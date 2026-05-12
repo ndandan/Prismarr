@@ -482,6 +482,7 @@ error:
     configure_cta: 'Configure {service}'
     service_unavailable_flash: 'Configure {service} to access this section.'
     service_unavailable_warn: 'The "{service}" service is not configured yet.'
+    service_disabled_flash: '{service} is disabled. Re-enable it from the admin settings to use this section.'
   service_banner:
     title_not_configured: '{service} is not configured'
     title_unreachable: '{service} is not responding'

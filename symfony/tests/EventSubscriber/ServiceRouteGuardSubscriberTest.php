@@ -32,9 +32,13 @@ class ServiceRouteGuardSubscriberTest extends TestCase
     private function subscriber(
         array $configuredKeys = [],
         array $healthy = [],
+        array $disabled = [],
     ): ServiceRouteGuardSubscriber {
         $config = $this->createMock(ConfigService::class);
         $config->method('has')->willReturnCallback(fn(string $k) => in_array($k, $configuredKeys, true));
+        $config->method('get')->willReturnCallback(
+            fn(string $k) => str_ends_with($k, '_enabled') && in_array(substr($k, 0, -8), $disabled, true) ? '0' : null
+        );
 
         // v1.1.0 — radarr/sonarr now go through ServiceInstanceProvider.
         // Mirror the old "configuredKeys" semantics: presence of the api_key
@@ -84,6 +88,22 @@ class ServiceRouteGuardSubscriberTest extends TestCase
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
         $this->assertStringContainsString('app_setup_managers', $response->getTargetUrl());
+    }
+
+    public function testDisabledServiceRedirectsHomeEvenWhenCredentialsArePresent(): void
+    {
+        // Issue #15 — Prowlarr URL + key are set, but the kill switch is off.
+        $event = $this->event('prowlarr_indexers');
+        $sub = $this->subscriber(
+            configuredKeys: ['prowlarr_api_key', 'prowlarr_url'],
+            healthy: ['prowlarr'],
+            disabled: ['prowlarr'],
+        );
+        $sub->onKernelRequest($event);
+
+        $response = $event->getResponse();
+        $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertStringContainsString('app_home', $response->getTargetUrl());
     }
 
     public function testConfiguredAndHealthyLetsThroughAnySubRoute(): void

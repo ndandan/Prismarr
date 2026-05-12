@@ -78,6 +78,15 @@ class ServiceRouteGuardSubscriber implements EventSubscriberInterface
             return;
         }
 
+        // 0. Service explicitly disabled (issue #15 — flat services only;
+        //    radarr/sonarr toggle per instance). Bounce home and say so, so
+        //    the user knows it's a toggle, not a missing config.
+        if ($this->isDisabled($rule)) {
+            $this->flash($event, $this->translator->trans('error.service_not_configured.service_disabled_flash', ['service' => $rule['service']]));
+            $event->setResponse(new RedirectResponse($this->urls->generate('app_home')));
+            return;
+        }
+
         // 1. Service not configured → wizard
         if (!$this->isConfigured($rule)) {
             $this->flash($event, $this->translator->trans('error.service_not_configured.service_unavailable_flash', ['service' => $rule['service']]));
@@ -114,6 +123,17 @@ class ServiceRouteGuardSubscriber implements EventSubscriberInterface
             }
         }
         return null;
+    }
+
+    /**
+     * @param array{service_id?: string} $rule
+     */
+    private function isDisabled(array $rule): bool
+    {
+        $id = $rule['service_id'] ?? null;
+        return is_string($id)
+            && in_array($id, HealthService::TOGGLEABLE_SERVICES, true)
+            && $this->config->get($id . '_enabled') === '0';
     }
 
     /**

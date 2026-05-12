@@ -481,6 +481,7 @@ error:
     configure_cta: 'Configurer {service}'
     service_unavailable_flash: 'Configurez {service} pour accéder à cette section.'
     service_unavailable_warn: 'Le service « {service} » n''est pas encore configuré.'
+    service_disabled_flash: '{service} est désactivé. Réactivez-le depuis les paramètres pour utiliser cette section.'
   service_banner:
     title_not_configured: '{service} n''est pas configuré'
     title_unreachable: '{service} ne répond pas'

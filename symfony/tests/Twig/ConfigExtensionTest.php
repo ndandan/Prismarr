@@ -97,6 +97,29 @@ class ConfigExtensionTest extends TestCase
         }
     }
 
+    public function testDisabledServiceIsNotConfiguredEvenWithCredentials(): void
+    {
+        // Issue #15 — the kill switch wins over the presence of URL + key.
+        $config = $this->createMock(ConfigService::class);
+        $config->method('has')->willReturn(true);
+        $config->method('get')->willReturnCallback(fn(string $k) => $k === 'prowlarr_enabled' ? '0' : null);
+        $ext = new ConfigExtension($config, $this->createMock(ServiceInstanceProvider::class));
+
+        $this->assertFalse($ext->isServiceConfigured('prowlarr'));
+        $this->assertFalse($ext->isServiceVisibleInSidebar('prowlarr'));
+    }
+
+    public function testEnabledFlagAbsentLeavesTheCredentialCheckInCharge(): void
+    {
+        $config = $this->createMock(ConfigService::class);
+        $config->method('has')->willReturnCallback(fn(string $k) => $k === 'prowlarr_api_key');
+        $config->method('get')->willReturn(null); // no *_enabled row, no sidebar_hide
+        $ext = new ConfigExtension($config, $this->createMock(ServiceInstanceProvider::class));
+
+        $this->assertTrue($ext->isServiceConfigured('prowlarr'));
+        $this->assertTrue($ext->isServiceVisibleInSidebar('prowlarr'));
+    }
+
     // ── isServiceVisibleInSidebar ────────────────────────────────────────
 
     /**

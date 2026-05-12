@@ -4,6 +4,7 @@ namespace App\Twig;
 
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
+use App\Service\HealthService;
 use App\Service\ServiceInstanceProvider;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\Routing\Generator\UrlGeneratorInterface;
@@ -147,6 +148,13 @@ class ConfigExtension extends AbstractExtension
     {
         if (isset(self::INSTANCE_TYPES[$service])) {
             return $this->instances->hasAnyEnabled(self::INSTANCE_TYPES[$service]);
+        }
+        // Issue #15 — the per-service kill switch makes the service behave as
+        // unconfigured: hidden from the sidebar and rendered as "not set" on
+        // its page. Same constant the runtime check in HealthService uses.
+        if (in_array($service, HealthService::TOGGLEABLE_SERVICES, true)
+            && $this->config->get($service . '_enabled') === '0') {
+            return false;
         }
         $key = self::SERVICE_KEYS[$service] ?? null;
         return $key !== null && $this->config->has($key);
