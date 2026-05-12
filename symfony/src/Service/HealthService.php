@@ -376,6 +376,12 @@ class HealthService
      */
     public static function urlBlockedReason(string $url): ?string
     {
+        // parse_url returns false on a seriously malformed URL — notably a
+        // port outside 0-65535 (PHP 7+). Surface that as its own reason so
+        // the admin sees "malformed" instead of a misleading "scheme".
+        if (parse_url($url) === false) {
+            return 'malformed';
+        }
         $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
         if ($scheme !== 'http' && $scheme !== 'https') {
             return 'scheme';

@@ -382,6 +382,14 @@ class HealthServiceTest extends TestCase
         ];
     }
 
+    public function testUrlBlockedReasonRejectsMalformedUrl(): void
+    {
+        // A port outside 0-65535 makes parse_url return false (PHP 7+);
+        // surface that as "malformed" rather than the misleading "scheme".
+        $this->assertSame('malformed', HealthService::urlBlockedReason('http://192.168.1.50:89000/'));
+        $this->assertSame('malformed', HealthService::urlBlockedReason('http://host:99999'));
+    }
+
     /**
      * AWS / GCP / Azure expose unauthenticated cloud-metadata endpoints on
      * 169.254.169.254. A SSRF that hits this IP can leak IAM credentials in

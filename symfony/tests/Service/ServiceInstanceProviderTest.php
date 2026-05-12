@@ -225,6 +225,7 @@ class ServiceInstanceProviderTest extends TestCase
             ['gopher://attacker.example/'],
             ['ftp://internal-only/'],
             ['http:///no-host-here'],
+            ['http://192.168.1.50:89000/'], // port out of range → malformed
         ];
     }
 

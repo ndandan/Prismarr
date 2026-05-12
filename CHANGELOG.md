@@ -56,6 +56,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`window.escHtml()` helper + 7 innerHTML splice sites** — escape `& < > " '` in the Quick-Add picker rows + candidates `<select>`, the topbar health dropdown, the Ctrl+K search result row, the recent-search row, the Quick-Add profile/folder `<option>` lists, the TMDb discovery cards, and the calendar tooltip.
 - **`ServiceInstanceProvider::create` / `update` reject bad URL schemes** — `file://` / `javascript:` / `gopher://` blocked at write time via `HealthService::urlBlockedReason`. Defense in depth, the cURL layer is already pinned to HTTP(S).
 - **`AdminInstancesController::testInstance` asserts type ∈ `ServiceInstance::TYPES`** — guard against a future probeFor() that lazily accepts more types.
+- **`HealthService::urlBlockedReason` reports `malformed`** for a URL `parse_url()` can't parse (e.g. a port outside 0-65535), so editing an instance with a bad port shows "Invalid instance URL (malformed)" instead of a misleading "(scheme)".
 
 ### Tests
 - 32 new unit tests on the v1.1.0 plumbing — `ServiceInstanceProvider` (22), `MultiInstanceBinderSubscriber` (7), `ServiceHealthCache` instance-keyed entries (3). Plus ~17 on `TorrentResolverService` + `SonarrClient::manualImportFromQueueItems`.
@@ -64,7 +65,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3 new `AppVersionTest` cases — `PRISMARR_VERSION` overrides the constant, `dev`/empty falls back, a beta build is ranked below the matching stable.
 - 16 new cases on the #28 / #15 / #25 work — `QBittorrentClient` 2xx acceptance (9), `HealthService` per-service kill switch (3), `AdminSettingsController` persisting the `<service>_enabled` form flag (1), `CspHeaderSubscriber` frame-ancestors widening + header-injection guard (3).
 - 3 new `LegacyMediaRedirectTest` cases — index + sub-page redirects land on the default instance, real slug routes aren't intercepted.
-- Suite is **358 tests / 808 assertions**, up from 273 / 565 at the end of v1.0.6.
+- 2 new `urlBlockedReason` cases (malformed-URL reason) + a blocked-URL provider entry for an out-of-range port.
+- Suite is **360 tests / 812 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.
