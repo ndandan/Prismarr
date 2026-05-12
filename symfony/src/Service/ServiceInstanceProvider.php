@@ -44,22 +44,29 @@ class ServiceInstanceProvider implements ResetInterface
     }
 
     /**
-     * Default instance for $type, with a safe fallback to the first instance
-     * if no row is flagged is_default (which can happen if the user deletes
-     * the previous default without nominating a replacement).
+     * Default instance for $type — always one that's *enabled*.
+     *
+     * A disabled instance still carrying the is_default flag would otherwise
+     * be picked up by the RadarrClient/SonarrClient fallback binding and
+     * every getDefault() caller, defeating the point of disabling it
+     * (issue #15). Falls back to the first enabled instance (by position)
+     * when the marked default is disabled or missing, or null when every
+     * instance of this type is disabled — in which case the service is
+     * effectively unconfigured and ServiceRouteGuardSubscriber redirects to
+     * the wizard before any controller runs.
      */
     public function getDefault(string $type): ?ServiceInstance
     {
-        $all = $this->getAll($type);
-        if ($all === []) {
+        $enabled = $this->getEnabled($type);
+        if ($enabled === []) {
             return null;
         }
-        foreach ($all as $instance) {
+        foreach ($enabled as $instance) {
             if ($instance->isDefault()) {
                 return $instance;
             }
         }
-        return $all[0];
+        return $enabled[0];
     }
 
     public function getBySlug(string $type, string $slug): ?ServiceInstance

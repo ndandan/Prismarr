@@ -27,6 +27,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`TorrentResolverService` matches `originalTitle` + every `alternateTitles[].title`** — French installs (Aventures croisées ↔ Swapped) resolve correctly. Accent folding moved to `intl Transliterator` to dodge an Alpine/musl iconv bug.
 - **Topbar health badge surfaces every instance** — one row per enabled instance instead of one aggregate per service.
 - **Queue card on the series page is collapsible** — mirrors the existing calendar card.
+- **`ServiceInstanceProvider::getDefault()` only returns an enabled instance** — disabling the default Radarr/Sonarr instance no longer leaves it as the fallback target the autowired clients bind to; the first enabled instance takes over (or the service reads as unconfigured if none are).
 - **`AppVersion` reports the build's own version** — reads `PRISMARR_VERSION` (stamped by the release/beta workflows), falls back to the `1.1.0-dev` constant for local builds. `:latest`, `:beta` and `make dev` each show the right string; `version_compare` ranks `1.1.0-beta.N` below `1.1.0` so beta testers get nudged to the stable.
 
 ### Fixed
@@ -67,7 +68,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 3 new `LegacyMediaRedirectTest` cases — index + sub-page redirects land on the default instance, real slug routes aren't intercepted.
 - 2 new `urlBlockedReason` cases (malformed-URL reason) + a blocked-URL provider entry for an out-of-range port.
 - 4 more #15 cases — `ConfigExtension` hides a disabled service from the sidebar (2), `ServiceRouteGuardSubscriber` bounces a disabled service (1) and a disabled instance (1) home.
-- Suite is **364 tests / 820 assertions**, up from 273 / 565 at the end of v1.0.6.
+- 2 `getDefault()` cases — skips a disabled flagged instance, returns null when every instance is disabled.
+- Suite is **366 tests / 822 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.

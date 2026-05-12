@@ -70,6 +70,26 @@ class ServiceInstanceProviderTest extends TestCase
         $this->assertSame($a, $this->provider($repo)->getDefault(ServiceInstance::TYPE_RADARR));
     }
 
+    public function testGetDefaultSkipsADisabledFlaggedInstance(): void
+    {
+        // Issue #15 — disabling the default instance must not leave it as the
+        // fallback target for clients and getDefault() callers.
+        $a = $this->makeInstance('radarr', 'on',  isDefault: false, enabled: true);
+        $b = $this->makeInstance('radarr', 'off', isDefault: true,  enabled: false);
+        $repo = $this->createMock(ServiceInstanceRepository::class);
+        $repo->method('findByType')->willReturn([$a, $b]);
+        $this->assertSame($a, $this->provider($repo)->getDefault(ServiceInstance::TYPE_RADARR));
+    }
+
+    public function testGetDefaultReturnsNullWhenEveryInstanceIsDisabled(): void
+    {
+        $a = $this->makeInstance('radarr', 'off1', isDefault: true,  enabled: false);
+        $b = $this->makeInstance('radarr', 'off2', isDefault: false, enabled: false);
+        $repo = $this->createMock(ServiceInstanceRepository::class);
+        $repo->method('findByType')->willReturn([$a, $b]);
+        $this->assertNull($this->provider($repo)->getDefault(ServiceInstance::TYPE_RADARR));
+    }
+
     // ── getBySlug / requireBySlug ──────────────────────────────────────────
 
     public function testGetBySlugReturnsMatchOrNull(): void
