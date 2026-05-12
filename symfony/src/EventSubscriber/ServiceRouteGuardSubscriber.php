@@ -87,6 +87,21 @@ class ServiceRouteGuardSubscriber implements EventSubscriberInterface
             return;
         }
 
+        // 0b. URL targets a disabled Radarr/Sonarr instance — same treatment,
+        //     named after the instance. (Unknown slug stays a 404, handled by
+        //     MultiInstanceBinderSubscriber which runs after this one.)
+        if (isset($rule['instance_type'])) {
+            $slug = $event->getRequest()->attributes->get('slug');
+            if (is_string($slug) && $slug !== '') {
+                $instance = $this->instances->getBySlug($rule['instance_type'], $slug);
+                if ($instance !== null && !$instance->isEnabled()) {
+                    $this->flash($event, $this->translator->trans('error.service_not_configured.service_disabled_flash', ['service' => $instance->getName()]));
+                    $event->setResponse(new RedirectResponse($this->urls->generate('app_home')));
+                    return;
+                }
+            }
+        }
+
         // 1. Service not configured → wizard
         if (!$this->isConfigured($rule)) {
             $this->flash($event, $this->translator->trans('error.service_not_configured.service_unavailable_flash', ['service' => $rule['service']]));

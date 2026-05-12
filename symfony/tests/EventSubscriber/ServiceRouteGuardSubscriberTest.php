@@ -106,6 +106,39 @@ class ServiceRouteGuardSubscriberTest extends TestCase
         $this->assertStringContainsString('app_home', $response->getTargetUrl());
     }
 
+    public function testDisabledRadarrInstanceRedirectsHomeNamedAfterTheInstance(): void
+    {
+        $disabled = new ServiceInstance(ServiceInstance::TYPE_RADARR, 'radarr-4k', 'Radarr 4K', 'http://r4k.lan');
+        $disabled->setEnabled(false);
+
+        $config = $this->createMock(ConfigService::class);
+        $config->method('has')->willReturn(true);
+        $config->method('get')->willReturn(null);
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('hasAnyEnabled')->willReturn(true);
+        $instances->method('getBySlug')->willReturnCallback(
+            fn(string $t, string $s) => ($t === ServiceInstance::TYPE_RADARR && $s === 'radarr-4k') ? $disabled : null
+        );
+        $urls = $this->createMock(UrlGeneratorInterface::class);
+        $urls->method('generate')->willReturnCallback(fn(string $n) => '/_route/' . $n);
+        $sub = new ServiceRouteGuardSubscriber(
+            $config, $instances, $this->createMock(HealthService::class), $urls,
+            $this->createMock(\Symfony\Contracts\Translation\TranslatorInterface::class),
+        );
+
+        $request = Request::create('/medias/radarr-4k/films');
+        $request->attributes->set('_route', 'app_media_films');
+        $request->attributes->set('slug', 'radarr-4k');
+        $request->setSession(new Session(new MockArraySessionStorage()));
+        $event = new RequestEvent($this->createMock(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
+
+        $sub->onKernelRequest($event);
+
+        $response = $event->getResponse();
+        $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertStringContainsString('app_home', $response->getTargetUrl());
+    }
+
     public function testConfiguredAndHealthyLetsThroughAnySubRoute(): void
     {
         $event = $this->event('radarr_calendar');
