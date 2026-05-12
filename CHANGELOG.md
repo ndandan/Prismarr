@@ -62,9 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 4 new `TmdbControllerTest` cases pinning Phase D+E — `/decouverte/resolve` exposes `instances` + `candidates`, series match by `tvdbId`, recommendations dedup across instances. Smoke tests seed default `radarr-1` / `sonarr-1` instances.
 - 5 new dataProvider cases on `ServiceInstanceProvider::create` pinning the URL-scheme rejection.
 - 3 new `AppVersionTest` cases — `PRISMARR_VERSION` overrides the constant, `dev`/empty falls back, a beta build is ranked below the matching stable.
-- 15 new cases on the #28 / #15 / #25 work — `QBittorrentClient` 2xx acceptance (9), `HealthService` per-service kill switch (3), `CspHeaderSubscriber` frame-ancestors widening + header-injection guard (3).
+- 16 new cases on the #28 / #15 / #25 work — `QBittorrentClient` 2xx acceptance (9), `HealthService` per-service kill switch (3), `AdminSettingsController` persisting the `<service>_enabled` form flag (1), `CspHeaderSubscriber` frame-ancestors widening + header-injection guard (3).
 - 3 new `LegacyMediaRedirectTest` cases — index + sub-page redirects land on the default instance, real slug routes aren't intercepted.
-- Suite is **357 tests / 806 assertions**, up from 273 / 565 at the end of v1.0.6.
+- Suite is **358 tests / 808 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.

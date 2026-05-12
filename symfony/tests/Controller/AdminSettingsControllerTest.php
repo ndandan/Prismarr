@@ -353,6 +353,39 @@ class AdminSettingsControllerTest extends TestCase
         $this->controller($settings, $config, $health)->index($request);
     }
 
+    public function testPostPersistsPerServiceEnabledFlag(): void
+    {
+        // Issue #15 — same unchecked-box semantics as the sidebar toggles:
+        // checkbox checked = '1' sent → drop the row (null); unchecked = not
+        // sent → store an explicit '0' so the kill switch is on.
+        $settings = $this->createMock(SettingRepository::class);
+        $settings->expects($this->once())
+            ->method('setMany')
+            ->with($this->callback(function (array $payload) {
+                return $payload['qbittorrent_enabled'] === null   // checked
+                    && $payload['prowlarr_enabled']    === '0'    // unchecked
+                    && $payload['jellyseerr_enabled']  === '0'    // unchecked
+                    && $payload['tmdb_enabled']        === '0';   // unchecked
+            }));
+
+        $config = $this->createMock(ConfigService::class);
+        $health = $this->createMock(HealthService::class);
+
+        $request = Request::create(
+            '/admin/settings',
+            'POST',
+            [
+                '_csrf_token'         => 'valid',
+                'qbittorrent_enabled' => '1', // only qBit's switch is on
+            ]
+        );
+        $request->setSession(new \Symfony\Component\HttpFoundation\Session\Session(
+            new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage()
+        ));
+
+        $this->controller($settings, $config, $health)->index($request);
+    }
+
     public function testTestEndpointReturnsOkJson(): void
     {
         $settings = $this->createMock(SettingRepository::class);
