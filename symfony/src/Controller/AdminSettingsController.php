@@ -298,6 +298,7 @@ class AdminSettingsController extends AbstractController
             'groups'             => self::FIELDS,
             'service_labels'     => self::SERVICE_LABELS,
             'values'             => $this->loadValues(),
+            'service_enabled'    => $this->loadServiceEnabled(),
             'sidebar_visibility' => $this->loadSidebarVisibility(),
             'internal_features'  => self::INTERNAL_FEATURES,
             'display_options'    => self::DISPLAY_OPTIONS,
@@ -814,6 +815,20 @@ class AdminSettingsController extends AbstractController
     }
 
     /**
+     * @return array<string, bool>  service id => enabled (true by default).
+     * Issue #15 — only an explicit `<service>_enabled=0` row disables; a
+     * missing row means the toggle was never touched.
+     */
+    private function loadServiceEnabled(): array
+    {
+        $out = [];
+        foreach (HealthService::TOGGLEABLE_SERVICES as $id) {
+            $out[$id] = $this->config->get($id . '_enabled') !== '0';
+        }
+        return $out;
+    }
+
+    /**
      * @return array<string, bool>  id => visible (true by default)
      */
     private function loadSidebarVisibility(): array
@@ -927,6 +942,13 @@ class AdminSettingsController extends AbstractController
         foreach ($all as $id) {
             $visible = $request->request->has('sidebar_visible_' . $id);
             $payload['sidebar_hide_' . $id] = $visible ? null : '1';
+        }
+
+        // Per-service kill switch (issue #15) — same unchecked-box semantics.
+        // Enabled → drop the row (falls back to the credential check on read);
+        // disabled → store an explicit '0'.
+        foreach (HealthService::TOGGLEABLE_SERVICES as $id) {
+            $payload[$id . '_enabled'] = $request->request->has($id . '_enabled') ? null : '0';
         }
 
         // Display preferences — only accept values from the declared allow-list

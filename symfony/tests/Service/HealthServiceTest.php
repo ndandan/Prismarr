@@ -222,6 +222,45 @@ class HealthServiceTest extends TestCase
         $this->assertFalse($svc->isConfigured('qbittorrent'));
     }
 
+    public function testExplicitlyDisabledServiceIsNotConfigured(): void
+    {
+        // Issue #15 — credentials are present, but the kill switch is off.
+        $config = $this->createMock(ConfigService::class);
+        $config->method('has')->willReturn(true);
+        $config->method('get')->willReturnCallback(fn (string $k) => $k === 'prowlarr_enabled' ? '0' : null);
+
+        $svc = $this->makeService(config: $config);
+        $this->assertFalse($svc->isConfigured('prowlarr'));
+    }
+
+    public function testEnabledFlagAbsentOrOneFallsBackToCredentialCheck(): void
+    {
+        // Missing row (toggle never touched) → use the credential check.
+        $absent = $this->createMock(ConfigService::class);
+        $absent->method('has')->willReturn(true);
+        $absent->method('get')->willReturn(null);
+        $this->assertTrue($this->makeService(config: $absent)->isConfigured('jellyseerr'));
+
+        // Explicit '1' → also enabled.
+        $on = $this->createMock(ConfigService::class);
+        $on->method('has')->willReturn(true);
+        $on->method('get')->willReturnCallback(fn (string $k) => $k === 'jellyseerr_enabled' ? '1' : null);
+        $this->assertTrue($this->makeService(config: $on)->isConfigured('jellyseerr'));
+    }
+
+    public function testDisabledServiceIsHealthyReturnsNullWithoutPinging(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->expects($this->never())->method('ping');
+
+        $config = $this->createMock(ConfigService::class);
+        $config->method('has')->willReturn(true);
+        $config->method('get')->willReturnCallback(fn (string $k) => $k === 'tmdb_enabled' ? '0' : null);
+
+        $svc = $this->makeService(tmdb: $tmdb, config: $config);
+        $this->assertNull($svc->isHealthy('tmdb'));
+    }
+
     public function testUnconfiguredResultIsCachedSoSecondCallStillSkipsPing(): void
     {
         $jellyseerr = $this->createMock(JellyseerrClient::class);

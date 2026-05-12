@@ -5,20 +5,29 @@ namespace App\EventSubscriber;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\ServiceInstanceProvider;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
- * Sets the Content-Security-Policy header on every HTML response.
+ * Sets the Content-Security-Policy + X-Frame-Options headers on every
+ * HTML response. (X-Frame-Options used to be a static Caddy header — it
+ * moved here so the iframe-embedding opt-in below can control both in one
+ * place; static assets served straight by Caddy no longer carry it, which
+ * is harmless since clickjacking needs an interactive HTML page.)
  *
  * img-src is built dynamically from the configured service URLs
  * (Radarr, Sonarr, Prowlarr, Jellyseerr, qBittorrent, Gluetun) so
  * that self-hosters on arbitrary IPs/ports see their service-hosted
  * images (e.g. Jellyseerr /avatarproxy/*) load correctly.
  *
- * script-src / connect-src / frame-ancestors stay strict — that is
- * where the real XSS/exfiltration protection lives.
+ * script-src / connect-src stay strict — that is where the real
+ * XSS/exfiltration protection lives. frame-ancestors is 'self' by default;
+ * set PRISMARR_FRAME_ANCESTORS to a space-separated origin list (e.g.
+ * "https://organizr.example.com") to allow embedding Prismarr in an iframe
+ * there (issue #25). When that env is set X-Frame-Options is dropped, since
+ * its only "allow" value (ALLOW-FROM) is ignored by modern browsers anyway.
  *
  * v1.1.0 — radarr/sonarr origins are aggregated across every enabled
  * instance (a multi-instance install with a 1080p + 4K Radarr needs
@@ -43,6 +52,10 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly ConfigService $config,
         private readonly ServiceInstanceProvider $instances,
+        // `default::VAR` yields null (not '') when the env is unset, so accept
+        // ?string and coalesce in onResponse().
+        #[Autowire(env: 'default::PRISMARR_FRAME_ANCESTORS')]
+        private readonly ?string $frameAncestors = null,
     ) {}
 
     public static function getSubscribedEvents(): array
@@ -57,9 +70,24 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
         }
 
         $response = $event->getResponse();
+
+        // Strip control chars so a stray CR/LF in the env can't smuggle a
+        // second header; keep the rest verbatim (origins are space-separated).
+        $extraAncestors = trim(preg_replace('/[\x00-\x1F\x7F]/', '', $this->frameAncestors ?? '') ?? '');
+
+        if ($extraAncestors === '') {
+            $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
+        } else {
+            // ALLOW-FROM is dead in modern browsers, so the only way to allow
+            // a foreign embedder is to drop this header and lean on CSP.
+            $response->headers->remove('X-Frame-Options');
+        }
+
         if ($response->headers->has('Content-Security-Policy')) {
             return;
         }
+
+        $frameAncestors = "'self'" . ($extraAncestors !== '' ? ' ' . $extraAncestors : '');
 
         $imgHosts = self::STATIC_IMG_HOSTS;
         foreach (self::SERVICE_URL_KEYS as $key) {
@@ -90,11 +118,12 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             . "script-src 'self' 'unsafe-inline' data:; "
             . "connect-src 'self'; "
             . "frame-src https://www.youtube.com https://www.youtube-nocookie.com; "
-            . "frame-ancestors 'self'; "
+            . "frame-ancestors %s; "
             . "base-uri 'self'; "
             . "form-action 'self'; "
             . "object-src 'none'",
-            implode(' ', $imgHosts)
+            implode(' ', $imgHosts),
+            $frameAncestors,
         );
 
         $response->headers->set('Content-Security-Policy', $csp);

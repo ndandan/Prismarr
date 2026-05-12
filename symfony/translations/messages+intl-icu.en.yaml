@@ -529,6 +529,8 @@ admin:
       unreachable: Unreachable
       error: Error
     test: Test
+    enabled: Enabled
+    enabled_title: 'When off, Prismarr stops polling this service and treats it as not configured. URL and API key are kept.'
   instances:
     add: '+ Add a {service} instance'
     empty:

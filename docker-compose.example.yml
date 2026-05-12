@@ -40,6 +40,11 @@ services:
       # PHP_MEMORY_LIMIT: 1024M
       # PHP_MAX_EXECUTION_TIME: 120
 
+      # Allow embedding Prismarr in an iframe (e.g. inside Organizr/Heimdall).
+      # Space-separated embedder origins. Unset = only Prismarr can frame
+      # itself. Setting it drops X-Frame-Options. (Issue #25.)
+      # PRISMARR_FRAME_ANCESTORS: https://organizr.example.com
+
     # Persistent volume — contains SQLite DB, .env.local, sessions, cache.
     volumes:
       - prismarr_data:/var/www/html/var/data

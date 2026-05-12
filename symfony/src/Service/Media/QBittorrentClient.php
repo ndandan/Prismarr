@@ -421,7 +421,7 @@ class QBittorrentClient implements ResetInterface
             $curlErr  = curl_error($ch);
             curl_close($ch);
 
-            if ($response === false || $code !== 200) {
+            if ($response === false || !self::isOkStatus((int) $code)) {
                 $this->logger->warning('QBittorrentClient addTorrentFromFiles failed', ['code' => $code]);
                 $this->recordError('POST', '/api/v2/torrents/add', (int) $code, is_string($response) ? $response : '', $curlErr);
                 if ($curlErr !== '' || (int) $code === 0) {
@@ -796,6 +796,18 @@ class QBittorrentClient implements ResetInterface
     //  HTTP
     // ══════════════════════════════════════════════════════════════════════════
 
+    /**
+     * Any 2xx is a success. qBittorrent 5.2.0 started answering `204 No Content`
+     * on some Web API endpoints (issue #28) — the previous strict `=== 200`
+     * check treated those as failures, so the Downloads page and the health
+     * badge reported "unreachable" even though the connection test was green.
+     * `0` (no connection) and 4xx/5xx stay failures.
+     */
+    private static function isOkStatus(int $code): bool
+    {
+        return $code >= 200 && $code < 300;
+    }
+
     private function get(string $path, array $params = [], ?string $sid = null): ?array
     {
         $body = $this->getRaw($path, $params, $sid);
@@ -847,7 +859,7 @@ class QBittorrentClient implements ResetInterface
         }
         curl_close($ch);
 
-        if ($code !== 200) {
+        if (!self::isOkStatus((int) $code)) {
             // Expired SID → invalidate; the next call will auto re-login
             if ($code === 403 || $code === 401) {
                 $this->invalidateSession();
@@ -911,7 +923,7 @@ class QBittorrentClient implements ResetInterface
         }
         curl_close($ch);
 
-        if ($code !== 200) {
+        if (!self::isOkStatus((int) $code)) {
             // Expired SID → invalidate + 1 retry after auto re-login
             if (($code === 401 || $code === 403) && !$retried) {
                 $this->invalidateSession();

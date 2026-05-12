@@ -528,6 +528,8 @@ admin:
       unreachable: Injoignable
       error: Erreur
     test: Tester
+    enabled: Activé
+    enabled_title: "Désactivé, Prismarr arrête de tester ce service et le considère comme non configuré. L'URL et la clé API sont conservées."
   instances:
     add: '+ Ajouter une instance {service}'
     empty:

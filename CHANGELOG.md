@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quick-Add target picker** (Phase E) — `/decouverte/resolve` exposes `instances` (current owners) + `candidates` (every enabled instance, with `is_default`). The modal lets the user pick where to add when 2+ Radarr/Sonarr exist.
 - **Settings export v2** — JSON dump now includes the `instances[]` topology (no API keys); restore preserves the original slug ordering. v1 backups still accepted.
 - **Expandable shelves on Radarr/Sonarr shelf views** ([PR #29](https://github.com/Shoshuo/Prismarr/pull/29)).
+- **Per-service enable/disable toggle** ([#15](https://github.com/Shoshuo/Prismarr/issues/15)) — a switch in `/admin/settings` for Prowlarr, Jellyseerr, qBittorrent and TMDb. Disabled = HealthService stops pinging it and the dashboard/topbar treat it as not configured; the URL and API key stay in the DB. Radarr/Sonarr already toggle per instance.
+- **`PRISMARR_FRAME_ANCESTORS` env var** ([#25](https://github.com/Shoshuo/Prismarr/issues/25)) — set it to a space-separated origin list to embed Prismarr in an iframe (Organizr, Heimdall, …). Unset keeps the default lockdown (`frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN`).
 
 ### Changed
 - **Languages card redesigned for multi-instance** — per-service blocks, per-instance UI + info-language selectors; partial failures reported by instance name.
@@ -44,6 +46,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Settings import v2 lost the original sidebar ordering** — `position` is now restored from the export.
 - **iCal dedup key parenthesised explicitly** — visual ambiguity around `??` vs `.` precedence (the previous form was correct but error-prone).
 - **Dead `CURRENT_RADARR_SLUG` / `CURRENT_SONARR_SLUG` JS globals removed** — Quick-Add was reverted to `DEFAULT_*_SLUG` semantics and nothing else read them.
+- **qBittorrent 5.2.0 reported as unreachable** ([#28](https://github.com/Shoshuo/Prismarr/issues/28)) — the runtime client demanded HTTP `200` exactly; qBit 5.2.0 answers `204 No Content` on some Web API endpoints. Now accepts the whole 2xx range, matching the connection-test path.
 
 ### Security
 - **Sanitised upstream bodies before logging** — `RadarrClient::request()` / `SonarrClient::request()` redact `apikey=`, `"apiKey":`, magnet links, then truncate to 200 chars.
@@ -58,7 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 4 new `TmdbControllerTest` cases pinning Phase D+E — `/decouverte/resolve` exposes `instances` + `candidates`, series match by `tvdbId`, recommendations dedup across instances. Smoke tests seed default `radarr-1` / `sonarr-1` instances.
 - 5 new dataProvider cases on `ServiceInstanceProvider::create` pinning the URL-scheme rejection.
 - 3 new `AppVersionTest` cases — `PRISMARR_VERSION` overrides the constant, `dev`/empty falls back, a beta build is ranked below the matching stable.
-- Suite is **339 tests / 772 assertions**, up from 273 / 565 at the end of v1.0.6.
+- 15 new cases on the #28 / #15 / #25 work — `QBittorrentClient` 2xx acceptance (9), `HealthService` per-service kill switch (3), `CspHeaderSubscriber` frame-ancestors widening + header-injection guard (3).
+- Suite is **354 tests / 793 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.

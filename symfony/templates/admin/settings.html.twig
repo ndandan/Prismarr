@@ -437,6 +437,18 @@
                       <p class="service-card-sub">{{ meta.subtitle }}</p>
                     </div>
                     <div class="service-card-actions">
+                      {# Issue #15 — per-service kill switch. Only the flat-config
+                         services have it; radarr/sonarr enable/disable per
+                         instance. Unchecked box isn't POSTed → disabled. #}
+                      {% if service_id in ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent'] %}
+                        <label class="form-check form-switch m-0 me-2" style="padding-left:2.4em;"
+                               title="{{ 'admin.services.enabled_title'|trans }}">
+                          <input class="form-check-input" type="checkbox"
+                                 name="{{ service_id }}_enabled" value="1"
+                                 {{ (service_enabled[service_id] ?? true) ? 'checked' : '' }}>
+                          <span class="form-check-label" style="font-size:.78rem; color:var(--tblr-secondary);">{{ 'admin.services.enabled'|trans }}</span>
+                        </label>
+                      {% endif %}
                       {# Gluetun has no health probe in HealthService::probeFor() —
                          it would always come back "unknown". Hide the test
                          affordance until/unless we add a real Gluetun probe. #}

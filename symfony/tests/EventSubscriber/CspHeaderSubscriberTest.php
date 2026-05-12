@@ -29,7 +29,7 @@ class CspHeaderSubscriberTest extends TestCase
      *
      * @param array<string, string> $urls
      */
-    private function subscriberWithUrls(array $urls): CspHeaderSubscriber
+    private function subscriberWithUrls(array $urls, string $frameAncestors = ''): CspHeaderSubscriber
     {
         $config = $this->createMock(ConfigService::class);
         $config->method('get')->willReturnCallback(fn(string $key) => $urls[$key] ?? null);
@@ -48,7 +48,7 @@ class CspHeaderSubscriberTest extends TestCase
             return [$instance];
         });
 
-        return new CspHeaderSubscriber($config, $instances);
+        return new CspHeaderSubscriber($config, $instances, $frameAncestors);
     }
 
     public function testSetsHeaderOnMainRequest(): void
@@ -133,5 +133,40 @@ class CspHeaderSubscriberTest extends TestCase
         $this->assertStringContainsString("object-src 'none'", $csp);
         $this->assertStringContainsString("base-uri 'self'", $csp);
         $this->assertStringContainsString("form-action 'self'", $csp);
+    }
+
+    public function testXFrameOptionsSameOriginByDefault(): void
+    {
+        $sub = $this->subscriberWithUrls([]);
+        $response = new Response();
+        $sub->onResponse($this->event($response));
+
+        $this->assertSame('SAMEORIGIN', $response->headers->get('X-Frame-Options'));
+        $this->assertStringContainsString("frame-ancestors 'self';", $response->headers->get('Content-Security-Policy'));
+    }
+
+    public function testFrameAncestorsWidenedAndXFrameOptionsDroppedWhenEnvSet(): void
+    {
+        // Issue #25 — embed Prismarr in Organizr/Heimdall.
+        $sub = $this->subscriberWithUrls([], 'https://organizr.example.com https://dash.example.org');
+        $response = new Response();
+        $sub->onResponse($this->event($response));
+
+        $csp = $response->headers->get('Content-Security-Policy');
+        $this->assertStringContainsString("frame-ancestors 'self' https://organizr.example.com https://dash.example.org;", $csp);
+        $this->assertFalse($response->headers->has('X-Frame-Options'));
+    }
+
+    public function testFrameAncestorsStripsControlCharsToBlockHeaderInjection(): void
+    {
+        $sub = $this->subscriberWithUrls([], "https://evil.example\r\nSet-Cookie: x=1");
+        $response = new Response();
+        $sub->onResponse($this->event($response));
+
+        $csp = $response->headers->get('Content-Security-Policy');
+        // The CR/LF is gone — the leftover text is harmless inside the directive.
+        $this->assertStringNotContainsString("\r", $csp);
+        $this->assertStringNotContainsString("\n", $csp);
+        $this->assertFalse($response->headers->has('Set-Cookie'));
     }
 }

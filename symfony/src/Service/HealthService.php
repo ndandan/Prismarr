@@ -117,10 +117,24 @@ class HealthService
      * when no ConfigService is wired, so the legacy test setup keeps
      * working without each test having to provide a fake config.
      */
+    /**
+     * Services that expose an explicit on/off switch in /admin/settings
+     * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
+     * per instance via the `enabled` flag on `service_instance`.
+     */
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb'];
+
     public function isConfigured(string $service): bool
     {
         if ($this->config === null) {
             return true;
+        }
+        // Explicit kill switch. A missing `<service>_enabled` row means the
+        // toggle was never touched → fall through to the credential check, so
+        // existing installs are unaffected. Only an explicit '0' disables.
+        if (in_array($service, self::TOGGLEABLE_SERVICES, true)
+            && $this->config->get($service . '_enabled') === '0') {
+            return false;
         }
         return match ($service) {
             // v1.1.0 — radarr/sonarr moved to service_instance. "Configured"
