@@ -47,6 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **iCal dedup key parenthesised explicitly** — visual ambiguity around `??` vs `.` precedence (the previous form was correct but error-prone).
 - **Dead `CURRENT_RADARR_SLUG` / `CURRENT_SONARR_SLUG` JS globals removed** — Quick-Add was reverted to `DEFAULT_*_SLUG` semantics and nothing else read them.
 - **qBittorrent 5.2.0 reported as unreachable** ([#28](https://github.com/Shoshuo/Prismarr/issues/28)) — the runtime client demanded HTTP `200` exactly; qBit 5.2.0 answers `204 No Content` on some Web API endpoints. Now accepts the whole 2xx range, matching the connection-test path.
+- **Pre-1.1.0 media URLs 404'd after upgrade** — `/medias/films`, `/medias/series`, `/medias/radarr/...` and `/medias/sonarr/...` (and the AJAX routes a cached v1.0.x page keeps polling) now 307-redirect to the default instance's slug-aware path. Method preserved, so cached POST handlers keep working. Bookmarks survive `docker compose pull`.
 
 ### Security
 - **Sanitised upstream bodies before logging** — `RadarrClient::request()` / `SonarrClient::request()` redact `apikey=`, `"apiKey":`, magnet links, then truncate to 200 chars.
@@ -62,7 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 5 new dataProvider cases on `ServiceInstanceProvider::create` pinning the URL-scheme rejection.
 - 3 new `AppVersionTest` cases — `PRISMARR_VERSION` overrides the constant, `dev`/empty falls back, a beta build is ranked below the matching stable.
 - 15 new cases on the #28 / #15 / #25 work — `QBittorrentClient` 2xx acceptance (9), `HealthService` per-service kill switch (3), `CspHeaderSubscriber` frame-ancestors widening + header-injection guard (3).
-- Suite is **354 tests / 793 assertions**, up from 273 / 565 at the end of v1.0.6.
+- 3 new `LegacyMediaRedirectTest` cases — index + sub-page redirects land on the default instance, real slug routes aren't intercepted.
+- Suite is **357 tests / 806 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.
