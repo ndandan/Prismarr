@@ -240,7 +240,9 @@ class MediaController extends AbstractController
     #[Route('/films/{id}/releases', name: 'films_releases', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function filmReleases(int $id): JsonResponse
     {
-        set_time_limit(90);
+        // Interactive search: the upstream call can run up to 90s with several
+        // slow indexers — give PHP headroom over it (overrides PHP_MAX_EXECUTION_TIME).
+        set_time_limit(120);
 
         // Fetch the movie's quality profile for score details
         $movie = $this->radarr->getMovie($id);
@@ -1338,7 +1340,9 @@ class MediaController extends AbstractController
     #[Route('/series/episode/{id}/releases', name: 'series_episode_releases', methods: ['GET'], requirements: ['id' => '\d+'])]
     public function episodeReleases(int $id): JsonResponse
     {
-        set_time_limit(50);
+        // Interactive search: Sonarr polls every indexer in real time — can run
+        // up to 90s with a few slow ones, so PHP gets headroom over it.
+        set_time_limit(120);
 
         // Fetch the series' quality profile for custom format scores
         $episode = $this->sonarr->getEpisode($id);
@@ -1498,7 +1502,9 @@ class MediaController extends AbstractController
     #[Route('/series/{seriesId}/season/{seasonNumber}/releases', name: 'series_season_releases', methods: ['GET'], requirements: ['seriesId' => '\d+', 'seasonNumber' => '\d+'])]
     public function seasonReleases(int $seriesId, int $seasonNumber): JsonResponse
     {
-        set_time_limit(50);
+        // Interactive search: Sonarr polls every indexer in real time — can run
+        // up to 90s with a few slow ones, so PHP gets headroom over it.
+        set_time_limit(120);
 
         $series = $this->sonarr->getSerie($seriesId);
         $profileScores = [];

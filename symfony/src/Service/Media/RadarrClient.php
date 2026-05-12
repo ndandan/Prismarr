@@ -461,7 +461,10 @@ class RadarrClient implements ResetInterface
     public function getReleasesForMovie(int $id): array
     {
         $this->ensureConfig();
-        // Radarr queries all indexers in real-time — needs a longer timeout than the default 10s
+        // Radarr polls every indexer in real time — with a few slow ones this
+        // can take 60-90s (Radarr's own UI waits just as long). The controller
+        // route raises set_time_limit() to match. NOSIGNAL: same Alpine/musl
+        // SIGALRM-vs-timeout reason as the other clients.
         $url = rtrim($this->baseUrl, '/') . '/api/v3/release?' . http_build_query(['movieId' => $id]);
 
         $ch = curl_init();
@@ -470,7 +473,9 @@ class RadarrClient implements ResetInterface
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS, // SSRF guard
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS, // (block file:// gopher:// ...)
-            CURLOPT_TIMEOUT        => 60,
+            CURLOPT_CONNECTTIMEOUT => 4,
+            CURLOPT_TIMEOUT        => 90,
+            CURLOPT_NOSIGNAL       => 1,
             CURLOPT_HTTPHEADER     => ["X-Api-Key: {$this->apiKey}", 'Accept: application/json'],
         ]);
 
