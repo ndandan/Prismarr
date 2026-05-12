@@ -458,7 +458,12 @@ class RadarrClient implements ResetInterface
 
     // ── Releases ──────────────────────────────────────────────────────────────
 
-    public function getReleasesForMovie(int $id): array
+    /**
+     * Interactive search for a movie. Returns null when the call didn't
+     * complete (cURL timeout or upstream error) — distinct from an empty
+     * array, which means Radarr answered with no releases.
+     */
+    public function getReleasesForMovie(int $id): ?array
     {
         $this->ensureConfig();
         // Radarr polls every indexer in real time — with a few slow ones this
@@ -486,10 +491,11 @@ class RadarrClient implements ResetInterface
 
         if ($err || $code !== 200) {
             $this->logger->warning("RadarrClient GET /api/v3/release → HTTP {$code} {$err}");
-            return [];
+            return null;
         }
 
-        return json_decode($body, true) ?? [];
+        $decoded = json_decode((string) $body, true);
+        return is_array($decoded) ? $decoded : null;
     }
 
     public function grabRelease(string $guid, int $indexerId): array

@@ -260,6 +260,9 @@ class MediaController extends AbstractController
         }
 
         $raw = $this->radarr->getReleasesForMovie($id);
+        if ($raw === null) {
+            return $this->json(['error' => 'search_timed_out'], 504);
+        }
         $releases = array_map(function($r) use ($profileScores) {
             // Per-custom-format score breakdown
             $scoreDetails = [];
@@ -1363,6 +1366,12 @@ class MediaController extends AbstractController
         }
 
         $raw = $this->sonarr->getEpisodeReleases($id);
+        if ($raw === null) {
+            // The search didn't complete (cURL timeout / Sonarr unreachable) —
+            // 504 so the frontend can say "indexers took too long" instead of
+            // showing it as a clean "no releases" result.
+            return $this->json(['error' => 'search_timed_out'], 504);
+        }
         $releases = array_map(function($r) use ($profileScores) {
             $scoreDetails = [];
             foreach ($r['customFormats'] ?? [] as $cf) {
@@ -1521,6 +1530,9 @@ class MediaController extends AbstractController
         }
 
         $raw = $this->sonarr->getSeasonReleases($seriesId, $seasonNumber);
+        if ($raw === null) {
+            return $this->json(['error' => 'search_timed_out'], 504);
+        }
         $releases = array_map(function($r) use ($profileScores) {
             $scoreDetails = [];
             foreach ($r['customFormats'] ?? [] as $cf) {

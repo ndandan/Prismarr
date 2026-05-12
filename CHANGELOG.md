@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Languages card redesigned for multi-instance** — per-service blocks, per-instance UI + info-language selectors; partial failures reported by instance name.
 - **Sonarr manual import is reliable** — uses `GET /api/v3/manualimport?downloadId=<hash>` instead of forging the payload, dedups queue items sharing a downloadId, reports grouped reject reasons.
+- **Interactive release search is more patient and tells you why it's empty** — the upstream search ran out of time at 45-60s while setups with several slow indexers routinely take 70-90s (Sonarr/Radarr themselves wait that long); bumped to 90s, with `set_time_limit()` raised to match on the three search routes. And a search that times out now returns 504 so the UI shows "the indexers took too long" instead of a misleading "no releases found". `RadarrClient::getReleasesForMovie` also gained the `CONNECTTIMEOUT`/`NOSIGNAL` the other clients have.
 - **Calendar uses Sonarr local `airDate`** ([#26](https://github.com/Shoshuo/Prismarr/issues/26)) — episodes stay on the right day regardless of viewer TZ. Same fix on `series_missing` / `series_cutoff`.
 - **`TorrentResolverService` matches `originalTitle` + every `alternateTitles[].title`** — French installs (Aventures croisées ↔ Swapped) resolve correctly. Accent folding moved to `intl Transliterator` to dodge an Alpine/musl iconv bug.
 - **Topbar health badge surfaces every instance** — one row per enabled instance instead of one aggregate per service.
@@ -69,7 +70,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 2 new `urlBlockedReason` cases (malformed-URL reason) + a blocked-URL provider entry for an out-of-range port.
 - 4 more #15 cases — `ConfigExtension` hides a disabled service from the sidebar (2), `ServiceRouteGuardSubscriber` bounces a disabled service (1) and a disabled instance (1) home.
 - 2 `getDefault()` cases — skips a disabled flagged instance, returns null when every instance is disabled.
-- Suite is **366 tests / 822 assertions**, up from 273 / 565 at the end of v1.0.6.
+- 4 `MediaReleasesSearchTest` cases — episode/season/film release search returns 504 when the upstream call doesn't complete, a plain JSON array when it does.
+- Suite is **370 tests / 828 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.

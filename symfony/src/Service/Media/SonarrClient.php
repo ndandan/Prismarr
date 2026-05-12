@@ -675,16 +675,18 @@ class SonarrClient implements ResetInterface
 
     // Interactive search — Sonarr polls every indexer in real time. With a
     // handful of slow indexers this routinely takes 60-90s (Sonarr's own UI
-    // waits just as long), so the HTTP timeout is generous; the controller
-    // route raises set_time_limit() to match.
-    public function getEpisodeReleases(int $episodeId): array
+    // waits just as long); the controller route raises set_time_limit() to
+    // match. Returns null when the call didn't complete (cURL timeout or an
+    // upstream error) so the caller can tell that apart from a clean "no
+    // releases" result; an empty array means Sonarr answered with nothing.
+    public function getEpisodeReleases(int $episodeId): ?array
     {
-        return $this->get('/api/v3/release', ['episodeId' => $episodeId], 90) ?? [];
+        return $this->get('/api/v3/release', ['episodeId' => $episodeId], 90);
     }
 
-    public function getSeasonReleases(int $seriesId, int $seasonNumber): array
+    public function getSeasonReleases(int $seriesId, int $seasonNumber): ?array
     {
-        return $this->get('/api/v3/release', ['seriesId' => $seriesId, 'seasonNumber' => $seasonNumber], 90) ?? [];
+        return $this->get('/api/v3/release', ['seriesId' => $seriesId, 'seasonNumber' => $seasonNumber], 90);
     }
 
     public function grabRelease(string $guid, int $indexerId): array
