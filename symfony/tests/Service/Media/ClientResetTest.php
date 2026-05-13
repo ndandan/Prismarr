@@ -101,7 +101,7 @@ class ClientResetTest extends TestCase
             'dummy-api-key',
         );
         $instances = $this->createMock(ServiceInstanceProvider::class);
-        $instances->expects($this->any())->method('getDefault')->with(ServiceInstance::TYPE_RADARR)->willReturn($instance);
+        $instances->expects($this->once())->method('getDefault')->with(ServiceInstance::TYPE_RADARR)->willReturn($instance);
 
         $client = new RadarrClient(
             $instances,

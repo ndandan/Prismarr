@@ -90,7 +90,7 @@ class MultiInstanceBinderSubscriberTest extends TestCase
     {
         $instance = new ServiceInstance(ServiceInstance::TYPE_RADARR, 'radarr-4k', '4K', 'http://r:7878', 'k');
         $instances = $this->createMock(ServiceInstanceProvider::class);
-        $instances->expects($this->any())->method('getBySlug')
+        $instances->expects($this->once())->method('getBySlug')
             ->with(ServiceInstance::TYPE_RADARR, 'radarr-4k')
             ->willReturn($instance);
         $radarr = $this->createMock(RadarrClient::class);
@@ -109,7 +109,7 @@ class MultiInstanceBinderSubscriberTest extends TestCase
         // respectively.
         $instance = new ServiceInstance(ServiceInstance::TYPE_RADARR, 'radarr-1', 'Default', 'http://r:7878', 'k');
         $instances = $this->createMock(ServiceInstanceProvider::class);
-        $instances->expects($this->any())->method('getBySlug')
+        $instances->expects($this->once())->method('getBySlug')
             ->with(ServiceInstance::TYPE_RADARR, 'radarr-1')
             ->willReturn($instance);
         $radarr = $this->createMock(RadarrClient::class);
@@ -125,7 +125,7 @@ class MultiInstanceBinderSubscriberTest extends TestCase
     {
         $instance = new ServiceInstance(ServiceInstance::TYPE_SONARR, 'sonarr-anime', 'Anime', 'http://s:8989', 'k');
         $instances = $this->createMock(ServiceInstanceProvider::class);
-        $instances->expects($this->any())->method('getBySlug')
+        $instances->expects($this->once())->method('getBySlug')
             ->with(ServiceInstance::TYPE_SONARR, 'sonarr-anime')
             ->willReturn($instance);
         $radarr = $this->createMock(RadarrClient::class);
