@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Service\ResetInterface;
@@ -52,6 +53,10 @@ class QBittorrentClient implements ResetInterface
 
     private function ensureConfig(): void
     {
+        // Issue #15 — see the same check in ProwlarrClient for rationale.
+        if ($this->config->get(self::SERVICE_KEY . '_enabled') === '0') {
+            throw new ServiceNotConfiguredException(self::SERVICE, self::SERVICE_KEY . '_enabled');
+        }
         if ($this->baseUrl === '') {
             // URL stays mandatory — without it we have nothing to talk to.
             // user/password are optional (issue #10): empty means "reverse

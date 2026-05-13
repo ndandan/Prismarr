@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Quick-Add target picker** (Phase E) — `/decouverte/resolve` exposes `instances` (current owners) + `candidates` (every enabled instance, with `is_default`). The modal lets the user pick where to add when 2+ Radarr/Sonarr exist.
 - **Settings export v2** — JSON dump now includes the `instances[]` topology (no API keys); restore preserves the original slug ordering. v1 backups still accepted.
 - **Expandable shelves on Radarr/Sonarr shelf views** ([PR #29](https://github.com/Shoshuo/Prismarr/pull/29)).
-- **Per-service enable/disable toggle** ([#15](https://github.com/Shoshuo/Prismarr/issues/15)) — a switch in `/admin/settings` for Prowlarr, Jellyseerr, qBittorrent and TMDb. Disabled: the service drops out of the sidebar, its pages bounce home with a "{service} is disabled" notice, HealthService stops pinging it and the dashboard/topbar treat it as not configured. URL and API key stay in the DB, re-enabling is one click. Disabling a Radarr/Sonarr instance gives the same notice, named after the instance, instead of a bare 404.
+- **Per-service enable/disable toggle** ([#15](https://github.com/Shoshuo/Prismarr/issues/15)) — a switch in `/admin/settings` for Prowlarr, Jellyseerr, qBittorrent and TMDb. Disabled: the service drops out of the sidebar, its pages bounce home with a "{service} is disabled" notice, HealthService stops pinging it, the dashboard/topbar treat it as not configured, and the clients themselves refuse to talk to it (so dashboard widgets that call them directly stop fetching from a "disabled" service). URL and API key stay in the DB, re-enabling is one click. Disabling a Radarr/Sonarr instance gives the same notice, named after the instance, instead of a bare 404.
 - **`PRISMARR_FRAME_ANCESTORS` env var** ([#25](https://github.com/Shoshuo/Prismarr/issues/25)) — set it to a space-separated origin list to embed Prismarr in an iframe (Organizr, Heimdall, …). Unset keeps the default lockdown (`frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN`).
 
 ### Changed
@@ -59,6 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ServiceInstanceProvider::create` / `update` reject bad URL schemes** — `file://` / `javascript:` / `gopher://` blocked at write time via `HealthService::urlBlockedReason`. Defense in depth, the cURL layer is already pinned to HTTP(S).
 - **`AdminInstancesController::testInstance` asserts type ∈ `ServiceInstance::TYPES`** — guard against a future probeFor() that lazily accepts more types.
 - **`HealthService::urlBlockedReason` reports `malformed`** for a URL `parse_url()` can't parse (e.g. a port outside 0-65535), so editing an instance with a bad port shows "Invalid instance URL (malformed)" instead of a misleading "(scheme)".
+- **`PRISMARR_FRAME_ANCESTORS` also strips `;`** alongside control chars, so a typo or a copy-paste accident can't smuggle a fresh CSP directive after `frame-ancestors`. Origins are space-separated; `;` is never legitimate in a value.
 
 ### Tests
 - 32 new unit tests on the v1.1.0 plumbing — `ServiceInstanceProvider` (22), `MultiInstanceBinderSubscriber` (7), `ServiceHealthCache` instance-keyed entries (3). Plus ~17 on `TorrentResolverService` + `SonarrClient::manualImportFromQueueItems`.
@@ -71,7 +72,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 4 more #15 cases — `ConfigExtension` hides a disabled service from the sidebar (2), `ServiceRouteGuardSubscriber` bounces a disabled service (1) and a disabled instance (1) home.
 - 2 `getDefault()` cases — skips a disabled flagged instance, returns null when every instance is disabled.
 - 4 `MediaReleasesSearchTest` cases — episode/season/film release search returns 504 when the upstream call doesn't complete, a plain JSON array when it does.
-- Suite is **370 tests / 828 assertions**, up from 273 / 565 at the end of v1.0.6.
+- 5 `FlatServiceClientDisabledTest` cases — Prowlarr/Jellyseerr/qBittorrent/TMDb clients throw `ServiceNotConfiguredException` from `ensureConfig` when their kill switch is on, fall through to the credential check when the flag is absent.
+- 1 `CspHeaderSubscriber` case — `PRISMARR_FRAME_ANCESTORS` strips `;` to block directive injection on top of the existing CR/LF strip.
+- Suite is **376 tests / 840 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.

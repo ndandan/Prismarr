@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Service\ResetInterface;
@@ -32,6 +33,12 @@ class ProwlarrClient implements ResetInterface
 
     private function ensureConfig(): void
     {
+        // Issue #15 — the kill switch makes the service behave like it isn't
+        // configured at all, so callers (widgets, badges) that don't pre-check
+        // isConfigured/isHealthy don't end up talking to a "disabled" service.
+        if ($this->config->get(self::SERVICE_KEY . '_enabled') === '0') {
+            throw new ServiceNotConfiguredException(self::SERVICE, self::SERVICE_KEY . '_enabled');
+        }
         if ($this->baseUrl === '') {
             $this->baseUrl = $this->config->require('prowlarr_url', self::SERVICE);
             $this->apiKey  = $this->config->require('prowlarr_api_key', self::SERVICE);

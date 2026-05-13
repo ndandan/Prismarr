@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
 use Psr\Log\LoggerInterface;
@@ -31,6 +32,10 @@ class TmdbClient implements ResetInterface
 
     private function ensureConfig(): void
     {
+        // Issue #15 — see the same check in ProwlarrClient for rationale.
+        if ($this->config->get('tmdb_enabled') === '0') {
+            throw new ServiceNotConfiguredException(self::SERVICE, 'tmdb_enabled');
+        }
         if ($this->apiKey === '') {
             $this->apiKey = $this->config->require('tmdb_api_key', self::SERVICE);
         }

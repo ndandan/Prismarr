@@ -169,4 +169,26 @@ class CspHeaderSubscriberTest extends TestCase
         $this->assertStringNotContainsString("\n", $csp);
         $this->assertFalse($response->headers->has('Set-Cookie'));
     }
+
+    public function testFrameAncestorsStripsSemicolonsToBlockDirectiveInjection(): void
+    {
+        // A `;` would close the frame-ancestors directive and let whatever
+        // follows be parsed as a new CSP directive. The operator controls
+        // the env so this isn't a web-attack surface, but stripping `;`
+        // prevents a typo or a copy-paste accident from weakening the CSP.
+        $sub = $this->subscriberWithUrls([], "https://a.test; default-src *");
+        $response = new Response();
+        $sub->onResponse($this->event($response));
+
+        $csp = $response->headers->get('Content-Security-Policy');
+        // The `;` after the origin would have closed frame-ancestors and let
+        // "default-src *" be parsed as a fresh directive — with it stripped,
+        // the leftover tokens stay inside frame-ancestors as harmless
+        // unknown source expressions, and the original default-src 'self'
+        // is the only one a browser sees.
+        $this->assertStringNotContainsString('a.test;', $csp);
+        $this->assertStringNotContainsString('; default-src *', $csp);
+        $this->assertStringContainsString("default-src 'self';", $csp);
+        $this->assertStringContainsString('https://a.test', $csp);
+    }
 }
