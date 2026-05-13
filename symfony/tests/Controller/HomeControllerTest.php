@@ -7,6 +7,7 @@ use App\Entity\ServiceInstance;
 use App\EventSubscriber\LastVisitedRouteSubscriber;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
+use App\Service\HealthService;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -93,6 +94,30 @@ class HomeControllerTest extends TestCase
         return $provider;
     }
 
+    /**
+     * Mirror the legacy "<key>" markers used elsewhere in this file onto
+     * HealthService::isConfigured() — so passing the same `$hasKeys` to
+     * config()/instances()/health() keeps the per-test wiring readable.
+     *
+     * @param list<string> $hasKeys
+     */
+    private function health(array $hasKeys): HealthService
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('isConfigured')->willReturnCallback(
+            fn(string $service) => match ($service) {
+                'tmdb'        => in_array('tmdb_api_key',        $hasKeys, true),
+                'qbittorrent' => in_array('qbittorrent_url',     $hasKeys, true),
+                'radarr'      => in_array('radarr_api_key',      $hasKeys, true),
+                'sonarr'      => in_array('sonarr_api_key',      $hasKeys, true),
+                'prowlarr'    => in_array('prowlarr_api_key',    $hasKeys, true),
+                'jellyseerr'  => in_array('jellyseerr_api_key',  $hasKeys, true),
+                default       => false,
+            }
+        );
+        return $health;
+    }
+
     private function prefs(string $homePage): DisplayPreferencesService
     {
         $prefs = $this->createMock(DisplayPreferencesService::class);
@@ -133,6 +158,7 @@ class HomeControllerTest extends TestCase
             $this->instances([]),
             $this->prefs('dashboard'),
             $this->router(),
+            $this->health([]),
         );
 
         $this->assertInstanceOf(RedirectResponse::class, $response);
@@ -147,6 +173,7 @@ class HomeControllerTest extends TestCase
             $this->instances(['tmdb_api_key']),
             $this->prefs('discovery'),
             $this->router(),
+            $this->health(['tmdb_api_key']),
         );
 
         $this->assertStringContainsString('tmdb_index', $response->getTargetUrl());
@@ -160,6 +187,7 @@ class HomeControllerTest extends TestCase
             $this->instances(['radarr_api_key']),
             $this->prefs('films'),
             $this->router(),
+            $this->health(['radarr_api_key']),
         );
 
         $this->assertStringContainsString('app_media_films', $response->getTargetUrl());
@@ -173,6 +201,7 @@ class HomeControllerTest extends TestCase
             $this->instances(['sonarr_api_key']),
             $this->prefs('series'),
             $this->router(),
+            $this->health(['sonarr_api_key']),
         );
 
         $this->assertStringContainsString('app_media_series', $response->getTargetUrl());
@@ -186,6 +215,7 @@ class HomeControllerTest extends TestCase
             $this->instances(['qbittorrent_url']),
             $this->prefs('qbittorrent'),
             $this->router(),
+            $this->health(['qbittorrent_url']),
         );
 
         $this->assertStringContainsString('app_qbittorrent_index', $response->getTargetUrl());
@@ -199,6 +229,7 @@ class HomeControllerTest extends TestCase
             $this->instances(['radarr_api_key']),
             $this->prefs('discovery'),
             $this->router(),
+            $this->health(['radarr_api_key']),
         );
 
         $this->assertStringContainsString('app_media_films', $response->getTargetUrl());
@@ -206,12 +237,16 @@ class HomeControllerTest extends TestCase
 
     public function testLastVisitedPreferenceUsesCookieWhenRouteExists(): void
     {
+        // qbittorrent_url present + isConfigured('qbittorrent') true so the
+        // disabled-service check inside resolveLastVisitedRoute() lets the
+        // cookie through (without it: redirect-loop guard returns null).
         $response = $this->newController()->index(
             $this->request('app_qbittorrent_index'),
-            $this->config([]),
-            $this->instances([]),
+            $this->config(['qbittorrent_url']),
+            $this->instances(['qbittorrent_url']),
             $this->prefs('last'),
             $this->router(['app_qbittorrent_index']),
+            $this->health(['qbittorrent_url']),
         );
 
         $this->assertStringContainsString('app_qbittorrent_index', $response->getTargetUrl());
@@ -226,6 +261,7 @@ class HomeControllerTest extends TestCase
             $this->instances(['tmdb_api_key']),
             $this->prefs('last'),
             $this->router([]),
+            $this->health(['tmdb_api_key']),
         );
 
         $this->assertStringContainsString('tmdb_index', $response->getTargetUrl());
@@ -239,6 +275,7 @@ class HomeControllerTest extends TestCase
             $this->instances(['tmdb_api_key']),
             $this->prefs('last'),
             $this->router(),
+            $this->health(['tmdb_api_key']),
         );
 
         $this->assertStringContainsString('tmdb_index', $response->getTargetUrl());
@@ -252,10 +289,49 @@ class HomeControllerTest extends TestCase
             $this->instances([]),
             $this->prefs('discovery'),
             $this->router(),
+            $this->health([]),
         );
 
         $this->assertNotInstanceOf(RedirectResponse::class, $response);
         $this->assertInstanceOf(Response::class, $response);
         $this->assertSame(200, $response->getStatusCode());
+    }
+
+    public function testDiscoveryPreferenceFallsThroughWhenTmdbIsDisabled(): void
+    {
+        // Even though tmdb credentials are present in `config()` (legacy
+        // `has()` would say "configured"), `health->isConfigured('tmdb')`
+        // returns false because the user toggled the #15 kill switch off.
+        // Without this guard, HomeController would redirect to tmdb_index,
+        // ServiceRouteGuardSubscriber would redirect back to /, and the
+        // browser would loop on the home page until it gives up.
+        $response = $this->newController()->index(
+            $this->request(),
+            $this->config(['tmdb_api_key']),
+            $this->instances([]),
+            $this->prefs('discovery'),
+            $this->router(),
+            $this->health([]), // tmdb disabled
+        );
+
+        $this->assertNotInstanceOf(RedirectResponse::class, $response);
+    }
+
+    public function testLastVisitedFallsBackWhenItsServiceIsDisabled(): void
+    {
+        // Same redirect-loop scenario, "last" preference flavour: the cookie
+        // points at a tmdb route, credentials are in DB, but the service is
+        // toggled off. resolveLastVisitedRoute() must reject the cookie so
+        // we fall through to the chain (and then the welcome page).
+        $response = $this->newController()->index(
+            $this->request('tmdb_index'),
+            $this->config(['tmdb_api_key']),
+            $this->instances([]),
+            $this->prefs('last'),
+            $this->router(['tmdb_index']),
+            $this->health([]), // tmdb disabled
+        );
+
+        $this->assertNotInstanceOf(RedirectResponse::class, $response);
     }
 }

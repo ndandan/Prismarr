@@ -6,6 +6,7 @@ use App\Entity\ServiceInstance;
 use App\EventSubscriber\LastVisitedRouteSubscriber;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
+use App\Service\HealthService;
 use App\Service\ServiceInstanceProvider;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -30,16 +31,20 @@ class HomeController extends AbstractController
         ServiceInstanceProvider $instances,
         DisplayPreferencesService $prefs,
         RouterInterface $router,
+        HealthService $health,
     ): Response {
-        $preferred = $this->routeForPreference($prefs->getHomePage(), $config, $instances, $request, $router);
+        $preferred = $this->routeForPreference($prefs->getHomePage(), $instances, $request, $router, $health);
         if ($preferred !== null) {
             return $this->redirectToRoute($preferred[0], $preferred[1]);
         }
 
         // Fallback chain — land on the first configured service so the user
         // always sees something useful even if their chosen preference is
-        // not yet backed by config.
-        if ($config->has('tmdb_api_key')) {
+        // not yet backed by config. `isConfigured()` honours the per-service
+        // kill switch (#15) so a disabled service doesn't get redirected
+        // here and then bounced back to home by ServiceRouteGuardSubscriber
+        // (infinite-redirect loop).
+        if ($health->isConfigured('tmdb')) {
             return $this->redirectToRoute('tmdb_index');
         }
         if ($instances->hasAnyEnabled(ServiceInstance::TYPE_RADARR)) {
@@ -51,7 +56,7 @@ class HomeController extends AbstractController
             $defaultSonarr = $instances->getDefault(ServiceInstance::TYPE_SONARR);
             return $this->redirectToRoute('app_media_series', ['slug' => $defaultSonarr->getSlug()]);
         }
-        if ($config->has('qbittorrent_url')) {
+        if ($health->isConfigured('qbittorrent')) {
             return $this->redirectToRoute('app_qbittorrent_index');
         }
 
@@ -73,16 +78,16 @@ class HomeController extends AbstractController
      */
     private function routeForPreference(
         string $homePage,
-        ConfigService $config,
         ServiceInstanceProvider $instances,
         Request $request,
         RouterInterface $router,
+        HealthService $health,
     ): ?array {
         switch ($homePage) {
             case 'dashboard':
                 return ['app_dashboard', []];
             case 'discovery':
-                return $config->has('tmdb_api_key') ? ['tmdb_index', []] : null;
+                return $health->isConfigured('tmdb') ? ['tmdb_index', []] : null;
             case 'films':
                 if (!$instances->hasAnyEnabled(ServiceInstance::TYPE_RADARR)) return null;
                 return ['app_media_films', ['slug' => $instances->getDefault(ServiceInstance::TYPE_RADARR)->getSlug()]];
@@ -90,9 +95,9 @@ class HomeController extends AbstractController
                 if (!$instances->hasAnyEnabled(ServiceInstance::TYPE_SONARR)) return null;
                 return ['app_media_series', ['slug' => $instances->getDefault(ServiceInstance::TYPE_SONARR)->getSlug()]];
             case 'qbittorrent':
-                return $config->has('qbittorrent_url') ? ['app_qbittorrent_index', []] : null;
+                return $health->isConfigured('qbittorrent') ? ['app_qbittorrent_index', []] : null;
             case 'last':
-                return $this->resolveLastVisitedRoute($request, $router, $instances);
+                return $this->resolveLastVisitedRoute($request, $router, $instances, $health);
             default:
                 return null;
         }
@@ -115,7 +120,7 @@ class HomeController extends AbstractController
      *
      * @return array{0: string, 1: array<string, mixed>}|null
      */
-    private function resolveLastVisitedRoute(Request $request, RouterInterface $router, ServiceInstanceProvider $instances): ?array
+    private function resolveLastVisitedRoute(Request $request, RouterInterface $router, ServiceInstanceProvider $instances, HealthService $health): ?array
     {
         $route = $request->cookies->get(LastVisitedRouteSubscriber::COOKIE_NAME);
         if (!is_string($route) || $route === '' || $route === 'app_home') {
@@ -134,6 +139,14 @@ class HomeController extends AbstractController
             return null;
         }
 
+        // If the cookie points at a service that's currently disabled (or
+        // unconfigured), don't redirect there — ServiceRouteGuardSubscriber
+        // would bounce it straight back to /, looping until the browser caps.
+        $serviceId = $this->routeNameToServiceId($route);
+        if ($serviceId !== null && !$health->isConfigured($serviceId)) {
+            return null;
+        }
+
         $params = [];
         if (in_array('slug', $compiled->compile()->getVariables(), true)) {
             $type = $this->routeNameToInstanceType($route);
@@ -143,6 +156,26 @@ class HomeController extends AbstractController
             $params['slug'] = $default->getSlug();
         }
         return [$route, $params];
+    }
+
+    /**
+     * Map a route name to the service id it belongs to (one of `radarr`,
+     * `sonarr`, `prowlarr`, `jellyseerr`, `qbittorrent`, `tmdb`), or null
+     * for routes not tied to a connected service.
+     */
+    private function routeNameToServiceId(string $route): ?string
+    {
+        if (str_starts_with($route, 'radarr_') || str_starts_with($route, 'app_media_films') || str_starts_with($route, 'app_media_radarr')) {
+            return 'radarr';
+        }
+        if (str_starts_with($route, 'sonarr_') || str_starts_with($route, 'app_media_series') || str_starts_with($route, 'app_media_sonarr')) {
+            return 'sonarr';
+        }
+        if (str_starts_with($route, 'tmdb_'))           return 'tmdb';
+        if (str_starts_with($route, 'prowlarr_'))       return 'prowlarr';
+        if (str_starts_with($route, 'jellyseerr_'))     return 'jellyseerr';
+        if (str_starts_with($route, 'app_qbittorrent_')) return 'qbittorrent';
+        return null;
     }
 
     /**

@@ -1485,8 +1485,9 @@
               clearInterval(bulkPoll);
               btn.disabled = false;
               btn.innerHTML = ICON_SEARCH + ' ' + FILM_I18N.search_filtered;
-              var downloaded = msg.match(/(\d+) reports downloaded/);
-              var dlCount = downloaded ? parseInt(downloaded[1]) : 0;
+              // Permissive: handle singular ("1 report downloaded") + "grabbed" variant.
+              var downloaded = msg.match(/(\d+)\s+reports?\s+(?:downloaded|grabbed)/i);
+              var dlCount = downloaded ? parseInt(downloaded[1], 10) : 0;
               if (dlCount > 0) {
                 showPageBanner(tpl(FILM_I18N.w_search_dl_tpl, {DL: dlCount, TOTAL: ids.length}), 'success');
               } else {
@@ -3665,14 +3666,19 @@
               importingCmdIds.delete(cmd.id);
               importingQueueIds.clear();
             }
-            var dl = msg.match(/(\d+) reports downloaded/);
-            var dlCount = dl ? parseInt(dl[1]) : 0;
-            if (dlCount > 0) {
+            // See the matching block in series.html.twig::pollCmd — permissive
+            // regex (singular/plural, downloaded/grabbed) + null sentinel so an
+            // unparseable "Completed" doesn't falsely say "no result found".
+            var dl = msg.match(/(\d+)\s+reports?\s+(?:downloaded|grabbed)/i);
+            var dlCount = dl ? parseInt(dl[1], 10) : null;
+            if (dlCount !== null && dlCount > 0) {
               showPageBanner(tpl(FILM_I18N.w_cmd_dl_ok_tpl, {LBL: label, COUNT: dlCount}), 'success');
             } else if (cmd.name === 'ManualImport') {
               showPageBanner(FILM_I18N.w_cmd_import_done, 'success');
-            } else {
+            } else if (dlCount === 0) {
               showPageBanner(tpl(FILM_I18N.w_cmd_nothing_tpl, {LBL: label}), 'warning');
+            } else {
+              showPageBanner(tpl(FILM_I18N.w_cmd_done_tpl, {LBL: label}), 'success');
             }
             refreshQueue();
           } else if (status === 'failed') {

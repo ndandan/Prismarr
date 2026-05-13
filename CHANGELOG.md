@@ -49,6 +49,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **iCal dedup key parenthesised explicitly** — visual ambiguity around `??` vs `.` precedence (the previous form was correct but error-prone).
 - **Dead `CURRENT_RADARR_SLUG` / `CURRENT_SONARR_SLUG` JS globals removed** — Quick-Add was reverted to `DEFAULT_*_SLUG` semantics and nothing else read them.
 - **qBittorrent 5.2.0 reported as unreachable** ([#28](https://github.com/Shoshuo/Prismarr/issues/28)) — the runtime client demanded HTTP `200` exactly; qBit 5.2.0 answers `204 No Content` on some Web API endpoints. Now accepts the whole 2xx range, matching the connection-test path.
+- **`HomeController` redirect-loop when the chosen home page is a disabled service** — the fallback chain and the `display_home_page = 'discovery' / 'qbittorrent' / 'last'` paths now ask `HealthService::isConfigured()` instead of `ConfigService::has()`, so a disabled service is treated as not-configured and the next viable target is picked. Without this guard, `ServiceRouteGuardSubscriber` would redirect the disabled service back to `app_home` and the browser would bounce until the redirect cap kicked in.
+- **`pollCmd` no longer claims "no release found" when Sonarr/Radarr's completion message lacks the report-count phrase** — the regex `(\d+) reports downloaded` only matched the plural form (so `1 report downloaded` was read as zero) and didn't match newer Sonarr v4 messages that just say "Completed". Now permissive (singular/plural, `downloaded`/`grabbed`) and falls back to the neutral "complete" banner when no count is found — instead of the misleading "no result found" warning.
 - **Pre-1.1.0 media URLs 404'd after upgrade** — `/medias/films`, `/medias/series`, `/medias/radarr/...` and `/medias/sonarr/...` (and the AJAX routes a cached v1.0.x page keeps polling) now 307-redirect to the default instance's slug-aware path. Method preserved, so cached POST handlers keep working. Bookmarks survive `docker compose pull`.
 
 ### Security
@@ -59,7 +61,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`ServiceInstanceProvider::create` / `update` reject bad URL schemes** — `file://` / `javascript:` / `gopher://` blocked at write time via `HealthService::urlBlockedReason`. Defense in depth, the cURL layer is already pinned to HTTP(S).
 - **`AdminInstancesController::testInstance` asserts type ∈ `ServiceInstance::TYPES`** — guard against a future probeFor() that lazily accepts more types.
 - **`HealthService::urlBlockedReason` reports `malformed`** for a URL `parse_url()` can't parse (e.g. a port outside 0-65535), so editing an instance with a bad port shows "Invalid instance URL (malformed)" instead of a misleading "(scheme)".
-- **`PRISMARR_FRAME_ANCESTORS` also strips `;`** alongside control chars, so a typo or a copy-paste accident can't smuggle a fresh CSP directive after `frame-ancestors`. Origins are space-separated; `;` is never legitimate in a value.
+- **`PRISMARR_FRAME_ANCESTORS` also strips `;` and `,`** alongside control chars: `;` would close `frame-ancestors` and smuggle a fresh CSP directive, `,` splits the header into multiple intersected policies (a footgun that silently breaks the app even though it can't weaken the policy). Origins are space-separated, neither character is ever legitimate.
+- **Global qBittorrent poll script gated on `service_configured('qbittorrent')`** — when qBit is disabled the poll endpoint redirects to home, the JS reads HTML, `r.json()` throws, the circuit breaker backs off to two minutes. Skipping the script entirely when the service is off keeps the page quiet.
 
 ### Tests
 - 32 new unit tests on the v1.1.0 plumbing — `ServiceInstanceProvider` (22), `MultiInstanceBinderSubscriber` (7), `ServiceHealthCache` instance-keyed entries (3). Plus ~17 on `TorrentResolverService` + `SonarrClient::manualImportFromQueueItems`.
@@ -73,8 +76,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - 2 `getDefault()` cases — skips a disabled flagged instance, returns null when every instance is disabled.
 - 4 `MediaReleasesSearchTest` cases — episode/season/film release search returns 504 when the upstream call doesn't complete, a plain JSON array when it does.
 - 5 `FlatServiceClientDisabledTest` cases — Prowlarr/Jellyseerr/qBittorrent/TMDb clients throw `ServiceNotConfiguredException` from `ensureConfig` when their kill switch is on, fall through to the credential check when the flag is absent.
-- 1 `CspHeaderSubscriber` case — `PRISMARR_FRAME_ANCESTORS` strips `;` to block directive injection on top of the existing CR/LF strip.
-- Suite is **376 tests / 840 assertions**, up from 273 / 565 at the end of v1.0.6.
+- 2 `CspHeaderSubscriber` cases — `PRISMARR_FRAME_ANCESTORS` strips `;` and `,` on top of the existing CR/LF strip.
+- 2 new `HomeControllerTest` cases pinning the redirect-loop fix — `discovery` and `last` preferences fall through cleanly when the target service is disabled.
+- Suite is **379 tests / 845 assertions**, up from 273 / 565 at the end of v1.0.6.
 
 ### Migrations
 - `migrations/Version20260503000000.php` (Big Bang) — creates `service_instance`, seeds the legacy `radarr_url` / `radarr_api_key` / `sonarr_url` / `sonarr_api_key` settings into a default instance per service (`slug = radarr-1` / `sonarr-1`), then drops the four settings rows. Reversible.

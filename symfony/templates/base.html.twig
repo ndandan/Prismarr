@@ -2150,16 +2150,20 @@
 
   {# ══════════════════════════════════════════════════════════════════════════
      Global qBittorrent poll — DL completion / error toasts + sidebar badge
-     Active only on media pages (avoids hitting qBit everywhere)
+     Active only on media pages (avoids hitting qBit everywhere). Also skipped
+     when qBit is disabled (#15) — otherwise the poll endpoint would chase a
+     route-guard redirect every few seconds and turn `r.json()` into a JS
+     SyntaxError that the circuit breaker then backs off for two minutes.
      ══════════════════════════════════════════════════════════════════════════ #}
   {% set route = app.request.attributes.get('_route') ?? '' %}
-  {% if route starts with 'app_qbittorrent_'
+  {% if service_configured('qbittorrent') and (
+        route starts with 'app_qbittorrent_'
      or route starts with 'app_media'
      or route starts with 'radarr_'
      or route starts with 'sonarr_'
      or route starts with 'prowlarr_'
      or route starts with 'jellyseerr_'
-     or route starts with 'tmdb_' %}
+     or route starts with 'tmdb_') %}
   <script>
   (function () {
     var QBT_POLL_URL = '{{ path('app_qbittorrent_api_poll_summary') }}';

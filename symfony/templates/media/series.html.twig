@@ -2862,14 +2862,19 @@
         var isCurrentModal = pollSeriesId && pollSeriesId == currentId;
         if (st === 'completed') {
           clearInterval(timer);
-          var dl = msg.match(/(\d+) reports downloaded/);
-          var dlCount = dl ? parseInt(dl[1]) : 0;
+          // Sonarr's command message sometimes carries "(\d+) report(s) downloaded"
+          // or "grabbed" (older versions, singular vs plural varies), often just
+          // "Completed" on v4+. Treat a no-match as "unknown count" rather than
+          // "zero" so we stop falsely claiming "no result found" when Sonarr did
+          // grab something but doesn't tell us how many.
+          var dl = msg.match(/(\d+)\s+reports?\s+(?:downloaded|grabbed)/i);
+          var dlCount = dl ? parseInt(dl[1], 10) : null;
           var searchKw = SERIES_I18N.d_search_bookmark.toLowerCase();
           var isSearch = label.toLowerCase().indexOf(searchKw) !== -1 || label.toLowerCase().indexOf('recherche') !== -1 || label.toLowerCase().indexOf('search') !== -1;
-          if (dlCount > 0) {
+          if (dlCount !== null && dlCount > 0) {
             if (isCurrentModal) showBanner(tpl(SERIES_I18N.w_cmd_dl_ok_tpl, { LBL: label, COUNT: dlCount }), 'success');
             showPageBanner(tpl(SERIES_I18N.w_cmd_dl_ok_tpl, { LBL: label, COUNT: dlCount }), 'success', pollSeriesId);
-          } else if (isSearch) {
+          } else if (dlCount === 0 && isSearch) {
             if (isCurrentModal) showBanner(tpl(SERIES_I18N.w_cmd_nothing_tpl, { LBL: label }), 'warning');
             showPageBanner(tpl(SERIES_I18N.w_cmd_nothing_tpl, { LBL: label }), 'warning', pollSeriesId);
           } else {

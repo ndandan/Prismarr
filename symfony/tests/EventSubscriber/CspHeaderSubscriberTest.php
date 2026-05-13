@@ -170,6 +170,24 @@ class CspHeaderSubscriberTest extends TestCase
         $this->assertFalse($response->headers->has('Set-Cookie'));
     }
 
+    public function testFrameAncestorsStripsCommasToAvoidMultiPolicyFootgun(): void
+    {
+        // A comma in a CSP header splits it into multiple policies which the
+        // browser then enforces as their intersection. That can't weaken the
+        // policy, but it can silently break the app for the admin who typo'd
+        // it (e.g. `https://a.com, https://b.com` → second policy has only
+        // frame-ancestors set, and default-src 'self' is *missing* there).
+        // Stripping `,` removes the footgun.
+        $sub = $this->subscriberWithUrls([], 'https://a.test, https://b.test');
+        $response = new Response();
+        $sub->onResponse($this->event($response));
+
+        $csp = $response->headers->get('Content-Security-Policy');
+        $this->assertStringNotContainsString(',', $csp);
+        $this->assertStringContainsString('https://a.test', $csp);
+        $this->assertStringContainsString('https://b.test', $csp);
+    }
+
     public function testFrameAncestorsStripsSemicolonsToBlockDirectiveInjection(): void
     {
         // A `;` would close the frame-ancestors directive and let whatever

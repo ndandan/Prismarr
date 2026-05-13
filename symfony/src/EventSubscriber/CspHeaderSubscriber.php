@@ -71,11 +71,13 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
 
         $response = $event->getResponse();
 
-        // Strip control chars (stray CR/LF can't smuggle a second header) and
-        // `;` (which would otherwise close `frame-ancestors` and let a typo
-        // smuggle another CSP directive). Origins are space-separated, so
-        // neither character is ever legitimate in a value.
-        $extraAncestors = trim(preg_replace('/[\x00-\x1F\x7F;]/', '', $this->frameAncestors ?? '') ?? '');
+        // Strip control chars (CR/LF would smuggle a second header), `;`
+        // (would close `frame-ancestors` and let a typo smuggle another CSP
+        // directive) and `,` (browsers split comma-separated CSPs into
+        // multiple policies and *intersect* them — a stray comma can't
+        // weaken the policy but silently breaks the app for the admin who
+        // typo'd it, and it's never legitimate in a value).
+        $extraAncestors = trim(preg_replace('/[\x00-\x1F\x7F;,]/', '', $this->frameAncestors ?? '') ?? '');
 
         if ($extraAncestors === '') {
             $response->headers->set('X-Frame-Options', 'SAMEORIGIN');
