@@ -2584,8 +2584,6 @@
             currentEpReleases = releases;
             renderEpReleases(releases, tbody);
             tableWrap.style.display = '';
-            showBanner(tpl(SERIES_I18N.d_releases_found_season_tpl, { COUNT: releases.length, N: sn }), 'success');
-            setTimeout(hideBanner, 3000);
           })
           .catch(function() {
             searchInProgress = false;
@@ -3591,8 +3589,6 @@
       currentEpReleases = releases;
       renderEpReleases(releases, tbody);
       tableWrap.style.display = '';
-      showBanner(tpl(SERIES_I18N.d_releases_found_tpl, { COUNT: releases.length }), 'success');
-      setTimeout(hideBanner, 3000);
     })
     .catch(function() {
       searchInProgress = false;
