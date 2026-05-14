@@ -1,0 +1,131 @@
+<?php
+
+namespace App\Service\Media;
+
+use Symfony\Component\HttpFoundation\Request;
+
+/**
+ * Read-only criteria for filtering / sorting / paginating the Radarr movie
+ * library server-side. Built from a Request via fromRequest() with strict
+ * validation so a hand-crafted query string can't slip an unknown sort key
+ * or a negative page number into the filter.
+ */
+final class MovieLibraryQuery
+{
+    /** Status filters mirror the legacy client-side JS for behavior parity. */
+    public const STATUSES = ['all', 'monitored', 'downloaded', 'missing', 'unmonitored'];
+
+    public const SORTS = ['title-asc', 'title-desc', 'year-desc', 'year-asc', 'added-desc', 'size-desc', 'size-asc'];
+
+    public const ALLOWED_PER_PAGE = [50, 100, 200, 500];
+
+    public function __construct(
+        public readonly string $q = '',
+        public readonly string $status = 'all',
+        public readonly string $quality = '',
+        public readonly string $genre = '',
+        public readonly string $language = '',
+        public readonly string $sort = 'title-asc',
+        public readonly int $page = 1,
+        public readonly int $perPage = 200,
+        public readonly bool $unlimited = false,
+    ) {}
+
+    public static function fromRequest(Request $request, int $defaultPerPage = 200): self
+    {
+        $status = (string) $request->query->get('status', 'all');
+        if (!in_array($status, self::STATUSES, true)) {
+            $status = 'all';
+        }
+
+        // Backwards compat with v1.0 bookmarks that used ?filter= instead of
+        // ?status=. The legacy param is honored only when ?status= isn't
+        // explicitly set, so the new param always wins when both are present.
+        if ($status === 'all' && !$request->query->has('status') && $request->query->has('filter')) {
+            $legacy = (string) $request->query->get('filter');
+            if (in_array($legacy, self::STATUSES, true)) {
+                $status = $legacy;
+            }
+        }
+
+        $sort = (string) $request->query->get('sort', 'title-asc');
+        if (!in_array($sort, self::SORTS, true)) {
+            $sort = 'title-asc';
+        }
+
+        $perPage = (int) $request->query->get('per_page', $defaultPerPage);
+        if (!in_array($perPage, self::ALLOWED_PER_PAGE, true)) {
+            $perPage = in_array($defaultPerPage, self::ALLOWED_PER_PAGE, true) ? $defaultPerPage : 200;
+        }
+
+        $page = (int) $request->query->get('page', 1);
+        if ($page < 1) {
+            $page = 1;
+        }
+
+        return new self(
+            q: trim((string) $request->query->get('q', '')),
+            status: $status,
+            quality: trim((string) $request->query->get('quality', '')),
+            genre: trim((string) $request->query->get('genre', '')),
+            language: trim((string) $request->query->get('language', '')),
+            sort: $sort,
+            page: $page,
+            perPage: $perPage,
+            unlimited: $request->query->getBoolean('unlimited'),
+        );
+    }
+
+    /**
+     * True when the user has narrowed the library beyond a sort/search.
+     * Drives the visibility of bulk-filtered action buttons.
+     */
+    public function hasActiveFilter(): bool
+    {
+        return $this->status !== 'all'
+            || $this->quality !== ''
+            || $this->genre !== ''
+            || $this->language !== '';
+    }
+
+    /**
+     * Same query with pagination dropped — used for bulk actions on the full
+     * filtered scope (e.g. "rechercher filtré" applies to all 350 matches,
+     * not just the 200 visible on the current page).
+     */
+    public function withoutPagination(): self
+    {
+        return new self(
+            q: $this->q,
+            status: $this->status,
+            quality: $this->quality,
+            genre: $this->genre,
+            language: $this->language,
+            sort: $this->sort,
+            page: 1,
+            perPage: $this->perPage,
+            unlimited: true,
+        );
+    }
+
+    /**
+     * Re-emit the active criteria as a query string array, suitable for
+     * `path('app_media_films', merge(criteria, {page: 2}))` in Twig links.
+     * Empty values are stripped so the URL stays clean.
+     *
+     * @return array<string, string|int>
+     */
+    public function toQueryArray(): array
+    {
+        $out = [];
+        if ($this->q !== '')        $out['q'] = $this->q;
+        if ($this->status !== 'all') $out['status'] = $this->status;
+        if ($this->quality !== '')  $out['quality'] = $this->quality;
+        if ($this->genre !== '')    $out['genre'] = $this->genre;
+        if ($this->language !== '') $out['language'] = $this->language;
+        if ($this->sort !== 'title-asc') $out['sort'] = $this->sort;
+        if ($this->perPage !== 200) $out['per_page'] = $this->perPage;
+
+        return $out;
+    }
+}
