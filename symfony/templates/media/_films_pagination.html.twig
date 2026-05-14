@@ -1,0 +1,109 @@
+{# Issue #19 — pagination bar for the films library view.
+   Rendered twice on the films page: once below the filters, once below
+   the grid. Honors the current query so links carry over the active
+   filters / search / sort.
+
+   Required context:
+     - library : MovieLibraryResult (.page, .totalPages, .total, .perPage, .libraryTotal)
+     - query   : MovieLibraryQuery   (used via .toQueryArray() to keep filters)
+     - slug    : current Radarr instance slug (for path('app_media_films'))
+     - position: 'top' | 'bottom' — drives the alignment styling
+#}
+{% set q = query.toQueryArray() %}
+{% set page = library.page %}
+{% set last = library.totalPages %}
+{% set windowSize = 2 %}
+{% set baseParams = q|merge({ slug: slug }) %}
+
+{# Build a "1 2 … 5 6 7 … 12" page list with ellipsis around the active page.
+   The middle range (rangeStart..rangeEnd) is only emitted when there's at
+   least one intermediate page — otherwise Twig's a..b operator builds a
+   descending sequence and we'd end up duplicating 1 and last (e.g. with
+   last=2 the naive form spits out [1, 2, 1, 2]). #}
+{% set links = [] %}
+{% if last > 1 %}
+  {% set links = links|merge([1]) %}
+  {% set rangeStart = max(2, page - windowSize) %}
+  {% set rangeEnd   = min(last - 1, page + windowSize) %}
+  {% if rangeStart > 2 %}
+    {% set links = links|merge(['…']) %}
+  {% endif %}
+  {% if rangeStart <= rangeEnd %}
+    {% for p in rangeStart..rangeEnd %}
+      {% set links = links|merge([p]) %}
+    {% endfor %}
+  {% endif %}
+  {% if rangeEnd < last - 1 %}
+    {% set links = links|merge(['…']) %}
+  {% endif %}
+  {% set links = links|merge([last]) %}
+{% endif %}
+
+<div class="card my-2 films-pagination-card films-pagination-{{ position|default('bottom') }}">
+  <div class="card-body py-2">
+    <div class="row align-items-center g-2">
+      <div class="col-12 col-md text-muted small text-center text-md-start">
+        {%- if library.total == 0 -%}
+          {{ 'media.films.pagination.no_results'|trans }}
+        {%- else -%}
+          {%- set firstIdx = (page - 1) * library.perPage + 1 -%}
+          {%- set lastIdx  = min(page * library.perPage, library.total) -%}
+          {{ 'media.films.pagination.range'|trans({ first: firstIdx, last: lastIdx, total: library.total }) }}
+          {%- if library.total < library.libraryTotal %}
+            <span class="text-secondary">· {{ 'media.films.pagination.filtered_from'|trans({ total: library.libraryTotal }) }}</span>
+          {%- endif -%}
+        {%- endif -%}
+      </div>
+
+      {% if last > 1 %}
+        <div class="col-12 col-md-auto d-flex justify-content-center">
+          <nav aria-label="{{ 'media.films.pagination.aria_label'|trans }}">
+            <ul class="pagination pagination-sm mb-0">
+              <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                {% if page > 1 %}
+                  <a class="page-link" href="{{ path('app_media_films', baseParams|merge({ page: page - 1 })) }}" rel="prev" aria-label="{{ 'media.films.pagination.prev'|trans }}">‹</a>
+                {% else %}
+                  <span class="page-link" aria-hidden="true">‹</span>
+                {% endif %}
+              </li>
+
+              {% for p in links %}
+                {% if p == '…' %}
+                  <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% elseif p == page %}
+                  <li class="page-item active" aria-current="page"><span class="page-link">{{ p }}</span></li>
+                {% else %}
+                  <li class="page-item"><a class="page-link" href="{{ path('app_media_films', baseParams|merge({ page: p })) }}">{{ p }}</a></li>
+                {% endif %}
+              {% endfor %}
+
+              <li class="page-item {% if page >= last %}disabled{% endif %}">
+                {% if page < last %}
+                  <a class="page-link" href="{{ path('app_media_films', baseParams|merge({ page: page + 1 })) }}" rel="next" aria-label="{{ 'media.films.pagination.next'|trans }}">›</a>
+                {% else %}
+                  <span class="page-link" aria-hidden="true">›</span>
+                {% endif %}
+              </li>
+            </ul>
+          </nav>
+        </div>
+
+        {# Direct page jump — useful when there's an ellipsis hiding the page you want.
+           Rendered in the 3rd column so the nav stays optically centered even when
+           the jump is hidden (last < 5) — empty column = symmetric breathing room. #}
+        <div class="col-12 col-md d-flex justify-content-center justify-content-md-end">
+          {% if last >= 5 %}
+            <form method="get" action="{{ path('app_media_films', { slug: slug }) }}" class="d-flex align-items-center gap-1 films-pagination-jump" aria-label="{{ 'media.films.pagination.jump_aria'|trans }}">
+              {% for k, v in q %}
+                <input type="hidden" name="{{ k }}" value="{{ v }}">
+              {% endfor %}
+              <label for="films-page-jump-{{ position|default('bottom') }}" class="text-muted small mb-0">{{ 'media.films.pagination.jump_label'|trans }}</label>
+              <input type="number" id="films-page-jump-{{ position|default('bottom') }}" name="page" min="1" max="{{ last }}" value="{{ page }}" class="form-control form-control-sm" style="width:64px" inputmode="numeric">
+              <span class="text-muted small">/ {{ last }}</span>
+            </form>
+          {% endif %}
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>

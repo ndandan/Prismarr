@@ -5,6 +5,9 @@ namespace App\Controller;
 use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
+use App\Service\DisplayPreferencesService;
+use App\Service\Media\MovieLibraryFilter;
+use App\Service\Media\MovieLibraryQuery;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\QBittorrentClient;
 use App\Service\Media\RadarrClient;
@@ -46,11 +49,15 @@ class MediaController extends AbstractController
      * method runs, so we just call $this->radarr like in v1.0.
      */
     #[Route('/films', name: 'films')]
-    public function films(): Response
-    {
+    public function films(
+        Request $request,
+        MovieLibraryFilter $filter,
+        DisplayPreferencesService $prefs,
+    ): Response {
         // Issue #13 — large libraries (5k+ items) make the parse + Twig
         // render flirt with the default 60s ceiling. Bumped to give big
-        // homelabs headroom until server-side pagination ships in 1.1.0.
+        // homelabs headroom even with server-side pagination since the raw
+        // Radarr payload still has to be parsed and faceted.
         set_time_limit(120);
 
         $movies = [];
@@ -99,19 +106,60 @@ class MediaController extends AbstractController
             $error = true;
         }
 
-        usort($movies, fn($a, $b) => strcmp($a['sortTitle'], $b['sortTitle']));
-
+        // Issue #19 — server-side filter/sort/pagination. Stats stay anchored
+        // to the full library so the cards don't shift when the user narrows.
         $total      = count($movies);
         $downloaded = count(array_filter($movies, fn($m) => $m['hasFile']));
         $monitored  = count(array_filter($movies, fn($m) => $m['monitored'] && !$m['hasFile']));
         $totalGb    = round(array_sum(array_column($movies, 'sizeGb')), 1);
 
+        $query = MovieLibraryQuery::fromRequest($request, $prefs->getPageSize());
+
+        // Deep-link support: when ?open={radarrId} arrives (e.g. from a qBit
+        // torrent badge), find which page of the filtered library contains
+        // that movie and switch to it, otherwise the auto-open JS can't
+        // find the card in the DOM.
+        $openId = $request->query->getInt('open');
+        if ($openId > 0) {
+            $full = $filter->apply($movies, $query->withoutPagination());
+            foreach ($full->items as $position => $movie) {
+                if ((int) ($movie['id'] ?? 0) === $openId) {
+                    $targetPage = intdiv($position, $query->perPage) + 1;
+                    if ($targetPage !== $query->page) {
+                        $query = new MovieLibraryQuery(
+                            q: $query->q,
+                            status: $query->status,
+                            quality: $query->quality,
+                            genre: $query->genre,
+                            language: $query->language,
+                            sort: $query->sort,
+                            page: $targetPage,
+                            perPage: $query->perPage,
+                            unlimited: false,
+                        );
+                    }
+                    break;
+                }
+            }
+        }
+
+        $library = $filter->apply($movies, $query);
+
         $current = $this->radarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_RADARR);
+        // Defensive guard. ServiceRouteGuardSubscriber should redirect long
+        // before we reach this point when no Radarr instance is configured,
+        // but if a worker keeps a stale binding around we'd otherwise render
+        // a template that calls path() with a null slug → 500.
+        if ($current === null) {
+            throw $this->createNotFoundException('No Radarr instance configured.');
+        }
         return $this->render('media/films.html.twig', [
-            'movies' => $movies,
-            'queue'  => $queue,
-            'error'  => $error,
-            'service_url' => $current?->getUrl(),
+            'movies'  => $library->items,
+            'library' => $library,
+            'query'   => $query,
+            'queue'   => $queue,
+            'error'   => $error,
+            'service_url' => $current->getUrl(),
             'current_instance' => $current,
             'instance_count'   => $this->instances->count(ServiceInstance::TYPE_RADARR),
             'warnings' => $warnings,
@@ -522,6 +570,45 @@ class MediaController extends AbstractController
     }
 
     // ── Queue ─────────────────────────────────────────────────────────────────
+
+    /**
+     * Issue #19 — resolve the current films filter to the list of matching
+     * movie IDs, ignoring pagination. Backs the "Refresh filtered" /
+     * "Search filtered" buttons so they act on the full filtered scope (not
+     * just the page in the DOM).
+     *
+     * `searchable_only=1` keeps only monitored movies without a file —
+     * what the user really wants for a bulk indexer search.
+     */
+    #[Route('/films/filter/ids', name: 'films_filter_ids', methods: ['GET'])]
+    public function filmsFilteredIds(Request $request, MovieLibraryFilter $filter): JsonResponse
+    {
+        try {
+            $movies = $this->radarr->getMovies();
+        } catch (\Throwable $e) {
+            $this->logger->warning('Media filmsFilteredIds failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
+            return $this->jsonClientError('Radarr', $this->radarr, $this->translator->trans('media.api.network_error'));
+        }
+        $query = MovieLibraryQuery::fromRequest($request)->withoutPagination();
+        $result = $filter->apply($movies, $query);
+
+        $searchableOnly = $request->query->getBoolean('searchable_only');
+        $ids = [];
+        foreach ($result->items as $movie) {
+            if ($searchableOnly && (($movie['hasFile'] ?? false) || !($movie['monitored'] ?? false))) {
+                continue;
+            }
+            if (isset($movie['id'])) {
+                $ids[] = (int) $movie['id'];
+            }
+        }
+
+        return $this->json([
+            'ok'    => true,
+            'ids'   => $ids,
+            'total' => count($ids),
+        ]);
+    }
 
     #[Route('/films/bulk/refresh', name: 'films_bulk_refresh', methods: ['POST'])]
     public function filmsBulkRefresh(Request $request): JsonResponse

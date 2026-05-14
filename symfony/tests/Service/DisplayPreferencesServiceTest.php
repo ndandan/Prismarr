@@ -109,6 +109,7 @@ class DisplayPreferencesServiceTest extends TestCase
         $prefs = $this->serviceWith([
             'display_toasts'       => '0',
             'display_qbit_refresh' => '10',
+            'display_page_size'    => '100',
         ]);
 
         $all = $prefs->all();
@@ -116,8 +117,15 @@ class DisplayPreferencesServiceTest extends TestCase
         $this->assertSame('dashboard', $all['home_page']);
         $this->assertFalse($all['toasts']);
         $this->assertSame(10, $all['qbit_refresh_seconds']);
+        $this->assertSame(100, $all['page_size']);
         $this->assertSame('#6366f1', $all['theme_color_hex']);
         $this->assertSame('99, 102, 241', $all['theme_color_rgb']);
+    }
+
+    public function testPageSizeFallsBackToDefault(): void
+    {
+        $this->assertSame(200, $this->serviceWith([])->getPageSize(), 'unset → default 200');
+        $this->assertSame(500, $this->serviceWith(['display_page_size' => '500'])->getPageSize());
     }
 
     public function testThemeColorRgbMatchesEachPaletteEntry(): void

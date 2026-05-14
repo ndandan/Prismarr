@@ -653,6 +653,14 @@ admin:
       options:
         comfortable: Confortable (défaut)
         compact: Compacte
+    page_size:
+      label: Éléments par page
+      help: 'Nombre de films ou séries listés par page dans les vues bibliothèque. Plus la page est grande, plus le rendu est lent mais plus on voit d''items.'
+      options:
+        '50': '50 par page'
+        '100': '100 par page'
+        '200': '200 par page (défaut)'
+        '500': '500 par page'
     language:
       label: Langue de l'interface
       help: 'Langue par défaut de l''interface. Chaque utilisateur peut surcharger via le sélecteur de la barre du haut.'
@@ -1095,6 +1103,7 @@ media:
       mo_suffix: Mo
     filters:
       search_placeholder: "Rechercher…"
+      apply: Appliquer
       status:
         all: Tous
         monitored: Suivis
@@ -1112,6 +1121,16 @@ media:
         added_desc: Ajouté récemment
         size_desc: 'Taille ↓'
         size_asc: 'Taille ↑'
+    pagination:
+      no_results: 'Aucun film ne correspond aux filtres actuels.'
+      range: '{first} – {last} sur {total}'
+      filtered_from: 'filtrés sur {total}'
+      prev: 'Page précédente'
+      next: 'Page suivante'
+      aria_label: 'Pagination de la bibliothèque'
+      reset_filters: Réinitialiser les filtres
+      jump_label: 'Aller à'
+      jump_aria: 'Aller à une page précise'
     view:
       grid: Grille
       wall: Mur
@@ -1374,6 +1393,8 @@ media:
     warnings_update_error: "❌ Erreur actualisation : {error}"
     warnings_network_error: "❌ Erreur réseau."
     warnings_no_missing_filter: "⚠️ Aucun film manquant dans la sélection filtrée."
+    warnings_no_filter_match: "⚠️ Aucun film ne correspond au filtre actuel."
+    warnings_resolving_filter: "Résolution des films filtrés…"
     warnings_search_confirm: "Lancer la recherche pour {count} film(s) manquant(s) ?"
     warnings_search_progress: "🔍 Recherche en cours pour {count} film(s) manquant(s) sur {indexers} indexeur(s)..."
     warnings_search_dl: "✅ Recherche terminée — {dl} téléchargement(s) lancé(s) pour {total} film(s). Vérifiez la queue ci-dessus."

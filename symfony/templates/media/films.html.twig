@@ -58,13 +58,14 @@
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
 .queue-progress-bar { height: 100%; border-radius: 2px; background: var(--tblr-primary); transition: width .3s; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
-.filter-btn { border-radius: 0 !important; border-bottom: 2px solid transparent !important; background: transparent !important; }
-.filter-btn.active { background: transparent !important; }
+/* Issue #19 — status filter buttons: outlined variants with a tinted active state */
+.filter-btn { font-weight: 500; }
+.filter-btn.active { color: #fff !important; }
 .filter-btn[data-filter="all"].active,
-.filter-btn[data-filter="unmonitored"].active { color: var(--tblr-secondary) !important; border-bottom-color: var(--tblr-secondary) !important; }
-.filter-btn[data-filter="monitored"].active { color: var(--tblr-info) !important; border-bottom-color: var(--tblr-info) !important; }
-.filter-btn[data-filter="downloaded"].active { color: var(--tblr-success) !important; border-bottom-color: var(--tblr-success) !important; }
-.filter-btn[data-filter="missing"].active { color: var(--tblr-warning) !important; border-bottom-color: var(--tblr-warning) !important; }
+.filter-btn[data-filter="unmonitored"].active { background-color: var(--tblr-secondary) !important; border-color: var(--tblr-secondary) !important; }
+.filter-btn[data-filter="monitored"].active { background-color: var(--tblr-info) !important; border-color: var(--tblr-info) !important; }
+.filter-btn[data-filter="downloaded"].active { background-color: var(--tblr-success) !important; border-color: var(--tblr-success) !important; }
+.filter-btn[data-filter="missing"].active { background-color: var(--tblr-warning) !important; border-color: var(--tblr-warning) !important; }
 
 /* ── Modal film detail ── */
 .film-header-backdrop {
@@ -293,81 +294,121 @@
   <div id="queue-body"></div>
 </div>
 
-{# ── Filtres ── #}
-<div class="card mb-3">
-  <div class="card-body py-2">
-    <div class="d-flex align-items-center gap-2 flex-wrap">
-      <input type="text" id="search-input" class="form-control form-control-sm" placeholder="{{ 'media.films.filters.search_placeholder'|trans }}" style="max-width:180px" autocomplete="off">
-      <div class="d-flex gap-1 flex-wrap">
-        <button class="btn btn-sm btn-ghost-secondary filter-btn active" data-filter="all">{{ 'media.films.filters.status.all'|trans }}</button>
-        <button class="btn btn-sm btn-ghost-success filter-btn" data-filter="downloaded">{{ 'media.films.filters.status.downloaded'|trans }}</button>
-        <button class="btn btn-sm btn-ghost-warning filter-btn" data-filter="missing">{{ 'media.films.filters.status.missing'|trans }}</button>
-        <button class="btn btn-sm btn-ghost-secondary filter-btn" data-filter="unmonitored">{{ 'media.films.filters.status.unmonitored'|trans }}</button>
-        <button class="btn btn-sm btn-ghost-info filter-btn" data-filter="monitored">{{ 'media.films.filters.status.monitored'|trans }}</button>
-      </div>
-      <select id="filter-quality" class="form-select form-select-sm" style="max-width:110px">
-        <option value="">{{ 'media.films.filters.quality'|trans }}</option>
-      </select>
-      <select id="filter-genre" class="form-select form-select-sm" style="max-width:110px">
-        <option value="">{{ 'media.films.filters.genre'|trans }}</option>
-      </select>
-      <select id="filter-language" class="form-select form-select-sm" style="max-width:110px">
-        <option value="">{{ 'media.films.filters.language'|trans }}</option>
-      </select>
-      <select id="sort-select" class="form-select form-select-sm" style="max-width:140px">
-        <option value="title-asc">{{ 'media.films.filters.sort.title_asc'|trans }}</option>
-        <option value="title-desc">{{ 'media.films.filters.sort.title_desc'|trans }}</option>
-        <option value="year-desc">{{ 'media.films.filters.sort.year_desc'|trans }}</option>
-        <option value="year-asc">{{ 'media.films.filters.sort.year_asc'|trans }}</option>
-        <option value="added-desc">{{ 'media.films.filters.sort.added_desc'|trans }}</option>
-        <option value="size-desc">{{ 'media.films.filters.sort.size_desc'|trans }}</option>
-        <option value="size-asc">{{ 'media.films.filters.sort.size_asc'|trans }}</option>
-      </select>
-      <div class="btn-group ms-auto" id="view-mode-btns">
-        <button class="btn btn-sm btn-secondary view-btn active" data-view="grid" title="{{ 'media.films.view.grid'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-        </button>
-        <button class="btn btn-sm btn-ghost-secondary view-btn" data-view="wall" title="{{ 'media.films.view.wall'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="9"/><rect x="10" y="2" width="6" height="9"/><rect x="18" y="2" width="4" height="9"/><rect x="2" y="13" width="6" height="9"/><rect x="10" y="13" width="6" height="9"/><rect x="18" y="13" width="4" height="9"/></svg>
-        </button>
-        <button class="btn btn-sm btn-ghost-secondary view-btn" data-view="extended" title="{{ 'media.films.view.extended'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="18" height="7" rx="1"/></svg>
-        </button>
-        <button class="btn btn-sm btn-ghost-secondary view-btn" data-view="table" title="{{ 'media.films.view.table'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        </button>
-        <button class="btn btn-sm btn-ghost-secondary view-btn" data-view="shelf" title="{{ 'media.films.view.shelf'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/><rect x="5" y="2" width="3" height="4"/><rect x="10" y="2" width="3" height="4"/><rect x="5" y="8" width="3" height="4"/><rect x="10" y="8" width="3" height="4"/><rect x="15" y="8" width="3" height="4"/></svg>
-        </button>
+{# ── Filters (issue #19 — server-side pagination + filters) ──
+   Layout: two side-by-side cards.
+     - Left card: filters (row 1 search + status buttons,
+                           row 2 dropdowns quality / genre / language / sort)
+     - Right card: view modes (row 1) + actions refresh / RSS / select / + Add (row 2)
+   The right card sizes to its content, the left one stretches to fill the rest.
+   On mobile (<1200px) they stack vertically via the xl breakpoint. #}
+<div class="row g-2 mb-3 align-items-stretch films-toolbar">
+  <div class="col-12 col-xl-9">
+    <div class="card h-100 films-toolbar-filters">
+      <div class="card-body py-2">
+      <form method="get" id="films-filter-form" action="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="d-flex flex-column gap-2">
+        <input type="hidden" name="status" id="films-filter-status" value="{{ query.status }}">
+        {# Row 1: search input (fixed width) + 5 status buttons sharing the remaining width via flex-fill. #}
+        <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
+          <input type="text" name="q" id="search-input" class="form-control form-control-sm" placeholder="{{ 'media.films.filters.search_placeholder'|trans }}" style="max-width:220px" value="{{ query.q }}" autocomplete="off">
+          <div class="d-flex gap-1 flex-wrap flex-md-nowrap films-status-group flex-fill">
+            <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'all' %} active{% endif %}" data-filter="all">{{ 'media.films.filters.status.all'|trans }}</button>
+            <button type="button" class="btn btn-sm btn-outline-success filter-btn flex-fill{% if query.status == 'downloaded' %} active{% endif %}" data-filter="downloaded">{{ 'media.films.filters.status.downloaded'|trans }}</button>
+            <button type="button" class="btn btn-sm btn-outline-warning filter-btn flex-fill{% if query.status == 'missing' %} active{% endif %}" data-filter="missing">{{ 'media.films.filters.status.missing'|trans }}</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'unmonitored' %} active{% endif %}" data-filter="unmonitored">{{ 'media.films.filters.status.unmonitored'|trans }}</button>
+            <button type="button" class="btn btn-sm btn-outline-info filter-btn flex-fill{% if query.status == 'monitored' %} active{% endif %}" data-filter="monitored">{{ 'media.films.filters.status.monitored'|trans }}</button>
+          </div>
+        </div>
+        {# Row 2: 4 dropdowns sharing the available width via flex-fill. #}
+        <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
+          <select name="quality" id="filter-quality" class="form-select form-select-sm flex-fill" style="min-width:120px">
+            <option value="">{{ 'media.films.filters.quality'|trans }}</option>
+            {% for q in library.qualities %}
+              <option value="{{ q }}"{% if query.quality == q %} selected{% endif %}>{{ q }}</option>
+            {% endfor %}
+          </select>
+          <select name="genre" id="filter-genre" class="form-select form-select-sm flex-fill" style="min-width:120px">
+            <option value="">{{ 'media.films.filters.genre'|trans }}</option>
+            {% for g in library.genres %}
+              <option value="{{ g }}"{% if query.genre == g %} selected{% endif %}>{{ g }}</option>
+            {% endfor %}
+          </select>
+          <select name="language" id="filter-language" class="form-select form-select-sm flex-fill" style="min-width:120px">
+            <option value="">{{ 'media.films.filters.language'|trans }}</option>
+            {% for l in library.languages %}
+              <option value="{{ l }}"{% if query.language == l %} selected{% endif %}>{{ l }}</option>
+            {% endfor %}
+          </select>
+          <select name="sort" id="sort-select" class="form-select form-select-sm flex-fill" style="min-width:140px">
+            <option value="title-asc"{% if query.sort == 'title-asc' %} selected{% endif %}>{{ 'media.films.filters.sort.title_asc'|trans }}</option>
+            <option value="title-desc"{% if query.sort == 'title-desc' %} selected{% endif %}>{{ 'media.films.filters.sort.title_desc'|trans }}</option>
+            <option value="year-desc"{% if query.sort == 'year-desc' %} selected{% endif %}>{{ 'media.films.filters.sort.year_desc'|trans }}</option>
+            <option value="year-asc"{% if query.sort == 'year-asc' %} selected{% endif %}>{{ 'media.films.filters.sort.year_asc'|trans }}</option>
+            <option value="added-desc"{% if query.sort == 'added-desc' %} selected{% endif %}>{{ 'media.films.filters.sort.added_desc'|trans }}</option>
+            <option value="size-desc"{% if query.sort == 'size-desc' %} selected{% endif %}>{{ 'media.films.filters.sort.size_desc'|trans }}</option>
+            <option value="size-asc"{% if query.sort == 'size-asc' %} selected{% endif %}>{{ 'media.films.filters.sort.size_asc'|trans }}</option>
+          </select>
+        </div>
+        <noscript><button type="submit" class="btn btn-sm btn-primary align-self-start">{{ 'media.films.filters.apply'|trans }}</button></noscript>
+      </form>
+      {% if query.hasActiveFilter or query.q != '' %}
+        <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top films-bulk-row">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-update-filtered" style="display:{% if query.hasActiveFilter %}inline-flex{% else %}none{% endif %}" title="{{ 'media.films.actions.refresh_filtered_title'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
+            {{ 'media.films.actions.refresh_filtered'|trans }}
+          </button>
+          <button type="button" class="btn btn-warning btn-sm" id="btn-search-filtered" style="display:{% if query.hasActiveFilter %}inline-flex{% else %}none{% endif %}" title="{{ 'media.films.actions.search_filtered_title'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            {{ 'media.films.actions.search_filtered'|trans }}
+          </button>
+          <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-sm btn-ghost-secondary ms-auto">{{ 'media.films.pagination.reset_filters'|trans }}</a>
+        </div>
+      {% endif %}
       </div>
     </div>
-    <div class="d-flex align-items-center gap-1 mt-2">
-      <button class="btn btn-primary btn-sm" id="btn-update-filtered" style="display:none" title="{{ 'media.films.actions.refresh_filtered_title'|trans }}">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
-        {{ 'media.films.actions.refresh_filtered'|trans }}
-      </button>
-      <button class="btn btn-warning btn-sm" id="btn-search-filtered" style="display:none" title="{{ 'media.films.actions.search_filtered_title'|trans }}">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
-        {{ 'media.films.actions.search_filtered'|trans }}
-      </button>
-      <div class="ms-auto d-flex gap-1 align-items-center">
-        <button class="btn btn-sm btn-ghost-secondary" id="btn-refresh-all" title="{{ 'media.films.actions.refresh_all_title'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
-        </button>
-        <button class="btn btn-sm btn-ghost-secondary" id="btn-rss-sync" title="{{ 'media.films.actions.rss_sync'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
-        </button>
-        <button class="btn btn-sm btn-outline-secondary" id="btn-select-mode" title="{{ 'media.films.actions.select_mode'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        </button>
-        <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modal-add-film">
-          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          {{ 'media.films.actions.add'|trans }}
-        </button>
+  </div>
+  <div class="col-12 col-xl-3">
+    <div class="card h-100 films-toolbar-actions">
+      <div class="card-body py-2">
+      <div class="d-flex flex-column gap-2 align-items-stretch">
+        <div class="d-flex gap-1" id="view-mode-btns">
+          <button type="button" class="btn btn-sm btn-secondary view-btn flex-fill active" data-view="grid" title="{{ 'media.films.view.grid'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost-secondary view-btn flex-fill" data-view="wall" title="{{ 'media.films.view.wall'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="6" height="9"/><rect x="10" y="2" width="6" height="9"/><rect x="18" y="2" width="4" height="9"/><rect x="2" y="13" width="6" height="9"/><rect x="10" y="13" width="6" height="9"/><rect x="18" y="13" width="4" height="9"/></svg>
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost-secondary view-btn flex-fill" data-view="extended" title="{{ 'media.films.view.extended'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="7" rx="1"/><rect x="3" y="14" width="18" height="7" rx="1"/></svg>
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost-secondary view-btn flex-fill" data-view="table" title="{{ 'media.films.view.table'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost-secondary view-btn flex-fill" data-view="shelf" title="{{ 'media.films.view.shelf'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/><rect x="5" y="2" width="3" height="4"/><rect x="10" y="2" width="3" height="4"/><rect x="5" y="8" width="3" height="4"/><rect x="10" y="8" width="3" height="4"/><rect x="15" y="8" width="3" height="4"/></svg>
+          </button>
+        </div>
+        <div class="d-flex gap-1 align-items-stretch">
+          <button type="button" class="btn btn-sm btn-ghost-secondary flex-fill" id="btn-refresh-all" title="{{ 'media.films.actions.refresh_all_title'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-4.95"/></svg>
+          </button>
+          <button type="button" class="btn btn-sm btn-ghost-secondary flex-fill" id="btn-rss-sync" title="{{ 'media.films.actions.rss_sync'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1"/></svg>
+          </button>
+          <button type="button" class="btn btn-sm btn-outline-secondary flex-fill" id="btn-select-mode" title="{{ 'media.films.actions.select_mode'|trans }}">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          </button>
+          <button type="button" class="btn btn-primary btn-sm flex-fill" data-bs-toggle="modal" data-bs-target="#modal-add-film">
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            {{ 'media.films.actions.add'|trans }}
+          </button>
+        </div>
+      </div>
       </div>
     </div>
   </div>
 </div>
+
+{% include 'media/_films_pagination.html.twig' with { library: library, query: query, slug: current_instance.slug, position: 'top' } only %}
 
 {# ── Shelves view (movies) ── #}
 <div id="films-shelf-view"></div>
@@ -684,6 +725,8 @@
   </div>
 {% endfor %}
 </div>
+
+{% include 'media/_films_pagination.html.twig' with { library: library, query: query, slug: current_instance.slug, position: 'bottom' } only %}
 
 {# ══════════════════════════════════════════════════════════════════════════════
    MODAL DETAIL FILM — Redesign Jellyfin/Radarr style
@@ -1181,6 +1224,8 @@
     w_update_error_tpl: {{ 'media.films.warnings_update_error'|trans({error: '__ERR__'})|json_encode|raw }},
     w_network_error: {{ 'media.films.warnings_network_error'|trans|json_encode|raw }},
     w_no_missing_filter: {{ 'media.films.warnings_no_missing_filter'|trans|json_encode|raw }},
+    w_no_filter_match: {{ 'media.films.warnings_no_filter_match'|trans|json_encode|raw }},
+    w_resolving_filter: {{ 'media.films.warnings_resolving_filter'|trans|json_encode|raw }},
     w_search_confirm_tpl: {{ 'media.films.warnings_search_confirm'|trans({count: '__COUNT__'})|json_encode|raw }},
     w_search_progress_tpl: {{ 'media.films.warnings_search_progress'|trans({count: '__COUNT__', indexers: '__IDX__'})|json_encode|raw }},
     w_search_dl_tpl: {{ 'media.films.warnings_search_dl'|trans({dl: '__DL__', total: '__TOTAL__'})|json_encode|raw }},
@@ -1285,104 +1330,71 @@
   }
 
   /* ══════════════════════════════════════════════════════════════════════════
-     Grille + filtres
+     Grid + filters — issue #19 made everything server-side.
+     The #films-filter-form re-navigates with the new query params on every
+     change; the grid rendered by Twig is already filtered, sorted, paginated.
+     applyFilters() is kept as a no-op shim for legacy call sites
+     (bulk-delete), it just triggers a shelf rebuild when that view is active.
      ══════════════════════════════════════════════════════════════════════════ */
   var grid    = document.getElementById('movies-grid');
   var search  = document.getElementById('search-input');
-  var btnAll  = document.querySelectorAll('.filter-btn');
+  var btnAll  = document.querySelectorAll('#films-filter-form .filter-btn');
   var counter = document.getElementById('count-label'); // peut être null
-  var currentFilter = 'all';
+  var filmsShelfView = document.getElementById('films-shelf-view');
+  var filterForm   = document.getElementById('films-filter-form');
+  var statusInput  = document.getElementById('films-filter-status');
+  var filmsShelfBuilt = false;
+
+  function submitFiltersForm() {
+    if (!filterForm) return;
+    if (typeof filterForm.requestSubmit === 'function') {
+      filterForm.requestSubmit();
+    } else {
+      filterForm.submit();
+    }
+  }
 
   function applyFilters() {
-    var q       = search.value.toLowerCase().trim();
-    var fQual   = filterQuality.value;
-    var fGenre  = filterGenre.value;
-    var fLang   = filterLanguage.value;
-    var cards   = grid.querySelectorAll('.media-card');
-    var visible = 0;
-
-    cards.forEach(function (c) {
-      var title     = c.dataset.title || '';
-      var hasFile   = c.dataset.hasFile === '1';
-      var monitored = c.dataset.monitored === '1';
-
-      var status    = c.dataset.status || 'released';
-      var isUnavail = !hasFile && monitored && (status === 'announced' || status === 'inCinemas');
-
-      var matchSearch = !q || title.includes(q);
-      var matchStatus = currentFilter === 'all'
-        || (currentFilter === 'monitored'    && monitored)
-        || (currentFilter === 'downloaded'   && hasFile)
-        || (currentFilter === 'missing'      && !hasFile && monitored)
-        || (currentFilter === 'unmonitored'  && !monitored);
-      var matchQuality  = !fQual || (c.dataset.quality || '') === fQual;
-      var matchGenre    = !fGenre || (c.dataset.genres || '').split(',').indexOf(fGenre) !== -1;
-      var matchLanguage = !fLang || (c.dataset.language || '').indexOf(fLang) !== -1;
-
-      var show = matchSearch && matchStatus && matchQuality && matchGenre && matchLanguage;
-      if (show) {
-        c.style.removeProperty('display');
-        visible++;
-      } else {
-        c.style.setProperty('display', 'none', 'important');
-      }
-    });
-
-    if (counter) counter.textContent = visible; // raw count; the label context handles singular/plural
-
-    // Sync filtre sur le tableau
-    document.querySelectorAll('.films-table-row').forEach(function(row) {
-      var card = grid.querySelector('.media-card[data-id="' + row.dataset.id + '"]');
-      row.style.display = (card && getComputedStyle(card).display !== 'none') ? '' : 'none';
-    });
-
-    // Show bulk buttons only when a status/quality/genre/language filter is applied (not sort or text search)
-    var hasFilter = currentFilter !== 'all' || fQual || fGenre || fLang;
-    document.getElementById('btn-update-filtered').style.display = hasFilter ? '' : 'none';
-    document.getElementById('btn-search-filtered').style.display = hasFilter ? '' : 'none';
-
-    // Rebuild shelves if visible
-    if (filmsShelfView.style.display === 'block') { filmsShelfBuilt = false; buildFilmsShelf(); }
+    // Server-side filtering already drove the current DOM; only the shelf
+    // rebuild needs to be re-triggered when it's the active view.
+    if (filmsShelfView && filmsShelfView.style.display === 'block' && typeof buildFilmsShelf === 'function') {
+      filmsShelfBuilt = false; buildFilmsShelf();
+    }
   }
 
-  // Populate filters dynamically from card data
-  var qualitySet = new Set();
-  var genreSet = new Set();
-  var languageSet = new Set();
-  grid.querySelectorAll('.media-card').forEach(function(c) {
-    if (c.dataset.quality) qualitySet.add(c.dataset.quality);
-    (c.dataset.language || '').split(', ').forEach(function(l) { if (l.trim()) languageSet.add(l.trim()); });
-    (c.dataset.genres || '').split(',').forEach(function(g) { if (g.trim()) genreSet.add(g.trim()); });
+  // Auto-submit on filter change.
+  ['filter-quality', 'filter-genre', 'filter-language', 'sort-select'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.addEventListener('change', submitFiltersForm);
   });
 
-  function populateSelect(id, values) {
-    var sel = document.getElementById(id);
-    var label = sel.options[0].text;
-    Array.from(values).sort().forEach(function(v) {
-      var opt = document.createElement('option'); opt.value = v; opt.textContent = v;
-      sel.appendChild(opt);
+  // Debounced text search: submit after 300ms of inactivity so typing
+  // a 5-letter word doesn't trigger 5 navigations.
+  var _filmSearchTimer;
+  if (search) {
+    search.addEventListener('input', function() {
+      clearTimeout(_filmSearchTimer);
+      _filmSearchTimer = setTimeout(submitFiltersForm, 300);
     });
   }
-  populateSelect('filter-quality', qualitySet);
-  populateSelect('filter-genre', genreSet);
-  populateSelect('filter-language', languageSet);
 
-  var filterQuality = document.getElementById('filter-quality');
-  var filterGenre = document.getElementById('filter-genre');
-  var filterLanguage = document.getElementById('filter-language');
-  filterQuality.addEventListener('change', applyFilters);
-  filterGenre.addEventListener('change', applyFilters);
-  filterLanguage.addEventListener('change', applyFilters);
-
-  search.addEventListener('input', applyFilters);
+  // Build a query string from the form so the bulk-filtered endpoints can
+  // re-apply the same filter server-side.
+  function currentFilterParams(extra) {
+    var params = new URLSearchParams(new FormData(filterForm));
+    Object.keys(extra || {}).forEach(function(k) { params.set(k, extra[k]); });
+    return params.toString();
+  }
 
   /* ── Bulk actions on filtered films ── */
-  function getFilteredMovieIds() {
-    var ids = [];
-    grid.querySelectorAll('.media-card').forEach(function(c) {
-      if (c.style.display !== 'none') ids.push(parseInt(c.dataset.id));
+  // Resolve the current filter to the full list of matching movie IDs via
+  // the server (so bulk-filtered actions hit the whole filtered scope, not
+  // just the items rendered on the current page).
+  function fetchFilteredIds(extra) {
+    var url = '/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/filter/ids?' + currentFilterParams(extra || {});
+    return ajaxGet(url).then(function(data) {
+      return (data && Array.isArray(data.ids)) ? data.ids : [];
     });
-    return ids;
   }
 
   var ICON_REFRESH = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>';
@@ -1420,53 +1432,70 @@
     }
   }
 
-  document.getElementById('btn-update-filtered').addEventListener('click', function() {
-    var ids = getFilteredMovieIds();
-    if (!ids.length) return;
+  // The bulk-filtered buttons are only rendered when a status / quality /
+  // genre / language filter or a text search is active (conditional wrapper
+  // in the template). Guard so an inactive page doesn't crash with
+  // "addEventListener of null".
+  var btnUpdateFiltered = document.getElementById('btn-update-filtered');
+  if (btnUpdateFiltered) btnUpdateFiltered.addEventListener('click', function() {
     var btn = this;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + ids.length + '...';
-    showPageBannerHtml('<span class="spinner-border spinner-border-sm me-2"></span> ' + tpl(FILM_I18N.w_update_tpl, {COUNT: ids.length}), 'info');
+    var originalHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+    showPageBannerHtml('<span class="spinner-border spinner-border-sm me-2"></span> ' + FILM_I18N.w_resolving_filter, 'info');
 
-    ajaxPost('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/bulk/refresh', { movieIds: ids })
-    .then(function(data) {
-      btn.disabled = false;
-      btn.innerHTML = ICON_REFRESH + ' ' + FILM_I18N.refresh_filtered;
-      if (data.ok) {
-        showPageBanner(tpl(FILM_I18N.w_update_tpl, {COUNT: ids.length}), 'success');
-      } else {
-        showPageBanner(tpl(FILM_I18N.w_update_error_tpl, {ERR: data.error || FILM_I18N.unknown_error}), 'danger');
+    fetchFilteredIds().then(function(ids) {
+      if (!ids.length) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        showPageBanner(FILM_I18N.w_no_filter_match, 'warning');
+        return;
       }
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + ids.length + '...';
+      showPageBannerHtml('<span class="spinner-border spinner-border-sm me-2"></span> ' + tpl(FILM_I18N.w_update_tpl, {COUNT: ids.length}), 'info');
+
+      return ajaxPost('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/bulk/refresh', { movieIds: ids })
+      .then(function(data) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        if (data.ok) {
+          showPageBanner(tpl(FILM_I18N.w_update_tpl, {COUNT: ids.length}), 'success');
+        } else {
+          showPageBanner(tpl(FILM_I18N.w_update_error_tpl, {ERR: data.error || FILM_I18N.unknown_error}), 'danger');
+        }
+      });
     }).catch(function() {
       btn.disabled = false;
-      btn.innerHTML = ICON_REFRESH + ' ' + FILM_I18N.refresh_filtered;
+      btn.innerHTML = originalHtml;
       showPageBanner(FILM_I18N.w_network_error, 'danger');
     });
   });
 
-  document.getElementById('btn-search-filtered').addEventListener('click', function() {
-    var ids = [];
-    grid.querySelectorAll('.media-card').forEach(function(c) {
-      if (c.style.display !== 'none' && c.dataset.hasFile === '0' && c.dataset.monitored === '1') ids.push(parseInt(c.dataset.id));
-    });
-    if (!ids.length) {
-      showPageBanner(FILM_I18N.w_no_missing_filter, 'warning');
-      return;
-    }
-    if (!confirm(tpl(FILM_I18N.w_search_confirm_tpl, {COUNT: ids.length}))) return;
+  var btnSearchFiltered = document.getElementById('btn-search-filtered');
+  if (btnSearchFiltered) btnSearchFiltered.addEventListener('click', function() {
     var btn = this;
+    var originalHtml = btn.innerHTML;
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + ids.length + '...';
-    showPageBannerHtml('<span class="spinner-border spinner-border-sm me-2"></span> ' + tpl(FILM_I18N.w_search_progress_tpl, {COUNT: ids.length, IDX: INDEXER_COUNT}), 'info');
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
 
-    var filmNames = [];
-    grid.querySelectorAll('.media-card').forEach(function(c) {
-      if (c.style.display !== 'none' && c.dataset.hasFile === '0' && c.dataset.monitored === '1') {
-        filmNames.push(c.getAttribute('title') || '?');
+    // Ask the server for monitored-and-missing IDs across the whole filter,
+    // then chain into the existing bulk-search command.
+    fetchFilteredIds({ searchable_only: '1' }).then(function(ids) {
+      if (!ids.length) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        showPageBanner(FILM_I18N.w_no_missing_filter, 'warning');
+        return;
       }
-    });
+      if (!confirm(tpl(FILM_I18N.w_search_confirm_tpl, {COUNT: ids.length}))) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+        return;
+      }
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + ids.length + '...';
+      showPageBannerHtml('<span class="spinner-border spinner-border-sm me-2"></span> ' + tpl(FILM_I18N.w_search_progress_tpl, {COUNT: ids.length, IDX: INDEXER_COUNT}), 'info');
 
-    ajaxPost('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/bulk/search', { movieIds: ids })
+      return ajaxPost('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/bulk/search', { movieIds: ids })
     .then(function(data) {
       if (data.ok && data.cmdId) {
         // Poll le statut de la commande
@@ -1521,76 +1550,25 @@
       btn.innerHTML = ICON_SEARCH + ' ' + FILM_I18N.search_filtered;
       showPageBanner(FILM_I18N.w_network_error, 'danger');
     });
-  });
-
-  var sortSelect = document.getElementById('sort-select');
-  sortSelect.addEventListener('change', function() {
-    var val = this.value;
-    var cards = Array.from(grid.querySelectorAll('.media-card'));
-    cards.sort(function(a, b) {
-      switch(val) {
-        case 'title-asc':  return (a.dataset.title || '').localeCompare(b.dataset.title || '');
-        case 'title-desc': return (b.dataset.title || '').localeCompare(a.dataset.title || '');
-        case 'year-desc':  return (parseInt(b.dataset.year) || 0) - (parseInt(a.dataset.year) || 0);
-        case 'year-asc':   return (parseInt(a.dataset.year) || 0) - (parseInt(b.dataset.year) || 0);
-        case 'added-desc': return (b.dataset.added || '').localeCompare(a.dataset.added || '');
-        case 'size-desc':  return (parseInt(b.dataset.size) || 0) - (parseInt(a.dataset.size) || 0);
-        case 'size-asc':   return (parseInt(a.dataset.size) || 0) - (parseInt(b.dataset.size) || 0);
-        default: return 0;
-      }
+    }).catch(function() {
+      // fetchFilteredIds failed (network / 5xx) — restore the UI.
+      btn.disabled = false;
+      btn.innerHTML = originalHtml;
+      showPageBanner(FILM_I18N.w_network_error, 'danger');
     });
-    cards.forEach(function(c) { grid.appendChild(c); });
-    applyFilters();
   });
 
-  // Issue #14 — persist the active status filter so refreshes, shared
-  // links and sidebar navigation back to /medias/films keep the same
-  // view. Two layers: URL params (for shareable / refresh-safe links)
-  // and localStorage (so navigating away then back via the sidebar
-  // doesn't reset to "All"). URL wins when present so a shared link
-  // overrides the visitor's local pref. Only the status filter is
-  // persisted here; quality / genre / language / sort / search follow
-  // alongside the v1.1.0 pagination refactor.
-  var FILMS_FILTER_KEY = 'prismarrFilmsFilter';
-
-  function syncFilterToUrl() {
-    var url = new URL(window.location.href);
-    if (currentFilter === 'all') {
-      url.searchParams.delete('filter');
-      try { localStorage.removeItem(FILMS_FILTER_KEY); } catch (e) {}
-    } else {
-      url.searchParams.set('filter', currentFilter);
-      try { localStorage.setItem(FILMS_FILTER_KEY, currentFilter); } catch (e) {}
-    }
-    window.history.replaceState({}, '', url);
-  }
-
+  // Status buttons → set the hidden input and submit (the form's GET
+  // submission becomes the new ?status= in the URL, no localStorage
+  // needed since the URL is the source of truth).
   btnAll.forEach(function (btn) {
     btn.addEventListener('click', function () {
       btnAll.forEach(function (b) { b.classList.remove('active'); });
       btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      syncFilterToUrl();
-      applyFilters();
+      statusInput.value = btn.dataset.filter || 'all';
+      submitFiltersForm();
     });
   });
-
-  // Restore the persisted filter AFTER the click handlers are wired up,
-  // by dispatching a click on the matching button. This goes through the
-  // same code path as a manual click (active class + applyFilters), so
-  // we don't end up with two slightly different init paths.
-  (function restorePersistedFilter() {
-    var requested = new URL(window.location.href).searchParams.get('filter');
-    if (!requested) {
-      try { requested = localStorage.getItem(FILMS_FILTER_KEY); } catch (e) {}
-    }
-    if (!requested || requested === 'all') return;
-    var target = null;
-    btnAll.forEach(function (b) {
-      if (b.dataset.filter === requested) target = b;
-    });
-    if (target) target.click();
-  })();
 
   /* ══════════════════════════════════════════════════════════════════════════
      Utilitaires
@@ -4067,32 +4045,18 @@
      Modes de vue
      ══════════════════════════════════════════════════════════════════════════ */
   var filmsTableView = document.getElementById('films-table-view');
-  var filmsShelfView = document.getElementById('films-shelf-view');
-  var filmsShelfBuilt = false;
+  // filmsShelfView and filmsShelfBuilt are already defined alongside the
+  // filter helpers above (issue #19 needed them earlier in the file).
   var filmsShelfExpanded = {};
 
+  // Issue #19 — cards in the DOM are already filtered/sorted server-side,
+  // so the shelves operate on whatever the user is currently looking at.
+  // Caveat: with pagination active the shelves only see the current page.
+  // The unlimited-fetch variant ships in 1.1.1+.
   function buildFilmsShelf() {
     if (filmsShelfBuilt) return;
     filmsShelfBuilt = true;
-    var q = search.value.toLowerCase().trim();
-    var fQual = filterQuality.value;
-    var fGenre = filterGenre.value;
-    var fLang = filterLanguage.value;
-    var cards = Array.from(grid.querySelectorAll('.media-card')).filter(function(c) {
-      var title = c.dataset.title || '';
-      var hasFile = c.dataset.hasFile === '1';
-      var monitored = c.dataset.monitored === '1';
-      var matchSearch = !q || title.includes(q);
-      var matchStatus = currentFilter === 'all'
-        || (currentFilter === 'monitored' && monitored)
-        || (currentFilter === 'downloaded' && hasFile)
-        || (currentFilter === 'missing' && !hasFile && monitored)
-        || (currentFilter === 'unmonitored' && !monitored);
-      var matchQuality = !fQual || (c.dataset.quality || '') === fQual;
-      var matchGenre = !fGenre || (c.dataset.genres || '').split(',').indexOf(fGenre) !== -1;
-      var matchLanguage = !fLang || (c.dataset.language || '').indexOf(fLang) !== -1;
-      return matchSearch && matchStatus && matchQuality && matchGenre && matchLanguage;
-    });
+    var cards = Array.from(grid.querySelectorAll('.media-card'));
     var groups = {
       'downloaded': { label: '✅ ' + FILM_I18N.shelf_downloaded, items: [] },
       'missing': { label: '⚠️ ' + FILM_I18N.shelf_missing, items: [] },
@@ -4563,17 +4527,31 @@
     ajaxPost('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/bulk/delete', { movieIds: ids, deleteFiles: document.getElementById('bulk-delete-files').checked, addExclusion: document.getElementById('bulk-delete-exclude').checked }).then(function(d) {
       btn.disabled = false; btn.innerHTML = FILM_I18N.b_delete;
       closeBulkModal('modal-bulk-delete');
-      if (d.ok) { ids.forEach(function(mid) { var c = grid.querySelector('[data-id="' + mid + '"]'); if (c) c.remove(); }); clearSelection(); showPageBanner(tpl(FILM_I18N.w_bulk_delete_ok_tpl, {COUNT: ids.length}), 'success'); applyFilters(); }
-      else showPageBanner(FILM_I18N.w_generic_error, 'danger');
+      if (d.ok) {
+        ids.forEach(function(mid) { var c = grid.querySelector('[data-id="' + mid + '"]'); if (c) c.remove(); });
+        clearSelection();
+        showPageBanner(tpl(FILM_I18N.w_bulk_delete_ok_tpl, {COUNT: ids.length}), 'success');
+        // Reload the same URL after the success banner so the server-side
+        // pagination counters ("1-200 of N") drop the deleted movies.
+        setTimeout(function() { location.reload(); }, 1500);
+      } else {
+        showPageBanner(FILM_I18N.w_generic_error, 'danger');
+      }
     });
   });
 
-  // Deep-link : ?open={radarrId} → ouvre la modal du film
+  // Deep-link: ?open={radarrId} opens the matching movie modal once the page
+  // has rendered. The controller has already switched to the page that holds
+  // this id, so the card is guaranteed to be in the DOM. We strip only the
+  // `open` param afterwards so a refresh re-renders the same filter view
+  // without re-triggering the modal.
   var openParam = new URLSearchParams(window.location.search).get('open');
   if (openParam) {
     var target = document.querySelector('.media-card[data-id="' + openParam + '"]');
     if (target) setTimeout(function() { target.click(); }, 300);
-    history.replaceState(null, '', window.location.pathname);
+    var cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete('open');
+    history.replaceState(null, '', cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : '') + cleanUrl.hash);
   }
 
 })();

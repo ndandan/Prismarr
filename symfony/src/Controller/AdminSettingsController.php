@@ -225,6 +225,18 @@ class AdminSettingsController extends AbstractController
                 'compact'     => 'admin.display.ui_density.options.compact',
             ],
         ],
+        'display_page_size' => [
+            'label'   => 'admin.display.page_size.label',
+            'type'    => 'select',
+            'default' => '200',
+            'options' => [
+                '50'  => 'admin.display.page_size.options.50',
+                '100' => 'admin.display.page_size.options.100',
+                '200' => 'admin.display.page_size.options.200',
+                '500' => 'admin.display.page_size.options.500',
+            ],
+            'help' => 'admin.display.page_size.help',
+        ],
         // Languages: kept in DISPLAY_OPTIONS to provide defaults to
         // DisplayPreferencesService and loadDisplayValues, but marked
         // `hidden: true` so they don't show up in the Display section

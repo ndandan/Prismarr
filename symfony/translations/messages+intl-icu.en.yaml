@@ -654,6 +654,14 @@ admin:
       options:
         comfortable: Comfortable (default)
         compact: Compact
+    page_size:
+      label: Items per page
+      help: 'Number of films or series listed per page on the library views. Larger pages render slower but show more at once.'
+      options:
+        '50': '50 per page'
+        '100': '100 per page'
+        '200': '200 per page (default)'
+        '500': '500 per page'
     language:
       label: UI language
       help: 'Default UI language. Every user can override it via the top-bar picker.'
@@ -1096,6 +1104,7 @@ media:
       mo_suffix: MB
     filters:
       search_placeholder: "Search…"
+      apply: Apply
       status:
         all: All
         monitored: Monitored
@@ -1113,6 +1122,16 @@ media:
         added_desc: Recently added
         size_desc: 'Size ↓'
         size_asc: 'Size ↑'
+    pagination:
+      no_results: 'No movie matches the current filters.'
+      range: '{first} – {last} of {total}'
+      filtered_from: 'filtered from {total}'
+      prev: 'Previous page'
+      next: 'Next page'
+      aria_label: 'Movie library pagination'
+      reset_filters: Clear filters
+      jump_label: 'Go to'
+      jump_aria: 'Jump to a specific page'
     view:
       grid: Grid
       wall: Wall
@@ -1375,6 +1394,8 @@ media:
     warnings_update_error: "❌ Refresh error: {error}"
     warnings_network_error: "❌ Network error."
     warnings_no_missing_filter: "⚠️ No missing movie in the filtered selection."
+    warnings_no_filter_match: "⚠️ No movie matches the current filter."
+    warnings_resolving_filter: "Resolving filtered movies…"
     warnings_search_confirm: "Search for {count} missing movie(s)?"
     warnings_search_progress: "🔍 Searching for {count} missing movie(s) on {indexers} indexer(s)..."
     warnings_search_dl: "✅ Search done — {dl} download(s) started for {total} movie(s). Check the queue above."
