@@ -408,7 +408,7 @@
   </div>
 </div>
 
-{% include 'media/_films_pagination.html.twig' with { library: library, query: query, slug: current_instance.slug, position: 'top' } only %}
+{% include 'media/_library_pagination.html.twig' with { library: library, query: query, slug: current_instance.slug, position: 'top', route_name: 'app_media_films', i18n_prefix: 'media.films.pagination', section: 'films' } only %}
 
 {# ── Shelves view (movies) ── #}
 <div id="films-shelf-view"></div>
@@ -726,7 +726,7 @@
 {% endfor %}
 </div>
 
-{% include 'media/_films_pagination.html.twig' with { library: library, query: query, slug: current_instance.slug, position: 'bottom' } only %}
+{% include 'media/_library_pagination.html.twig' with { library: library, query: query, slug: current_instance.slug, position: 'bottom', route_name: 'app_media_films', i18n_prefix: 'media.films.pagination', section: 'films' } only %}
 
 {# ══════════════════════════════════════════════════════════════════════════════
    MODAL DETAIL FILM — Redesign Jellyfin/Radarr style

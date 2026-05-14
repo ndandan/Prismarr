@@ -1,13 +1,19 @@
-{# Issue #19 — pagination bar for the films library view.
-   Rendered twice on the films page: once below the filters, once below
-   the grid. Honors the current query so links carry over the active
-   filters / search / sort.
+{# Issue #19 — generic pagination bar for the library views (films + series).
+   Rendered twice per page (once below the filters, once below the grid).
+   Honors the current query so links carry over the active filters / search
+   / sort.
 
    Required context:
-     - library : MovieLibraryResult (.page, .totalPages, .total, .perPage, .libraryTotal)
-     - query   : MovieLibraryQuery   (used via .toQueryArray() to keep filters)
-     - slug    : current Radarr instance slug (for path('app_media_films'))
-     - position: 'top' | 'bottom' — drives the alignment styling
+     - library     : Result DTO (.page, .totalPages, .total, .perPage, .libraryTotal)
+     - query       : Query DTO   (used via .toQueryArray() to keep filters)
+     - slug        : current instance slug (for path(route_name))
+     - position    : 'top' | 'bottom' — drives the alignment styling and
+                     disambiguates the page-jump input id between the two
+                     pagination instances on the same page
+     - route_name  : Symfony route name to call path() on (e.g. 'app_media_films')
+     - i18n_prefix : translation namespace for the strings, e.g.
+                     'media.films.pagination' or 'media.series.pagination'
+     - section     : short discriminator used in DOM ids (e.g. 'films', 'series')
 #}
 {% set q = query.toQueryArray() %}
 {% set page = library.page %}
@@ -39,29 +45,29 @@
   {% set links = links|merge([last]) %}
 {% endif %}
 
-<div class="card my-2 films-pagination-card films-pagination-{{ position|default('bottom') }}">
+<div class="card my-2 library-pagination-card {{ section|default('library') }}-pagination-{{ position|default('bottom') }}">
   <div class="card-body py-2">
     <div class="row align-items-center g-2">
       <div class="col-12 col-md text-muted small text-center text-md-start">
         {%- if library.total == 0 -%}
-          {{ 'media.films.pagination.no_results'|trans }}
+          {{ (i18n_prefix ~ '.no_results')|trans }}
         {%- else -%}
           {%- set firstIdx = (page - 1) * library.perPage + 1 -%}
           {%- set lastIdx  = min(page * library.perPage, library.total) -%}
-          {{ 'media.films.pagination.range'|trans({ first: firstIdx, last: lastIdx, total: library.total }) }}
+          {{ (i18n_prefix ~ '.range')|trans({ first: firstIdx, last: lastIdx, total: library.total }) }}
           {%- if library.total < library.libraryTotal %}
-            <span class="text-secondary">· {{ 'media.films.pagination.filtered_from'|trans({ total: library.libraryTotal }) }}</span>
+            <span class="text-secondary">· {{ (i18n_prefix ~ '.filtered_from')|trans({ total: library.libraryTotal }) }}</span>
           {%- endif -%}
         {%- endif -%}
       </div>
 
       {% if last > 1 %}
         <div class="col-12 col-md-auto d-flex justify-content-center">
-          <nav aria-label="{{ 'media.films.pagination.aria_label'|trans }}">
+          <nav aria-label="{{ (i18n_prefix ~ '.aria_label')|trans }}">
             <ul class="pagination pagination-sm mb-0">
               <li class="page-item {% if page <= 1 %}disabled{% endif %}">
                 {% if page > 1 %}
-                  <a class="page-link" href="{{ path('app_media_films', baseParams|merge({ page: page - 1 })) }}" rel="prev" aria-label="{{ 'media.films.pagination.prev'|trans }}">‹</a>
+                  <a class="page-link" href="{{ path(route_name, baseParams|merge({ page: page - 1 })) }}" rel="prev" aria-label="{{ (i18n_prefix ~ '.prev')|trans }}">‹</a>
                 {% else %}
                   <span class="page-link" aria-hidden="true">‹</span>
                 {% endif %}
@@ -73,13 +79,13 @@
                 {% elseif p == page %}
                   <li class="page-item active" aria-current="page"><span class="page-link">{{ p }}</span></li>
                 {% else %}
-                  <li class="page-item"><a class="page-link" href="{{ path('app_media_films', baseParams|merge({ page: p })) }}">{{ p }}</a></li>
+                  <li class="page-item"><a class="page-link" href="{{ path(route_name, baseParams|merge({ page: p })) }}">{{ p }}</a></li>
                 {% endif %}
               {% endfor %}
 
               <li class="page-item {% if page >= last %}disabled{% endif %}">
                 {% if page < last %}
-                  <a class="page-link" href="{{ path('app_media_films', baseParams|merge({ page: page + 1 })) }}" rel="next" aria-label="{{ 'media.films.pagination.next'|trans }}">›</a>
+                  <a class="page-link" href="{{ path(route_name, baseParams|merge({ page: page + 1 })) }}" rel="next" aria-label="{{ (i18n_prefix ~ '.next')|trans }}">›</a>
                 {% else %}
                   <span class="page-link" aria-hidden="true">›</span>
                 {% endif %}
@@ -88,17 +94,18 @@
           </nav>
         </div>
 
-        {# Direct page jump — useful when there's an ellipsis hiding the page you want.
-           Rendered in the 3rd column so the nav stays optically centered even when
-           the jump is hidden (last < 5) — empty column = symmetric breathing room. #}
+        {# Direct page jump — useful when there's an ellipsis hiding the page
+           you want. Rendered in the 3rd column so the nav stays optically
+           centered even when the jump is hidden (last < 5): empty column =
+           symmetric breathing room. #}
         <div class="col-12 col-md d-flex justify-content-center justify-content-md-end">
           {% if last >= 5 %}
-            <form method="get" action="{{ path('app_media_films', { slug: slug }) }}" class="d-flex align-items-center gap-1 films-pagination-jump" aria-label="{{ 'media.films.pagination.jump_aria'|trans }}">
+            <form method="get" action="{{ path(route_name, { slug: slug }) }}" class="d-flex align-items-center gap-1 library-pagination-jump" aria-label="{{ (i18n_prefix ~ '.jump_aria')|trans }}">
               {% for k, v in q %}
                 <input type="hidden" name="{{ k }}" value="{{ v }}">
               {% endfor %}
-              <label for="films-page-jump-{{ position|default('bottom') }}" class="text-muted small mb-0">{{ 'media.films.pagination.jump_label'|trans }}</label>
-              <input type="number" id="films-page-jump-{{ position|default('bottom') }}" name="page" min="1" max="{{ last }}" value="{{ page }}" class="form-control form-control-sm" style="width:64px" inputmode="numeric">
+              <label for="{{ section|default('library') }}-page-jump-{{ position|default('bottom') }}" class="text-muted small mb-0">{{ (i18n_prefix ~ '.jump_label')|trans }}</label>
+              <input type="number" id="{{ section|default('library') }}-page-jump-{{ position|default('bottom') }}" name="page" min="1" max="{{ last }}" value="{{ page }}" class="form-control form-control-sm" style="width:64px" inputmode="numeric">
               <span class="text-muted small">/ {{ last }}</span>
             </form>
           {% endif %}
