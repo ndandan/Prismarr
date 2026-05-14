@@ -11,6 +11,8 @@ use App\Service\Media\MovieLibraryQuery;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\QBittorrentClient;
 use App\Service\Media\RadarrClient;
+use App\Service\Media\SeriesLibraryFilter;
+use App\Service\Media\SeriesLibraryQuery;
 use App\Service\Media\SonarrClient;
 use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
@@ -169,8 +171,11 @@ class MediaController extends AbstractController
     }
 
     #[Route('/series', name: 'series')]
-    public function series(): Response
-    {
+    public function series(
+        Request $request,
+        SeriesLibraryFilter $filter,
+        DisplayPreferencesService $prefs,
+    ): Response {
         // Same rationale as films() — see issue #13.
         set_time_limit(120);
 
@@ -192,20 +197,55 @@ class MediaController extends AbstractController
             $error = true;
         }
 
-        usort($series, fn($a, $b) => strcmp($a['sortTitle'], $b['sortTitle']));
-
+        // Issue #19 — server-side filter/sort/pagination. Stats stay anchored
+        // to the full library so the cards don't shift when the user narrows.
         $total      = count($series);
         $continuing = count(array_filter($series, fn($s) => $s['status'] === 'continuing'));
         $ended      = count(array_filter($series, fn($s) => $s['status'] === 'ended'));
         $totalGb    = round(array_sum(array_column($series, 'sizeGb')), 1);
 
+        $query = SeriesLibraryQuery::fromRequest($request, $prefs->getPageSize());
+
+        // Deep-link support: when ?open={sonarrId} arrives (e.g. from a qBit
+        // torrent badge), find which page of the filtered library contains
+        // that series and switch to it.
+        $openId = $request->query->getInt('open');
+        if ($openId > 0) {
+            $full = $filter->apply($series, $query->withoutPagination());
+            foreach ($full->items as $position => $entry) {
+                if ((int) ($entry['id'] ?? 0) === $openId) {
+                    $targetPage = intdiv($position, $query->perPage) + 1;
+                    if ($targetPage !== $query->page) {
+                        $query = new SeriesLibraryQuery(
+                            q: $query->q,
+                            status: $query->status,
+                            genre: $query->genre,
+                            network: $query->network,
+                            sort: $query->sort,
+                            page: $targetPage,
+                            perPage: $query->perPage,
+                            unlimited: false,
+                        );
+                    }
+                    break;
+                }
+            }
+        }
+
+        $library = $filter->apply($series, $query);
+
         $current = $this->sonarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_SONARR);
+        if ($current === null) {
+            throw $this->createNotFoundException('No Sonarr instance configured.');
+        }
         return $this->render('media/series.html.twig', [
-            'series'   => $series,
+            'series'   => $library->items,
+            'library'  => $library,
+            'query'    => $query,
             'queue'    => $queue,
             'calendar' => $calendar,
             'error'    => $error,
-            'service_url' => $current?->getUrl(),
+            'service_url' => $current->getUrl(),
             'current_instance' => $current,
             'instance_count'   => $this->instances->count(ServiceInstance::TYPE_SONARR),
             'stats'    => compact('total', 'continuing', 'ended', 'totalGb'),
@@ -840,6 +880,50 @@ class MediaController extends AbstractController
 
         $result = $this->sonarr->addSeries($raw);
         return $this->json(['ok' => $result !== null, 'series' => $result]);
+    }
+
+    /**
+     * Issue #19 — resolve the current series filter to the list of matching
+     * Sonarr IDs, ignoring pagination. Backs the "Refresh filtered" /
+     * "Search filtered" buttons so they act on the full filtered scope (not
+     * just the page in the DOM).
+     *
+     * `searchable_only=1` keeps only monitored series with at least one
+     * missing episode — what the user really wants for a bulk indexer search.
+     */
+    #[Route('/series/filter/ids', name: 'series_filter_ids', methods: ['GET'])]
+    public function seriesFilteredIds(Request $request, SeriesLibraryFilter $filter): JsonResponse
+    {
+        try {
+            $series = $this->sonarr->getSeries();
+        } catch (\Throwable $e) {
+            $this->logger->warning('Media seriesFilteredIds failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
+            return $this->jsonClientError('Sonarr', $this->sonarr, $this->translator->trans('media.api.network_error'));
+        }
+        $query = SeriesLibraryQuery::fromRequest($request)->withoutPagination();
+        $result = $filter->apply($series, $query);
+
+        $searchableOnly = $request->query->getBoolean('searchable_only');
+        $ids = [];
+        foreach ($result->items as $entry) {
+            if ($searchableOnly) {
+                $monitored = (bool) ($entry['monitored'] ?? false);
+                $percent   = (float) ($entry['percent'] ?? 0);
+                $epCount   = (int) ($entry['episodeCount'] ?? 0);
+                if (!$monitored || $percent >= 100 || $epCount <= 0) {
+                    continue;
+                }
+            }
+            if (isset($entry['id'])) {
+                $ids[] = (int) $entry['id'];
+            }
+        }
+
+        return $this->json([
+            'ok'    => true,
+            'ids'   => $ids,
+            'total' => count($ids),
+        ]);
     }
 
     #[Route('/series/bulk/edit', name: 'series_bulk_edit', methods: ['POST'])]

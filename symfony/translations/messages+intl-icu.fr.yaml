@@ -1631,6 +1631,7 @@ media:
       upcoming: À venir
     filters:
       search_placeholder: "Rechercher…"
+      apply: Appliquer
       status:
         all: Toutes
         monitored: Suivies
@@ -1648,8 +1649,19 @@ media:
         year_asc: 'Année ↑'
         added_desc: Ajouté récemment
         size_desc: 'Taille ↓'
+        size_asc: 'Taille ↑'
         percent_desc: 'Progression ↓'
         percent_asc: 'Progression ↑'
+    pagination:
+      no_results: 'Aucune série ne correspond aux filtres actuels.'
+      range: '{first} – {last} sur {total}'
+      filtered_from: 'filtrées sur {total}'
+      prev: 'Page précédente'
+      next: 'Page suivante'
+      aria_label: 'Pagination de la bibliothèque'
+      reset_filters: Réinitialiser les filtres
+      jump_label: 'Aller à'
+      jump_aria: 'Aller à une page précise'
     view:
       grid: Grille
       wall: Mur de posters
@@ -1951,13 +1963,16 @@ media:
       back: Retour
       close: Fermer
     warnings:
-      refresh_tpl: '{count, plural, one {✅ Actualisation lancée pour # série} other {✅ Actualisation lancée pour # séries}}'
+      refresh_tpl: '✅ Actualisation lancée pour {count} série(s).'
       refreshing_tpl: 'Actualisation de {count} série(s)...'
       no_monitored_filtered: '⚠️ Aucune série suivie dans la sélection filtrée.'
+      no_filter_match: '⚠️ Aucune série ne correspond au filtre actuel.'
+      resolving_filter: 'Résolution des séries filtrées…'
+      network_error: '❌ Erreur réseau.'
       confirm_search_filtered_tpl: "Rechercher les épisodes manquants pour {count} série(s) filtrée(s) ?"
       searching_tpl: '🔍 Recherche en cours pour {count} série(s)...'
       search_launched_tpl: '✅ Recherche lancée pour {count} série(s).'
-      delete_ok_tpl: '{count, plural, one {# série supprimée} other {# séries supprimées}}.'
+      delete_ok_tpl: '✅ {count} série(s) supprimée(s).'
       modified_ok_tpl: '✅ {count} série(s) modifiée(s).'
       tags_ok_tpl: '✅ Étiquettes mises à jour pour {count} série(s).'
       rename_ok_tpl: '✅ Renommage lancé pour {count} série(s).'

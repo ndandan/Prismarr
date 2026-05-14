@@ -1632,6 +1632,7 @@ media:
       upcoming: Upcoming
     filters:
       search_placeholder: "Search…"
+      apply: Apply
       status:
         all: All
         monitored: Monitored
@@ -1649,8 +1650,19 @@ media:
         year_asc: 'Year ↑'
         added_desc: Recently added
         size_desc: 'Size ↓'
+        size_asc: 'Size ↑'
         percent_desc: 'Progress ↓'
         percent_asc: 'Progress ↑'
+    pagination:
+      no_results: 'No series matches the current filters.'
+      range: '{first} – {last} of {total}'
+      filtered_from: 'filtered from {total}'
+      prev: 'Previous page'
+      next: 'Next page'
+      aria_label: 'Series library pagination'
+      reset_filters: Clear filters
+      jump_label: 'Go to'
+      jump_aria: 'Jump to a specific page'
     view:
       grid: Grid
       wall: Poster wall
@@ -1952,13 +1964,16 @@ media:
       back: Back
       close: Close
     warnings:
-      refresh_tpl: '{count, plural, one {✅ Refresh started for # series} other {✅ Refresh started for # series}}'
+      refresh_tpl: '✅ Refresh started for {count} series.'
       refreshing_tpl: 'Refreshing {count} series...'
       no_monitored_filtered: '⚠️ No monitored series in the filtered selection.'
+      no_filter_match: '⚠️ No series matches the current filter.'
+      resolving_filter: 'Resolving filtered series…'
+      network_error: '❌ Network error.'
       confirm_search_filtered_tpl: "Search for missing episodes of {count} filtered series?"
       searching_tpl: '🔍 Searching {count} series...'
       search_launched_tpl: '✅ Search started for {count} series.'
-      delete_ok_tpl: '{count, plural, one {# series deleted} other {# series deleted}}.'
+      delete_ok_tpl: '✅ {count} series deleted.'
       modified_ok_tpl: '✅ {count} series updated.'
       tags_ok_tpl: '✅ Tags updated for {count} series.'
       rename_ok_tpl: '✅ Rename started for {count} series.'
