@@ -1326,10 +1326,10 @@
     });
   });
 
-  // View mode switch + persist
+  // View mode switch + persist.
+  // shelfView and shelfBuilt are already declared alongside the filter
+  // helpers above (issue #19 needed them earlier in the file).
   var tableView = document.getElementById('series-table-view');
-  var shelfView = document.getElementById('series-shelf-view');
-  var shelfBuilt = false;
   var shelfExpanded = {};
 
   // Issue #19 — cards in the DOM are already filtered/sorted server-side,

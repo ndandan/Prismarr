@@ -1690,13 +1690,13 @@ media:
       not_monitored: Unmonitored
       up_to_date_tpl: 'Up to date — {files}/{total} (continuing)'
       complete_tpl: 'Complete — {files}/{total}'
-      missing_tpl: '{count, plural, one {Missing # episode} other {Missing # episodes}}'
+      missing_tpl: 'Missing {count} episode(s)'
       missing_detail_tpl: '{count, plural, one {Missing # episode} other {Missing # episodes}} — {files}/{total}'
       up_to_date_detail_tpl: 'Up to date — {files}/{total} episodes (continuing)'
       complete_detail_tpl: 'Complete — {files}/{total} episodes'
       upcoming_tpl: 'Upcoming series — {total} episodes announced'
       episodes_suffix: "episodes"
-      season_tpl: '{count, plural, one {# season} other {# seasons}}'
+      season_tpl: '{count} season(s)'
     table:
       title: Title
       col_s: 'S.'
@@ -1809,8 +1809,8 @@ media:
       no_release_found: No release found.
       loading_error_indexers: "Error (timeout or indexers unavailable)."
       loading_error_full: "Error while loading (timeout or indexers unavailable)."
-      releases_found_tpl: "{count, plural, one {# release found} other {# releases found}}."
-      releases_found_season_tpl: "{count, plural, one {# release found} other {# releases found}} for season {n}."
+      releases_found_tpl: "{count} release(s) found."
+      releases_found_season_tpl: "{count} release(s) found for season {n}."
       col_release: Release
       col_indexer: Indexer
       col_quality: Quality
@@ -1844,7 +1844,7 @@ media:
       filemanager_title: Manage files
       filemanager_season_title_tpl: 'Manage files — Season {n}'
       rename_title_tpl: 'Rename — Season {n} ({count} file(s))'
-      rename_file_count_tpl: '{count, plural, one {Rename # file} other {Rename # files}}'
+      rename_file_count_tpl: 'Rename {count} file(s)'
       rename_files_already_correct_tpl: 'All files from season {n} are already correctly named.'
       all_files_correct: "All files are already correctly named."
       col_current_name: Current name
@@ -1933,7 +1933,7 @@ media:
       col_version: Version
       col_flags: Flags
       col_size: Size
-      selected_count_tpl: '{count, plural, one {# selected} other {# selected}}'
+      selected_count_tpl: '{count} selected'
       bulk_modify: "Edit..."
       bulk_season: Season
       bulk_episode: Episode
@@ -1952,7 +1952,7 @@ media:
       saving: "Saving..."
       season_option_special: "Specials"
       no_ep_for_file_tpl: 'Select an episode for: {name}...'
-      save_success_tpl: '{count, plural, one {# file saved} other {# files saved}}.'
+      save_success_tpl: '{count} file(s) saved.'
       save_partial_tpl: '{ok} saved, {errors} error(s).'
       save_network_error: "Network error while saving."
       save_bulk_too_many_tpl: "Too many episodes picked ({picked}) for {selected} selected file(s)."
