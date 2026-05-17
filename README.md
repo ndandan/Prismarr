@@ -235,6 +235,20 @@ wget -O docker-compose.yml https://raw.githubusercontent.com/Shoshuo/Prismarr/ma
 
 (or `curl -O https://raw.githubusercontent.com/Shoshuo/Prismarr/main/docker-compose.example.yml && mv docker-compose.example.yml docker-compose.yml`)
 
+#### Option C: Bind-mount (Servarr-style layout)
+
+If you prefer host folders next to your other Servarr containers (Radarr, Sonarr, etc.) for easy browsing, replace the named volume with a bind-mount. The container target must stay at `/var/www/html/var/data`:
+
+```yaml
+    volumes:
+      - ./prismarr-config:/var/www/html/var/data
+```
+
+Drop the top-level `volumes:` block from Option A, and create the host folder before first start: `mkdir -p ./prismarr-config`.
+
+> [!warning]
+> If you write your own compose instead of using a template above, the container target for the data volume must be `/var/www/html/var/data`. Prismarr does not use the Servarr `/config` or `/app/config` convention. A bind-mount on the wrong path silently creates an anonymous volume that resets on every redeploy, with no error in the logs.
+
 ---
 
 **Step 2.** Start the container:
