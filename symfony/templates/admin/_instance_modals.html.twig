@@ -95,7 +95,7 @@
             <label class="form-label" for="instance-edit-key-{{ instance.id }}">{{ 'admin.field.api_key'|trans }}</label>
             <div class="secret-wrapper">
               <input type="password" id="instance-edit-key-{{ instance.id }}" name="api_key" class="form-control"
-                     value="{{ instance.apiKey ?? '' }}"
+                     value=""
                      autocomplete="new-password" spellcheck="false"/>
               <button type="button" class="secret-toggle" data-toggle-for="instance-edit-key-{{ instance.id }}"
                       aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}">
