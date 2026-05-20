@@ -566,7 +566,6 @@ admin:
       slug_auto: Auto-generated from the name
       slug_hint: 'Used in URLs (e.g. /radarr/{slug}/films). Lowercase letters, digits and dashes only.'
       slug_warning: 'Editing the slug will break any external bookmark or link pointing to the old URL.'
-      api_key_edit_hint: 'Leave blank to keep the existing key unchanged.'
     flash:
       created: Instance created.
       updated: Instance updated.
