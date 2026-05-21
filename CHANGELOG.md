@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Server-side pagination, filtering and sorting on the films / series libraries** ([#19](https://github.com/Shoshuo/Prismarr/issues/19)). The browser no longer receives the whole library at once: the page renders a single page (50 / 100 / 200 / 500 items, set in `/admin/settings → Display`) with status, quality/network, genre, language, sort and search all applied server-side. Facets are computed over the full library, `?open={id}` deep-links resolve to the right page, and v1.0 `?filter=` bookmarks still work. Libraries of 10,000+ items stay responsive.
 - **Multi-instance Radarr and Sonarr** ([#21](https://github.com/Shoshuo/Prismarr/issues/21)). Configure as many instances per service as you need (1080p / 4K / Anime…); legacy single-config is migrated to a default instance at first boot. Each instance has its own URL, API key, name, slug, position, enabled flag.
 - **Instance manager in `/admin/settings`** — add / rename / reorder / enable-disable / set default / delete + per-row Test connection. CSRF per action, ROLE_ADMIN.
 - **Dynamic sidebar** — flat link (1 instance) → pill group (2–3) → dropdown (4+). Active instance highlighted across navigation.
@@ -21,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PRISMARR_FRAME_ANCESTORS` env var** ([#25](https://github.com/Shoshuo/Prismarr/issues/25)) — set it to a space-separated origin list to embed Prismarr in an iframe (Organizr, Heimdall, …). Unset keeps the default lockdown (`frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN`).
 
 ### Changed
+- **Films / series toolbar redesign + loading feedback** — the filter, sort and view-mode controls were reorganised into a two-card toolbar for the server-side pagination, and the grid dims briefly while a filter or page change reloads so the action feels responsive.
 - **Languages card redesigned for multi-instance** — per-service blocks, per-instance UI + info-language selectors; partial failures reported by instance name.
 - **Sonarr manual import is reliable** — uses `GET /api/v3/manualimport?downloadId=<hash>` instead of forging the payload, dedups queue items sharing a downloadId, reports grouped reject reasons.
 - **Interactive release search is more patient and tells you why it's empty** — the upstream search ran out of time at 45-60s while setups with several slow indexers routinely take 70-90s (Sonarr/Radarr themselves wait that long); bumped to 90s, with `set_time_limit()` raised to match on the three search routes. And a search that times out now returns 504 so the UI shows "the indexers took too long" instead of a misleading "no releases found". `RadarrClient::getReleasesForMovie` also gained the `CONNECTTIMEOUT`/`NOSIGNAL` the other clients have.
