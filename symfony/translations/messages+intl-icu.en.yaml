@@ -1226,20 +1226,20 @@ media:
       search_error: Error while searching
       no_poster: "No poster"
       already_radarr: Already in Radarr
-      pick_quality_folder: "⚠️ Pick a quality profile and a folder."
+      pick_quality_folder: "Pick a quality profile and a folder."
       adding: "Adding…"
-      added_success: "✅ «{title}» added to Radarr!"
-      added_searching: "✅ «{title}» added — 🔍 Radarr is searching on {count} indexer(s)..."
+      added_success: "«{title}» added to Radarr!"
+      added_searching: "«{title}» added — 🔍 Radarr is searching on {count} indexer(s)..."
       searching_dots: "🔍 Radarr searching{dots}"
       searching_elapsed: " ({seconds}s)"
-      dl_started: "✅ «{title}» — 📥 Download started{src}! Reloading..."
+      dl_started: "«{title}» — 📥 Download started{src}! Reloading..."
       via_prefix: " via {src}"
-      dl_failed: "❌ «{title}» — Download failed. Check qBittorrent and retry via interactive search."
-      grab_but_no_queue: "⚠️ «{title}» — Torrent grabbed{src} but not detected in the queue. Check qBittorrent."
-      no_download_detected: "⚠️ «{title}» added but no download detected. Open the movie to launch an interactive search."
-      added_not_monitored: "✅ «{title}» added (not monitored)"
-      add_error_duplicate: "❌ Error — the movie may already exist."
-      network_error: "❌ Network error"
+      dl_failed: "«{title}» — Download failed. Check qBittorrent and retry via interactive search."
+      grab_but_no_queue: "«{title}» — Torrent grabbed{src} but not detected in the queue. Check qBittorrent."
+      no_download_detected: "«{title}» added but no download detected. Open the movie to launch an interactive search."
+      added_not_monitored: "«{title}» added (not monitored)"
+      add_error_duplicate: "Error — the movie may already exist."
+      network_error: "Network error"
     detail:
       follow: Monitor
       unfollow: Unmonitor
@@ -1293,11 +1293,11 @@ media:
       edit_save: Save
       edit_modified_title: "Edit — {title}"
       edit_update_path_confirm: "Update the path to:\n{path}"
-      edit_path_updated: "✅ Path updated."
+      edit_path_updated: "Path updated."
       edit_delete_confirm: "Delete «{title}»?"
       edit_delete_files_confirm: "Also delete files on disk?"
-      edit_saved: "✅ Movie updated."
-      edit_error: "❌ Error: {error}"
+      edit_saved: "Movie updated."
+      edit_error: "Error: {error}"
       edit_config_error: "Error loading configuration."
       manage_files: Manage files
       loading_files: "Loading files..."
@@ -1341,15 +1341,15 @@ media:
       ev_file_renamed: Renamed
       search_launch: "Starting..."
       search_start: "🔍 Starting search for \"{title}\"..."
-      search_cannot_launch: "❌ Cannot launch search — check that the movie is in Radarr"
+      search_cannot_launch: "Cannot launch search — check that the movie is in Radarr"
       search_indexers_plural: "📡 Querying {count} indexers..."
       search_indexers_sing: "📡 Querying {count} indexer..."
       search_indexers_generic: "📡 Querying indexers..."
       search_indexers_short: "Indexers..."
       search_verify: "Verifying..."
       search_results_check: "📋 Search done — checking results..."
-      search_download_in_progress: "✅ Download in progress: \"{title}\" — status: {status}"
-      search_torrent_grabbed: "✅ Torrent grabbed via {indexer} — waiting for download"
+      search_download_in_progress: "Download in progress: \"{title}\" — status: {status}"
+      search_torrent_grabbed: "Torrent grabbed via {indexer} — waiting for download"
       search_no_auto_result: "🔍 Auto-search empty — querying indexers directly..."
       search_idx_connect: "📡 Connecting to indexers..."
       search_idx_query_plural: "📡 Querying {count} indexers..."
@@ -1358,70 +1358,70 @@ media:
       search_torrents_analysing: "🔍 Analysing results..."
       search_progress_elapsed: " ({seconds}s)"
       search_results_grab_best: "📥 {total} result(s) found, {approved} valid — grabbing the best..."
-      search_grab_started: "✅ Download started via {indexer}: {title}"
-      search_grab_failed_manual: "⚠️ {count} torrent(s) found but grab failed: {error}. Use interactive search to pick manually."
-      search_grab_network_error: "⚠️ Network error during grab. Use interactive search."
-      search_no_quality_match: "⚠️ {count} result(s) found but none match the quality profile. Use interactive search for details."
-      search_no_torrent_found: "⚠️ No torrent found on the indexers for this movie."
-      search_indexer_timeout: "⚠️ Indexers timed out. Retry or use interactive search."
-      search_completed: "✅ Search complete"
-      search_failed: "❌ Search failed: {error}"
+      search_grab_started: "Download started via {indexer}: {title}"
+      search_grab_failed_manual: "{count} torrent(s) found but grab failed: {error}. Use interactive search to pick manually."
+      search_grab_network_error: "Network error during grab. Use interactive search."
+      search_no_quality_match: "{count} result(s) found but none match the quality profile. Use interactive search for details."
+      search_no_torrent_found: "No torrent found on the indexers for this movie."
+      search_indexer_timeout: "Indexers timed out. Retry or use interactive search."
+      search_completed: "Search complete"
+      search_failed: "Search failed: {error}"
       unknown_error: Unknown error
-      search_network_error: "❌ Network error — cannot reach Radarr"
+      search_network_error: "Network error — cannot reach Radarr"
       refresh_in_progress: "Refreshing..."
       refresh_launch_error: "Error while starting"
       refresh_done: "Refresh complete!"
       refresh_failed: "Refresh failed"
       no_release_for_grab: "No custom format"
       grab_launched: "📥 Download started: {title} — progress will appear in the banner at the top of the page"
-      grab_failed_err: "❌ Grab failed — {error}"
+      grab_failed_err: "Grab failed — {error}"
       rename_launch: "Renaming..."
       rename_launch_start: "Starting rename..."
       rename_launch_error: "Error while starting rename."
-      rename_success: "✅ Rename complete!"
+      rename_success: "Rename complete!"
       rename_failed: "Rename failed: {error}"
       delete_in_progress: "Deleting..."
-      delete_success: "✅ Deleted!"
+      delete_success: "Deleted!"
       delete_error_msg: "Error while deleting."
-      file_delete_success: "✅ File deleted!"
+      file_delete_success: "File deleted!"
       no_file_found: "No file found."
-      del_file_confirm: "Delete the file of «{title}» from disk?\n\n⚠️ This action is irreversible."
-      del_film_and_file_confirm: "Delete «{title}» from Radarr AND delete the file on disk?\n\n⚠️ This action is irreversible."
+      del_file_confirm: "Delete the file of «{title}» from disk?\n\nThis action is irreversible."
+      del_film_and_file_confirm: "Delete «{title}» from Radarr AND delete the file on disk?\n\nThis action is irreversible."
     filter:
       filter_label: 'Filter:'
-    warnings_update: "✅ Refresh started for {count} movie(s) — Radarr is updating metadata and scanning files."
-    warnings_update_error: "❌ Refresh error: {error}"
-    warnings_network_error: "❌ Network error."
-    warnings_no_missing_filter: "⚠️ No missing movie in the filtered selection."
-    warnings_no_filter_match: "⚠️ No movie matches the current filter."
+    warnings_update: "Refresh started for {count} movie(s) — Radarr is updating metadata and scanning files."
+    warnings_update_error: "Refresh error: {error}"
+    warnings_network_error: "Network error."
+    warnings_no_missing_filter: "No missing movie in the filtered selection."
+    warnings_no_filter_match: "No movie matches the current filter."
     warnings_resolving_filter: "Resolving filtered movies…"
     warnings_search_confirm: "Search for {count} missing movie(s)?"
     warnings_search_progress: "🔍 Searching for {count} missing movie(s) on {indexers} indexer(s)..."
-    warnings_search_dl: "✅ Search done — {dl} download(s) started for {total} movie(s). Check the queue above."
-    warnings_search_none: "⚠️ Search done for {total} movie(s) — no matching torrent found."
-    warnings_search_failed: "❌ Search failed: {error}"
+    warnings_search_dl: "Search done — {dl} download(s) started for {total} movie(s). Check the queue above."
+    warnings_search_none: "Search done for {total} movie(s) — no matching torrent found."
+    warnings_search_failed: "Search failed: {error}"
     warnings_search_elapsed: "🔍 {msg}{progress}"
     warnings_search_progress_suffix: " — Movie {done}/{total}"
     warnings_search_in_progress_elapsed: "Search in progress... ({seconds}s)"
-    warnings_search_error_pr: "❌ Search error: {error}"
+    warnings_search_error_pr: "Search error: {error}"
     warnings_refresh_label: "Library refresh"
     warnings_rss_label: "RSS sync"
-    warnings_generic_error: "❌ Error."
+    warnings_generic_error: "Error."
     warnings_cmd_search: "Movie search"
     warnings_cmd_missing_search: "Missing movies search"
     warnings_cmd_rename: "Rename"
     warnings_cmd_import: "Manual import"
     warnings_cmd_in_progress: "🔍 {label} — in progress..."
-    warnings_cmd_dl_ok: "✅ {label} — {count} download(s) started. Check the queue."
-    warnings_cmd_import_done: "✅ Import complete."
-    warnings_cmd_nothing: "⚠️ {label} — done, no result found."
-    warnings_cmd_failed: "❌ {label} — failed: {error}"
+    warnings_cmd_dl_ok: "{label} — {count} download(s) started. Check the queue."
+    warnings_cmd_import_done: "Import complete."
+    warnings_cmd_nothing: "{label} — done, no result found."
+    warnings_cmd_failed: "{label} — failed: {error}"
     warnings_cmd_elapsed: "🔍 {label} — {msg}"
-    warnings_cmd_done: "✅ {label} — complete."
-    warnings_bulk_modified: "✅ {count} movie(s) updated."
-    warnings_bulk_tags_ok: "✅ Tags updated for {count} movie(s)."
-    warnings_bulk_rename_ok: "✅ Rename started for {count} movie(s)."
-    warnings_bulk_delete_ok: "✅ {count} movie(s) deleted."
+    warnings_cmd_done: "{label} — complete."
+    warnings_bulk_modified: "{count} movie(s) updated."
+    warnings_bulk_tags_ok: "Tags updated for {count} movie(s)."
+    warnings_bulk_rename_ok: "Rename started for {count} movie(s)."
+    warnings_bulk_delete_ok: "{count} movie(s) deleted."
     queue:
       title: Downloads
       movie_col: Movie
@@ -1436,8 +1436,8 @@ media:
       completed_pct: "100%"
       status_importing: "📦 Importing"
       status_pending: "⏳ Awaiting import"
-      status_blocked: "⚠️ Import blocked"
-      status_warning_prefix: "⚠️ "
+      status_blocked: "Import blocked"
+      status_warning_prefix: ""
       status_error_prefix: "✗ "
       status_completed: "✓ Complete"
       status_downloading: "⬇️ Downloading"
@@ -1451,14 +1451,14 @@ media:
       delete_confirm: Confirm
       delete_cancel: Cancel
       import_done_status: "✓ Imported"
-      import_failed: "❌ {message}"
+      import_failed: "{message}"
       import_failed_short: "Import failed"
       import_failed_status: "✗ Failed"
-      network_error: "❌ Network error"
-      error_generic: "❌ {error}"
+      network_error: "Network error"
+      error_generic: "{error}"
       error: Error
     banner:
-      path_update: "✅ Path updated."
+      path_update: "Path updated."
 
   films_blocklist:
     title: Blocklist
@@ -1744,7 +1744,7 @@ media:
       rename_loading: Loading previews...
       rename_go: Organize
       selected_info_tpl: '{count} series selected'
-      already_correct_tpl: '✅ {count} series already correctly named.'
+      already_correct_tpl: '{count} series already correctly named.'
       organise_files_tpl: 'Organize {count} file(s)'
       all_correct: Already correct
     modal:
@@ -1772,9 +1772,9 @@ media:
       searching: "Searching..."
       no_results: No results.
       already_added: Already added
-      added_success: "✅ Series added successfully!"
-      add_error_tpl: "❌ Error: {error}"
-      network_error: "❌ Network error."
+      added_success: "Series added successfully!"
+      add_error_tpl: "Error: {error}"
+      network_error: "Network error."
       error_unknown: unknown
     detail:
       monitor: Monitor
@@ -1853,7 +1853,7 @@ media:
       no_file_selected: "No file selected."
       rename_error: "Error while renaming."
       rename_failed: "Rename failed."
-      renamed: "✅ Renamed"
+      renamed: "Renamed"
       rename_done_tpl: '{count} file(s) renamed.'
       rename_in_progress: "Renaming..."
       confirm_delete_file: "Delete this file from disk?\n\nThis action is irreversible."
@@ -1963,31 +1963,31 @@ media:
       back: Back
       close: Close
     warnings:
-      refresh_tpl: '✅ Refresh started for {count} series.'
+      refresh_tpl: 'Refresh started for {count} series.'
       refreshing_tpl: 'Refreshing {count} series...'
-      no_monitored_filtered: '⚠️ No monitored series in the filtered selection.'
-      no_filter_match: '⚠️ No series matches the current filter.'
+      no_monitored_filtered: 'No monitored series in the filtered selection.'
+      no_filter_match: 'No series matches the current filter.'
       resolving_filter: 'Resolving filtered series…'
-      network_error: '❌ Network error.'
+      network_error: 'Network error.'
       confirm_search_filtered_tpl: "Search for missing episodes of {count} filtered series?"
       searching_tpl: '🔍 Searching {count} series...'
-      search_launched_tpl: '✅ Search started for {count} series.'
-      delete_ok_tpl: '✅ {count} series deleted.'
-      modified_ok_tpl: '✅ {count} series updated.'
-      tags_ok_tpl: '✅ Tags updated for {count} series.'
-      rename_ok_tpl: '✅ Rename started for {count} series.'
-      bulk_error: '❌ Error.'
+      search_launched_tpl: 'Search started for {count} series.'
+      delete_ok_tpl: '{count} series deleted.'
+      modified_ok_tpl: '{count} series updated.'
+      tags_ok_tpl: 'Tags updated for {count} series.'
+      rename_ok_tpl: 'Rename started for {count} series.'
+      bulk_error: 'Error.'
       error_tpl: 'Error: {error}'
-      generic_error: '❌ Error.'
+      generic_error: 'Error.'
       refresh_label: "Library refresh"
       rss_label: "RSS sync"
       open_series_title: "Open series"
       cmd_in_progress_tpl: "🔍 {label} — in progress..."
-      cmd_dl_ok_tpl: "✅ {label} — {count} download(s) started. Check the queue."
-      cmd_nothing_tpl: "⚠️ {label} — done, no result found."
-      cmd_failed_tpl: "❌ {label} — failed: {error}"
+      cmd_dl_ok_tpl: "{label} — {count} download(s) started. Check the queue."
+      cmd_nothing_tpl: "{label} — done, no result found."
+      cmd_failed_tpl: "{label} — failed: {error}"
       cmd_elapsed_tpl: "🔍 {label} — {msg}"
-      cmd_done_tpl: "✅ {label} — complete."
+      cmd_done_tpl: "{label} — complete."
 
   series_detail:
     header:
@@ -2077,8 +2077,8 @@ media:
     search_all: Search all missing
     searching_all: "Searching..."
     searching_label: "Searching for all missing episodes..."
-    search_launched: "✅ Search started."
-    error: "❌ Error."
+    search_launched: "Search started."
+    error: "Error."
     prev: "← Previous"
     next: "Next →"
     pagination_summary_tpl: "Page {page} / {total}"
@@ -2826,7 +2826,7 @@ media:
       error_add_radarr: 'Error — check that the path exists and is accessible by Radarr.'
       error_add_sonarr: 'Error — check that the path exists and is accessible by Sonarr.'
       error_delete: Error while deleting.
-      confirm_delete_tpl: "Delete folder \"{path}\"?\n⚠️ The movies it contains will not be deleted."
+      confirm_delete_tpl: "Delete folder \"{path}\"?\nThe movies it contains will not be deleted."
     backups:
       title_radarr: Radarr Backups
       title_sonarr: Sonarr Backups

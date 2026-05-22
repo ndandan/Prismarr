@@ -1443,15 +1443,21 @@
     var el = document.getElementById('warnings-banner');
     if (!el) return;
     bannerLocked = true;
+    // Type icon for the auto-dismissing states; 'info' banners carry their own spinner.
+    var ico = (type !== 'info' && window._prismarrTypeIcon) ? window._prismarrTypeIcon(type) : '';
     var existing = el.querySelector('.alert');
-    if (existing && existing.classList.contains('alert-' + type)) {
-      if (allowHtml) existing.innerHTML = msg; else existing.textContent = msg;
-    } else {
+    var target = (existing && existing.classList.contains('alert-' + type)) ? existing : null;
+    if (!target) {
       el.innerHTML = '';
-      var alert = document.createElement('div');
-      alert.className = 'alert alert-' + type + ' mb-3';
-      if (allowHtml) alert.innerHTML = msg; else alert.textContent = msg;
-      el.appendChild(alert);
+      target = document.createElement('div');
+      target.className = 'alert alert-' + type + ' mb-3 d-flex align-items-center gap-2';
+      el.appendChild(target);
+    }
+    if (allowHtml) {
+      target.innerHTML = ico + msg;
+    } else {
+      target.innerHTML = ico + '<span></span>';
+      target.querySelector('span').textContent = msg;
     }
     if (type === 'success' || type === 'warning' || type === 'danger') {
       setTimeout(function() { bannerLocked = false; refreshWarnings(); }, 6000);

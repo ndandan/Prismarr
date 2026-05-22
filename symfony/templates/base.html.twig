@@ -1,3 +1,4 @@
+{% import '_icons.html.twig' as ico %}
 <!doctype html>
 <html lang="{{ app.request.locale|default('fr') }}">
 <head>
@@ -2118,7 +2119,18 @@
       });
     }
 
-    /* ── 2. Toasts SSE ── */
+    /* ── 2. Type icon — single source (Tabler macro) for toasts + page banners ── */
+    window._prismarrTypeIcon = function (type) {
+      var m = {
+        success: {{ ico.icon('check', '', 16)|json_encode|raw }},
+        warning: {{ ico.icon('alert-triangle', '', 16)|json_encode|raw }},
+        danger:  {{ ico.icon('x', '', 16)|json_encode|raw }},
+        info:    {{ ico.icon('info-circle', '', 16)|json_encode|raw }}
+      };
+      return m[type] || m.info;
+    };
+
+    /* ── 2bis. Toasts ── */
     window._prismarrToast = function (msg, type, duration) {
       {# User opt-out via display_toasts = '0' → JS no-op, no DOM mutation. #}
       {% if not display_pref('toasts') %}return;{% endif %}
@@ -2126,14 +2138,8 @@
       if (!container) return;
       var toast = document.createElement('div');
       toast.className = 'prismarr-toast prismarr-toast-' + (type || 'info');
-      var icons = {
-        success: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5l10-10"/></svg>',
-        warning: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4"/><path d="M12 16h.01"/></svg>',
-        danger: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>',
-        info: '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
-      };
       // Icon via innerHTML (frozen content), message via textContent (XSS-safe even if msg contains HTML)
-      toast.innerHTML = (icons[type] || icons.info) + '<span></span>';
+      toast.innerHTML = window._prismarrTypeIcon(type) + '<span></span>';
       toast.querySelector('span').textContent = String(msg == null ? '' : msg);
       container.appendChild(toast);
       setTimeout(function () {
@@ -2279,13 +2285,13 @@
             justCompleted.forEach(function (it) {
               if (alreadyNotified(it.hash)) return;
               var truncated = (it.name || '').length > 60 ? it.name.substring(0, 60) + '…' : it.name;
-              window._prismarrToast('✅ ' + truncated + ' — ' + fmtGo(it.size), 'success', 6000);
+              window._prismarrToast(truncated + ' — ' + fmtGo(it.size), 'success', 6000);
               markNotified(it.hash);
             });
             justErrored.forEach(function (it) {
               if (alreadyNotified(it.hash)) return;
               var truncated = (it.name || '').length > 60 ? it.name.substring(0, 60) + '…' : it.name;
-              window._prismarrToast('⚠ Erreur sur : ' + truncated, 'danger', 8000);
+              window._prismarrToast('Erreur sur : ' + truncated, 'danger', 8000);
               markNotified(it.hash);
             });
           }
