@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'calendar.title'|trans }}{% endblock %}
 {% block head_meta %}<meta name="turbo-visit-control" content="reload">{% endblock %}
@@ -716,7 +717,7 @@
                     : CAL_I18N.event_series;
                 var poster = ev.poster
                     ? '<img src="' + ev.poster + '" alt="" class="cal-day-row-poster" loading="lazy">'
-                    : '<div class="cal-day-row-placeholder">' + (ev.type === 'film' ? '🎬' : '📺') + '</div>';
+                    : '<div class="cal-day-row-placeholder">' + (ev.type === 'film' ? {{ ico.icon('movie', '', 18)|json_encode|raw }} : {{ ico.icon('device-tv', '', 18)|json_encode|raw }}) + '</div>';
                 var title = evTitle(ev);
                 var sub = '';
                 if (ev.type === 'film') {

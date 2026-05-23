@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'decouverte.title'|trans }}{% endblock %}
 {% block page_title %}<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#6366f1" stroke="#6366f1" stroke-width="1.5" stroke-linejoin="round"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5l2.4 7.4l-6.2 -4.6l-6.2 4.6l2.4 -7.4l-6.2 -4.5h7.6z"/></svg> {{ 'decouverte.title'|trans }}{% endblock %}
@@ -876,7 +877,7 @@
       <h2 class="tmdb-hero-title">{{ item.title }}</h2>
       <div class="tmdb-hero-meta">
         {% if item.year %}<span>{{ item.year }}</span>{% endif %}
-        {% if item.vote %}<span>★ {{ item.vote }}/10</span>{% endif %}
+        {% if item.vote %}<span>{{ ico.icon('star-filled', '', 14) }} {{ item.vote }}/10</span>{% endif %}
         {% if item.in_library %}
           {# v1.1.0 — match the badge colour + label to the actual
              library status (downloaded / missing / announced / inCinemas
@@ -971,7 +972,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="2"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4-6.2-4.5h7.6z"/></svg>
     </button>
     {% if item.vote %}
-      <span class="vote-badge {{ voteClass }}">★ {{ item.vote }}</span>
+      <span class="vote-badge {{ voteClass }}">{{ ico.icon('star-filled', '', 14) }} {{ item.vote }}</span>
     {% endif %}
     <div class="card-overlay">
       <div class="card-title-text" title="{{ item.title }}">{{ item.title }}</div>
@@ -979,7 +980,7 @@
     </div>
     <div class="hover-info">
       <div class="h-title">{{ item.title }}</div>
-      <div class="h-year">{{ item.year ?: '' }}{% if item.vote %} · ★ {{ item.vote }}{% endif %}</div>
+      <div class="h-year">{{ item.year ?: '' }}{% if item.vote %} · {{ ico.icon('star-filled', '', 14) }} {{ item.vote }}{% endif %}</div>
       <div class="h-actions">
         {% if not item.in_library %}
           <button type="button" class="btn btn-primary btn-sm tmdb-add-btn"
@@ -1427,7 +1428,7 @@
       var videos = [d.trailer].concat(d.video_gallery || []);
       if (videos.length > 1) {
         galWrap.innerHTML = videos.map(function(v, i) {
-          return '<button type="button" class="td-video-btn" data-yt-key="' + v.key + '" data-yt-name="' + (v.name||'').replace(/"/g,'&quot;') + '">' + (v.type || 'Trailer') + (i === 0 ? ' ★' : '') + '</button>';
+          return '<button type="button" class="td-video-btn" data-yt-key="' + v.key + '" data-yt-name="' + (v.name||'').replace(/"/g,'&quot;') + '">' + (v.type || 'Trailer') + (i === 0 ? ' ' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} : '') + '</button>';
         }).join('');
         galWrap.style.display = '';
         // Re-activate the current button
@@ -1469,26 +1470,26 @@
       var safe = escHtml(String(value));
       qiRows.push('<div class="qi-row"><span class="qi-icon">' + icon + '</span><span class="qi-label">' + escHtml(label) + '</span><span class="qi-value" title="' + safe + '">' + safe + '</span></div>');
     }
-    qi('📅', TMDB_I18N.qi.release, d.release || null);
+    qi({{ ico.icon('calendar', '', 16)|json_encode|raw }}, TMDB_I18N.qi.release, d.release || null);
     if (d.type === 'movie' && d.runtime) {
       var h = Math.floor(d.runtime / 60);
       var m = d.runtime % 60;
-      qi('⏱️', TMDB_I18N.qi.runtime, (h > 0 ? h + 'h' + (m > 0 ? String(m).padStart(2, '0') : '') : m + ' min'));
+      qi({{ ico.icon('clock', '', 16)|json_encode|raw }}, TMDB_I18N.qi.runtime, (h > 0 ? h + 'h' + (m > 0 ? String(m).padStart(2, '0') : '') : m + ' min'));
     } else if (d.type === 'tv' && d.episode_runtime) {
-      qi('⏱️', TMDB_I18N.qi.episode_runtime, d.episode_runtime + ' min');
+      qi({{ ico.icon('clock', '', 16)|json_encode|raw }}, TMDB_I18N.qi.episode_runtime, d.episode_runtime + ' min');
     }
-    qi('🎬', TMDB_I18N.qi.status, d.status ? (TMDB_I18N.tmdb_status[d.status] || d.status) : null);
-    qi('🎭', TMDB_I18N.qi.certification, d.certification);
-    qi('🗣️', TMDB_I18N.qi.orig_language, d.original_language ? d.original_language.toUpperCase() : null);
-    qi('🌍', TMDB_I18N.qi.country, (d.countries && d.countries.length) ? d.countries[0] : null);
+    qi({{ ico.icon('movie', '', 16)|json_encode|raw }}, TMDB_I18N.qi.status, d.status ? (TMDB_I18N.tmdb_status[d.status] || d.status) : null);
+    qi({{ ico.icon('masks-theater', '', 16)|json_encode|raw }}, TMDB_I18N.qi.certification, d.certification);
+    qi({{ ico.icon('language', '', 16)|json_encode|raw }}, TMDB_I18N.qi.orig_language, d.original_language ? d.original_language.toUpperCase() : null);
+    qi({{ ico.icon('world', '', 16)|json_encode|raw }}, TMDB_I18N.qi.country, (d.countries && d.countries.length) ? d.countries[0] : null);
     if (d.type === 'movie' && d.budget && d.budget > 0) {
-      qi('💰', TMDB_I18N.qi.budget, '$' + (d.budget / 1e6).toFixed(1) + 'M');
+      qi({{ ico.icon('coin', '', 16)|json_encode|raw }}, TMDB_I18N.qi.budget, '$' + (d.budget / 1e6).toFixed(1) + 'M');
     }
     if (d.type === 'movie' && d.revenue && d.revenue > 0) {
-      qi('💵', TMDB_I18N.qi.box_office, '$' + (d.revenue / 1e6).toFixed(1) + 'M');
+      qi({{ ico.icon('cash', '', 16)|json_encode|raw }}, TMDB_I18N.qi.box_office, '$' + (d.revenue / 1e6).toFixed(1) + 'M');
     }
-    if (d.vote_count) qi('⭐', TMDB_I18N.qi.votes, d.vote_count.toLocaleString());
-    if (d.popularity) qi('🔥', TMDB_I18N.qi.popularity, d.popularity);
+    if (d.vote_count) qi({{ ico.icon('star-filled', '', 16)|json_encode|raw }}, TMDB_I18N.qi.votes, d.vote_count.toLocaleString());
+    if (d.popularity) qi({{ ico.icon('flame', '', 16)|json_encode|raw }}, TMDB_I18N.qi.popularity, d.popularity);
     if (qiRows.length) {
       document.getElementById('td-quickinfo').innerHTML = qiRows.join('');
       qiBlock.style.display = '';
@@ -1621,7 +1622,7 @@
           ? '<img src="' + s.poster + '" alt="" loading="lazy">'
           : '<div class="no-poster"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 4v16l13 -8z"/></svg></div>';
         var year = s.air_date ? s.air_date.substring(0, 4) : '—';
-        var vote = s.vote ? '<span class="season-vote">★ ' + s.vote + '</span>' : '';
+        var vote = s.vote ? '<span class="season-vote">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + s.vote + '</span>' : '';
         return '<div class="td-season-card" title="' + (s.overview||'').replace(/"/g,'&quot;') + '">' + poster
           + '<div class="season-body">'
           + '<div class="season-name">' + (s.name || TMDB_I18N.season_tpl.replace('__N__', s.number)) + '</div>'
@@ -1650,7 +1651,7 @@
       document.getElementById('td-reviews').innerHTML = d.reviews.map(function(r) {
         var excerpt = (r.content || '').substring(0, 300);
         if (r.content && r.content.length > 300) excerpt += '…';
-        var rating = r.rating ? ' <span class="badge bg-warning ms-2">★ ' + r.rating + '/10</span>' : '';
+        var rating = r.rating ? ' <span class="badge bg-warning ms-2">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + r.rating + '/10</span>' : '';
         var link = r.url ? ' <a href="' + r.url + '" target="_blank" rel="noopener" class="small">Lire ↗</a>' : '';
         return '<div class="mb-2 pb-2 border-bottom">'
           + '<div class="d-flex align-items-center gap-2 mb-1"><strong class="small">' + escHtml(r.author) + '</strong>' + rating + link + '</div>'
@@ -1741,7 +1742,7 @@
     var safeTitle = escHtml(item.title || '');
     var poster = item.poster
       ? '<img src="' + item.poster + '" alt="" loading="lazy">'
-      : '<div class="no-poster">🎬</div>';
+      : '<div class="no-poster">' + {{ ico.icon('movie', '', 32)|json_encode|raw }} + '</div>';
     var statusColors = { downloaded: '#22c55e', missing: '#f59e0b', announced: '#6366f1', inCinemas: '#6366f1', partial: '#3b82f6', unmonitored: '#6b7280' };
     // Short labels (for card badges) — reuse the card.status_short keys
     // from _i18n, with a sensible fallback if a lib_status is unknown.
@@ -1756,7 +1757,7 @@
     };
     var inLibraryShort = {{ 'decouverte.card.in_library_short'|trans|json_encode|raw }};
     var libBadge = item.in_library ? '<span class="lib-badge" style="background:' + (statusColors[item.lib_status] || '#22c55e') + ';">' + (cardShort[item.lib_status] || cardShort._default) + '</span>' : '';
-    var voteBadge = item.vote ? '<span class="vote-badge ' + vc + '">★ ' + item.vote + '</span>' : '';
+    var voteBadge = item.vote ? '<span class="vote-badge ' + vc + '">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + item.vote + '</span>' : '';
     var hoverBtn  = item.in_library
       ? '<a href="' + (item.type === 'movie' ? '/medias/' + DEFAULT_RADARR_SLUG + '/films' : '/medias/' + DEFAULT_SONARR_SLUG + '/series') + '?open=' + (item.lib_id||'') + '" class="btn btn-sm" style="background:' + ({downloaded:'#22c55e',missing:'#f59e0b',announced:'#6366f1',inCinemas:'#6366f1',partial:'#3b82f6',unmonitored:'#6b7280'}[item.lib_status]||'#22c55e') + ';color:#fff;">' + (cardShort[item.lib_status] || inLibraryShort) + '</a>'
       : '<button type="button" class="btn btn-primary btn-sm tmdb-add-btn" data-tmdb-id="' + item.id + '" data-tmdb-type="' + item.type + '" data-tmdb-title="' + safeTitle + '">' + {{ 'decouverte.action.add'|trans|json_encode|raw }} + '</button>';
@@ -1784,7 +1785,7 @@
       + '<div class="card-overlay"><div class="card-title-text" title="' + safeTitle + '">' + titleOrDash + '</div>'
       + '<div class="card-year">' + safeYear + '</div></div>'
       + '<div class="hover-info"><div class="h-title">' + titleOrDash + '</div>'
-      + '<div class="h-year">' + safeYear + (item.vote ? ' · ★ ' + item.vote : '') + '</div>'
+      + '<div class="h-year">' + safeYear + (item.vote ? ' · ' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + item.vote : '') + '</div>'
       + '<div class="h-actions">' + hoverBtn + '</div></div></div>';
   }
 

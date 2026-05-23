@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'decouverte.watchlist.title'|trans }}{% endblock %}
 {% block page_title %}Watchlist{% endblock %}
@@ -125,7 +126,7 @@
     <div class="col-auto">
       <div class="card card-sm">
         <div class="card-body d-flex align-items-center gap-2 py-2 px-3">
-          <span style="color:#ffc230;">🎬</span>
+          <span style="color:#ffc230;">{{ ico.icon('movie', '', 16) }}</span>
           <span class="fw-bold" id="wl-movies">{{ items|filter(i => i.type == 'movie')|length }}</span>
           <span class="text-secondary">{{ 'watchlist_page.films_suffix'|trans }}</span>
         </div>
@@ -134,7 +135,7 @@
     <div class="col-auto">
       <div class="card card-sm">
         <div class="card-body d-flex align-items-center gap-2 py-2 px-3">
-          <span style="color:#0cf;">📺</span>
+          <span style="color:#0cf;">{{ ico.icon('device-tv', '', 16) }}</span>
           <span class="fw-bold" id="wl-series">{{ items|filter(i => i.type == 'tv')|length }}</span>
           <span class="text-secondary">{{ 'watchlist_page.series_suffix'|trans }}</span>
         </div>
@@ -174,7 +175,7 @@
       {% if item.poster %}
         <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy">
       {% else %}
-        <div class="no-poster">🎬</div>
+        <div class="no-poster">{{ ico.icon('movie', '', 32) }}</div>
       {% endif %}
       <span class="type-badge {{ item.type }}">{{ item.type == 'movie' ? 'decouverte.watchlist.type_film'|trans : 'decouverte.watchlist.type_tv'|trans }}</span>
       {% if item.in_library %}
@@ -182,10 +183,10 @@
       {% endif %}
       {% if item.vote %}
         {% set vc = item.vote >= 7 ? 'good' : (item.vote >= 5 ? 'mid' : 'bad') %}
-        <span class="vote-badge {{ vc }}">★ {{ item.vote }}</span>
+        <span class="vote-badge {{ vc }}">{{ ico.icon('star-filled', '', 14) }} {{ item.vote }}</span>
       {% endif %}
       {% if item.notes %}
-        <div class="wl-notes-preview">📝 {{ item.notes }}</div>
+        <div class="wl-notes-preview">{{ ico.icon('note', '', 14) }} {{ item.notes }}</div>
       {% endif %}
       <button class="wl-notes-ico" title="{{ 'decouverte.watchlist.notes_title'|trans }}" data-wl-id="{{ item.id }}">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.376 3.622a1 1 0 013.002 3.002L7.368 18.635a2 2 0 01-.855.506l-2.872.838.838-2.872a2 2 0 01.506-.855z"/></svg>
@@ -380,7 +381,7 @@
             preview.className = 'wl-notes-preview';
             currentNotesCard.appendChild(preview);
           }
-          preview.textContent = '📝 ' + notes;
+          preview.innerHTML = {{ ico.icon('note', '', 14)|json_encode|raw }} + ' ' + escHtml(notes);
         } else if (preview) {
           preview.remove();
         }

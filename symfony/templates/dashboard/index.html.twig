@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'dashboard.title'|trans }}{% endblock %}
 {% block page_title %}{% endblock %}
@@ -469,7 +470,7 @@
             <h2 class="hero-spotlight-title">{{ hero_spotlight.title }}</h2>
 
             <div class="hero-spotlight-meta">
-              {% if hero_spotlight.rating %}<span class="rating">★ {{ hero_spotlight.rating|round(1) }}/10</span>{% endif %}
+              {% if hero_spotlight.rating %}<span class="rating">{{ ico.icon('star-filled', '', 14) }} {{ hero_spotlight.rating|round(1) }}/10</span>{% endif %}
               {% if hero_spotlight.year %}<span>{{ hero_spotlight.year }}</span>{% endif %}
               {% if hero_spotlight.runtime %}<span>{{ hero_spotlight.runtime }} min</span>{% endif %}
               {% if hero_spotlight.quality %}<span class="chip">{{ hero_spotlight.quality }}</span>{% endif %}
@@ -569,7 +570,7 @@
                           {% if item.poster %}
                             <div class="mini-cal-item-thumb" style="background-image: url('{{ item.poster }}');"></div>
                           {% else %}
-                            <div class="mini-cal-item-thumb is-placeholder">{{ item.type == 'movie' ? '🎬' : '📺' }}</div>
+                            <div class="mini-cal-item-thumb is-placeholder">{{ item.type == 'movie' ? ico.icon('movie', '', 18) : ico.icon('device-tv', '', 18) }}</div>
                           {% endif %}
                           <div class="mini-cal-item-body">
                             <span class="mini-cal-item-type {{ item.type == 'movie' ? 'is-movie' : 'is-episode' }}">
@@ -630,7 +631,7 @@
                   {% if req.poster %}
                     <img src="https://image.tmdb.org/t/p/w92{{ req.poster }}" alt="" class="dash-poster" loading="lazy">
                   {% else %}
-                    <div class="dash-poster-placeholder">{{ req_type == 'movie' ? '🎬' : '📺' }}</div>
+                    <div class="dash-poster-placeholder">{{ req_type == 'movie' ? ico.icon('movie', '', 24) : ico.icon('device-tv', '', 24) }}</div>
                   {% endif %}
                   <div class="dash-item-body">
                     <div class="dash-item-title text-truncate">{{ req.title }}</div>
@@ -722,10 +723,10 @@
               {% if w.poster %}
                 <img src="https://image.tmdb.org/t/p/w342{{ w.poster }}" alt="{{ w.title }}" loading="lazy" class="poster-tile-img">
               {% else %}
-                <div class="poster-tile-placeholder">{{ w.mediaType == 'tv' ? '📺' : '🎬' }}</div>
+                <div class="poster-tile-placeholder">{{ w.mediaType == 'tv' ? ico.icon('device-tv', '', 28) : ico.icon('movie', '', 28) }}</div>
               {% endif %}
               {% if w.vote and w.vote > 0 %}
-                <span class="poster-tile-badge">★ {{ w.vote|round(1) }}</span>
+                <span class="poster-tile-badge">{{ ico.icon('star-filled', '', 12) }} {{ w.vote|round(1) }}</span>
               {% endif %}
             </div>
             <div class="poster-tile-info">
@@ -766,10 +767,10 @@
               {% if item.poster_path %}
                 <img src="https://image.tmdb.org/t/p/w342{{ item.poster_path }}" alt="{{ tmdb_title }}" loading="lazy" class="poster-tile-img">
               {% else %}
-                <div class="poster-tile-placeholder">{{ item.media_type == 'tv' ? '📺' : '🎬' }}</div>
+                <div class="poster-tile-placeholder">{{ item.media_type == 'tv' ? ico.icon('device-tv', '', 28) : ico.icon('movie', '', 28) }}</div>
               {% endif %}
               {% if item.vote_average and item.vote_average > 0 %}
-                <span class="poster-tile-badge">★ {{ item.vote_average|round(1) }}</span>
+                <span class="poster-tile-badge">{{ ico.icon('star-filled', '', 12) }} {{ item.vote_average|round(1) }}</span>
               {% endif %}
             </div>
             <div class="poster-tile-info">
@@ -804,7 +805,7 @@
               {% if item.poster %}
                 <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy" class="poster-tile-img">
               {% else %}
-                <div class="poster-tile-placeholder">{{ item.type == 'movie' ? '🎬' : '📺' }}</div>
+                <div class="poster-tile-placeholder">{{ item.type == 'movie' ? ico.icon('movie', '', 28) : ico.icon('device-tv', '', 28) }}</div>
               {% endif %}
               {% if item.badge %}
                 <span class="poster-tile-badge {{ item.is_downloaded|default(false) ? 'is-downloaded' }}">{{ item.badge }}</span>

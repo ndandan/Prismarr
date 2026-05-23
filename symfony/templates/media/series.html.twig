@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {# v1.1.0 — page_title is rendered automatically by base.html.twig
    (icon + instance name on instance-aware routes). The browser tab
@@ -1367,11 +1368,11 @@
     shelfBuilt = true;
     var cards = Array.from(grid.querySelectorAll('.media-card'));
     var groups = {
-      'continuing': { label: '📺 ' + SERIES_I18N.continuing, items: [] },
-      'ended': { label: '✅ ' + SERIES_I18N.ended, items: [] },
-      'upcoming': { label: '🔮 ' + SERIES_I18N.upcoming, items: [] },
-      'anime': { label: '🌸 ' + SERIES_I18N.anime, items: [] },
-      'unmonitored': { label: '👁 ' + SERIES_I18N.unfollowed, items: [] }
+      'continuing': { label: {{ ico.icon('device-tv', '', 14)|json_encode|raw }} + ' ' + SERIES_I18N.continuing, items: [] },
+      'ended': { label: {{ ico.icon('check', '', 14)|json_encode|raw }} + ' ' + SERIES_I18N.ended, items: [] },
+      'upcoming': { label: {{ ico.icon('crystal-ball', '', 14)|json_encode|raw }} + ' ' + SERIES_I18N.upcoming, items: [] },
+      'anime': { label: {{ ico.icon('flower', '', 14)|json_encode|raw }} + ' ' + SERIES_I18N.anime, items: [] },
+      'unmonitored': { label: {{ ico.icon('eye', '', 14)|json_encode|raw }} + ' ' + SERIES_I18N.unfollowed, items: [] }
     };
     cards.forEach(function(c) {
       var s = c.dataset;

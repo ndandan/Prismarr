@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'decouverte.explorer.title'|trans }}{% endblock %}
 {% block page_title %}{{ 'decouverte.explorer.title'|trans }}{% endblock %}
@@ -346,9 +347,9 @@
     var vc = item.vote >= 7 ? 'good' : (item.vote >= 5 ? 'mid' : 'bad');
     var poster = item.poster
       ? '<img class="poster" src="' + escHtml(item.poster) + '" alt="" loading="lazy">'
-      : '<div class="no-poster">🎬</div>';
+      : '<div class="no-poster">' + {{ ico.icon('movie', '', 32)|json_encode|raw }} + '</div>';
     var lib = item.in_library ? '<span class="badge-lib" style="background:' + (statusColors[item.lib_status] || '#22c55e') + ';">' + (statusLabels[item.lib_status] || statusLabels.downloaded) + '</span>' : '';
-    var vote = item.vote ? '<span class="badge-vote ' + vc + '">★ ' + escHtml(item.vote) + '</span>' : '';
+    var vote = item.vote ? '<span class="badge-vote ' + vc + '">' + {{ ico.icon('star-filled', '', 14)|json_encode|raw }} + ' ' + escHtml(item.vote) + '</span>' : '';
     var wlClass = (window._prismarrWatchlist && window._prismarrWatchlist[item.type + '_' + item.id]) ? ' in-wl' : '';
     var wlStar = '<button type="button" class="wl-star' + wlClass + '" data-tmdb-id="' + escHtml(item.id) + '" data-tmdb-type="' + escHtml(item.type) + '" data-title="' + escHtml(item.title) + '" data-poster="' + escHtml(item.poster) + '" data-vote="' + escHtml(item.vote) + '" data-year="' + escHtml(item.year) + '"><svg viewBox="0 0 24 24" fill="' + (wlClass ? '#f59e0b' : 'none') + '" stroke="#f59e0b" stroke-width="2"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4-6.2-4.5h7.6z"/></svg></button>';
     return '<div class="ex-card" data-tmdb-id="' + escHtml(item.id) + '" data-type="' + escHtml(item.type) + '">'
@@ -465,7 +466,7 @@
       + (d.poster ? '<img class="exd-poster" src="' + escHtml(d.poster) + '">' : '')
       + '<div class="exd-meta"><h3>' + escHtml(d.title) + '</h3>'
       + '<div class="sub">' + escHtml(d.year) + (d.runtime ? ' · ' + escHtml(d.runtime) + ' min' : '') + (genres ? ' · ' + escHtml(genres) : '') + '</div>'
-      + (d.vote ? '<div class="sub">★ ' + escHtml(d.vote) + ' / 10</div>' : '')
+      + (d.vote ? '<div class="sub">' + {{ ico.icon('star-filled', '', 14)|json_encode|raw }} + ' ' + escHtml(d.vote) + ' / 10</div>' : '')
       + '</div></div></div>'
       + '<div class="exd-body">';
 

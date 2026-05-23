@@ -1,3 +1,4 @@
+{% import '_icons.html.twig' as ico %}
 {# v1.1.0 Phase B1 — modales (add/edit) for the multi-instance card.
    MUST be rendered OUTSIDE the admin_settings_index main form because
    HTML doesn't allow nested forms (CSRF gets confused otherwise).
@@ -116,7 +117,7 @@
               <label class="form-label" for="instance-edit-slug-{{ instance.id }}">{{ 'admin.instances.field.slug'|trans }}</label>
               <input type="text" id="instance-edit-slug-{{ instance.id }}" name="slug" class="form-control"
                      value="{{ instance.slug }}" maxlength="60"/>
-              <small class="form-hint text-danger">⚠ {{ 'admin.instances.field.slug_warning'|trans }}</small>
+              <small class="form-hint text-danger">{{ ico.icon('alert-triangle', '', 14) }} {{ 'admin.instances.field.slug_warning'|trans }}</small>
             </div>
           </details>
         </div>

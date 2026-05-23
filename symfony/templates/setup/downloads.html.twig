@@ -1,4 +1,5 @@
 {% extends 'setup/_layout.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'setup.stepper.downloads'|trans }} - Prismarr{% endblock %}
 
@@ -57,7 +58,7 @@
     </div>
 
     <div class="wizard-section">
-      <div class="wizard-section-title">🛡️ {{ 'setup.step.downloads.gluetun.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.gluetun.section_suffix'|trans }}</span></div>
+      <div class="wizard-section-title">{{ ico.icon('shield', '', 18) }} {{ 'setup.step.downloads.gluetun.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.gluetun.section_suffix'|trans }}</span></div>
       <div class="wizard-section-subtitle">{{ 'setup.step.downloads.gluetun.subtitle'|trans }}</div>
       <div class="row g-3">
         <div class="col-md-7">

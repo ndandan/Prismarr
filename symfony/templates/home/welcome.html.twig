@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'common.labels.welcome'|trans }}{% endblock %}
 
@@ -16,7 +17,7 @@
       <div class="col-md-6 col-lg-4">
         <a href="{{ path('app_setup_tmdb') }}" class="card card-link">
           <div class="card-body text-center">
-            <div class="mb-2" style="font-size: 2rem;">🎬</div>
+            <div class="mb-2">{{ ico.icon('sparkles', '', 32) }}</div>
             <h3 class="card-title">{{ 'home.welcome.cards.discovery.title'|trans }}</h3>
             <p class="text-secondary small mb-0">{{ 'home.welcome.cards.discovery.subtitle'|trans }}</p>
           </div>
@@ -25,7 +26,7 @@
       <div class="col-md-6 col-lg-4">
         <a href="{{ path('app_setup_managers') }}" class="card card-link">
           <div class="card-body text-center">
-            <div class="mb-2" style="font-size: 2rem;">📽️</div>
+            <div class="mb-2">{{ ico.icon('movie', '', 32) }}</div>
             <h3 class="card-title">{{ 'home.welcome.cards.managers.title'|trans }}</h3>
             <p class="text-secondary small mb-0">{{ 'home.welcome.cards.managers.subtitle'|trans }}</p>
           </div>
@@ -34,7 +35,7 @@
       <div class="col-md-6 col-lg-4">
         <a href="{{ path('app_setup_indexers') }}" class="card card-link">
           <div class="card-body text-center">
-            <div class="mb-2" style="font-size: 2rem;">🔍</div>
+            <div class="mb-2">{{ ico.icon('search', '', 32) }}</div>
             <h3 class="card-title">{{ 'home.welcome.cards.indexers.title'|trans }}</h3>
             <p class="text-secondary small mb-0">{{ 'home.welcome.cards.indexers.subtitle'|trans }}</p>
           </div>
@@ -43,7 +44,7 @@
       <div class="col-md-6 col-lg-4">
         <a href="{{ path('app_setup_downloads') }}" class="card card-link">
           <div class="card-body text-center">
-            <div class="mb-2" style="font-size: 2rem;">⬇️</div>
+            <div class="mb-2">{{ ico.icon('download', '', 32) }}</div>
             <h3 class="card-title">{{ 'home.welcome.cards.downloads.title'|trans }}</h3>
             <p class="text-secondary small mb-0">{{ 'home.welcome.cards.downloads.subtitle'|trans }}</p>
           </div>

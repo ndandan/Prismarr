@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 {% block title %}{{ 'qbittorrent.page_title'|trans }}{% endblock %}
 {% block page_title %}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f67ba" stroke-width="2"><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg> {{ 'qbittorrent.page_title'|trans }}{% endblock %}
 
@@ -822,15 +823,15 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
             {% endif %}
             {% if t.state == 'downloading' and t.eta < 8640000 %}
             <span class="sep"></span>
-            <span class="item">⏱ {{ (t.eta / 3600)|round(0,'floor') }}h{{ ((t.eta % 3600) / 60)|round }}m</span>
+            <span class="item">{{ ico.icon('clock', '', 14) }} {{ (t.eta / 3600)|round(0,'floor') }}h{{ ((t.eta % 3600) / 60)|round }}m</span>
             {% endif %}
             <span class="sep"></span>
-            <span class="item" title="{{ 'qbittorrent.row.title_seeds_leechers'|trans }}">🌱 {{ t.num_seeds }}/{{ t.num_leechs ?? 0 }}</span>
+            <span class="item" title="{{ 'qbittorrent.row.title_seeds_leechers'|trans }}">{{ ico.icon('seeding', '', 14) }} {{ t.num_seeds }}/{{ t.num_leechs ?? 0 }}</span>
             <span class="sep"></span>
-            <span class="item" title="{{ 'qbittorrent.row.title_ratio'|trans }}">⚖ {{ (t.ratio ?? 0)|number_format(2) }}</span>
+            <span class="item" title="{{ 'qbittorrent.row.title_ratio'|trans }}">{{ ico.icon('scale', '', 14) }} {{ (t.ratio ?? 0)|number_format(2) }}</span>
             {% if t.added_on %}
             <span class="sep"></span>
-            <span class="item" title="{{ 'qbittorrent.row.title_added_tpl'|trans|replace({'__DATE__': t.added_on|date('d/m/Y H:i')}) }}">📅 {{ t.added_on|date('d/m/y') }}</span>
+            <span class="item" title="{{ 'qbittorrent.row.title_added_tpl'|trans|replace({'__DATE__': t.added_on|date('d/m/Y H:i')}) }}">{{ ico.icon('calendar', '', 14) }} {{ t.added_on|date('d/m/y') }}</span>
             {% endif %}
         </div>
     </div>
@@ -1482,12 +1483,12 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
             + '<span class="item">' + (STATE_LABELS[t.state] || t.state) + '</span>';
         if (t.dlspeed > 0) html += '<span class="sep"></span><span class="item dl-speed">&#8595; ' + fmtSpeed(t.dlspeed) + '</span>';
         if (t.upspeed > 0) html += '<span class="sep"></span><span class="item up-speed">&#8593; ' + fmtSpeed(t.upspeed) + '</span>';
-        if (t.state === 'downloading' && t.eta < 8640000) html += '<span class="sep"></span><span class="item">⏱ ' + fmtEta(t.eta) + '</span>';
-        html += '<span class="sep"></span><span class="item" title="' + escapeHtml(QBT_I18N.row.seeds_leech) + '">🌱 ' + t.num_seeds + '/' + leech + '</span>';
-        html += '<span class="sep"></span><span class="item" title="' + escapeHtml(QBT_I18N.row.ratio_title) + '">⚖ ' + ratio + '</span>';
+        if (t.state === 'downloading' && t.eta < 8640000) html += '<span class="sep"></span><span class="item">' + {{ ico.icon('clock', '', 14)|json_encode|raw }} + ' ' + fmtEta(t.eta) + '</span>';
+        html += '<span class="sep"></span><span class="item" title="' + escapeHtml(QBT_I18N.row.seeds_leech) + '">' + {{ ico.icon('seeding', '', 14)|json_encode|raw }} + ' ' + t.num_seeds + '/' + leech + '</span>';
+        html += '<span class="sep"></span><span class="item" title="' + escapeHtml(QBT_I18N.row.ratio_title) + '">' + {{ ico.icon('scale', '', 14)|json_encode|raw }} + ' ' + ratio + '</span>';
         if (t.added_on) {
             var addedTitle = tpl(QBT_I18N.row.added_title_tpl, { DATE: fmtLongDate(t.added_on) });
-            html += '<span class="sep"></span><span class="item" title="' + escapeHtml(addedTitle) + '">📅 ' + fmtRelativeDate(t.added_on) + '</span>';
+            html += '<span class="sep"></span><span class="item" title="' + escapeHtml(addedTitle) + '">' + {{ ico.icon('calendar', '', 14)|json_encode|raw }} + ' ' + fmtRelativeDate(t.added_on) + '</span>';
         }
         return html;
     }
@@ -1964,7 +1965,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         if (!pendingTorrentFiles.length) { ul.innerHTML = ''; return; }
         var html = '';
         pendingTorrentFiles.forEach(function(f, i){
-            html += '<li>📄 <strong>' + escapeHtml(f.name) + '</strong> <span class="text-muted" style="font-size:.7rem;">(' + fmtSize(f.size) + ')</span><span class="remove" data-i="' + i + '" title="' + escapeHtml(FILE_REMOVE_TITLE) + '">×</span></li>';
+            html += '<li>' + {{ ico.icon('file', '', 14)|json_encode|raw }} + ' <strong>' + escapeHtml(f.name) + '</strong> <span class="text-muted" style="font-size:.7rem;">(' + fmtSize(f.size) + ')</span><span class="remove" data-i="' + i + '" title="' + escapeHtml(FILE_REMOVE_TITLE) + '">×</span></li>';
         });
         ul.innerHTML = html;
     }

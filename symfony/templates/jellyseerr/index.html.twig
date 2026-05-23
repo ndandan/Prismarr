@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 {% block title %}Seerr{% endblock %}
 {% block page_title %}<svg width="24" height="24" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm0 368c-88.4 0-160-71.6-160-160S167.6 96 256 96s160 71.6 160 160-71.6 160-160 160z" fill="#a259ff"/><circle cx="256" cy="256" r="80" fill="#a259ff"/><path d="M256 176c-44.2 0-80 35.8-80 80s35.8 80 80 80 80-35.8 80-80-35.8-80-80-80zm0 120c-22.1 0-40-17.9-40-40s17.9-40 40-40 40 17.9 40 40-17.9 40-40 40z" fill="#c084fc" opacity=".6"/></svg> {{ 'jellyseerr.index.request_title'|trans }}{% endblock %}
 {% block head_meta %}<meta name="turbo-visit-control" content="reload">{% endblock %}
@@ -260,7 +261,7 @@
                                 {{ tmdb.releaseDate|slice(0,4) }}
                             {% endif %}
                             {% if tmdb and tmdb.voteAverage %}
-                                · <span style="color:#f59e0b;">★</span> {{ tmdb.voteAverage|number_format(1) }}
+                                · <span style="color:#f59e0b;">{{ ico.icon('star-filled', '', 14) }}</span> {{ tmdb.voteAverage|number_format(1) }}
                             {% endif %}
                             {% if tmdb and tmdb.genres|length > 0 %}
                                 · {{ tmdb.genres|slice(0,2)|join(', ') }}
@@ -563,7 +564,7 @@
                 if (tmdb.releaseDate || tmdb.voteAverage) {
                     html += '<div style="color:rgba(255,255,255,.7);font-size:.85rem;margin-top:.3rem;">';
                     if (tmdb.releaseDate) html += tmdb.releaseDate.substring(0, 4);
-                    if (tmdb.voteAverage) html += ' · <span style="color:#f59e0b;">★</span> ' + Number(tmdb.voteAverage).toFixed(1);
+                    if (tmdb.voteAverage) html += ' · <span style="color:#f59e0b;">' + {{ ico.icon('star-filled', '', 14)|json_encode|raw }} + '</span> ' + Number(tmdb.voteAverage).toFixed(1);
                     if (tmdb.genres && tmdb.genres.length) html += ' · ' + tmdb.genres.join(', ');
                     html += '</div>';
                 }

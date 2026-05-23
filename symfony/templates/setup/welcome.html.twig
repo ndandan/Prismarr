@@ -1,4 +1,5 @@
 {% extends 'setup/_layout.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {% block title %}{{ 'setup.step.welcome.title'|trans }} - Prismarr{% endblock %}
 
@@ -60,19 +61,19 @@
 
     <div class="welcome-features">
       <div class="welcome-feature">
-        <div class="welcome-feature-icon">🎬</div>
+        <div class="welcome-feature-icon">{{ ico.icon('movie', '', 24) }}</div>
         <div>{{ 'setup.step.welcome.features.media'|trans }}</div>
       </div>
       <div class="welcome-feature">
-        <div class="welcome-feature-icon">🔎</div>
+        <div class="welcome-feature-icon">{{ ico.icon('search', '', 24) }}</div>
         <div>{{ 'setup.step.welcome.features.indexers'|trans }}</div>
       </div>
       <div class="welcome-feature">
-        <div class="welcome-feature-icon">⬇️</div>
+        <div class="welcome-feature-icon">{{ ico.icon('download', '', 24) }}</div>
         <div>{{ 'setup.step.welcome.features.downloads'|trans }}</div>
       </div>
       <div class="welcome-feature">
-        <div class="welcome-feature-icon">✨</div>
+        <div class="welcome-feature-icon">{{ ico.icon('sparkles', '', 24) }}</div>
         <div>{{ 'setup.step.welcome.features.discovery'|trans }}</div>
       </div>
     </div>

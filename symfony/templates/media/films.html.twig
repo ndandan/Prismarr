@@ -1,4 +1,5 @@
 {% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
 
 {# v1.1.0 — page_title is rendered automatically by base.html.twig
    (icon + instance name on instance-aware routes). The browser tab
@@ -292,7 +293,7 @@
 {# ── Download queue (auto-refresh) ── #}
 <div id="queue-card" class="card mb-3" style="{{ queue is empty ? 'display:none' : '' }}">
   <div class="card-header">
-    <h3 class="card-title">⬇️ {{ 'media.films.queue.title'|trans }} <span class="badge bg-primary text-white ms-1" id="queue-count">{{ queue|length }}</span></h3>
+    <h3 class="card-title">{{ ico.icon('download', '', 18) }} {{ 'media.films.queue.title'|trans }} <span class="badge bg-primary text-white ms-1" id="queue-count">{{ queue|length }}</span></h3>
     <div class="card-actions">
       <span class="text-muted small" id="queue-refresh-label"></span>
     </div>
@@ -3440,7 +3441,7 @@
       var msgs = '';
       if (q.statusMessages) {
         q.statusMessages.forEach(function(m) {
-          if (m.messages) msgs += '<div class="text-danger small mt-1">⚠️ ' + esc(m.messages.join('. ')) + '</div>';
+          if (m.messages) msgs += '<div class="text-danger small mt-1">' + {{ ico.icon('alert-triangle', '', 14)|json_encode|raw }} + ' ' + esc(m.messages.join('. ')) + '</div>';
         });
       }
 
@@ -4090,9 +4091,9 @@
     filmsShelfBuilt = true;
     var cards = Array.from(grid.querySelectorAll('.media-card'));
     var groups = {
-      'downloaded': { label: '✅ ' + FILM_I18N.shelf_downloaded, items: [] },
-      'missing': { label: '⚠️ ' + FILM_I18N.shelf_missing, items: [] },
-      'unmonitored': { label: '👁 ' + FILM_I18N.shelf_unmonitored, items: [] }
+      'downloaded': { label: {{ ico.icon('check', '', 14)|json_encode|raw }} + ' ' + FILM_I18N.shelf_downloaded, items: [] },
+      'missing': { label: {{ ico.icon('alert-triangle', '', 14)|json_encode|raw }} + ' ' + FILM_I18N.shelf_missing, items: [] },
+      'unmonitored': { label: {{ ico.icon('eye', '', 14)|json_encode|raw }} + ' ' + FILM_I18N.shelf_unmonitored, items: [] }
     };
     cards.forEach(function(c) {
       var d = c.dataset;

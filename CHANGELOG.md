@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`PRISMARR_FRAME_ANCESTORS` env var** ([#25](https://github.com/Shoshuo/Prismarr/issues/25)) — set it to a space-separated origin list to embed Prismarr in an iframe (Organizr, Heimdall, …). Unset keeps the default lockdown (`frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN`).
 
 ### Changed
+- **UI emojis replaced with Tabler icons** ([#18](https://github.com/Shoshuo/Prismarr/issues/18)). Status emojis now rely on the toast/banner type icon; the remaining semantic emojis became inline Tabler SVG through a shared Twig macro, so icons follow the surrounding text colour and the theme picked in `/admin/settings` and render the same on every platform.
 - **Films / series toolbar redesign + loading feedback** — the filter, sort and view-mode controls were reorganised into a two-card toolbar for the server-side pagination, and the grid dims briefly while a filter or page change reloads so the action feels responsive.
 - **Languages card redesigned for multi-instance** — per-service blocks, per-instance UI + info-language selectors; partial failures reported by instance name.
 - **Sonarr manual import is reliable** — uses `GET /api/v3/manualimport?downloadId=<hash>` instead of forging the payload, dedups queue items sharing a downloadId, reports grouped reject reasons.
