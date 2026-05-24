@@ -108,6 +108,23 @@
     width: 100%; text-align: left;
     font-size: .8rem;
 }
+/* Compact detail card (#6) — driven by the existing "compact" UI density
+   (body.density-compact, set from display_ui_density). The modal also gets
+   modal-dialog-scrollable in that mode so the body scrolls internally; these
+   rules tighten the header and body so the card feels markedly smaller.
+   Scoped to #modal-film so other modals on the page are untouched. */
+body.density-compact #modal-film .film-header-backdrop,
+body.density-compact #modal-film .film-header-backdrop.has-fanart { min-height: 84px; }
+body.density-compact #modal-film .film-header-content { padding: .8rem 1.1rem .6rem; }
+body.density-compact #modal-film h2#film-title { font-size: 1.2rem; }
+body.density-compact #modal-film #film-genres { margin-top: .35rem !important; }
+body.density-compact #modal-film .modal-body { padding-top: .5rem; padding-bottom: .75rem; }
+body.density-compact #modal-film .modal-body > .row { margin-top: -.5rem !important; row-gap: .75rem; }
+body.density-compact #modal-film .modal-body h4 { font-size: 1rem; margin-bottom: .4rem !important; }
+body.density-compact #modal-film #film-overview { line-height: 1.45; font-size: .85rem; }
+body.density-compact #modal-film .modal-body .card { margin-bottom: .5rem !important; }
+body.density-compact #modal-film .modal-body .card-header { padding-top: .4rem !important; padding-bottom: .4rem !important; }
+body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: .3rem .55rem; }
 /* Mode sélection */
 .select-mode .media-card { cursor: pointer; }
 .select-mode .media-card .select-cb { display: flex !important; z-index: 10; }
@@ -716,7 +733,7 @@
    MODAL DETAIL FILM — Redesign Jellyfin/Radarr style
    ══════════════════════════════════════════════════════════════════════════════ #}
 <div class="modal modal-blur fade" id="modal-film" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-fullscreen-lg-down modal-xl" role="document" style="margin-top:1rem">
+  <div class="modal-dialog modal-fullscreen-lg-down modal-xl{% if display_pref('ui_density') == 'compact' %} modal-dialog-scrollable{% endif %}" role="document" style="margin-top:1rem">
     <div class="modal-content" style="background:var(--tblr-bg-surface)">
 
       {# ── Header with fanart backdrop ── #}

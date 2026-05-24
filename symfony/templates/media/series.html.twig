@@ -174,6 +174,18 @@
 .media-grid.view-compact .media-card .ep-bar { height: 3px; margin-top: .15rem; }
 .media-grid.view-compact .media-card .hover-info { display: none !important; }
 .media-grid.view-compact .media-card .extended-info { display: none; }
+/* Compact detail card (#6) — series modal, mirrors the films page, driven by
+   body.density-compact (display_ui_density). modal-dialog-scrollable is added
+   in the same mode so the body scrolls internally. Scoped to #modal-serie. */
+body.density-compact #modal-serie #modal-serie-header { min-height: 84px !important; }
+body.density-compact #modal-serie-title { font-size: 1.2rem; }
+body.density-compact #modal-serie #modal-serie-overview { line-height: 1.45; }
+body.density-compact #modal-serie .modal-body { padding-top: .5rem; padding-bottom: .75rem; }
+body.density-compact #modal-serie .modal-body > .row { margin-top: -.5rem !important; row-gap: .75rem; }
+body.density-compact #modal-serie .modal-body > .row > .col-md-4 > .mb-3:first-child { margin-top: -1.5rem !important; }
+body.density-compact #modal-serie .modal-body h4 { font-size: 1rem; margin-bottom: .4rem !important; }
+body.density-compact #modal-serie .modal-body .card { margin-bottom: .5rem !important; }
+body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem !important; padding-bottom: .4rem !important; }
 /* Vue mur — posters plein, sans overlay, sans gap */
 .media-grid.view-wall {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 2px;
@@ -652,7 +664,7 @@
 
 {# ── Series detail modal ── #}
 <div class="modal modal-blur fade" id="modal-serie" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-fullscreen-lg-down modal-xl" role="document" style="margin-top:1rem;">
+  <div class="modal-dialog modal-fullscreen-lg-down modal-xl{% if display_pref('ui_density') == 'compact' %} modal-dialog-scrollable{% endif %}" role="document" style="margin-top:1rem;">
     <div class="modal-content" style="background:var(--tblr-bg-surface);position:relative;">
 
       {# ── Header fanart ── #}
