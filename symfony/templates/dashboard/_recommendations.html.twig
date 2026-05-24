@@ -1,0 +1,27 @@
+{# Async-hydrated fragment (#27) — TMDb trending poster row, rendered by
+   DashboardController::widgetRecommendations. Empty render hides the section. #}
+{% import '_icons.html.twig' as ico %}
+{% for item in recommendations %}
+  {% set tmdb_title = item.title|default(item.name|default('—')) %}
+  {% set tmdb_date = item.release_date|default(item.first_air_date|default('')) %}
+  {% set tmdb_type = item.media_type == 'tv' ? 'tv' : 'movie' %}
+  <a href="{{ path('tmdb_index') }}?detail={{ tmdb_type }}/{{ item.id }}" class="poster-tile">
+    <div class="poster-tile-wrap">
+      {% if item.poster_path %}
+        <img src="https://image.tmdb.org/t/p/w342{{ item.poster_path }}" alt="{{ tmdb_title }}" loading="lazy" class="poster-tile-img">
+      {% else %}
+        <div class="poster-tile-placeholder">{{ item.media_type == 'tv' ? ico.icon('device-tv', '', 28) : ico.icon('movie', '', 28) }}</div>
+      {% endif %}
+      {% if item.vote_average and item.vote_average > 0 %}
+        <span class="poster-tile-badge">{{ ico.icon('star-filled', '', 12) }} {{ item.vote_average|round(1) }}</span>
+      {% endif %}
+    </div>
+    <div class="poster-tile-info">
+      <div class="poster-tile-title text-truncate">{{ tmdb_title }}</div>
+      <div class="poster-tile-sub">
+        {{ item.media_type == 'tv' ? 'dashboard.type.series'|trans : 'dashboard.type.film'|trans }}
+        {%- if tmdb_date %} · {{ tmdb_date|slice(0, 4) }}{% endif -%}
+      </div>
+    </div>
+  </a>
+{% endfor %}

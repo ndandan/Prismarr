@@ -14,6 +14,8 @@ use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
@@ -31,6 +33,11 @@ class DashboardController extends AbstractController
     private const MAX_RECOMMENDATIONS = 16;
     private const MAX_RECENT          = 16;
     private const MAX_WATCHLIST       = 16;
+    // #30 — short server-side cache for the heavy per-widget upstream calls.
+    // Radarr/Sonarr aren't client-cached (unlike TMDb), so the async widget
+    // fragments would each hit them live; this dedupes the calls shared across
+    // the parallel fragments and makes revisits within the window instant.
+    private const WIDGET_CACHE_TTL    = 45;
 
     /**
      * Per-request memoization for the expensive library listings — each
@@ -53,7 +60,28 @@ class DashboardController extends AbstractController
         private readonly ServiceInstanceProvider $instances,
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
+        private readonly CacheInterface $cache,
     ) {}
+
+    /**
+     * #30 — wrap an expensive upstream aggregate in a short shared cache.
+     * An empty result (every instance failed / nothing configured) is NOT
+     * cached: it expires immediately so the next paint retries instead of
+     * pinning a transient failure for the whole window. Keyed globally (the
+     * dashboard aggregates across instances); the TTL self-heals topology
+     * changes and the pool is purged on /admin/settings save.
+     *
+     * @param callable():array $fn
+     * @return array<mixed>
+     */
+    private function cached(string $key, callable $fn): array
+    {
+        return $this->cache->get('dash.' . $key, function (ItemInterface $item) use ($fn) {
+            $result = $fn();
+            $item->expiresAfter($result === [] ? 0 : self::WIDGET_CACHE_TTL);
+            return $result;
+        });
+    }
 
     /**
      * Slug helper for the deep-link URLs the dashboard renders into films
@@ -76,54 +104,50 @@ class DashboardController extends AbstractController
      */
     private function movies(): array
     {
-        if ($this->moviesCache !== null) return $this->moviesCache;
-        $out = [];
-        foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
-            $rows = $this->safeFetch(
-                'library.movies.' . $inst->getSlug(),
-                fn() => $this->radarr->withInstance($inst)->getMovies(),
-            ) ?? [];
-            foreach ($rows as $row) {
-                $row['_instanceSlug'] = $inst->getSlug();
-                $row['_instanceName'] = $inst->getName();
-                $out[] = $row;
+        return $this->moviesCache ??= $this->cached('movies', function () {
+            $out = [];
+            foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
+                $rows = $this->safeFetch(
+                    'library.movies.' . $inst->getSlug(),
+                    fn() => $this->radarr->withInstance($inst)->getMovies(),
+                ) ?? [];
+                foreach ($rows as $row) {
+                    $row['_instanceSlug'] = $inst->getSlug();
+                    $row['_instanceName'] = $inst->getName();
+                    $out[] = $row;
+                }
             }
-        }
-        return $this->moviesCache = $out;
+            return $out;
+        });
     }
 
     private function series(): array
     {
-        if ($this->seriesCache !== null) return $this->seriesCache;
-        $out = [];
-        foreach ($this->instances->getEnabled(ServiceInstance::TYPE_SONARR) as $inst) {
-            $rows = $this->safeFetch(
-                'library.series.' . $inst->getSlug(),
-                fn() => $this->sonarr->withInstance($inst)->getSeries(),
-            ) ?? [];
-            foreach ($rows as $row) {
-                $row['_instanceSlug'] = $inst->getSlug();
-                $row['_instanceName'] = $inst->getName();
-                $out[] = $row;
+        return $this->seriesCache ??= $this->cached('series', function () {
+            $out = [];
+            foreach ($this->instances->getEnabled(ServiceInstance::TYPE_SONARR) as $inst) {
+                $rows = $this->safeFetch(
+                    'library.series.' . $inst->getSlug(),
+                    fn() => $this->sonarr->withInstance($inst)->getSeries(),
+                ) ?? [];
+                foreach ($rows as $row) {
+                    $row['_instanceSlug'] = $inst->getSlug();
+                    $row['_instanceName'] = $inst->getName();
+                    $out[] = $row;
+                }
             }
-        }
-        return $this->seriesCache = $out;
+            return $out;
+        });
     }
 
     #[Route('/tableau-de-bord', name: 'app_dashboard')]
     public function index(): Response
     {
-        // The dashboard aggregates 8+ remote service calls sequentially. A
-        // single slow service (qBit + Radarr + Sonarr + TMDb + …) can push
-        // the total past the default 30s max_execution_time and trigger a
-        // FatalError. 60s covers worst-case homelab latency without masking
-        // a real runaway. Session 9c / v1.1+ will move to async widget
-        // hydration to bring the initial paint back under 1s.
-        set_time_limit(60);
-
-        // Issue #9 — skip widgets bound to services the user never enabled,
-        // so the dashboard isn't littered with empty cards (and Radarr/Sonarr
-        // calls aren't fired at all if neither library is configured).
+        // Issue #27 — every upstream-dependent widget (hero, stats, upcoming,
+        // requests, health, recommendations, recent additions) now loads from
+        // its own async fragment endpoint after first paint, so index() makes
+        // no remote calls: it renders the shell + skeletons instantly. Only the
+        // watchlist (local DB) and the cheap service-configured flags stay here.
         $configured = [
             'radarr'     => $this->health->isConfigured('radarr'),
             'sonarr'     => $this->health->isConfigured('sonarr'),
@@ -131,20 +155,120 @@ class DashboardController extends AbstractController
             'tmdb'       => $this->health->isConfigured('tmdb'),
         ];
 
-        $recommendations = $configured['tmdb'] ? $this->recommendations() : [];
-        $upcoming        = ($configured['radarr'] || $configured['sonarr']) ? $this->upcomingReleases() : [];
-
         return $this->render('dashboard/index.html.twig', [
-            'stats'               => $this->stats(),
-            'upcoming'            => $upcoming,
-            'upcoming_days'       => $this->upcomingByDay($upcoming),
-            'jellyseerr_requests' => $configured['jellyseerr'] ? $this->pendingRequests() : [],
-            'services_health'     => $this->servicesHealth(),
-            'recommendations'     => $recommendations,
-            'recent_additions'    => ($configured['radarr'] || $configured['sonarr']) ? $this->recentAdditions() : [],
             'watchlist'           => $this->watchlist(),
-            'hero_spotlight'      => $this->pickHeroSpotlight($recommendations),
             'services_configured' => $configured,
+        ]);
+    }
+
+    /**
+     * Async fragment (#27) — the "Recent additions" poster row, fetched after
+     * the dashboard shell has painted so the initial render stays fast. Fails
+     * open: an empty body (no items / fetch failure) hides the section
+     * client-side. Skipped entirely when neither library is configured.
+     */
+    #[Route('/tableau-de-bord/widget/recent', name: 'app_dashboard_widget_recent')]
+    public function widgetRecent(): Response
+    {
+        if (!$this->health->isConfigured('radarr') && !$this->health->isConfigured('sonarr')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        return $this->render('dashboard/_recent_additions.html.twig', [
+            'recent_additions' => $this->recentAdditions(),
+        ]);
+    }
+
+    /**
+     * Async fragment (#27) — TMDb trending poster row. Empty body hides the
+     * section client-side. Skipped when TMDb isn't configured.
+     */
+    #[Route('/tableau-de-bord/widget/recommendations', name: 'app_dashboard_widget_recommendations')]
+    public function widgetRecommendations(): Response
+    {
+        if (!$this->health->isConfigured('tmdb')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        return $this->render('dashboard/_recommendations.html.twig', [
+            'recommendations' => $this->recommendations(),
+        ]);
+    }
+
+    /**
+     * Async fragment (#27) — the upcoming 7-day mini-calendar. Returns the
+     * empty-state message when there's nothing (so the card keeps showing);
+     * an empty body only happens when neither library is configured, hiding
+     * the card client-side.
+     */
+    #[Route('/tableau-de-bord/widget/upcoming', name: 'app_dashboard_widget_upcoming')]
+    public function widgetUpcoming(): Response
+    {
+        if (!$this->health->isConfigured('radarr') && !$this->health->isConfigured('sonarr')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+        $upcoming = $this->upcomingReleases();
+
+        return $this->render('dashboard/_upcoming.html.twig', [
+            'upcoming'      => $upcoming,
+            'upcoming_days' => $this->upcomingByDay($upcoming),
+        ]);
+    }
+
+    /**
+     * Async fragment (#27) — pending Jellyseerr requests list. Only reached
+     * when Jellyseerr is configured (the card is otherwise not rendered);
+     * returns the empty-state message when there are no pending requests.
+     */
+    #[Route('/tableau-de-bord/widget/requests', name: 'app_dashboard_widget_requests')]
+    public function widgetRequests(): Response
+    {
+        if (!$this->health->isConfigured('jellyseerr')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        return $this->render('dashboard/_requests.html.twig', [
+            'jellyseerr_requests' => $this->pendingRequests(),
+        ]);
+    }
+
+    /**
+     * Async fragment (#27) — services health chips. The card is always present;
+     * the pings can be slow (timeouts on a down service), so it loads after
+     * first paint. Unconfigured services come back as null and are filtered out.
+     */
+    #[Route('/tableau-de-bord/widget/health', name: 'app_dashboard_widget_health')]
+    public function widgetHealth(): Response
+    {
+        set_time_limit(60);
+
+        return $this->render('dashboard/_health.html.twig', [
+            'services_health' => $this->servicesHealth(),
+        ]);
+    }
+
+    /**
+     * Async fragment (#27) — hero spotlight + library stats. Pulls the three
+     * heaviest sources (TMDb recommendations, Radarr/Sonarr library counts and
+     * the upcoming count) off the initial render; the greeting/clock stay in
+     * index.html.twig so the hero shell paints instantly.
+     */
+    #[Route('/tableau-de-bord/widget/hero', name: 'app_dashboard_widget_hero')]
+    public function widgetHero(): Response
+    {
+        set_time_limit(60);
+        $recommendations = $this->health->isConfigured('tmdb') ? $this->recommendations() : [];
+        $upcoming = ($this->health->isConfigured('radarr') || $this->health->isConfigured('sonarr'))
+            ? $this->upcomingReleases() : [];
+
+        return $this->render('dashboard/_hero.html.twig', [
+            'hero_spotlight' => $this->pickHeroSpotlight($recommendations),
+            'stats'          => $this->stats(),
+            'upcoming'       => $upcoming,
         ]);
     }
 
@@ -177,6 +301,7 @@ class DashboardController extends AbstractController
      */
     private function upcomingReleases(): array
     {
+        return $this->cached('upcoming', function () {
         // Compare by calendar day (midnight) so events earlier today —
         // a morning episode, a midnight digital release — are still
         // classified as "today" rather than silently filtered out as past.
@@ -248,6 +373,7 @@ class DashboardController extends AbstractController
         usort($items, fn($a, $b) => $a['date'] <=> $b['date']);
 
         return $items;
+        });
     }
 
     /**

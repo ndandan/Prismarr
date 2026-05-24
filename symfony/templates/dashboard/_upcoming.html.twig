@@ -1,0 +1,56 @@
+{# Async-hydrated fragment (#27) — the upcoming 7-day mini-calendar body,
+   rendered by DashboardController::widgetUpcoming and injected into the card's
+   [data-dash-body]. Returns the empty-state message when there's nothing. #}
+{% import '_icons.html.twig' as ico %}
+{% if upcoming is empty %}
+  <div class="card-body text-center text-secondary py-4">
+    {{ 'dashboard.upcoming.empty'|trans }}
+  </div>
+{% else %}
+  <div class="mini-cal">
+    {% for iso, day in upcoming_days %}
+      <div class="mini-cal-day {{ day.isToday ? 'is-today' }}">
+        <div class="mini-cal-day-head">
+          <div class="mini-cal-dow">{{ day.dow }}</div>
+          <div class="mini-cal-dom">{{ day.dom }}</div>
+        </div>
+        <div class="mini-cal-items">
+          {% if day.items is empty %}
+            <div class="mini-cal-empty">—</div>
+          {% else %}
+            {% set max_shown = 3 %}
+            {% for item in day.items|slice(0, max_shown) %}
+              {% set item_href = item.id ? (item.type == 'movie'
+                  ? instance_path('app_media_films')  ~ '?open=' ~ item.id
+                  : instance_path('app_media_series') ~ '?open=' ~ item.id) : '#' %}
+              <a href="{{ item_href }}" class="mini-cal-item"
+                 title="{{ item.title }}{% if item.subtitle %} — {{ item.subtitle }}{% endif %} · {{ item.date|prismarr_time }}{% if item.badge %} · {{ item.badge }}{% endif %}">
+                {% if item.poster %}
+                  <div class="mini-cal-item-thumb" style="background-image: url('{{ item.poster }}');"></div>
+                {% else %}
+                  <div class="mini-cal-item-thumb is-placeholder">{{ item.type == 'movie' ? ico.icon('movie', '', 18) : ico.icon('device-tv', '', 18) }}</div>
+                {% endif %}
+                <div class="mini-cal-item-body">
+                  <span class="mini-cal-item-type {{ item.type == 'movie' ? 'is-movie' : 'is-episode' }}">
+                    {{ item.type == 'movie' ? 'dashboard.type.film'|trans : 'dashboard.type.series'|trans }}
+                  </span>
+                  <div class="mini-cal-item-title">{{ item.title }}</div>
+                  <div class="mini-cal-item-meta">
+                    {{ item.date|prismarr_time }}
+                    {%- if item.subtitle and item.type == 'episode' %} · {{ item.subtitle }}{% endif -%}
+                    {%- if item.badge %} · {{ item.badge }}{% endif -%}
+                  </div>
+                </div>
+              </a>
+            {% endfor %}
+            {% if day.items|length > max_shown %}
+              <a href="{{ path('app_calendrier') }}?view=day&amp;date={{ iso }}" class="mini-cal-more">
+                {{ 'dashboard.upcoming.more'|trans({count: day.items|length - max_shown}) }}
+              </a>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

@@ -1,0 +1,30 @@
+{# Async-hydrated fragment (#27) — pending Jellyseerr requests list, rendered
+   by DashboardController::widgetRequests into the card's [data-dash-body].
+   Returns the empty-state message when there are no pending requests. #}
+{% import '_icons.html.twig' as ico %}
+{% if jellyseerr_requests is empty %}
+  <div class="card-body text-center text-secondary py-4">
+    {{ 'dashboard.requests.empty'|trans }}
+  </div>
+{% else %}
+  {% for req in jellyseerr_requests %}
+    {% set req_type = req.type == 'tv' ? 'tv' : 'movie' %}
+    <a href="{{ path('tmdb_index') }}?detail={{ req_type }}/{{ req.tmdbId }}" class="list-group-item list-group-item-action text-reset text-decoration-none">
+      {% if req.poster %}
+        <img src="https://image.tmdb.org/t/p/w92{{ req.poster }}" alt="" class="dash-poster" loading="lazy">
+      {% else %}
+        <div class="dash-poster-placeholder">{{ req_type == 'movie' ? ico.icon('movie', '', 24) : ico.icon('device-tv', '', 24) }}</div>
+      {% endif %}
+      <div class="dash-item-body">
+        <div class="dash-item-title text-truncate">{{ req.title }}</div>
+        <div class="dash-item-sub">
+          {{ 'dashboard.requests.by'|trans }} {{ req.requestedBy }}
+          {%- if req.requestedAt %} · {{ req.requestedAt|prismarr_date }}{% endif -%}
+        </div>
+      </div>
+      <div class="dash-item-aside">
+        <span class="badge bg-yellow-lt text-yellow">{{ 'dashboard.requests.status_pending'|trans }}</span>
+      </div>
+    </a>
+  {% endfor %}
+{% endif %}

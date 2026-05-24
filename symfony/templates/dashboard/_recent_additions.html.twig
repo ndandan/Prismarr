@@ -1,0 +1,25 @@
+{# Async-hydrated fragment (#27) — rendered by DashboardController::widgetRecent
+   and injected into the [data-dash-widget="recent"] skeleton. Returns just the
+   poster tiles; an empty render hides the section client-side. #}
+{% import '_icons.html.twig' as ico %}
+{% for item in recent_additions %}
+  <a href="{{ item.href }}" class="poster-tile">
+    <div class="poster-tile-wrap">
+      {% if item.poster %}
+        <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy" class="poster-tile-img">
+      {% else %}
+        <div class="poster-tile-placeholder">{{ item.type == 'movie' ? ico.icon('movie', '', 28) : ico.icon('device-tv', '', 28) }}</div>
+      {% endif %}
+      {% if item.badge %}
+        <span class="poster-tile-badge {{ item.is_downloaded|default(false) ? 'is-downloaded' }}">{{ item.badge }}</span>
+      {% endif %}
+    </div>
+    <div class="poster-tile-info">
+      <div class="poster-tile-title text-truncate">{{ item.title }}</div>
+      <div class="poster-tile-sub">
+        {{ item.type == 'movie' ? 'dashboard.type.film'|trans : 'dashboard.type.series'|trans }}
+        {%- if item.subtitle %} · {{ item.subtitle }}{% endif -%}
+      </div>
+    </div>
+  </a>
+{% endfor %}

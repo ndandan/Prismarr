@@ -1,0 +1,31 @@
+{# Async-hydrated fragment (#27) — services health chips, rendered by
+   DashboardController::widgetHealth into the card's [data-dash-body]. Only
+   configured services get a chip (issue #9); none → a neutral message. #}
+{% set configured_health = services_health|filter(ok => ok is not null) %}
+{% if configured_health is empty %}
+  <div class="text-center text-secondary py-3">
+    {{ 'dashboard.health.none_configured'|trans }}
+  </div>
+{% else %}
+  <div class="service-grid">
+    {% for id, ok in configured_health %}
+      {% set meta = {
+        radarr:      {name:'Radarr',      color:'#FFC230'},
+        sonarr:      {name:'Sonarr',      color:'#00CCFF'},
+        prowlarr:    {name:'Prowlarr',    color:'#E88D1A'},
+        jellyseerr:  {name:'Seerr',       color:'#a259ff'},
+        qbittorrent: {name:'qBittorrent', color:'#2f67ba'},
+        tmdb:        {name:'TMDb',        color:'#01B4E4'},
+      }[id] %}
+      <div class="service-chip">
+        <span class="service-chip-dot {{ ok ? 'is-ok' : 'is-ko' }}"></span>
+        <div class="flex-fill">
+          <div class="service-chip-name" style="color: {{ meta.color }};">{{ meta.name }}</div>
+          <div class="service-chip-state">
+            {{ ok ? 'dashboard.health.status_ok'|trans : 'dashboard.health.status_ko'|trans }}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}

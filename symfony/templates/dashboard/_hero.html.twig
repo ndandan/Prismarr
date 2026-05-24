@@ -1,0 +1,69 @@
+{# Async-hydrated fragment (#27) — hero spotlight + library stats, rendered by
+   DashboardController::widgetHero into the hero's [data-dash-body]. The greeting
+   and clock stay server-rendered in index.html.twig for an instant first paint. #}
+{% import '_icons.html.twig' as ico %}
+{# Fanart background — the hydrator moves this up to be a direct child of
+   .hero (so it covers the whole hero) and drops the .hero-noBg gradient. #}
+{% if hero_spotlight and hero_spotlight.url %}
+  <div class="hero-bg" data-dash-hero-bg style="background-image: url('{{ hero_spotlight.url }}');"></div>
+{% endif %}
+{% if hero_spotlight and hero_spotlight.title %}
+  <div class="hero-spotlight">
+    <span class="hero-spotlight-label">{{ hero_spotlight.badge }}</span>
+    <h2 class="hero-spotlight-title">{{ hero_spotlight.title }}</h2>
+
+    <div class="hero-spotlight-meta">
+      {% if hero_spotlight.rating %}<span class="rating">{{ ico.icon('star-filled', '', 14) }} {{ hero_spotlight.rating|round(1) }}/10</span>{% endif %}
+      {% if hero_spotlight.year %}<span>{{ hero_spotlight.year }}</span>{% endif %}
+      {% if hero_spotlight.runtime %}<span>{{ hero_spotlight.runtime }} min</span>{% endif %}
+      {% if hero_spotlight.quality %}<span class="chip">{{ hero_spotlight.quality }}</span>{% endif %}
+      {% for g in hero_spotlight.genres %}<span class="chip">{{ g }}</span>{% endfor %}
+    </div>
+
+    {% if hero_spotlight.overview %}
+      <p class="hero-spotlight-overview">{{ hero_spotlight.overview }}</p>
+    {% endif %}
+
+    {% if hero_spotlight.detailUrl %}
+      <a href="{{ hero_spotlight.detailUrl }}" class="hero-spotlight-cta">
+        {{ hero_spotlight.cta }}
+      </a>
+    {% endif %}
+  </div>
+{% endif %}
+
+<div class="hero-stats">
+  <div class="hero-stat">
+    <div class="hero-stat-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4"/>
+      </svg>
+    </div>
+    <div>
+      <div class="hero-stat-value">{{ stats.films ?? '—' }}</div>
+      <div class="hero-stat-label">{{ 'dashboard.hero.stats.films'|trans }}</div>
+    </div>
+  </div>
+  <div class="hero-stat">
+    <div class="hero-stat-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/>
+      </svg>
+    </div>
+    <div>
+      <div class="hero-stat-value">{{ stats.series ?? '—' }}</div>
+      <div class="hero-stat-label">{{ 'dashboard.hero.stats.series'|trans }}</div>
+    </div>
+  </div>
+  <div class="hero-stat">
+    <div class="hero-stat-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+    </div>
+    <div>
+      <div class="hero-stat-value">{{ upcoming|length }}</div>
+      <div class="hero-stat-label">{{ 'dashboard.hero.stats.upcoming_7d'|trans }}</div>
+    </div>
+  </div>
+</div>

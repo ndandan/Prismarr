@@ -3,6 +3,11 @@
 
 {% block title %}{{ 'dashboard.title'|trans }}{% endblock %}
 {% block page_title %}{% endblock %}
+{# #27 — content is async; don't let Turbo cache the dashboard. Otherwise an
+   advance visit flashes the stale hydrated snapshot, then re-renders to
+   skeletons ("reloads everything"). no-cache makes every visit render the
+   shell + skeletons fresh (index() is fast), then the widgets hydrate. #}
+{% block head_meta %}<meta name="turbo-cache-control" content="no-cache">{% endblock %}
 
 {% block stylesheets %}
 <style>
@@ -438,6 +443,18 @@
   .service-chip-dot.is-unk { background: #6b7280; }
   .service-chip-name { font-size: .82rem; font-weight: 500; line-height: 1; }
   .service-chip-state { font-size: .68rem; color: var(--tblr-secondary); margin-top: .15rem; }
+  /* Async widget hydration skeletons (#27) */
+  .dash-skel { pointer-events: none; }
+  .dash-skel .poster-tile-wrap { aspect-ratio: 2/3; }
+  .dash-skel .poster-tile-wrap,
+  .dash-skel-line {
+    background: linear-gradient(90deg, var(--tblr-bg-surface-secondary) 25%, rgba(128,128,128,.18) 37%, var(--tblr-bg-surface-secondary) 63%);
+    background-size: 400% 100%;
+    animation: dash-shimmer 1.4s ease infinite;
+    border-radius: .5rem;
+  }
+  .dash-skel-line { height: .7rem; width: 80%; margin-top: .45rem; border-radius: .25rem; }
+  @keyframes dash-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 </style>
 {% endblock %}
 
@@ -453,84 +470,39 @@
 <div class="page-body dashboard-scope">
   <div class="container-xl">
 
-    {# ── Hero: welcome + random movie from library ───────── #}
-    <div class="hero {{ hero_spotlight is null ? 'hero-noBg' }}">
-      {% if hero_spotlight %}
-        <div class="hero-bg" style="background-image: url('{{ hero_spotlight.url }}');"></div>
-      {% endif %}
+    {# ── Hero: welcome + spotlight/stats (async-hydrated, #27) ─────────
+       Greeting + clock paint instantly; the spotlight and library stats load
+       from app_dashboard_widget_hero after first paint. The fanart background
+       image was dropped in favour of the gradient to keep the async hero
+       robust (the bg can't be injected into a sub-container cleanly). #}
+    <div class="hero hero-noBg">
       <div class="hero-fade"></div>
       <div class="hero-inner">
         {% set weekday = ['dashboard.weekdays.mon','dashboard.weekdays.tue','dashboard.weekdays.wed','dashboard.weekdays.thu','dashboard.weekdays.fri','dashboard.weekdays.sat','dashboard.weekdays.sun']['now'|date('N') - 1]|trans %}
         <p class="hero-kicker">{{ weekday }} · {{ 'now'|prismarr_date }} · {{ 'now'|prismarr_time }}</p>
         <h1 class="hero-greeting">{{ greeting }}, {{ username }}</h1>
-
-        {% if hero_spotlight and hero_spotlight.title %}
-          <div class="hero-spotlight">
-            <span class="hero-spotlight-label">{{ hero_spotlight.badge }}</span>
-            <h2 class="hero-spotlight-title">{{ hero_spotlight.title }}</h2>
-
-            <div class="hero-spotlight-meta">
-              {% if hero_spotlight.rating %}<span class="rating">{{ ico.icon('star-filled', '', 14) }} {{ hero_spotlight.rating|round(1) }}/10</span>{% endif %}
-              {% if hero_spotlight.year %}<span>{{ hero_spotlight.year }}</span>{% endif %}
-              {% if hero_spotlight.runtime %}<span>{{ hero_spotlight.runtime }} min</span>{% endif %}
-              {% if hero_spotlight.quality %}<span class="chip">{{ hero_spotlight.quality }}</span>{% endif %}
-              {% for g in hero_spotlight.genres %}<span class="chip">{{ g }}</span>{% endfor %}
-            </div>
-
-            {% if hero_spotlight.overview %}
-              <p class="hero-spotlight-overview">{{ hero_spotlight.overview }}</p>
-            {% endif %}
-
-            {% if hero_spotlight.detailUrl %}
-              <a href="{{ hero_spotlight.detailUrl }}" class="hero-spotlight-cta">
-                {{ hero_spotlight.cta }}
-              </a>
-            {% endif %}
-          </div>
-        {% endif %}
-
-        <div class="hero-stats">
-          <div class="hero-stat">
-            <div class="hero-stat-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M7 3v18M17 3v18M3 7.5h4M3 12h18M3 16.5h4M17 7.5h4M17 16.5h4"/>
-              </svg>
-            </div>
-            <div>
-              <div class="hero-stat-value">{{ stats.films ?? '—' }}</div>
-              <div class="hero-stat-label">{{ 'dashboard.hero.stats.films'|trans }}</div>
-            </div>
-          </div>
-          <div class="hero-stat">
-            <div class="hero-stat-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="2" y="7" width="20" height="15" rx="2"/><polyline points="17 2 12 7 7 2"/>
-              </svg>
-            </div>
-            <div>
-              <div class="hero-stat-value">{{ stats.series ?? '—' }}</div>
-              <div class="hero-stat-label">{{ 'dashboard.hero.stats.series'|trans }}</div>
-            </div>
-          </div>
-          <div class="hero-stat">
-            <div class="hero-stat-icon">
-              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
-              </svg>
-            </div>
-            <div>
-              <div class="hero-stat-value">{{ upcoming|length }}</div>
-              <div class="hero-stat-label">{{ 'dashboard.hero.stats.upcoming_7d'|trans }}</div>
-            </div>
+        <div data-dash-widget="hero" data-dash-url="{{ path('app_dashboard_widget_hero') }}" data-dash-body>
+          <div class="hero-stats">
+            {% for i in 1..3 %}
+              <div class="hero-stat" aria-hidden="true">
+                <div class="dash-skel-line" style="width:38px;height:38px;border-radius:8px;margin:0;"></div>
+                <div>
+                  <div class="dash-skel-line" style="width:44px;height:1.1rem;margin:0;"></div>
+                  <div class="dash-skel-line" style="width:64px;margin-top:.35rem;"></div>
+                </div>
+              </div>
+            {% endfor %}
           </div>
         </div>
       </div>
     </div>
 
-    {# ── Prochaines sorties (mini-calendrier 7 jours) ──────────────── #}
-    {# Issue #9 — masqué quand ni Radarr ni Sonarr ne sont configurés. #}
+    {# ── Prochaines sorties (mini-calendrier, async-hydraté #27) ──────
+       Issue #9 — masqué quand ni Radarr ni Sonarr ne sont configurés. Le
+       corps (mini-cal ou message vide) est chargé via
+       app_dashboard_widget_upcoming après le first paint. #}
     {% if services_configured.radarr or services_configured.sonarr %}
-    <div class="row row-cards mb-3">
+    <div class="row row-cards mb-3" data-dash-widget="upcoming" data-dash-url="{{ path('app_dashboard_widget_upcoming') }}">
       <div class="col-12">
         <div class="card">
           <div class="card-header">
@@ -544,58 +516,9 @@
               <a href="{{ path('app_calendrier') }}" class="dash-action-btn">{{ 'dashboard.upcoming.calendar_cta'|trans }}</a>
             </div>
           </div>
-          {% if upcoming is empty %}
-            <div class="card-body text-center text-secondary py-4">
-              {{ 'dashboard.upcoming.empty'|trans }}
-            </div>
-          {% else %}
-            <div class="mini-cal">
-              {% for iso, day in upcoming_days %}
-                <div class="mini-cal-day {{ day.isToday ? 'is-today' }}">
-                  <div class="mini-cal-day-head">
-                    <div class="mini-cal-dow">{{ day.dow }}</div>
-                    <div class="mini-cal-dom">{{ day.dom }}</div>
-                  </div>
-                  <div class="mini-cal-items">
-                    {% if day.items is empty %}
-                      <div class="mini-cal-empty">—</div>
-                    {% else %}
-                      {% set max_shown = 3 %}
-                      {% for item in day.items|slice(0, max_shown) %}
-                        {% set item_href = item.id ? (item.type == 'movie'
-                            ? instance_path('app_media_films')  ~ '?open=' ~ item.id
-                            : instance_path('app_media_series') ~ '?open=' ~ item.id) : '#' %}
-                        <a href="{{ item_href }}" class="mini-cal-item"
-                           title="{{ item.title }}{% if item.subtitle %} — {{ item.subtitle }}{% endif %} · {{ item.date|prismarr_time }}{% if item.badge %} · {{ item.badge }}{% endif %}">
-                          {% if item.poster %}
-                            <div class="mini-cal-item-thumb" style="background-image: url('{{ item.poster }}');"></div>
-                          {% else %}
-                            <div class="mini-cal-item-thumb is-placeholder">{{ item.type == 'movie' ? ico.icon('movie', '', 18) : ico.icon('device-tv', '', 18) }}</div>
-                          {% endif %}
-                          <div class="mini-cal-item-body">
-                            <span class="mini-cal-item-type {{ item.type == 'movie' ? 'is-movie' : 'is-episode' }}">
-                              {{ item.type == 'movie' ? 'dashboard.type.film'|trans : 'dashboard.type.series'|trans }}
-                            </span>
-                            <div class="mini-cal-item-title">{{ item.title }}</div>
-                            <div class="mini-cal-item-meta">
-                              {{ item.date|prismarr_time }}
-                              {%- if item.subtitle and item.type == 'episode' %} · {{ item.subtitle }}{% endif -%}
-                              {%- if item.badge %} · {{ item.badge }}{% endif -%}
-                            </div>
-                          </div>
-                        </a>
-                      {% endfor %}
-                      {% if day.items|length > max_shown %}
-                        <a href="{{ path('app_calendrier') }}?view=day&amp;date={{ iso }}" class="mini-cal-more">
-                          {{ 'dashboard.upcoming.more'|trans({count: day.items|length - max_shown}) }}
-                        </a>
-                      {% endif %}
-                    {% endif %}
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-          {% endif %}
+          <div data-dash-body>
+            <div class="card-body text-center text-secondary py-4"><span class="spinner-border spinner-border-sm"></span></div>
+          </div>
         </div>
       </div>
     </div>
@@ -606,7 +529,7 @@
        La grid se réduit alors à la seule carte "Services health". #}
     <div class="row row-cards mb-3">
       {% if services_configured.jellyseerr %}
-      <div class="col-12 col-lg-6">
+      <div class="col-12 col-lg-6" data-dash-widget="requests" data-dash-url="{{ path('app_dashboard_widget_requests') }}">
         <div class="card h-100">
           <div class="card-header">
             <h3 class="card-title">
@@ -619,33 +542,8 @@
               <a href="{{ path('jellyseerr_index') }}" class="dash-action-btn">{{ 'dashboard.requests.manage_cta'|trans }}</a>
             </div>
           </div>
-          <div class="list-group list-group-flush dash-list">
-            {% if jellyseerr_requests is empty %}
-              <div class="card-body text-center text-secondary py-4">
-                {{ 'dashboard.requests.empty'|trans }}
-              </div>
-            {% else %}
-              {% for req in jellyseerr_requests %}
-                {% set req_type = req.type == 'tv' ? 'tv' : 'movie' %}
-                <a href="{{ path('tmdb_index') }}?detail={{ req_type }}/{{ req.tmdbId }}" class="list-group-item list-group-item-action text-reset text-decoration-none">
-                  {% if req.poster %}
-                    <img src="https://image.tmdb.org/t/p/w92{{ req.poster }}" alt="" class="dash-poster" loading="lazy">
-                  {% else %}
-                    <div class="dash-poster-placeholder">{{ req_type == 'movie' ? ico.icon('movie', '', 24) : ico.icon('device-tv', '', 24) }}</div>
-                  {% endif %}
-                  <div class="dash-item-body">
-                    <div class="dash-item-title text-truncate">{{ req.title }}</div>
-                    <div class="dash-item-sub">
-                      {{ 'dashboard.requests.by'|trans }} {{ req.requestedBy }}
-                      {%- if req.requestedAt %} · {{ req.requestedAt|prismarr_date }}{% endif -%}
-                    </div>
-                  </div>
-                  <div class="dash-item-aside">
-                    <span class="badge bg-yellow-lt text-yellow">{{ 'dashboard.requests.status_pending'|trans }}</span>
-                  </div>
-                </a>
-              {% endfor %}
-            {% endif %}
+          <div class="list-group list-group-flush dash-list" data-dash-body>
+            <div class="card-body text-center text-secondary py-4"><span class="spinner-border spinner-border-sm"></span></div>
           </div>
         </div>
       </div>
@@ -653,7 +551,7 @@
 
       {# Services health card spans the full width when the requests card is
          hidden (no Seerr), otherwise sits next to it on the right. #}
-      <div class="col-12 {% if services_configured.jellyseerr %}col-lg-6{% endif %}">
+      <div class="col-12 {% if services_configured.jellyseerr %}col-lg-6{% endif %}" data-dash-widget="health" data-dash-url="{{ path('app_dashboard_widget_health') }}">
         <div class="card h-100">
           <div class="card-header">
             <h3 class="card-title">
@@ -666,39 +564,8 @@
               <a href="{{ path('admin_settings_index') }}" class="dash-action-btn">{{ 'dashboard.health.settings_cta'|trans }}</a>
             </div>
           </div>
-          <div class="card-body">
-            {# Only render chips for services the user has configured —
-               unconfigured ones come back as `null` from HealthService and
-               would otherwise clutter the grid with "—" rows that never
-               turn green (issue #9). #}
-            {% set configured_health = services_health|filter(ok => ok is not null) %}
-            {% if configured_health is empty %}
-              <div class="text-center text-secondary py-3">
-                {{ 'dashboard.health.none_configured'|trans }}
-              </div>
-            {% else %}
-            <div class="service-grid">
-              {% for id, ok in configured_health %}
-                {% set meta = {
-                  radarr:      {name:'Radarr',      color:'#FFC230'},
-                  sonarr:      {name:'Sonarr',      color:'#00CCFF'},
-                  prowlarr:    {name:'Prowlarr',    color:'#E88D1A'},
-                  jellyseerr:  {name:'Seerr',       color:'#a259ff'},
-                  qbittorrent: {name:'qBittorrent', color:'#2f67ba'},
-                  tmdb:        {name:'TMDb',        color:'#01B4E4'},
-                }[id] %}
-                <div class="service-chip">
-                  <span class="service-chip-dot {{ ok ? 'is-ok' : 'is-ko' }}"></span>
-                  <div class="flex-fill">
-                    <div class="service-chip-name" style="color: {{ meta.color }};">{{ meta.name }}</div>
-                    <div class="service-chip-state">
-                      {{ ok ? 'dashboard.health.status_ok'|trans : 'dashboard.health.status_ko'|trans }}
-                    </div>
-                  </div>
-                </div>
-              {% endfor %}
-            </div>
-            {% endif %}
+          <div class="card-body" data-dash-body>
+            <div class="text-center text-secondary py-3"><span class="spinner-border spinner-border-sm"></span></div>
           </div>
         </div>
       </div>
@@ -742,12 +609,12 @@
     </div>
     {% endif %}
 
-    {# ── TMDb trending (links to Discover modal) ─────────────── #}
-    {# Issue #9 — also hide the row when TMDb isn't configured at all
-       (otherwise `recommendations` is always [] and the section never shows,
-       but this guard makes the intent explicit). #}
-    {% if services_configured.tmdb and recommendations is not empty %}
-    <div class="row-section">
+    {# ── TMDb trending (async-hydrated, #27) ─────────────────────────
+       Issue #9 — still hidden entirely when TMDb isn't configured. The
+       tiles load from app_dashboard_widget_recommendations after first paint;
+       an empty fragment hides the section. #}
+    {% if services_configured.tmdb %}
+    <div class="row-section" data-dash-widget="recommendations" data-dash-url="{{ path('app_dashboard_widget_recommendations') }}">
       <div class="row-section-head">
         <h2 class="row-section-title">
           <span class="row-section-title-icon">
@@ -757,39 +624,19 @@
         </h2>
         <a href="{{ path('tmdb_index') }}" class="row-section-link">{{ 'dashboard.trending.discover_cta'|trans }}</a>
       </div>
-      <div class="poster-row">
-        {% for item in recommendations %}
-          {% set tmdb_title = item.title|default(item.name|default('—')) %}
-          {% set tmdb_date = item.release_date|default(item.first_air_date|default('')) %}
-          {% set tmdb_type = item.media_type == 'tv' ? 'tv' : 'movie' %}
-          <a href="{{ path('tmdb_index') }}?detail={{ tmdb_type }}/{{ item.id }}" class="poster-tile">
-            <div class="poster-tile-wrap">
-              {% if item.poster_path %}
-                <img src="https://image.tmdb.org/t/p/w342{{ item.poster_path }}" alt="{{ tmdb_title }}" loading="lazy" class="poster-tile-img">
-              {% else %}
-                <div class="poster-tile-placeholder">{{ item.media_type == 'tv' ? ico.icon('device-tv', '', 28) : ico.icon('movie', '', 28) }}</div>
-              {% endif %}
-              {% if item.vote_average and item.vote_average > 0 %}
-                <span class="poster-tile-badge">{{ ico.icon('star-filled', '', 12) }} {{ item.vote_average|round(1) }}</span>
-              {% endif %}
-            </div>
-            <div class="poster-tile-info">
-              <div class="poster-tile-title text-truncate">{{ tmdb_title }}</div>
-              <div class="poster-tile-sub">
-                {{ item.media_type == 'tv' ? 'dashboard.type.series'|trans : 'dashboard.type.film'|trans }}
-                {%- if tmdb_date %} · {{ tmdb_date|slice(0, 4) }}{% endif -%}
-              </div>
-            </div>
-          </a>
-        {% endfor %}
+      <div class="poster-row" data-dash-body>
+        {% for i in 1..7 %}<div class="poster-tile dash-skel" aria-hidden="true"><div class="poster-tile-wrap"></div><div class="poster-tile-info"><div class="dash-skel-line"></div></div></div>{% endfor %}
       </div>
     </div>
     {% endif %}
 
-    {# ── Recent library additions ──────────────────────────────── #}
-    {# Issue #9 — masqué quand ni Radarr ni Sonarr ne sont configurés. #}
-    {% if (services_configured.radarr or services_configured.sonarr) and recent_additions is not empty %}
-    <div class="row-section">
+    {# ── Recent library additions (async-hydrated, #27) ──────────────
+       The section shell + skeleton paint instantly; the poster tiles are
+       fetched from app_dashboard_widget_recent after first paint and
+       injected into [data-dash-body]. An empty fragment hides the section.
+       Issue #9 — still skipped entirely when neither service is configured. #}
+    {% if services_configured.radarr or services_configured.sonarr %}
+    <div class="row-section" data-dash-widget="recent" data-dash-url="{{ path('app_dashboard_widget_recent') }}">
       <div class="row-section-head">
         <h2 class="row-section-title">
           <span class="row-section-title-icon">
@@ -798,32 +645,52 @@
           {{ 'dashboard.recent.title'|trans }}
         </h2>
       </div>
-      <div class="poster-row">
-        {% for item in recent_additions %}
-          <a href="{{ item.href }}" class="poster-tile">
-            <div class="poster-tile-wrap">
-              {% if item.poster %}
-                <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy" class="poster-tile-img">
-              {% else %}
-                <div class="poster-tile-placeholder">{{ item.type == 'movie' ? ico.icon('movie', '', 28) : ico.icon('device-tv', '', 28) }}</div>
-              {% endif %}
-              {% if item.badge %}
-                <span class="poster-tile-badge {{ item.is_downloaded|default(false) ? 'is-downloaded' }}">{{ item.badge }}</span>
-              {% endif %}
-            </div>
-            <div class="poster-tile-info">
-              <div class="poster-tile-title text-truncate">{{ item.title }}</div>
-              <div class="poster-tile-sub">
-                {{ item.type == 'movie' ? 'dashboard.type.film'|trans : 'dashboard.type.series'|trans }}
-                {%- if item.subtitle %} · {{ item.subtitle }}{% endif -%}
-              </div>
-            </div>
-          </a>
-        {% endfor %}
+      <div class="poster-row" data-dash-body>
+        {% for i in 1..7 %}<div class="poster-tile dash-skel" aria-hidden="true"><div class="poster-tile-wrap"></div><div class="poster-tile-info"><div class="dash-skel-line"></div></div></div>{% endfor %}
       </div>
     </div>
     {% endif %}
 
   </div>
 </div>
+{% endblock %}
+
+{% block javascripts %}
+<script>
+  (function () {
+    // Async dashboard widget hydration (#27): after first paint, fetch each
+    // [data-dash-widget] fragment and swap it into its [data-dash-body].
+    // Turbo-safe (IIFE + var + .then); the data-dash-loaded guard stops a
+    // re-fired turbo:load from double-fetching.
+    function applyFragment(node, html) {
+      var trimmed = (html || '').trim();
+      if (!trimmed) { node.style.display = 'none'; return; }
+      var body = node.querySelector('[data-dash-body]') || node;
+      body.innerHTML = trimmed;
+      // Hero fanart: lift the injected bg up to the .hero so it covers the
+      // whole hero (it can't sit inside .hero-inner), dropping the gradient.
+      var bg = body.querySelector('[data-dash-hero-bg]');
+      if (bg) {
+        var hero = node.closest('.hero');
+        if (hero) { hero.insertBefore(bg, hero.firstChild); hero.classList.remove('hero-noBg'); }
+      }
+    }
+
+    function hydrateDashWidgets() {
+      var nodes = document.querySelectorAll('[data-dash-widget][data-dash-url]');
+      for (var i = 0; i < nodes.length; i++) {
+        (function (node) {
+          if (node.dataset.dashLoaded === '1') return;
+          node.dataset.dashLoaded = '1';
+          fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.text() : ''; })
+            .then(function (html) { applyFragment(node, html); })
+            .catch(function () { node.style.display = 'none'; });
+        })(nodes[i]);
+      }
+    }
+    document.addEventListener('turbo:load', hydrateDashWidgets);
+    if (document.readyState !== 'loading') { hydrateDashWidgets(); }
+  })();
+</script>
 {% endblock %}
