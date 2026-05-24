@@ -250,39 +250,13 @@
 
 <div id="sonarr-warnings-banner"></div>
 
-{# ── Stats ── #}
-<div class="row g-3 mb-3">
-  <div class="col-6 col-sm-3">
-    <div class="card card-sm text-center">
-      <div class="card-body">
-        <div class="h1 mb-0">{{ stats.total }}</div>
-        <div class="text-muted small">{{ 'media.series.stats.total'|trans }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-sm-3">
-    <div class="card card-sm text-center">
-      <div class="card-body">
-        <div class="h1 mb-0 text-success">{{ stats.continuing }}</div>
-        <div class="text-muted small">{{ 'media.series.stats.continuing'|trans }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-sm-3">
-    <div class="card card-sm text-center">
-      <div class="card-body">
-        <div class="h1 mb-0 text-secondary">{{ stats.ended }}</div>
-        <div class="text-muted small">{{ 'media.series.stats.ended'|trans }}</div>
-      </div>
-    </div>
-  </div>
-  <div class="col-6 col-sm-3">
-    <div class="card card-sm text-center">
-      <div class="card-body">
-        <div class="h1 mb-0">{{ stats.totalGb }} <small class="text-muted fs-4">{{ 'media.series.stats.gb_suffix'|trans }}</small></div>
-        <div class="text-muted small">{{ 'media.series.stats.total_size'|trans }}</div>
-      </div>
-    </div>
+{# ── Stats (compact strip — #7) ── #}
+<div class="card card-sm mb-3">
+  <div class="card-body py-2 d-flex flex-wrap align-items-baseline justify-content-around gap-2 gap-sm-3">
+    <div><span class="h3 mb-0">{{ stats.total }}</span> <span class="text-muted small">{{ 'media.series.stats.total'|trans }}</span></div>
+    <div><span class="h3 mb-0 text-success">{{ stats.continuing }}</span> <span class="text-muted small">{{ 'media.series.stats.continuing'|trans }}</span></div>
+    <div><span class="h3 mb-0 text-secondary">{{ stats.ended }}</span> <span class="text-muted small">{{ 'media.series.stats.ended'|trans }}</span></div>
+    <div><span class="h3 mb-0">{{ stats.totalGb }} <span class="text-muted fs-5">{{ 'media.series.stats.gb_suffix'|trans }}</span></span> <span class="text-muted small">{{ 'media.series.stats.total_size'|trans }}</span></div>
   </div>
 </div>
 
