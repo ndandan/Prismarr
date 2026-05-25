@@ -1,5 +1,7 @@
 {% extends 'base.html.twig' %}
 
+{% import '_icons.html.twig' as ico %}
+
 {% block title %}{{ 'admin.page.title'|trans }}{% endblock %}
 
 {% block stylesheets %}
@@ -1004,13 +1006,13 @@
                 </div>
                 <div class="d-flex flex-wrap gap-2">
                   <a href="https://github.com/Shoshuo/Prismarr/releases" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                    {{ 'admin.updates.view_on_github'|trans }}
+                    {{ ico.icon('brand-github', '', 16) }} {{ 'admin.updates.view_on_github'|trans }}
                   </a>
                   <a href="https://hub.docker.com/r/shoshuo/prismarr/tags" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                    {{ 'admin.updates.docker_hub'|trans }}
+                    {{ ico.icon('brand-docker', '', 16) }} {{ 'admin.updates.docker_hub'|trans }}
                   </a>
                   <a href="https://github.com/users/Shoshuo/projects/3" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                    {{ 'admin.updates.roadmap'|trans }}
+                    {{ ico.icon('map', '', 16) }} {{ 'admin.updates.roadmap'|trans }}
                   </a>
                 </div>
               </div>
@@ -1131,16 +1133,16 @@
               <p class="service-card-title" style="margin-bottom:.4rem;">{{ 'admin.about.links.title'|trans }}</p>
               <div class="d-flex flex-wrap gap-2">
                 <a href="https://github.com/Shoshuo/Prismarr" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                  {{ 'admin.about.links.source'|trans }}
+                  {{ ico.icon('brand-github', '', 16) }} {{ 'admin.about.links.source'|trans }}
                 </a>
                 <a href="https://github.com/Shoshuo/Prismarr/issues" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                  {{ 'admin.about.links.bug'|trans }}
+                  {{ ico.icon('bug', '', 16) }} {{ 'admin.about.links.bug'|trans }}
                 </a>
                 <a href="https://github.com/Shoshuo/Prismarr#readme" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                  {{ 'admin.about.links.docs'|trans }}
+                  {{ ico.icon('book', '', 16) }} {{ 'admin.about.links.docs'|trans }}
                 </a>
                 <a href="https://github.com/users/Shoshuo/projects/3" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                  {{ 'admin.about.links.roadmap'|trans }}
+                  {{ ico.icon('map', '', 16) }} {{ 'admin.about.links.roadmap'|trans }}
                 </a>
               </div>
             </div>
