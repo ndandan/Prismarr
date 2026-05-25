@@ -117,6 +117,28 @@ class JellyseerrController extends AbstractController
         ]);
     }
 
+    /**
+     * Lightweight endpoint for the sidebar badge poll — returns only the
+     * pending request count, mirroring the qBittorrent poll-summary contract
+     * ({@see QBittorrentController::apiPollSummary}). An empty `/request/count`
+     * with a recorded client error means Jellyseerr is unreachable: we answer
+     * 500 so the JS poll backs off instead of flashing the badge to zero.
+     */
+    #[Route('/api/pending-count', name: 'api_pending_count', methods: ['GET'])]
+    public function apiPendingCount(): JsonResponse
+    {
+        try {
+            $counts = $this->jellyseerr->getRequestCount();
+            if ($counts === [] && $this->jellyseerr->getLastError() !== null) {
+                return $this->json(['error' => 'jellyseerr_unreachable'], 500);
+            }
+            return $this->json(['pending' => (int) ($counts['pending'] ?? 0)]);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Jellyseerr pending-count failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
+            return $this->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
     // ── Users page ───────────────────────────────────────────────────────────
 
     #[Route('/utilisateurs', name: 'users')]

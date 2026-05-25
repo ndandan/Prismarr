@@ -888,7 +888,9 @@
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
                   <svg width="24" height="24" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" class="icon"><path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm0 368c-88.4 0-160-71.6-160-160S167.6 96 256 96s160 71.6 160 160-71.6 160-160 160z" fill="#a259ff"/><circle cx="256" cy="256" r="80" fill="#a259ff"/></svg>
                 </span>
-                <span class="nav-link-title">Seerr</span>
+                <span class="nav-link-title d-flex align-items-center">Seerr
+                  <span id="sidebar-seerr-badge" class="sidebar-dl-badge" style="display:none;">0</span>
+                </span>
               </a>
             </li>
             {% endif %}
@@ -2318,6 +2320,83 @@
           if (window._prismarrQbtPollTimer) { clearTimeout(window._prismarrQbtPollTimer); window._prismarrQbtPollTimer = null; }
         } else {
           pollQbt();
+        }
+      });
+    }
+  })();
+  </script>
+  {% endif %}
+
+  {# ══════════════════════════════════════════════════════════════════════════
+     Jellyseerr pending-requests poll — sidebar badge only (mirrors the qBit
+     poll above). Gated on service_configured so a disabled Jellyseerr (#15)
+     isn't chased through its route-guard redirect. Polls slowly (60s): pending
+     requests change far less often than downloads.
+     ══════════════════════════════════════════════════════════════════════════ #}
+  {% if service_configured('jellyseerr') and (
+        route starts with 'app_qbittorrent_'
+     or route starts with 'app_media'
+     or route starts with 'radarr_'
+     or route starts with 'sonarr_'
+     or route starts with 'prowlarr_'
+     or route starts with 'jellyseerr_'
+     or route starts with 'tmdb_') %}
+  <script>
+  (function () {
+    var SEERR_POLL_URL = '{{ path('jellyseerr_api_pending_count') }}';
+    var SEERR_POLL_INTERVAL = 60000;       // 60s — pending requests move slowly
+    var SEERR_POLL_INTERVAL_MAX = 240000;  // back off to 4 min when unreachable
+    window._prismarrSeerrFailCount = 0;
+
+    function updateSeerrBadge(pending) {
+      var badge = document.getElementById('sidebar-seerr-badge');
+      if (!badge) return;
+      if (pending > 0) {
+        badge.textContent = pending > 99 ? '99+' : String(pending);
+        badge.style.display = '';
+      } else {
+        badge.style.display = 'none';
+      }
+    }
+
+    function seerrNextDelay() {
+      if (window._prismarrSeerrFailCount === 0) return SEERR_POLL_INTERVAL;
+      var scaled = SEERR_POLL_INTERVAL * Math.pow(2, window._prismarrSeerrFailCount - 1);
+      return Math.min(scaled, SEERR_POLL_INTERVAL_MAX);
+    }
+
+    function scheduleSeerrPoll() {
+      if (window._prismarrSeerrPollTimer) clearTimeout(window._prismarrSeerrPollTimer);
+      window._prismarrSeerrPollTimer = setTimeout(pollSeerr, seerrNextDelay());
+    }
+
+    function pollSeerr() {
+      fetch(SEERR_POLL_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (d) {
+          if (!d || d.error) { window._prismarrSeerrFailCount++; scheduleSeerrPoll(); return; }
+          window._prismarrSeerrFailCount = 0;
+          updateSeerrBadge(d.pending || 0);
+          scheduleSeerrPoll();
+        })
+        .catch(function () {
+          window._prismarrSeerrFailCount++;
+          scheduleSeerrPoll();
+        });
+    }
+
+    // Turbo-safe singleton pattern: a single global poll even with re-exec
+    if (window._prismarrSeerrPollTimer) clearTimeout(window._prismarrSeerrPollTimer);
+    pollSeerr();
+
+    // Pause when tab is hidden, resume when it returns
+    if (!window._prismarrSeerrVisibilityBound) {
+      window._prismarrSeerrVisibilityBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          if (window._prismarrSeerrPollTimer) { clearTimeout(window._prismarrSeerrPollTimer); window._prismarrSeerrPollTimer = null; }
+        } else {
+          pollSeerr();
         }
       });
     }
