@@ -164,6 +164,7 @@ a request UI (Seerr).
 - Pending Seerr requests enriched with TMDb metadata
 - Live health of all six services
 - Personal watchlist, weekly TMDb trending, latest library additions
+- Near-instant load: the page paints first, then each widget hydrates on its own
 
 ### Downloads
 - Full qBittorrent dashboard: server-side pagination, sorting and filters
