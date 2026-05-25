@@ -2328,21 +2328,18 @@
   {% endif %}
 
   {# ══════════════════════════════════════════════════════════════════════════
-     Jellyseerr pending-requests poll — sidebar badge only (mirrors the qBit
-     poll above). Gated on service_configured so a disabled Jellyseerr (#15)
-     isn't chased through its route-guard redirect. Polls slowly (60s): pending
-     requests change far less often than downloads.
+     Jellyseerr pending-requests poll — sidebar badge. Unlike the qBit poll
+     above (media pages only, to avoid hammering the NAS every 15s), this one
+     runs on every page that renders the sidebar: the 60s cadence is light
+     enough, and a "requests awaiting action" count is useful everywhere.
+     Gated on service_configured so a disabled Jellyseerr (#15) isn't chased
+     through its route-guard redirect.
      ══════════════════════════════════════════════════════════════════════════ #}
-  {% if service_configured('jellyseerr') and (
-        route starts with 'app_qbittorrent_'
-     or route starts with 'app_media'
-     or route starts with 'radarr_'
-     or route starts with 'sonarr_'
-     or route starts with 'prowlarr_'
-     or route starts with 'jellyseerr_'
-     or route starts with 'tmdb_') %}
+  {% if service_configured('jellyseerr') %}
   <script>
   (function () {
+    // No sidebar (login / setup) → no badge → don't poke Jellyseerr.
+    if (!document.getElementById('sidebar-seerr-badge')) return;
     var SEERR_POLL_URL = '{{ path('jellyseerr_api_pending_count') }}';
     var SEERR_POLL_INTERVAL = 60000;       // 60s — pending requests move slowly
     var SEERR_POLL_INTERVAL_MAX = 240000;  // back off to 4 min when unreachable
