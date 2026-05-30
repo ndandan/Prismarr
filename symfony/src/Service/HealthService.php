@@ -10,6 +10,8 @@ use App\Service\Media\RadarrClient;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\Usenet\NzbgetClient;
+use App\Service\Media\Usenet\SabnzbdClient;
 
 /**
  * Tests third-party service availability.
@@ -40,6 +42,11 @@ class HealthService
         private readonly ?ConfigService    $config = null,
         private readonly ?ServiceHealthCache $serviceHealthCache = null,
         private readonly ?ServiceInstanceProvider $instances = null,
+        // #20 — Usenet download clients. Nullable + last so the legacy test
+        // constructors (which pass the six core clients positionally) keep
+        // working without each having to provide a fake SAB/NZBGet.
+        private readonly ?SabnzbdClient    $sabnzbd = null,
+        private readonly ?NzbgetClient     $nzbget = null,
     ) {}
 
     /**
@@ -106,6 +113,8 @@ class HealthService
             'jellyseerr'  => $this->jellyseerr->ping(),
             'qbittorrent' => $this->qbittorrent->ping(),
             'tmdb'        => $this->tmdb->ping(),
+            'sabnzbd'     => $this->sabnzbd?->ping() ?? false,
+            'nzbget'      => $this->nzbget?->ping() ?? false,
             default       => true,
         };
     }
@@ -122,7 +131,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'];
 
     public function isConfigured(string $service): bool
     {
@@ -156,6 +165,13 @@ class HealthService
             // See issue #10.
             'qbittorrent' =>
                 $this->config->has('qbittorrent_url'),
+            // SABnzbd needs URL + API key. NZBGet only needs the URL — user /
+            // password are optional (reverse-proxy or auth-disabled LAN setup),
+            // mirroring qBittorrent's reverse-proxy stance.
+            'sabnzbd' =>
+                $this->config->has('sabnzbd_url') && $this->config->has('sabnzbd_api_key'),
+            'nzbget' =>
+                $this->config->has('nzbget_url'),
             default => true,
         };
     }
@@ -172,7 +188,7 @@ class HealthService
         if ($service === null) {
             $this->cache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -237,6 +253,17 @@ class HealthService
         // auth failure for a healthy response.
         if ($service === 'qbittorrent' && $http === 200 && is_string($body) && trim($body) === 'Fails.') {
             return ['ok' => false, 'category' => 'auth', 'http' => $http];
+        }
+        // SABnzbd answers 403 for BOTH a wrong API key and a host that isn't in
+        // its host_whitelist (anti DNS-rebinding). Tell them apart so the admin
+        // gets an actionable hint instead of a bare "forbidden".
+        if ($service === 'sabnzbd' && $http === 403 && is_string($body)) {
+            if (stripos($body, 'hostname') !== false) {
+                return ['ok' => false, 'category' => 'host_whitelist', 'http' => $http];
+            }
+            if (stripos($body, 'api key') !== false) {
+                return ['ok' => false, 'category' => 'auth', 'http' => $http];
+            }
         }
         if ($http !== null && $http >= 200 && $http < 300) {
             return ['ok' => true, 'category' => 'ok', 'http' => $http];
@@ -354,6 +381,34 @@ class HealthService
                     ],
                     'method'  => 'POST',
                     'body'    => http_build_query(['username' => $user, 'password' => $pass]),
+                ];
+            }
+            case 'sabnzbd': {
+                $url = $get('sabnzbd_url');
+                $key = $get('sabnzbd_api_key');
+                if ($url === '' || $key === '') return null;
+                // mode=version is the lightest authenticated call. A bad key →
+                // 403 {"error":"API Key Incorrect"}; a host not in SABnzbd's
+                // host_whitelist → 403 {"error":"Access denied - hostname …"}.
+                // diagnoseFromResponse() tells those two 403s apart.
+                return [
+                    'url' => rtrim($url, '/') . '/api?mode=version&output=json&apikey=' . urlencode($key),
+                ];
+            }
+            case 'nzbget': {
+                $url  = $get('nzbget_url');
+                $user = $get('nzbget_user');
+                $pass = $get('nzbget_password');
+                if ($url === '') return null;
+                $headers = ['Content-Type: application/json'];
+                if ($user !== '' || $pass !== '') {
+                    $headers[] = 'Authorization: Basic ' . base64_encode($user . ':' . $pass);
+                }
+                return [
+                    'url'     => rtrim($url, '/') . '/jsonrpc',
+                    'headers' => $headers,
+                    'method'  => 'POST',
+                    'body'    => (string) json_encode(['version' => '1.1', 'id' => 1, 'method' => 'version', 'params' => []]),
                 ];
             }
             default:

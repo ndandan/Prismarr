@@ -69,6 +69,15 @@ class AdminSettingsController extends AbstractController
             ['key' => 'qbittorrent_user',     'type' => 'text',     'label' => 'admin.field.username',  'clearable' => true],
             ['key' => 'qbittorrent_password', 'type' => 'password', 'label' => 'admin.field.password',  'clearable' => true],
         ],
+        'sabnzbd' => [
+            ['key' => 'sabnzbd_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8080'],
+            ['key' => 'sabnzbd_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
+        ],
+        'nzbget' => [
+            ['key' => 'nzbget_url',      'type' => 'text',     'label' => 'admin.field.url',      'placeholder' => 'http://host.docker.internal:6789'],
+            ['key' => 'nzbget_user',     'type' => 'text',     'label' => 'admin.field.username', 'clearable' => true],
+            ['key' => 'nzbget_password', 'type' => 'password', 'label' => 'admin.field.password', 'clearable' => true],
+        ],
         'gluetun' => [
             ['key' => 'gluetun_url',      'type' => 'text',     'label' => 'admin.field.url'],
             ['key' => 'gluetun_api_key',  'type' => 'password', 'label' => 'admin.field.api_key_if_protected'],
@@ -116,6 +125,8 @@ class AdminSettingsController extends AbstractController
         'prowlarr'    => 'Prowlarr',
         'jellyseerr'  => 'Seerr',
         'qbittorrent' => 'qBittorrent',
+        'sabnzbd'     => 'SABnzbd',
+        'nzbget'      => 'NZBGet',
         'gluetun'     => 'Gluetun',
     ];
 
