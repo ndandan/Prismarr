@@ -40,8 +40,11 @@ class UsenetStatusTest extends TestCase
         return [
             ['DOWNLOADING', UsenetStatus::DOWNLOADING],
             ['QUEUED',      UsenetStatus::QUEUED],
+            ['PP_QUEUED',   UsenetStatus::QUEUED],
             ['PAUSED',      UsenetStatus::PAUSED],
+            ['VERIFYING_SOURCES', UsenetStatus::VERIFYING],
             ['UNPACKING',   UsenetStatus::EXTRACTING],
+            ['RENAMING',    UsenetStatus::MOVING],
             ['POST_PROCESSING', UsenetStatus::MOVING],
             ['???',         UsenetStatus::UNKNOWN],
         ];

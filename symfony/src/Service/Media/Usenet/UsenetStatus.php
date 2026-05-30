@@ -45,11 +45,13 @@ final class UsenetStatus
     {
         return match (strtoupper($status)) {
             'DOWNLOADING'                 => self::DOWNLOADING,
-            'QUEUED', 'FETCHING'          => self::QUEUED,
+            'QUEUED', 'FETCHING', 'PP_QUEUED' => self::QUEUED,
             'PAUSED'                      => self::PAUSED,
-            'VERIFYING', 'REPAIRING'      => self::VERIFYING,
+            'LOADING_PARS', 'VERIFYING_SOURCES', 'VERIFYING_REPAIRED', 'VERIFYING', 'REPAIRING'
+                                          => self::VERIFYING,
             'UNPACKING'                   => self::EXTRACTING,
-            'MOVING', 'POST_PROCESSING', 'EXECUTING_SCRIPT' => self::MOVING,
+            'RENAMING', 'MOVING', 'POST_PROCESSING', 'EXECUTING_SCRIPT', 'PP_FINISHED'
+                                          => self::MOVING,
             default                       => self::UNKNOWN,
         };
     }
