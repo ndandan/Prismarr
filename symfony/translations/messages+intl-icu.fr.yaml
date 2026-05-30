@@ -752,6 +752,7 @@ admin:
       forbidden: 'Accès refusé (403) — IP bannie ou pare-feu'
       not_found: "Endpoint introuvable (404) — mauvaise URL ou chemin d'API"
       server_error: 'Service en erreur ({http}) — consulte les logs du service'
+      host_whitelist: 'SABnzbd a refusé le nom d''hôte — ajoute-le à host_whitelist dans Config → General de SABnzbd'
       unknown: 'Réponse inattendue ({http})'
   export:
     encode_failed: Encodage impossible.

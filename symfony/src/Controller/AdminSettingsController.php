@@ -472,6 +472,8 @@ class AdminSettingsController extends AbstractController
             'radarr', 'sonarr', 'prowlarr', 'jellyseerr' => [$service . '_url', $service . '_api_key'],
             'tmdb'                                       => ['tmdb_api_key'],
             'qbittorrent'                                => ['qbittorrent_url', 'qbittorrent_user', 'qbittorrent_password'],
+            'sabnzbd'                                    => ['sabnzbd_url', 'sabnzbd_api_key'],
+            'nzbget'                                     => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
             default                                      => [],
         };
         $overrides = [];
@@ -520,7 +522,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb'];
+        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'];
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }

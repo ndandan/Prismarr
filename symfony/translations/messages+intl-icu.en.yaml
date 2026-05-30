@@ -753,6 +753,7 @@ admin:
       forbidden: 'Access refused (403) — IP banned or firewall'
       not_found: 'Endpoint not found (404) — wrong URL or API path'
       server_error: 'Service error ({http}) — check service logs'
+      host_whitelist: 'SABnzbd refused the hostname — add it to host_whitelist in SABnzbd''s Config → General'
       unknown: 'Unexpected response ({http})'
   export:
     encode_failed: Cannot encode.
