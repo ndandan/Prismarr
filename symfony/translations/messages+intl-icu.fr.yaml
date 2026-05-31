@@ -3548,6 +3548,66 @@ qbittorrent:
     no_valid_file: Aucun fichier valide
     torrent_not_found: Torrent introuvable
 
+usenet:
+  page_title: 'Téléchargements Usenet'
+  disabled_notice: '{client} est désactivé.'
+  error_unreachable: 'Impossible de contacter {client}.'
+  stats:
+    active: En cours
+    queued: En attente
+    speed: Vitesse
+    remaining: Restant
+    eta: Temps restant
+    free_space: Libre
+    paused: En pause
+  filters:
+    search_placeholder: 'Rechercher...'
+    all: Tous
+    downloading: En cours
+    queued: En attente
+    paused: En pause
+    verifying: Réparation
+    extracting: Extraction
+    completed: Terminés
+    failed: Échoués
+  count_tpl: '{count, plural, one {# téléchargement} other {# téléchargements}}'
+  table:
+    name: Nom
+    category: Catégorie
+    size: Taille
+    progress: '%'
+    speed: Vitesse
+    eta: Temps restant
+    status: Statut
+  status:
+    downloading: En cours
+    queued: En attente
+    paused: En pause
+    verifying: Réparation
+    extracting: Extraction
+    moving: Traitement
+    completed: Terminé
+    failed: Échoué
+    unknown: Inconnu
+  history:
+    title: Historique
+    empty: 'Aucun historique pour le moment.'
+  empty: 'La file est vide.'
+  toolbar:
+    pause_all: Tout mettre en pause
+    resume_all: Tout reprendre
+    speed_limit: 'Limite de vitesse'
+    speed_limit_unlimited: Illimité
+    speed_limit_placeholder: 'Mo/s (0 = illimité)'
+    add_nzb: 'Ajouter un NZB'
+  actions:
+    pause: Pause
+    resume: Reprendre
+    delete: Supprimer
+    delete_confirm: 'Supprimer ce téléchargement ? Les fichiers partiels sont aussi supprimés.'
+  api:
+    unreachable: 'Client de téléchargement injoignable.'
+
 prowlarr:
   nav:
     indexers: Indexeurs

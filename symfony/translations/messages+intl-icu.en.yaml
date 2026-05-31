@@ -3549,6 +3549,66 @@ qbittorrent:
     no_valid_file: No valid file
     torrent_not_found: Torrent not found
 
+usenet:
+  page_title: 'Usenet downloads'
+  disabled_notice: '{client} is disabled.'
+  error_unreachable: 'Unable to reach {client}.'
+  stats:
+    active: Downloading
+    queued: Queued
+    speed: Speed
+    remaining: Remaining
+    eta: ETA
+    free_space: Free
+    paused: Paused
+  filters:
+    search_placeholder: 'Search...'
+    all: All
+    downloading: Downloading
+    queued: Queued
+    paused: Paused
+    verifying: Repairing
+    extracting: Extracting
+    completed: Completed
+    failed: Failed
+  count_tpl: '{count, plural, one {# job} other {# jobs}}'
+  table:
+    name: Name
+    category: Category
+    size: Size
+    progress: '%'
+    speed: Speed
+    eta: ETA
+    status: Status
+  status:
+    downloading: Downloading
+    queued: Queued
+    paused: Paused
+    verifying: Repairing
+    extracting: Extracting
+    moving: Processing
+    completed: Completed
+    failed: Failed
+    unknown: Unknown
+  history:
+    title: History
+    empty: 'No history yet.'
+  empty: 'The queue is empty.'
+  toolbar:
+    pause_all: Pause all
+    resume_all: Resume all
+    speed_limit: 'Speed limit'
+    speed_limit_unlimited: Unlimited
+    speed_limit_placeholder: 'MB/s (0 = unlimited)'
+    add_nzb: 'Add NZB'
+  actions:
+    pause: Pause
+    resume: Resume
+    delete: Delete
+    delete_confirm: 'Delete this download? Partial files are removed too.'
+  api:
+    unreachable: 'Download client unreachable.'
+
 prowlarr:
   nav:
     indexers: Indexers
