@@ -63,7 +63,7 @@ sidebar:
     tools: Outils
   nav:
     dashboard: Tableau de bord
-    qbittorrent: Téléchargements
+    qbittorrent: qBittorrent
     discovery: Découverte
     calendar: Calendrier
     radarr: Radarr

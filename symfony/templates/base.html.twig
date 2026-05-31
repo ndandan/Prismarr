@@ -914,6 +914,44 @@
             </li>
             {% endif %}
 
+            {% if service_visible_in_sidebar('sabnzbd') %}
+            <li class="nav-item">
+              <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_usenet_' and app.request.attributes.get('client') == 'sabnzbd' ? 'active' }}"
+                 href="{{ path('app_usenet_index', {client: 'sabnzbd'}) }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                       fill="none" stroke="#ffa000" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" class="icon">
+                    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/>
+                    <path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/>
+                  </svg>
+                </span>
+                <span class="nav-link-title d-flex align-items-center">SABnzbd
+                  <span id="sidebar-sabnzbd-badge" class="sidebar-dl-badge" style="display:none;">0</span>
+                </span>
+              </a>
+            </li>
+            {% endif %}
+
+            {% if service_visible_in_sidebar('nzbget') %}
+            <li class="nav-item">
+              <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_usenet_' and app.request.attributes.get('client') == 'nzbget' ? 'active' }}"
+                 href="{{ path('app_usenet_index', {client: 'nzbget'}) }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                       fill="none" stroke="#1f9c3a" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" class="icon">
+                    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/>
+                    <path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/>
+                  </svg>
+                </span>
+                <span class="nav-link-title d-flex align-items-center">NZBGet
+                  <span id="sidebar-nzbget-badge" class="sidebar-dl-badge" style="display:none;">0</span>
+                </span>
+              </a>
+            </li>
+            {% endif %}
+
           </ul>
 
           {# ── Sidebar footer: admin settings + logout (mobile included) ── #}
@@ -2397,6 +2435,49 @@
         }
       });
     }
+  })();
+  </script>
+  {% endif %}
+
+  {# ══════════════════════════════════════════════════════════════════════════
+     Usenet active-downloads badge — one poll per configured client, mirroring
+     the qBit/Seerr badge. Light JSON endpoint (active count only); each badge
+     hides itself at zero and backs off when the client is unreachable.
+     ══════════════════════════════════════════════════════════════════════════ #}
+  {% if service_configured('sabnzbd') or service_configured('nzbget') %}
+  <script>
+  (function () {
+    var CLIENTS = [
+      {% if service_configured('sabnzbd') %}{ id: 'sidebar-sabnzbd-badge', url: '{{ path('app_usenet_api_poll_summary', {client: 'sabnzbd'}) }}' },{% endif %}
+      {% if service_configured('nzbget') %}{ id: 'sidebar-nzbget-badge', url: '{{ path('app_usenet_api_poll_summary', {client: 'nzbget'}) }}' },{% endif %}
+    ];
+    var BASE = 60000, MAX = 240000;
+
+    CLIENTS.forEach(function (c) {
+      var badge = document.getElementById(c.id);
+      if (!badge) return;  // sidebar hidden / not rendered
+      var fails = 0, timer = null;
+
+      function update(active) {
+        if (active > 0) { badge.textContent = active > 99 ? '99+' : String(active); badge.style.display = ''; }
+        else { badge.style.display = 'none'; }
+      }
+      function schedule() {
+        if (timer) clearTimeout(timer);
+        var delay = fails === 0 ? BASE : Math.min(BASE * Math.pow(2, fails - 1), MAX);
+        timer = setTimeout(poll, delay);
+      }
+      function poll() {
+        fetch(c.url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+          .then(function (d) {
+            if (!d || d.error) { fails++; schedule(); return; }
+            fails = 0; update(d.active || 0); schedule();
+          })
+          .catch(function () { fails++; schedule(); });
+      }
+      poll();
+    });
   })();
   </script>
   {% endif %}
