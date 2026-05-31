@@ -387,12 +387,13 @@ class HealthService
                 $url = $get('sabnzbd_url');
                 $key = $get('sabnzbd_api_key');
                 if ($url === '' || $key === '') return null;
-                // mode=version is the lightest authenticated call. A bad key →
-                // 403 {"error":"API Key Incorrect"}; a host not in SABnzbd's
-                // host_whitelist → 403 {"error":"Access denied - hostname …"}.
-                // diagnoseFromResponse() tells those two 403s apart.
+                // mode=queue actually validates the key — mode=version does NOT
+                // (SABnzbd answers 200 for any key on version). With queue: good
+                // key → 200; bad key → 403 "API Key Incorrect"; a host not in
+                // SABnzbd's host_whitelist → 403 "Access denied - hostname …".
+                // diagnoseFromResponse() tells those two 403s apart by body.
                 return [
-                    'url' => rtrim($url, '/') . '/api?mode=version&output=json&apikey=' . urlencode($key),
+                    'url' => rtrim($url, '/') . '/api?mode=queue&output=json&apikey=' . urlencode($key),
                 ];
             }
             case 'nzbget': {

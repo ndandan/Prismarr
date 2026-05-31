@@ -520,6 +520,8 @@ admin:
       prowlarr: Indexer aggregator
       jellyseerr: Request platform
       qbittorrent: Torrent client
+      sabnzbd: Usenet downloader
+      nzbget: Usenet downloader
       gluetun: 'VPN / port forwarding'
     sidebar_toggle: Menu
     sidebar_toggle_title: Show in sidebar

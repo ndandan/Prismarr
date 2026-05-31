@@ -12,6 +12,7 @@ use App\Service\Media\SonarrClient;
 use App\Service\Media\TmdbClient;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 /**
  * Pure-logic coverage of HealthService for the Usenet wiring (#20):
@@ -76,5 +77,27 @@ class HealthServiceDiagnoseTest extends TestCase
         $config->method('get')->willReturn(null);
         $config->method('has')->willReturnCallback(fn(string $k) => $k === 'nzbget_url');
         self::assertTrue($this->makeService($config)->isConfigured('nzbget'));
+    }
+
+    // The SABnzbd probe MUST hit an authenticated mode. mode=version answers
+    // 200 for ANY key, so a broken key would test green; mode=queue actually
+    // rejects a bad key with 403. Pin the endpoint so we can't regress to it.
+    public function testSabnzbdProbeUsesAuthenticatedMode(): void
+    {
+        $probe = $this->probeFor('sabnzbd', ['sabnzbd_url' => 'http://sab:8080', 'sabnzbd_api_key' => 'k']);
+        self::assertNotNull($probe);
+        self::assertStringContainsString('mode=queue', $probe['url']);
+        self::assertStringNotContainsString('mode=version', $probe['url']);
+    }
+
+    /**
+     * @param array<string, ?string> $overrides
+     * @return array{url: string, headers?: array<int,string>, method?: string, body?: string}|null
+     */
+    private function probeFor(string $service, array $overrides): ?array
+    {
+        $m = new ReflectionMethod(HealthService::class, 'probeFor');
+        $m->setAccessible(true);
+        return $m->invoke($this->makeService(), $service, $overrides);
     }
 }
