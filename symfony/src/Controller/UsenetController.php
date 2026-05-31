@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Service\ConfigService;
 use App\Service\HealthService;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
@@ -31,6 +32,7 @@ class UsenetController extends AbstractController
         private readonly SabnzbdClient $sabnzbd,
         private readonly NzbgetClient $nzbget,
         private readonly HealthService $health,
+        private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
     ) {}
@@ -51,9 +53,31 @@ class UsenetController extends AbstractController
             return $this->redirectToRoute('app_home');
         }
 
+        // Probe at render time so a configured-but-unreachable client shows the
+        // explicit "unreachable" banner (like qBittorrent) instead of a silent
+        // empty page. The JS feed still refreshes the data afterwards.
+        $error = false;
+        try {
+            if ($this->client($client)->getVersion() === null) {
+                $error = true;
+            }
+        } catch (\Throwable $e) {
+            $error = true;
+            $this->logger->warning('Usenet index probe crashed', [
+                'client'    => $client,
+                'exception' => $e::class,
+                'message'   => $e->getMessage(),
+            ]);
+        }
+        if ($error) {
+            $this->logger->warning('Usenet {client} unreachable on page render', ['client' => $client]);
+        }
+
         return $this->render('usenet/index.html.twig', [
             'client'       => $client,
             'client_label' => $label,
+            'error'        => $error,
+            'service_url'  => $this->config->get($client . '_url'),
         ]);
     }
 

@@ -73,6 +73,16 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
 {% endblock %}
 
 {% block body %}
+{% if error %}
+  {% include 'error/_service_banner.html.twig' with {
+    service: client_label,
+    wizard_route: 'app_setup_downloads',
+    configured_url: service_url,
+    reason: 'unreachable'
+  } %}
+{% endif %}
+
+{% if not error %}
 <div data-usenet-client="{{ client }}"
      data-queue-url="{{ path('app_usenet_api_queue', {client: client}) }}"
      data-refresh="{{ display_pref('qbit_refresh_seconds') }}">
@@ -135,6 +145,7 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
     </div>
   </div>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block javascripts %}
