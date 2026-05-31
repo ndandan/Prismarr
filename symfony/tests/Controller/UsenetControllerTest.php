@@ -25,9 +25,11 @@ class UsenetControllerTest extends AbstractWebTestCase
         $html = (string) $this->client->getResponse()->getContent();
 
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
-        // Error banner shown, live content hidden.
+        // Error banner shown, live content hidden. (We can't assert on
+        // "data-usenet-client" — the JS block always references it by selector;
+        // the stats markup `data-stat=` only renders inside {% if not error %}.)
         $this->assertStringContainsString('alert-danger', $html);
-        $this->assertStringNotContainsString('data-usenet-client', $html);
+        $this->assertStringNotContainsString('data-stat="active"', $html);
     }
 
     public function testUnconfiguredClientRedirectsHome(): void
