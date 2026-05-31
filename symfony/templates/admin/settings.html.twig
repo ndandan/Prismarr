@@ -442,7 +442,7 @@
                       {# Issue #15 — per-service kill switch. Only the flat-config
                          services have it; radarr/sonarr enable/disable per
                          instance. Unchecked box isn't POSTed → disabled. #}
-                      {% if service_id in ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent'] %}
+                      {% if service_id in ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'sabnzbd', 'nzbget'] %}
                         <label class="form-check form-switch m-0 me-2" style="padding-left:2.4em;"
                                title="{{ 'admin.services.enabled_title'|trans }}">
                           <input class="form-check-input" type="checkbox"
