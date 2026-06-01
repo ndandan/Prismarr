@@ -3,6 +3,8 @@
 namespace App\Tests\Controller;
 
 use App\Controller\HealthController;
+use App\Service\HealthService;
+use App\Service\ServiceInstanceProvider;
 use Doctrine\DBAL\Connection;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -52,6 +54,36 @@ class HealthControllerTest extends TestCase
         $this->assertSame(503, $response->getStatusCode());
         $this->assertStringContainsString('"status":"error"', $response->getContent());
         $this->assertStringContainsString('"db":"unreachable"', $response->getContent());
+    }
+
+    public function testServicesHealthExposesUsenetClients(): void
+    {
+        // #20 — SABnzbd / NZBGet must appear in the topbar health feed like the
+        // other flat services. isHealthy returns null when not configured or
+        // disabled (counts 0) and a bool otherwise.
+        $health = $this->createMock(HealthService::class);
+        $health->method('isHealthy')->willReturnCallback(fn(string $service) => match ($service) {
+            'sabnzbd'     => true,   // configured + up
+            'nzbget'      => null,   // not configured / disabled
+            'qbittorrent' => true,
+            default       => null,   // prowlarr, jellyseerr, tmdb not configured
+        });
+
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturn([]);
+
+        $response = $this->newController()->servicesHealth($health, $instances);
+        $payload  = json_decode((string) $response->getContent(), true);
+
+        // Both clients present in the services map.
+        $this->assertArrayHasKey('sabnzbd', $payload['services']);
+        $this->assertArrayHasKey('nzbget', $payload['services']);
+        $this->assertTrue($payload['services']['sabnzbd']);
+        $this->assertNull($payload['services']['nzbget']);
+
+        // sabnzbd + qbittorrent are up → counted; nzbget (null) is not.
+        $this->assertSame(2, $payload['ok']);
+        $this->assertSame(2, $payload['total']);
     }
 
     public function testErrorResponseDoesNotLeakDetails(): void

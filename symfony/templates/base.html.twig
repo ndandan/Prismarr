@@ -2548,7 +2548,7 @@
           });
         });
         // Remaining flat services.
-        ['prowlarr', 'jellyseerr', 'qbittorrent'].forEach(function (id) {
+        ['prowlarr', 'jellyseerr', 'qbittorrent', 'sabnzbd', 'nzbget'].forEach(function (id) {
           html += rowFor(SERVICE_LABELS[id], services[id]);
         });
         list.innerHTML = html;
