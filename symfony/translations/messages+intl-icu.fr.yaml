@@ -485,9 +485,14 @@ error:
   service_banner:
     title_not_configured: '{service} n''est pas configuré'
     title_unreachable: '{service} ne répond pas'
+    title_auth: '{service} a refusé les identifiants'
+    title_host_whitelist: '{service} a bloqué cet hôte'
     body_not_configured: 'Configurez {service} depuis le wizard pour activer cette section.'
     body_unreachable_url: 'Impossible de contacter <code>{url}</code>. Vérifiez que le service tourne, que l''URL est correcte et que la clé API est valide.'
     body_unreachable_no_url: 'Impossible de contacter le service. Vérifiez qu''il tourne, que l''URL est correcte et que la clé API est valide.'
+    body_auth: 'La clé API ou les identifiants de {service} sont incorrects. Corrigez-les dans les réglages, puis réessayez.'
+    body_host_whitelist_url: '{service} a refusé la requête depuis <code>{url}</code> car l''hôte n''est pas autorisé. Ajoutez cet hôte à la liste blanche de {service} (host_whitelist), puis réessayez.'
+    body_host_whitelist: '{service} a refusé la requête car l''hôte n''est pas autorisé. Ajoutez cet hôte à la liste blanche de {service} (host_whitelist), puis réessayez.'
     cta_configure: 'Configurer {service}'
     cta_edit: 'Modifier la configuration'
     cta_retry: Réessayer

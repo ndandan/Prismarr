@@ -486,9 +486,14 @@ error:
   service_banner:
     title_not_configured: '{service} is not configured'
     title_unreachable: '{service} is not responding'
+    title_auth: '{service} rejected the credentials'
+    title_host_whitelist: '{service} blocked this host'
     body_not_configured: 'Configure {service} from the wizard to enable this section.'
     body_unreachable_url: 'Cannot reach <code>{url}</code>. Make sure the service is running, the URL is correct and the API key is valid.'
     body_unreachable_no_url: 'Cannot reach the service. Make sure it is running, the URL is correct and the API key is valid.'
+    body_auth: 'The API key or credentials for {service} are incorrect. Update them in the settings, then retry.'
+    body_host_whitelist_url: '{service} refused the request from <code>{url}</code> because the host is not allowed. Add this host to {service}''s whitelist (host_whitelist), then retry.'
+    body_host_whitelist: '{service} refused the request because the host is not allowed. Add this host to {service}''s whitelist (host_whitelist), then retry.'
     cta_configure: 'Configure {service}'
     cta_edit: 'Edit configuration'
     cta_retry: Retry

@@ -53,30 +53,43 @@ class UsenetController extends AbstractController
             return $this->redirectToRoute('app_home');
         }
 
-        // Probe at render time so a configured-but-unreachable client shows the
-        // explicit "unreachable" banner (like qBittorrent) instead of a silent
-        // empty page. The JS feed still refreshes the data afterwards.
-        $error = false;
+        // Probe at render time so a configured-but-unreachable client shows an
+        // explicit banner (like qBittorrent) instead of a silent empty page.
+        // Use HealthService::diagnose() rather than the client's getVersion():
+        // SABnzbd answers mode=version with 200 for ANY key, so getVersion()
+        // would sail past a wrong API key and leave the page silently empty.
+        // diagnose() probes mode=queue, which actually validates the key, and
+        // tells a bad key (auth) apart from a host_whitelist block.
+        $reason = null;
         try {
-            if ($this->client($client)->getVersion() === null) {
-                $error = true;
+            $diag = $this->health->diagnose($client);
+            if (!($diag['ok'] ?? false)) {
+                $reason = match ($diag['category'] ?? '') {
+                    'auth'           => 'auth',
+                    'host_whitelist' => 'host_whitelist',
+                    default          => 'unreachable',
+                };
             }
         } catch (\Throwable $e) {
-            $error = true;
+            $reason = 'unreachable';
             $this->logger->warning('Usenet index probe crashed', [
                 'client'    => $client,
                 'exception' => $e::class,
                 'message'   => $e->getMessage(),
             ]);
         }
-        if ($error) {
-            $this->logger->warning('Usenet {client} unreachable on page render', ['client' => $client]);
+        if ($reason !== null) {
+            $this->logger->warning('Usenet {client} not OK on page render', [
+                'client' => $client,
+                'reason' => $reason,
+            ]);
         }
 
         return $this->render('usenet/index.html.twig', [
             'client'       => $client,
             'client_label' => $label,
-            'error'        => $error,
+            'error'        => $reason !== null,
+            'error_reason' => $reason ?? 'unreachable',
             'service_url'  => $this->config->get($client . '_url'),
         ]);
     }

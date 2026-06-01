@@ -8,12 +8,14 @@
     service        (string)  — readable name (ex: "Radarr")
     wizard_route   (string)  — Symfony wizard route name (ex: "app_setup_managers")
     configured_url (string)  — configured URL (shown to help diagnostics)
-    reason         (?string) — 'unreachable' (default) or 'not_configured'
+    reason         (?string) — 'unreachable' (default), 'not_configured',
+                               'auth' (bad API key / credentials) or
+                               'host_whitelist' (host blocked by the service)
 #}
 {% set _reason = reason|default('unreachable') %}
 {% set _is_config = _reason == 'not_configured' %}
 
-<div class="alert {{ _is_config ? 'alert-info' : 'alert-danger' }} mb-3" role="alert">
+<div class="alert {{ _is_config ? 'alert-info' : 'alert-danger' }} mb-3" role="alert" data-reason="{{ _reason }}">
   <div class="d-flex align-items-start gap-3">
     <div class="flex-shrink-0" style="margin-top:2px;">
       {% if _is_config %}
@@ -35,6 +37,10 @@
       <h4 class="alert-title mb-1">
         {% if _is_config %}
           {{ 'error.service_banner.title_not_configured'|trans({service: service}) }}
+        {% elseif _reason == 'auth' %}
+          {{ 'error.service_banner.title_auth'|trans({service: service}) }}
+        {% elseif _reason == 'host_whitelist' %}
+          {{ 'error.service_banner.title_host_whitelist'|trans({service: service}) }}
         {% else %}
           {{ 'error.service_banner.title_unreachable'|trans({service: service}) }}
         {% endif %}
@@ -42,6 +48,14 @@
       <div class="text-muted small mb-2">
         {% if _is_config %}
           {{ 'error.service_banner.body_not_configured'|trans({service: service}) }}
+        {% elseif _reason == 'auth' %}
+          {{ 'error.service_banner.body_auth'|trans({service: service}) }}
+        {% elseif _reason == 'host_whitelist' %}
+          {% if configured_url is defined and configured_url %}
+            {{ 'error.service_banner.body_host_whitelist_url'|trans({service: service, url: configured_url|e('html')})|raw }}
+          {% else %}
+            {{ 'error.service_banner.body_host_whitelist'|trans({service: service}) }}
+          {% endif %}
         {% else %}
           {% if configured_url is defined and configured_url %}
             {{ 'error.service_banner.body_unreachable_url'|trans({url: configured_url|e('html')})|raw }}
