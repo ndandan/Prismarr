@@ -4,8 +4,10 @@ namespace App\Tests\Controller;
 
 use App\Entity\Setting;
 use App\Service\HealthService;
+use App\Service\Media\Usenet\SabnzbdClient;
 use App\Tests\AbstractWebTestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use PHPUnit\Framework\MockObject\MockObject;
 
 /**
  * #20 — a configured-but-unreachable Usenet client must show an explicit
@@ -92,5 +94,121 @@ class UsenetControllerTest extends AbstractWebTestCase
         // No sabnzbd_* settings seeded → not configured → redirect with flash.
         $this->client->request('GET', '/usenet/sabnzbd');
         $this->assertTrue($this->client->getResponse()->isRedirect());
+    }
+
+    // ── Actions (write) ──────────────────────────────────────────────────────
+
+    public function testPauseAllReturnsOk(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->once())->method('pauseAll')->willReturn(true);
+
+        $this->post('/usenet/sabnzbd/pause');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(['ok' => true], $this->jsonResponse());
+    }
+
+    public function testActionReturns502WhenClientRejects(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->once())->method('resumeAll')->willReturn(false);
+
+        $this->post('/usenet/sabnzbd/resume');
+
+        $this->assertSame(502, $this->client->getResponse()->getStatusCode());
+        $this->assertFalse($this->jsonResponse()['ok']);
+    }
+
+    public function testDeleteItemRemovesPartialFiles(): void
+    {
+        $sab = $this->configureSabnzbd();
+        // The page always deletes with files — pin the deleteFiles=true contract.
+        $sab->expects($this->once())->method('deleteItem')
+            ->with('SABnzbd_nzo_abc', true)->willReturn(true);
+
+        $this->post('/usenet/sabnzbd/item/SABnzbd_nzo_abc/delete');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testSpeedLimitConvertsMbpsToBytes(): void
+    {
+        $sab = $this->configureSabnzbd();
+        // 2 MB/s → 2 * 1024 * 1024 bytes/s.
+        $sab->expects($this->once())->method('setSpeedLimitBytes')
+            ->with(2 * 1024 * 1024)->willReturn(true);
+
+        $this->post('/usenet/sabnzbd/speed-limit', '{"mbps":2}');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testAddUrlRequiresUrl(): void
+    {
+        $this->configureSabnzbd();
+
+        $this->post('/usenet/sabnzbd/add', '{}');
+
+        $this->assertSame(400, $this->client->getResponse()->getStatusCode());
+        $this->assertFalse($this->jsonResponse()['ok']);
+    }
+
+    public function testAddUrlForwardsToClient(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->once())->method('addNzbFromUrl')
+            ->with('http://indexer.test/x.nzb', 'movies')->willReturn(true);
+
+        $this->post('/usenet/sabnzbd/add', '{"url":"http://indexer.test/x.nzb","category":"movies"}');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testActionRejectsGet(): void
+    {
+        $this->configureSabnzbd();
+        $this->client->request('GET', '/usenet/sabnzbd/pause');
+        $this->assertSame(405, $this->client->getResponse()->getStatusCode());
+    }
+
+    public function testActionOnUnconfiguredClientReturns403(): void
+    {
+        // No sabnzbd_* settings → isConfigured false → 403, no client touched.
+        $this->post('/usenet/sabnzbd/pause');
+        $this->assertSame(403, $this->client->getResponse()->getStatusCode());
+    }
+
+    /**
+     * Seed a configured SABnzbd and swap the autowired client for a mock so the
+     * action endpoints run without touching a real downloader.
+     *
+     * @return SabnzbdClient&MockObject
+     */
+    private function configureSabnzbd(): MockObject
+    {
+        $em = $this->em();
+        $em->persist(new Setting('sabnzbd_url', 'http://sab.test:8080'));
+        $em->persist(new Setting('sabnzbd_api_key', 'k'));
+        $em->flush();
+
+        $mock = $this->createMock(SabnzbdClient::class);
+        static::getContainer()->set(SabnzbdClient::class, $mock);
+
+        return $mock;
+    }
+
+    private function post(string $path, string $json = '{}'): void
+    {
+        $this->client->request('POST', $path, [], [], [
+            'CONTENT_TYPE'        => 'application/json',
+            'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest',
+        ], $json);
+    }
+
+    /** @return array<string, mixed> */
+    private function jsonResponse(): array
+    {
+        return (array) json_decode((string) $this->client->getResponse()->getContent(), true);
     }
 }

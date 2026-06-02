@@ -3612,6 +3612,9 @@ usenet:
     delete_confirm: 'Supprimer ce téléchargement ? Les fichiers partiels sont aussi supprimés.'
   api:
     unreachable: 'Client de téléchargement injoignable.'
+    action_failed: 'Le client de téléchargement a refusé l''action.'
+    add_no_url: 'Saisissez une URL de NZB.'
+    add_no_file: 'Choisissez au moins un fichier NZB.'
 
 prowlarr:
   nav:

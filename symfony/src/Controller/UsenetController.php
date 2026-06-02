@@ -10,6 +10,7 @@ use App\Service\Media\Usenet\UsenetClientInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -21,8 +22,10 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * / trackers). The {client} slug picks the right UsenetClientInterface; an
  * unknown or disabled client bounces home / 403 like qBittorrent (#15).
  *
- * Phase 2a — read only: the page shell + the JSON queue/history feed. Actions
- * (pause, resume, delete, speed limit, add NZB) land in the next slice.
+ * Read endpoints: the page shell + the JSON queue/history feed. Write
+ * endpoints (pause/resume all, per-item pause/resume/delete, speed limit, add
+ * NZB by URL or file) mirror the qBittorrent action API: POST-only, gated by
+ * ROLE_ADMIN, and returning a {ok:bool[, error]} envelope the page JS reads.
  */
 #[IsGranted('ROLE_ADMIN')]
 #[Route('/usenet/{client}', name: 'app_usenet_', requirements: ['client' => 'sabnzbd|nzbget'])]
@@ -156,6 +159,108 @@ class UsenetController extends AbstractController
             ]);
             return $this->json(['error' => $e->getMessage()], 502);
         }
+    }
+
+    // ── Actions (write) ───────────────────────────────────────────────────────
+
+    #[Route('/pause', name: 'pause', methods: ['POST'])]
+    public function pauseAll(string $client): JsonResponse
+    {
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->pauseAll());
+    }
+
+    #[Route('/resume', name: 'resume', methods: ['POST'])]
+    public function resumeAll(string $client): JsonResponse
+    {
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->resumeAll());
+    }
+
+    #[Route('/item/{id}/pause', name: 'item_pause', methods: ['POST'], requirements: ['id' => '[A-Za-z0-9_.\-]+'])]
+    public function pauseItem(string $client, string $id): JsonResponse
+    {
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->pauseItem($id));
+    }
+
+    #[Route('/item/{id}/resume', name: 'item_resume', methods: ['POST'], requirements: ['id' => '[A-Za-z0-9_.\-]+'])]
+    public function resumeItem(string $client, string $id): JsonResponse
+    {
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->resumeItem($id));
+    }
+
+    #[Route('/item/{id}/delete', name: 'item_delete', methods: ['POST'], requirements: ['id' => '[A-Za-z0-9_.\-]+'])]
+    public function deleteItem(string $client, string $id): JsonResponse
+    {
+        // The confirm dialog warns the user that partial files go too.
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->deleteItem($id, true));
+    }
+
+    #[Route('/speed-limit', name: 'speed_limit', methods: ['POST'])]
+    public function speedLimit(string $client, Request $request): JsonResponse
+    {
+        $mbps = (float) ($request->toArray()['mbps'] ?? 0);
+        $bytes = $mbps > 0 ? (int) round($mbps * 1024 * 1024) : 0;
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->setSpeedLimitBytes($bytes));
+    }
+
+    #[Route('/add', name: 'add', methods: ['POST'])]
+    public function addUrl(string $client, Request $request): JsonResponse
+    {
+        $data     = $request->toArray();
+        $url      = trim((string) ($data['url'] ?? ''));
+        $category = trim((string) ($data['category'] ?? '')) ?: null;
+        if ($url === '') {
+            return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_no_url')], 400);
+        }
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->addNzbFromUrl($url, $category));
+    }
+
+    #[Route('/add-file', name: 'add_file', methods: ['POST'])]
+    public function addFile(string $client, Request $request): JsonResponse
+    {
+        $category = trim((string) $request->request->get('category', '')) ?: null;
+        $uploaded = $request->files->get('files');
+        $list = is_array($uploaded) ? $uploaded : ($uploaded !== null ? [$uploaded] : []);
+
+        $payload = [];
+        foreach ($list as $file) {
+            if ($file === null) continue;
+            $content = @file_get_contents($file->getPathname());
+            if ($content === false) continue;
+            $payload[] = ['content' => $content, 'name' => $file->getClientOriginalName()];
+        }
+        if ($payload === []) {
+            return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_no_file')], 400);
+        }
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->addNzbFromFiles($payload, $category));
+    }
+
+    /**
+     * Run a write action against the selected client. Guards the
+     * configured/enabled state, swallows upstream failures into the
+     * {ok:false,error} envelope the page JS expects, and never leaks an
+     * exception message to the client.
+     *
+     * @param callable(UsenetClientInterface):bool $fn
+     */
+    private function runAction(string $client, callable $fn): JsonResponse
+    {
+        if (!$this->health->isConfigured($client)) {
+            return $this->json(['ok' => false, 'error' => 'disabled'], 403);
+        }
+        try {
+            $ok = $fn($this->client($client));
+        } catch (\Throwable $e) {
+            $this->logger->warning('Usenet action crashed', [
+                'client'    => $client,
+                'exception' => $e::class,
+                'message'   => $e->getMessage(),
+            ]);
+            return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.unreachable')], 502);
+        }
+        if (!$ok) {
+            return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.action_failed')], 502);
+        }
+        return $this->json(['ok' => true]);
     }
 
     /**
