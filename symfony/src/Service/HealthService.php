@@ -113,7 +113,13 @@ class HealthService
             'jellyseerr'  => $this->jellyseerr->ping(),
             'qbittorrent' => $this->qbittorrent->ping(),
             'tmdb'        => $this->tmdb->ping(),
-            'sabnzbd'     => $this->sabnzbd?->ping() ?? false,
+            // SABnzbd's ping() hits mode=version, which answers 200 for ANY
+            // key, so it can't tell a wrong key from a healthy server — the
+            // pill would stay green with a broken key. Derive it from
+            // diagnose() instead (mode=queue, the same authenticated probe the
+            // page banner uses) so the dot matches reality. NZBGet's RPC ping
+            // already authenticates, so it keeps its client ping().
+            'sabnzbd'     => $this->diagnose('sabnzbd')['ok'],
             'nzbget'      => $this->nzbget?->ping() ?? false,
             default       => true,
         };

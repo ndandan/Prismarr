@@ -62,6 +62,51 @@ class HealthServiceDiagnoseTest extends TestCase
         self::assertSame('network', $this->makeService()->diagnoseFromResponse($resp, 'nzbget')['category']);
     }
 
+    public function testSabnzbdPillIsDownWhenApiKeyRejected(): void
+    {
+        // Regression (#20): the green pill used a version-based ping that
+        // returns 200 for ANY key, so a broken key lit it green. isHealthy()
+        // now derives SABnzbd from diagnose() (mode=queue), so a 403 auth
+        // failure must surface as down (false), not up.
+        $health = $this->makeServiceWithDiagnosis(['ok' => false, 'category' => 'auth', 'http' => 403]);
+        self::assertFalse($health->isHealthy('sabnzbd'));
+    }
+
+    public function testSabnzbdPillIsUpWhenDiagnosisOk(): void
+    {
+        $health = $this->makeServiceWithDiagnosis(['ok' => true, 'category' => 'ok', 'http' => 200]);
+        self::assertTrue($health->isHealthy('sabnzbd'));
+    }
+
+    /**
+     * A HealthService with a configured SABnzbd and diagnose() stubbed, so the
+     * real isHealthy() → pingFor() wiring is exercised without any network.
+     *
+     * @param array{ok: bool, category: string, http: ?int} $diagnosis
+     */
+    private function makeServiceWithDiagnosis(array $diagnosis): HealthService
+    {
+        $config = $this->createMock(ConfigService::class);
+        $config->method('get')->willReturn(null);           // sabnzbd_enabled unset → not disabled
+        $config->method('has')->willReturn(true);            // sabnzbd_url + sabnzbd_api_key present
+
+        $health = $this->getMockBuilder(HealthService::class)
+            ->setConstructorArgs([
+                $this->createMock(RadarrClient::class),
+                $this->createMock(SonarrClient::class),
+                $this->createMock(ProwlarrClient::class),
+                $this->createMock(JellyseerrClient::class),
+                $this->createMock(QBittorrentClient::class),
+                $this->createMock(TmdbClient::class),
+                $config,
+            ])
+            ->onlyMethods(['diagnose'])
+            ->getMock();
+        $health->expects($this->once())->method('diagnose')->with('sabnzbd')->willReturn($diagnosis);
+
+        return $health;
+    }
+
     public function testSabnzbdNeedsUrlAndKey(): void
     {
         $config = $this->createMock(ConfigService::class);

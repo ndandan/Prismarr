@@ -66,6 +66,12 @@ class SabnzbdClient implements UsenetClientInterface
         return $this->lastError;
     }
 
+    /**
+     * Reachability only. mode=version is NOT authenticated (SABnzbd answers
+     * 200 for any key), so a `true` here does NOT mean the API key is valid.
+     * For key-aware health use {@see HealthService::diagnose()}, which probes
+     * mode=queue.
+     */
     public function ping(): bool
     {
         try {
