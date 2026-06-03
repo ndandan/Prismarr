@@ -2450,6 +2450,14 @@
   {% if service_configured('sabnzbd') or service_configured('nzbget') %}
   <script>
   (function () {
+    // Turbo-safe singleton: one poll loop for the whole session. Re-running
+    // this script on every navigation must NOT spawn a fresh poll (that would
+    // hammer a downed client on each page change and reset the backoff, which
+    // is what made the whole app lag while SABnzbd was off). The badge is
+    // re-queried by id inside poll() so it keeps updating across Turbo swaps.
+    if (window._usenetBadgeStarted) return;
+    window._usenetBadgeStarted = true;
+
     var CLIENTS = [
       {% if service_configured('sabnzbd') %}{ id: 'sidebar-sabnzbd-badge', url: '{{ path('app_usenet_api_poll_summary', {client: 'sabnzbd'}) }}' },{% endif %}
       {% if service_configured('nzbget') %}{ id: 'sidebar-nzbget-badge', url: '{{ path('app_usenet_api_poll_summary', {client: 'nzbget'}) }}' },{% endif %}
@@ -2457,11 +2465,11 @@
     var BASE = 60000, MAX = 240000;
 
     CLIENTS.forEach(function (c) {
-      var badge = document.getElementById(c.id);
-      if (!badge) return;  // sidebar hidden / not rendered
       var fails = 0, timer = null;
 
       function update(active) {
+        var badge = document.getElementById(c.id);
+        if (!badge) return;
         if (active > 0) { badge.textContent = active > 99 ? '99+' : String(active); badge.style.display = ''; }
         else { badge.style.display = 'none'; }
       }

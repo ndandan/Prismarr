@@ -10,6 +10,8 @@ use App\Service\Media\QBittorrentClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\ServiceHealthCache;
+use App\Service\Media\Usenet\SabnzbdClient;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use ReflectionMethod;
@@ -62,49 +64,95 @@ class HealthServiceDiagnoseTest extends TestCase
         self::assertSame('network', $this->makeService()->diagnoseFromResponse($resp, 'nzbget')['category']);
     }
 
-    public function testSabnzbdPillIsDownWhenApiKeyRejected(): void
+    public function testPassiveDiagnoseShortCircuitsWhenBreakerDown(): void
     {
-        // Regression (#20): the green pill used a version-based ping that
-        // returns 200 for ANY key, so a broken key lit it green. isHealthy()
-        // now derives SABnzbd from diagnose() (mode=queue), so a 403 auth
-        // failure must surface as down (false), not up.
-        $health = $this->makeServiceWithDiagnosis(['ok' => false, 'category' => 'auth', 'http' => 403]);
+        // #20 perf: a passive diagnosis (no overrides) must honour the circuit
+        // breaker — returning 'network' immediately rather than re-probing a
+        // known-down client and waiting out the connect timeout (which lagged
+        // the page render). Proven by it NOT falling through to 'unconfigured'.
+        $cache = $this->createMock(ServiceHealthCache::class);
+        $cache->method('isDown')->willReturn(true);
+        $config = $this->createMock(ConfigService::class);
+        $config->method('get')->willReturn(null);
+        $config->method('has')->willReturn(false); // would be 'unconfigured' without the breaker
+
+        $health = new HealthService(
+            $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class),
+            $this->createMock(ProwlarrClient::class),
+            $this->createMock(JellyseerrClient::class),
+            $this->createMock(QBittorrentClient::class),
+            $this->createMock(TmdbClient::class),
+            $config,
+            $cache,
+        );
+
+        self::assertSame('network', $health->diagnose('sabnzbd')['category']);
+    }
+
+    public function testTestConnectionIgnoresBreaker(): void
+    {
+        // With overrides (a "Test connection" click) the breaker is bypassed so
+        // the admin always gets a fresh probe. No URL in the overrides → it
+        // falls through to 'unconfigured' (no network), proving it didn't
+        // short-circuit on the breaker.
+        $cache = $this->createMock(ServiceHealthCache::class);
+        $cache->method('isDown')->willReturn(true);
+
+        $health = new HealthService(
+            $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class),
+            $this->createMock(ProwlarrClient::class),
+            $this->createMock(JellyseerrClient::class),
+            $this->createMock(QBittorrentClient::class),
+            $this->createMock(TmdbClient::class),
+            $this->createMock(ConfigService::class),
+            $cache,
+        );
+
+        self::assertSame('unconfigured', $health->diagnose('sabnzbd', [])['category']);
+    }
+
+    public function testSabnzbdPillIsDownWhenClientPingFails(): void
+    {
+        // Regression (#20): the pill must reflect the client's key-aware ping
+        // (mode=queue → false on a wrong key / down) so it stays consistent
+        // with the circuit breaker, not green-on-broken-key.
+        $health = $this->makeServiceWithSabPing(false);
         self::assertFalse($health->isHealthy('sabnzbd'));
     }
 
-    public function testSabnzbdPillIsUpWhenDiagnosisOk(): void
+    public function testSabnzbdPillIsUpWhenClientPingOk(): void
     {
-        $health = $this->makeServiceWithDiagnosis(['ok' => true, 'category' => 'ok', 'http' => 200]);
+        $health = $this->makeServiceWithSabPing(true);
         self::assertTrue($health->isHealthy('sabnzbd'));
     }
 
     /**
-     * A HealthService with a configured SABnzbd and diagnose() stubbed, so the
-     * real isHealthy() → pingFor() wiring is exercised without any network.
-     *
-     * @param array{ok: bool, category: string, http: ?int} $diagnosis
+     * A HealthService with a configured SABnzbd client whose ping() is stubbed,
+     * so the real isHealthy() → pingFor() wiring is exercised without network.
      */
-    private function makeServiceWithDiagnosis(array $diagnosis): HealthService
+    private function makeServiceWithSabPing(bool $ping): HealthService
     {
         $config = $this->createMock(ConfigService::class);
         $config->method('get')->willReturn(null);           // sabnzbd_enabled unset → not disabled
         $config->method('has')->willReturn(true);            // sabnzbd_url + sabnzbd_api_key present
 
-        $health = $this->getMockBuilder(HealthService::class)
-            ->setConstructorArgs([
-                $this->createMock(RadarrClient::class),
-                $this->createMock(SonarrClient::class),
-                $this->createMock(ProwlarrClient::class),
-                $this->createMock(JellyseerrClient::class),
-                $this->createMock(QBittorrentClient::class),
-                $this->createMock(TmdbClient::class),
-                $config,
-            ])
-            ->onlyMethods(['diagnose'])
-            ->getMock();
-        $health->expects($this->once())->method('diagnose')->with('sabnzbd')->willReturn($diagnosis);
+        $sab = $this->createMock(SabnzbdClient::class);
+        $sab->method('ping')->willReturn($ping);
 
-        return $health;
+        return new HealthService(
+            $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class),
+            $this->createMock(ProwlarrClient::class),
+            $this->createMock(JellyseerrClient::class),
+            $this->createMock(QBittorrentClient::class),
+            $this->createMock(TmdbClient::class),
+            $config,
+            null,
+            null,
+            $sab,
+        );
     }
 
     public function testSabnzbdNeedsUrlAndKey(): void

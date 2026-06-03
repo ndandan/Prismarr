@@ -67,15 +67,17 @@ class SabnzbdClient implements UsenetClientInterface
     }
 
     /**
-     * Reachability only. mode=version is NOT authenticated (SABnzbd answers
-     * 200 for any key), so a `true` here does NOT mean the API key is valid.
-     * For key-aware health use {@see HealthService::diagnose()}, which probes
-     * mode=queue.
+     * True only when SABnzbd answers AND accepts the API key. Probes mode=queue
+     * — NOT mode=version, which returns 200 for any key, so a wrong key would
+     * read as healthy. Goes through call(), so it honours the circuit breaker:
+     * a downed SABnzbd short-circuits instead of timing out on every health
+     * poll (a wrong key or a non-whitelisted host both 403 → false).
      */
     public function ping(): bool
     {
         try {
-            return $this->getVersion() !== null;
+            $data = $this->call(['mode' => 'queue']);
+            return is_array($data['queue'] ?? null);
         } catch (\Throwable $e) {
             $this->logger->warning('SABnzbd ping failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
             return false;
