@@ -2156,6 +2156,9 @@
         ['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer'].forEach(function (key) {
           if (window[key]) { clearInterval(window[key]); window[key] = null; }
         });
+        // Usenet page uses a setTimeout poll chain — kill it on navigation so
+        // it doesn't keep fetching against a detached DOM (#20).
+        if (window._usenetTimer) { clearTimeout(window._usenetTimer); window._usenetTimer = null; }
       });
     }
 

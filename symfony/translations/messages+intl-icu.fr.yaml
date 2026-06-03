@@ -3575,6 +3575,8 @@ usenet:
     extracting: Extraction
     completed: Terminés
     failed: Échoués
+    select_all: 'Tout sélectionner'
+    sort_label: Trier
   count_tpl: '{count, plural, one {# téléchargement} other {# téléchargements}}'
   table:
     name: Nom
@@ -3584,6 +3586,26 @@ usenet:
     speed: Vitesse
     eta: Temps restant
     status: Statut
+    actions: Actions
+  view:
+    aria_label: 'Vue de la file'
+    list: Liste
+    table: Tableau
+    compact: Compact
+    list_title: 'Vue liste'
+    table_title: 'Vue tableau'
+    compact_title: 'Vue compacte'
+  sort:
+    name_asc: 'Nom (A→Z)'
+    name_desc: 'Nom (Z→A)'
+    size_desc: 'Taille (plus grand)'
+    size_asc: 'Taille (plus petit)'
+    progress_desc: 'Progression (plus avancé)'
+    speed_desc: 'Vitesse (plus rapide)'
+    eta_asc: 'Temps restant (plus court)'
+  bulk:
+    count: '{count, plural, one {# sélectionné} other {# sélectionnés}}'
+    clear: Effacer
   status:
     downloading: En cours
     queued: En attente
@@ -3610,6 +3632,35 @@ usenet:
     resume: Reprendre
     delete: Supprimer
     delete_confirm: 'Supprimer ce téléchargement ? Les fichiers partiels sont aussi supprimés.'
+  modal_add:
+    title: 'Ajouter un NZB'
+    urls_label: 'URLs des NZB'
+    urls_placeholder: 'https://indexeur.exemple/abc.nzb (une par ligne)'
+    urls_hint: 'Le client de téléchargement récupère chaque NZB depuis son URL. Une URL par ligne.'
+    file_label: 'Ou déposer des fichiers .nzb'
+    drop_text: 'Glissez-déposez des fichiers .nzb ici'
+    drop_browse: 'ou cliquez pour parcourir'
+    file_remove_title: Retirer
+    category_label: 'Catégorie (optionnel)'
+    category_placeholder: 'films, séries…'
+    required: 'Saisissez une URL ou choisissez un fichier.'
+    cancel: Annuler
+    submit: Ajouter
+  modal_detail:
+    status: Statut
+    category: Catégorie
+    size: Taille
+    remaining: Restant
+    progress: Progression
+    speed: Vitesse
+    eta: Temps restant
+    id: Identifiant
+    fail: Erreur
+    none: '—'
+  toast:
+    done: 'Fait.'
+    added: 'NZB ajouté.'
+    error: 'Action échouée.'
   api:
     unreachable: 'Client de téléchargement injoignable.'
     action_failed: 'Le client de téléchargement a refusé l''action.'

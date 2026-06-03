@@ -3,19 +3,24 @@
 {% block title %}{{ 'usenet.page_title'|trans }} — {{ client_label }}{% endblock %}
 {% block page_title %}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ client == 'nzbget' ? '#1f9c3a' : '#ffa000' }}" stroke-width="2"><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg> {{ client_label }}{% endblock %}
 
+{# Live-polled page: skip Turbo's cached preview so a menu click reloads it
+   fresh instead of flashing the stale snapshot then re-rendering. #}
+{% block head_meta %}<meta name="turbo-cache-control" content="no-cache">{% endblock %}
+
 {% block stylesheets %}
 <style>
-/* Usenet downloads — same Tabler look as the qBittorrent page, trimmed to
-   Usenet semantics (no seeding / ratio / trackers / VPN). */
+/* Usenet downloads — same Tabler visual language as the qBittorrent page,
+   trimmed to Usenet semantics (no seeding / ratio / trackers / peers). */
 .usenet-stat-card { position:relative; overflow:hidden; height:100%; }
 .usenet-stat-card .card-body { min-height:80px; display:flex; flex-direction:column; justify-content:center; }
 .usenet-stat-card .stat-val { font-size:1.4rem; font-weight:700; line-height:1; letter-spacing:-.5px; }
 .usenet-stat-card .stat-lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.4px; color:var(--tblr-text-secondary); font-weight:600; }
 
+/* ── List / row base ─────────────────────────────────────────────────────── */
 .usenet-list { display:flex; flex-direction:column; gap:.3rem; }
 .usenet-job {
     display:grid;
-    grid-template-columns: 32px 1fr auto;
+    grid-template-columns: 22px 32px 1fr auto;
     gap:.6rem;
     align-items:center;
     padding:.45rem .7rem;
@@ -24,9 +29,12 @@
     border-left:3px solid var(--tblr-border-color);
     border-radius:6px;
     transition:all .12s;
+    cursor:pointer;
     position:relative;
     overflow:hidden;
 }
+.usenet-job:hover { border-color:rgba(255,160,0,.4); box-shadow:0 2px 6px rgba(0,0,0,.05); }
+.usenet-job.selected { background:rgba(255,160,0,.06); border-color:#ffa000; }
 .usenet-job[data-status="downloading"] { border-left-color:#3b82f6; }
 .usenet-job[data-status="queued"]      { border-left-color:#6b7280; }
 .usenet-job[data-status="paused"]      { border-left-color:#f59e0b; }
@@ -36,6 +44,8 @@
 .usenet-job[data-status="completed"]   { border-left-color:#22c55e; }
 .usenet-job[data-status="failed"]      { border-left-color:#ef4444; }
 .usenet-job[data-status="unknown"]     { border-left-color:#9ca3af; }
+
+.usenet-check { width:15px; height:15px; cursor:pointer; }
 
 .usenet-ico {
     width:32px; height:32px;
@@ -48,6 +58,7 @@
 .usenet-ico svg { width:16px; height:16px; }
 .usenet-job[data-status="downloading"] .usenet-ico { background:linear-gradient(135deg, rgba(59,130,246,.15), rgba(59,130,246,.05)); color:#3b82f6; }
 .usenet-job[data-status="failed"] .usenet-ico { background:linear-gradient(135deg, rgba(239,68,68,.15), rgba(239,68,68,.03)); color:#ef4444; }
+.usenet-job[data-status="completed"] .usenet-ico { background:linear-gradient(135deg, rgba(34,197,94,.12), rgba(34,197,94,.03)); color:#22c55e; }
 
 .usenet-main { min-width:0; }
 .usenet-name-row { display:flex; align-items:center; gap:.4rem; margin-bottom:.2rem; }
@@ -65,10 +76,91 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
 .usenet-job[data-status="completed"] .usenet-bar { background:linear-gradient(90deg, #22c55e, #4ade80); }
 .usenet-job[data-status="failed"] .usenet-bar { background:linear-gradient(90deg, #ef4444, #f87171); }
 
+.usenet-stats-line { display:flex; align-items:center; gap:.7rem; margin-top:.2rem; font-size:.68rem; color:var(--tblr-text-secondary); flex-wrap:wrap; line-height:1.3; }
+.usenet-stats-line strong { color:var(--tblr-body-color); font-weight:600; font-family:'SF Mono', Menlo, monospace; }
+.usenet-stats-line .dl-speed { color:#3b82f6; font-weight:600; font-family:'SF Mono', Menlo, monospace; }
+
 .usenet-side { text-align:right; font-size:.7rem; color:var(--tblr-text-secondary); white-space:nowrap; }
 .usenet-side .usenet-pct { font-weight:700; font-size:.8rem; color:var(--tblr-body-color); }
 .usenet-status-pill { display:inline-block; font-size:.6rem; font-weight:700; padding:1px 7px; border-radius:3px; text-transform:uppercase; letter-spacing:.3px; }
-.usenet-empty { text-align:center; padding:2.5rem 1rem; color:var(--tblr-text-secondary); font-size:.85rem; }
+
+.usenet-row-actions { display:flex; gap:.25rem; flex-shrink:0; }
+.usenet-row-actions .btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border-radius:5px; line-height:1; }
+.usenet-row-actions .btn svg { width:14px; height:14px; }
+/* Icon-only buttons: center the glyph and keep a visible border. */
+[data-usenet-pause-all], [data-usenet-resume-all] { display:inline-flex; align-items:center; justify-content:center; }
+[data-usenet-client] .btn svg { vertical-align:middle; }
+
+/* ── Compact view ────────────────────────────────────────────────────────── */
+.usenet-list[data-view="compact"] { gap:2px; }
+.usenet-list[data-view="compact"] .usenet-job { grid-template-columns:18px 24px 1fr 60px auto; padding:.25rem .55rem; gap:.5rem; }
+.usenet-list[data-view="compact"] .usenet-ico { width:24px; height:24px; border-radius:5px; }
+.usenet-list[data-view="compact"] .usenet-ico svg { width:12px; height:12px; }
+.usenet-list[data-view="compact"] .usenet-name-row { margin-bottom:2px; }
+.usenet-list[data-view="compact"] .usenet-name { font-size:.73rem; }
+.usenet-list[data-view="compact"] .usenet-tag-cat { display:none; }
+.usenet-list[data-view="compact"] .usenet-bar-wrap { height:3px; }
+.usenet-list[data-view="compact"] .usenet-stats-line { display:none; }
+.usenet-list[data-view="compact"] .usenet-compact-pct { font-size:.7rem; font-weight:600; font-family:'SF Mono',Menlo,monospace; color:var(--tblr-text-secondary); text-align:right; align-self:center; }
+.usenet-list:not([data-view="compact"]) .usenet-compact-pct { display:none; }
+
+/* ── Table view ──────────────────────────────────────────────────────────── */
+#usenet-table-header { display:none; grid-template-columns:28px 30px 1fr 96px 120px 96px 80px 100px 92px; gap:.6rem; align-items:center; padding:.5rem .7rem; background:var(--tblr-bg-surface-secondary); border:1px solid var(--tblr-border-color); border-radius:6px 6px 0 0; font-size:.66rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--tblr-text-secondary); margin-bottom:-1px; }
+#usenet-table-header.show { display:grid; }
+.usenet-sort { display:flex; align-items:center; gap:3px; cursor:pointer; user-select:none; }
+.usenet-sort svg { width:11px; height:11px; opacity:0; transition:opacity .12s, transform .12s; }
+.usenet-sort.active svg { opacity:1; }
+.usenet-sort.active.asc svg { transform:rotate(180deg); }
+.usenet-list[data-view="table"] { gap:0; border-radius:0 0 6px 6px; overflow:hidden; border:1px solid var(--tblr-border-color); border-top:none; }
+.usenet-list[data-view="table"] .usenet-job { grid-template-columns:28px 30px 1fr 96px 120px 96px 80px 100px 92px; border:none; border-bottom:1px solid var(--tblr-border-color); border-left:3px solid var(--tblr-border-color); border-radius:0; padding:.4rem .7rem; }
+.usenet-list[data-view="table"] .usenet-job:last-child { border-bottom:none; }
+.usenet-list[data-view="table"] .usenet-ico { width:26px; height:26px; }
+.usenet-list[data-view="table"] .usenet-main { display:contents; }
+.usenet-list[data-view="table"] .usenet-name-row { margin:0; min-width:0; }
+.usenet-list[data-view="table"] .usenet-name { font-size:.74rem; font-weight:500; }
+.usenet-list[data-view="table"] .usenet-tag-cat { display:none; }
+.usenet-list[data-view="table"] .usenet-bar-wrap { display:none; }
+.usenet-list[data-view="table"] .usenet-stats-line { display:none; }
+.usenet-tcell { font-size:.72rem; color:var(--tblr-text-secondary); white-space:nowrap; align-self:center; font-family:'SF Mono',Menlo,monospace; }
+.usenet-tcell.tnum { text-align:right; }
+.usenet-tcell.tprog { display:flex; align-items:center; gap:6px; }
+.usenet-tmini { flex:1; height:5px; background:rgba(0,0,0,.08); border-radius:3px; overflow:hidden; }
+body[data-bs-theme="dark"] .usenet-tmini { background:rgba(255,255,255,.08); }
+.usenet-tmini > div { height:100%; background:linear-gradient(90deg,#3b82f6,#60a5fa); }
+.usenet-list:not([data-view="table"]) .usenet-tcell { display:none; }
+
+/* ── Filters / view switcher / bulk bar ──────────────────────────────────── */
+.usenet-filter-btn { border-radius:6px !important; background:transparent !important; font-size:.78rem; padding:4px 10px; }
+.usenet-filter-btn:hover { background:rgba(255,160,0,.08) !important; }
+.usenet-filter-btn.active { font-weight:600; background:rgba(255,160,0,.16) !important; color:#c47e00 !important; }
+
+.usenet-view-switcher { display:inline-flex; background:rgba(0,0,0,.04); border-radius:6px; padding:2px; gap:1px; }
+body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.05); }
+.usenet-view-btn { border:none; background:transparent; padding:3px 9px; border-radius:4px; font-size:.72rem; font-weight:500; color:var(--tblr-text-secondary); display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
+.usenet-view-btn:hover { background:rgba(255,160,0,.1); color:#c47e00; }
+.usenet-view-btn.active { background:#ffa000; color:#fff; }
+.usenet-view-btn svg { width:13px; height:13px; }
+
+.usenet-bulk-bar { position:fixed; bottom:0; left:15rem; right:0; z-index:1050; background:var(--tblr-bg-surface); border-top:2px solid #ffa000; padding:.7rem 1.25rem; display:none; align-items:center; gap:.6rem; box-shadow:0 -6px 18px rgba(0,0,0,.12); }
+.usenet-bulk-bar.show { display:flex; }
+@media(max-width:991px){ .usenet-bulk-bar { left:0; } }
+
+/* ── Add modal drop zone ─────────────────────────────────────────────────── */
+.usenet-drop-zone { position:relative; border:2px dashed var(--tblr-border-color); border-radius:8px; padding:1rem; text-align:center; cursor:pointer; transition:all .15s; background:var(--tblr-bg-surface-secondary); }
+.usenet-drop-zone:hover { border-color:#ffa000; background:rgba(255,160,0,.04); }
+.usenet-drop-zone.drag-over { border-color:#ffa000; background:rgba(255,160,0,.1); }
+.usenet-drop-inner { display:flex; flex-direction:column; align-items:center; gap:.4rem; color:var(--tblr-text-secondary); }
+.usenet-drop-inner svg { color:#ffa000; opacity:.75; }
+.usenet-drop-text { font-size:.78rem; line-height:1.4; }
+.usenet-drop-files { list-style:none; padding:0; margin:.7rem 0 0; text-align:left; }
+.usenet-drop-files li { font-size:.74rem; padding:3px 8px; background:var(--tblr-bg-surface); border-radius:4px; margin-top:3px; display:flex; align-items:center; gap:6px; }
+.usenet-drop-files li .remove { margin-left:auto; color:var(--tblr-text-secondary); cursor:pointer; font-size:.9rem; line-height:1; padding:0 4px; }
+.usenet-drop-files li .remove:hover { color:#ef4444; }
+
+/* ── Detail modal ────────────────────────────────────────────────────────── */
+.usenet-prop { padding:.6rem .85rem; background:var(--tblr-bg-surface-secondary); border-radius:8px; }
+.usenet-prop-label { font-size:.66rem; color:var(--tblr-text-secondary); text-transform:uppercase; letter-spacing:.3px; font-weight:600; margin-bottom:3px; }
+.usenet-prop-value { font-size:.84rem; font-weight:600; color:var(--tblr-body-color); word-break:break-word; }
 </style>
 {% endblock %}
 
@@ -85,9 +177,10 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
 {% if not error %}
 <div data-usenet-client="{{ client }}"
      data-queue-url="{{ path('app_usenet_api_queue', {client: client}) }}"
+     data-base="{{ path('app_usenet_index', {client: client}) }}"
      data-refresh="{{ display_pref('qbit_refresh_seconds') }}">
 
-  {# ─── Stats strip (same grid + Tabler colours as the qBit page) ── #}
+  {# ─── Stats strip ──────────────────────────────────────────────── #}
   <div class="row row-cards g-2 mb-3">
     <div class="col-6 col-sm-4 col-lg">
       <div class="card usenet-stat-card"><div class="card-body text-center">
@@ -121,27 +214,157 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
     </div>
   </div>
 
-  {# ─── Toolbar (search) ────────────────────────────────────────── #}
+  {# ─── Toolbar ──────────────────────────────────────────────────── #}
   <div class="card mb-3"><div class="card-body py-2">
-    <input type="search" class="form-control form-control-sm" style="max-width:280px;"
-           data-usenet-search placeholder="{{ 'usenet.filters.search_placeholder'|trans }}">
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+      <div class="input-icon" style="max-width:240px;">
+        <span class="input-icon-addon">{{ ico.icon('search', '', 16) }}</span>
+        <input type="search" class="form-control form-control-sm" data-usenet-search
+               placeholder="{{ 'usenet.filters.search_placeholder'|trans }}" autocomplete="off">
+      </div>
+      <div class="d-flex gap-1 flex-wrap">
+        {% for f in ['all', 'downloading', 'queued', 'paused', 'verifying', 'extracting', 'completed', 'failed'] %}
+          <button type="button" class="btn btn-sm usenet-filter-btn{{ f == 'all' ? ' active' }}" data-filter="{{ f }}">{{ ('usenet.filters.' ~ f)|trans }}</button>
+        {% endfor %}
+      </div>
+      <span class="text-muted small ms-auto" data-usenet-count></span>
+      <div class="d-flex gap-1">
+        <button type="button" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#usenet-add">
+          {{ ico.icon('download', '', 14) }} {{ 'usenet.toolbar.add_nzb'|trans }}
+        </button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-usenet-pause-all hidden title="{{ 'usenet.toolbar.pause_all'|trans }}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6z"/><path d="M14 4h4v16h-4z"/></svg></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-usenet-resume-all hidden title="{{ 'usenet.toolbar.resume_all'|trans }}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16l13-8z"/></svg></button>
+      </div>
+    </div>
+    <div class="d-flex align-items-center gap-2 mt-2 pt-2 flex-wrap" style="border-top:1px solid var(--tblr-border-color);">
+      <label class="form-check mb-0" style="font-size:.75rem;">
+        <input type="checkbox" class="form-check-input" data-usenet-select-all>
+        <span class="form-check-label">{{ 'usenet.filters.select_all'|trans }}</span>
+      </label>
+      <div class="input-group input-group-sm" style="max-width:180px;">
+        <span class="input-group-text" title="{{ 'usenet.toolbar.speed_limit'|trans }}">{{ ico.icon('bolt', '', 14) }}</span>
+        <input type="number" min="0" step="1" class="form-control" data-usenet-speed
+               placeholder="{{ 'usenet.toolbar.speed_limit_placeholder'|trans }}" aria-label="{{ 'usenet.toolbar.speed_limit'|trans }}">
+      </div>
+      <div class="ms-auto d-flex align-items-center gap-2 flex-shrink-0">
+        <span class="text-muted" style="font-size:.78rem;white-space:nowrap;font-weight:500;">{{ 'usenet.filters.sort_label'|trans }}</span>
+        <select class="form-select form-select-sm" data-usenet-sort style="min-width:180px;font-size:.78rem;padding:4px 28px 4px 10px;">
+          <option value="name|0">{{ 'usenet.sort.name_asc'|trans }}</option>
+          <option value="name|1">{{ 'usenet.sort.name_desc'|trans }}</option>
+          <option value="size|1">{{ 'usenet.sort.size_desc'|trans }}</option>
+          <option value="size|0">{{ 'usenet.sort.size_asc'|trans }}</option>
+          <option value="progress|1">{{ 'usenet.sort.progress_desc'|trans }}</option>
+          <option value="speed|1">{{ 'usenet.sort.speed_desc'|trans }}</option>
+          <option value="eta|0">{{ 'usenet.sort.eta_asc'|trans }}</option>
+        </select>
+      </div>
+      <div class="usenet-view-switcher" role="group" aria-label="{{ 'usenet.view.aria_label'|trans }}">
+        <button type="button" class="usenet-view-btn active" data-view="list" title="{{ 'usenet.view.list_title'|trans }}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+          {{ 'usenet.view.list'|trans }}
+        </button>
+        <button type="button" class="usenet-view-btn" data-view="table" title="{{ 'usenet.view.table_title'|trans }}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18v14H3zM3 10h18M3 15h18M10 5v14"/></svg>
+          {{ 'usenet.view.table'|trans }}
+        </button>
+        <button type="button" class="usenet-view-btn" data-view="compact" title="{{ 'usenet.view.compact_title'|trans }}">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
+          {{ 'usenet.view.compact'|trans }}
+        </button>
+      </div>
+    </div>
   </div></div>
 
+  {# ─── Table header (table view only) ──────────────────────────── #}
+  <div id="usenet-table-header">
+    <div></div>
+    <div></div>
+    <div class="usenet-sort active" data-sort="name">{{ 'usenet.table.name'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="usenet-sort tnum" data-sort="size" style="justify-content:flex-end">{{ 'usenet.table.size'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="usenet-sort" data-sort="progress" style="justify-content:center">{{ 'usenet.table.progress'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="usenet-sort tnum" data-sort="speed" style="justify-content:flex-end">{{ 'usenet.table.speed'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="usenet-sort tnum" data-sort="eta" style="justify-content:flex-end">{{ 'usenet.table.eta'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div>{{ 'usenet.table.status'|trans }}</div>
+    <div style="text-align:center">{{ 'usenet.table.actions'|trans }}</div>
+  </div>
+
   {# ─── Queue ───────────────────────────────────────────────────── #}
-  <div class="card mb-3">
-    <div class="card-header py-2"><h3 class="card-title m-0" style="font-size:.85rem;">{{ 'usenet.page_title'|trans }}</h3></div>
+  <div class="usenet-list" data-usenet-queue data-view="list"></div>
+  <div class="usenet-empty text-muted small text-center py-3" data-usenet-queue-empty hidden>{{ 'usenet.empty'|trans }}</div>
+
+  {# ─── History ─────────────────────────────────────────────────── #}
+  <div class="card mt-3">
+    <div class="card-header py-2"><h3 class="card-title m-0" style="font-size:.85rem;">{{ 'usenet.history.title'|trans }}</h3></div>
     <div class="card-body">
-      <div class="usenet-list" data-usenet-queue></div>
-      <div class="usenet-empty" data-usenet-queue-empty hidden>{{ 'usenet.empty'|trans }}</div>
+      <div class="usenet-list" data-usenet-history data-view="list"></div>
+      <div class="usenet-empty text-muted small" data-usenet-history-empty hidden>{{ 'usenet.history.empty'|trans }}</div>
     </div>
   </div>
 
-  {# ─── History ─────────────────────────────────────────────────── #}
-  <div class="card">
-    <div class="card-header py-2"><h3 class="card-title m-0" style="font-size:.85rem;">{{ 'usenet.history.title'|trans }}</h3></div>
-    <div class="card-body">
-      <div class="usenet-list" data-usenet-history></div>
-      <div class="usenet-empty" data-usenet-history-empty hidden>{{ 'usenet.history.empty'|trans }}</div>
+  {# ─── Bulk action bar ─────────────────────────────────────────── #}
+  <div class="usenet-bulk-bar" data-usenet-bulk-bar>
+    <span class="fw-bold" data-usenet-bulk-count></span>
+    <div class="ms-auto d-flex gap-2">
+      <button type="button" class="btn btn-sm btn-outline-primary d-inline-flex align-items-center gap-1" data-usenet-bulk="resume"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16l13-8z"/></svg> {{ 'usenet.actions.resume'|trans }}</button>
+      <button type="button" class="btn btn-sm btn-outline-warning d-inline-flex align-items-center gap-1" data-usenet-bulk="pause"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6z"/><path d="M14 4h4v16h-4z"/></svg> {{ 'usenet.actions.pause'|trans }}</button>
+      <button type="button" class="btn btn-sm btn-outline-danger d-inline-flex align-items-center gap-1" data-usenet-bulk="delete"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg> {{ 'usenet.actions.delete'|trans }}</button>
+      <button type="button" class="btn btn-sm btn-ghost-secondary" data-usenet-bulk-clear>{{ 'usenet.bulk.clear'|trans }}</button>
+    </div>
+  </div>
+
+  {# ─── Add NZB modal ───────────────────────────────────────────── #}
+  <div class="modal modal-blur fade" id="usenet-add" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h5 class="modal-title" style="font-size:.9rem;">{{ ico.icon('download', '', 18) }} {{ 'usenet.modal_add.title'|trans }}</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="{{ 'usenet.modal_add.cancel'|trans }}"></button>
+        </div>
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">{{ 'usenet.modal_add.urls_label'|trans }}</label>
+            <textarea class="form-control" data-usenet-add-url rows="3" wrap="soft"
+                      placeholder="{{ 'usenet.modal_add.urls_placeholder'|trans }}"
+                      style="font-family:'SF Mono',Menlo,monospace;font-size:.78rem;word-break:break-all;"></textarea>
+            <div class="form-hint">{{ 'usenet.modal_add.urls_hint'|trans }}</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">{{ 'usenet.modal_add.file_label'|trans }}</label>
+            <div class="usenet-drop-zone" data-usenet-drop>
+              <input type="file" data-usenet-add-files accept=".nzb,.gz" multiple style="display:none;">
+              <div class="usenet-drop-inner">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/><path d="M7 9l5 -5l5 5"/><path d="M12 4l0 12"/></svg>
+                <div class="usenet-drop-text">{{ 'usenet.modal_add.drop_text'|trans }}<br><span class="text-muted" style="font-size:.72rem;">{{ 'usenet.modal_add.drop_browse'|trans }}</span></div>
+              </div>
+              <ul class="usenet-drop-files" data-usenet-drop-files></ul>
+            </div>
+          </div>
+          <div>
+            <label class="form-label">{{ 'usenet.modal_add.category_label'|trans }}</label>
+            <input type="text" class="form-control" data-usenet-add-category placeholder="{{ 'usenet.modal_add.category_placeholder'|trans }}">
+          </div>
+        </div>
+        <div class="modal-footer py-2">
+          <button type="button" class="btn btn-sm" data-bs-dismiss="modal">{{ 'usenet.modal_add.cancel'|trans }}</button>
+          <button type="button" class="btn btn-sm btn-primary" data-usenet-add-submit>{{ 'usenet.modal_add.submit'|trans }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {# ─── Detail modal ────────────────────────────────────────────── #}
+  <button type="button" class="d-none" data-usenet-detail-trigger data-bs-toggle="modal" data-bs-target="#usenet-detail"></button>
+  <div class="modal modal-blur fade" id="usenet-detail" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header py-2">
+          <h5 class="modal-title text-truncate" style="font-size:.9rem;max-width:90%;" data-usenet-detail-title></h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-2" data-usenet-detail-body></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -155,20 +378,46 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
   if (!root) return;
 
   var QUEUE_URL = root.dataset.queueUrl;
+  var BASE = root.dataset.base;
   var REFRESH = Math.max(2, parseInt(root.dataset.refresh, 10) || 5) * 1000;
+  var VKEY = 'usenet_view', SKEY = 'usenet_sort';
 
   var I18N = {
     status: {{ {
-      downloading: 'usenet.status.downloading'|trans,
-      queued: 'usenet.status.queued'|trans,
-      paused: 'usenet.status.paused'|trans,
-      verifying: 'usenet.status.verifying'|trans,
-      extracting: 'usenet.status.extracting'|trans,
-      moving: 'usenet.status.moving'|trans,
-      completed: 'usenet.status.completed'|trans,
-      failed: 'usenet.status.failed'|trans,
+      downloading: 'usenet.status.downloading'|trans, queued: 'usenet.status.queued'|trans,
+      paused: 'usenet.status.paused'|trans, verifying: 'usenet.status.verifying'|trans,
+      extracting: 'usenet.status.extracting'|trans, moving: 'usenet.status.moving'|trans,
+      completed: 'usenet.status.completed'|trans, failed: 'usenet.status.failed'|trans,
       unknown: 'usenet.status.unknown'|trans
-    }|json_encode|raw }}
+    }|json_encode|raw }},
+    actions: {{ {
+      pause: 'usenet.actions.pause'|trans, resume: 'usenet.actions.resume'|trans,
+      delete: 'usenet.actions.delete'|trans, confirm: 'usenet.actions.delete_confirm'|trans
+    }|json_encode|raw }},
+    detail: {{ {
+      status: 'usenet.modal_detail.status'|trans, category: 'usenet.modal_detail.category'|trans,
+      size: 'usenet.modal_detail.size'|trans, remaining: 'usenet.modal_detail.remaining'|trans,
+      progress: 'usenet.modal_detail.progress'|trans, speed: 'usenet.modal_detail.speed'|trans,
+      eta: 'usenet.modal_detail.eta'|trans, id: 'usenet.modal_detail.id'|trans,
+      fail: 'usenet.modal_detail.fail'|trans, none: 'usenet.modal_detail.none'|trans
+    }|json_encode|raw }},
+    toast: {{ {
+      done: 'usenet.toast.done'|trans, added: 'usenet.toast.added'|trans,
+      error: 'usenet.toast.error'|trans, required: 'usenet.modal_add.required'|trans
+    }|json_encode|raw }},
+    count_tpl: {{ 'usenet.count_tpl'|trans({count: 0})|json_encode|raw }},
+    bulk_count_tpl: {{ 'usenet.bulk.count'|trans({count: 0})|json_encode|raw }},
+    file_remove: {{ 'usenet.modal_add.file_remove_title'|trans|json_encode|raw }}
+  };
+  // Bare inline SVGs (no macro) for the action buttons — same pattern as the
+  // qBittorrent page: the .icon class the macro adds throws off centring
+  // inside a button, so size is driven by CSS on a plain <svg> instead.
+  var ICON = {
+    pause: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6z"/><path d="M14 4h4v16h-4z"/></svg>',
+    play:  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16l13-8z"/></svg>',
+    trash: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>',
+    file:  {{ ico.icon('file', '', 14)|json_encode|raw }},
+    job:   {{ ico.icon('download', '', 16)|json_encode|raw }}
   };
 
   function esc(s) { return window.escHtml ? window.escHtml(s) : String(s == null ? '' : s); }
@@ -181,44 +430,188 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
     if (m > 0) return m + 'm' + (sec < 10 ? '0' : '') + sec + 's';
     return sec + 's';
   }
+  function plural(n, tpl) { return (tpl || '').replace('__COUNT__', n).replace('{count}', n); }
 
-  function jobRow(j) {
+  // ── State ───────────────────────────────────────────────────────────────
+  var lastItems = [], lastHistory = [];
+  var selected = {};
+  var view = localStorage.getItem(VKEY) || 'list';
+  var sortSpec = (localStorage.getItem(SKEY) || 'name|0').split('|');
+  var sortField = sortSpec[0] || 'name', sortDesc = sortSpec[1] === '1';
+  var statusFilter = 'all';
+
+  var queueBox   = root.querySelector('[data-usenet-queue]');
+  var historyBox = root.querySelector('[data-usenet-history]');
+  var tableHeader = root.querySelector('#usenet-table-header');
+  var pauseAllBtn  = root.querySelector('[data-usenet-pause-all]');
+  var resumeAllBtn = root.querySelector('[data-usenet-resume-all]');
+  var speedInput   = root.querySelector('[data-usenet-speed]');
+  var searchInput  = root.querySelector('[data-usenet-search]');
+  var bulkBar      = root.querySelector('[data-usenet-bulk-bar]');
+
+  function toast(msg, type) { if (window._prismarrToast) window._prismarrToast(msg, type); }
+
+  function post(url, body) {
+    return fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify(body || {})
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return { ok: r.ok && j && j.ok, error: j && j.error }; });
+    });
+  }
+  function runAction(url, body, okMsg) {
+    return post(url, body).then(function (res) {
+      toast(res.ok ? (okMsg || I18N.toast.done) : (res.error || I18N.toast.error), res.ok ? 'success' : 'danger');
+      poll();
+      return res.ok;
+    }).catch(function () { toast(I18N.toast.error, 'danger'); return false; });
+  }
+
+  // ── Rendering ───────────────────────────────────────────────────────────
+  function actionBtn(act, id, label, icon, danger) {
+    return '<button type="button" class="btn btn-sm btn-outline-' + (danger ? 'danger' : 'secondary') + '"'
+      + ' data-act="' + act + '" data-id="' + esc(id) + '" title="' + esc(label) + '" aria-label="' + esc(label) + '">' + icon + '</button>';
+  }
+  function rowActions(j) {
+    var toggle = j.status === 'paused'
+      ? actionBtn('resume', j.id, I18N.actions.resume, ICON.play, false)
+      : actionBtn('pause', j.id, I18N.actions.pause, ICON.pause, false);
+    return '<div class="usenet-row-actions">' + toggle + actionBtn('delete', j.id, I18N.actions.delete, ICON.trash, true) + '</div>';
+  }
+
+  function queueRow(j) {
     var pct = Math.max(0, Math.min(100, j.percentage || 0));
+    var sel = selected[j.id] ? ' selected' : '';
+    var checked = selected[j.id] ? ' checked' : '';
     var cat = j.category ? '<span class="usenet-tag usenet-tag-cat">' + esc(j.category) + '</span>' : '';
-    var statusLabel = I18N.status[j.status] || j.status;
-    var right = j.history
-      ? '<div class="usenet-status-pill">' + esc(statusLabel) + '</div>'
-      : '<div class="usenet-pct">' + pct.toFixed(0) + '%</div><div>' + speed(j.speed) + ' · ' + eta(j.eta) + '</div>';
-    var bar = j.history ? '' :
-      '<div class="usenet-bar-wrap mt-1"><div class="usenet-bar" style="width:' + pct + '%"></div></div>';
+    var head = '<div class="usenet-job' + sel + '" data-status="' + esc(j.status) + '" data-id="' + esc(j.id) + '">'
+      + '<input type="checkbox" class="form-check-input usenet-check" data-check data-id="' + esc(j.id) + '"' + checked + '>'
+      + '<div class="usenet-ico">' + ICON.job + '</div>';
+
+    if (view === 'table') {
+      return head
+        + '<div class="usenet-main"><div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span></div></div>'
+        + '<div class="usenet-tcell tnum">' + bytes(j.size) + '</div>'
+        + '<div class="usenet-tcell tprog"><span class="usenet-tmini"><div style="width:' + pct + '%"></div></span>' + pct.toFixed(0) + '%</div>'
+        + '<div class="usenet-tcell tnum">' + speed(j.speed) + '</div>'
+        + '<div class="usenet-tcell tnum">' + eta(j.eta) + '</div>'
+        + '<div class="usenet-tcell">' + esc(I18N.status[j.status] || j.status) + '</div>'
+        + rowActions(j)
+        + '</div>';
+    }
+
+    var bar = '<div class="usenet-bar-wrap mt-1"><div class="usenet-bar" style="width:' + pct + '%"></div></div>';
     var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(j.fail) + '</div>' : '';
-    return '<div class="usenet-job" data-status="' + esc(j.status) + '">'
-      + '<div class="usenet-ico">' + {{ ico.icon('download', '', 16)|json_encode|raw }} + '</div>'
+    var statsLine = '<div class="usenet-stats-line"><span><strong>' + bytes(j.size) + '</strong></span>'
+      + '<span class="dl-speed">' + speed(j.speed) + '</span><span>' + eta(j.eta) + '</span></div>';
+    return head
       + '<div class="usenet-main">'
       +   '<div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span>' + cat + '</div>'
-      +   '<div class="usenet-meta">' + bytes(j.size) + '</div>'
-      +   failLine + bar
+      +   bar + statsLine + failLine
       + '</div>'
-      + '<div class="usenet-side">' + right + '</div>'
+      + '<div class="usenet-compact-pct">' + pct.toFixed(0) + '%</div>'
+      + rowActions(j)
       + '</div>';
   }
 
-  function render(sel, emptySel, items) {
-    var box = root.querySelector(sel);
-    var empty = root.querySelector(emptySel);
-    if (!box) return;
-    var search = (root.querySelector('[data-usenet-search]') || {}).value || '';
-    var needle = search.toLowerCase();
-    var list = needle ? items.filter(function (j) { return (j.name || '').toLowerCase().indexOf(needle) !== -1; }) : items;
-    box.innerHTML = list.map(jobRow).join('');
+  function historyRow(j) {
+    var statusLabel = I18N.status[j.status] || j.status;
+    var cat = j.category ? '<span class="usenet-tag usenet-tag-cat">' + esc(j.category) + '</span>' : '';
+    var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(j.fail) + '</div>' : '';
+    return '<div class="usenet-job" data-status="' + esc(j.status) + '">'
+      + '<div></div><div class="usenet-ico">' + ICON.job + '</div>'
+      + '<div class="usenet-main"><div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span>' + cat + '</div>'
+      +   '<div class="usenet-meta">' + bytes(j.size) + '</div>' + failLine + '</div>'
+      + '<div class="usenet-side"><div class="usenet-status-pill">' + esc(statusLabel) + '</div></div>'
+      + '</div>';
+  }
+
+  function sortItems(items) {
+    var f = sortField, dir = sortDesc ? -1 : 1;
+    return items.slice().sort(function (a, b) {
+      var va, vb;
+      if (f === 'name')      { va = (a.name || '').toLowerCase(); vb = (b.name || '').toLowerCase(); return va < vb ? -dir : va > vb ? dir : 0; }
+      if (f === 'size')      { va = a.size || 0; vb = b.size || 0; }
+      else if (f === 'progress') { va = a.percentage || 0; vb = b.percentage || 0; }
+      else if (f === 'speed')    { va = a.speed || 0; vb = b.speed || 0; }
+      else if (f === 'eta')      { va = a.eta == null ? Infinity : a.eta; vb = b.eta == null ? Infinity : b.eta; }
+      else { va = 0; vb = 0; }
+      return (va - vb) * dir;
+    });
+  }
+
+  function visibleQueue() {
+    var needle = (searchInput && searchInput.value || '').toLowerCase();
+    var list = lastItems.filter(function (j) {
+      if (statusFilter !== 'all' && j.status !== statusFilter) return false;
+      if (needle && (j.name || '').toLowerCase().indexOf(needle) === -1) return false;
+      return true;
+    });
+    return sortItems(list);
+  }
+
+  function renderQueue() {
+    var list = visibleQueue();
+    queueBox.dataset.view = view;
+    queueBox.innerHTML = list.map(queueRow).join('');
+    var empty = root.querySelector('[data-usenet-queue-empty]');
     if (empty) empty.hidden = list.length > 0;
+    var countEl = root.querySelector('[data-usenet-count]');
+    if (countEl) countEl.textContent = plural(list.length, I18N.count_tpl);
+    if (tableHeader) tableHeader.classList.toggle('show', view === 'table' && list.length > 0);
+    refreshSelectionUi();
   }
 
-  function setStat(key, val) {
-    var el = root.querySelector('[data-stat="' + key + '"]');
-    if (el) el.textContent = val;
+  function renderHistory() {
+    historyBox.innerHTML = lastHistory.map(historyRow).join('');
+    var empty = root.querySelector('[data-usenet-history-empty]');
+    if (empty) empty.hidden = lastHistory.length > 0;
   }
 
+  // ── Selection ─────────────────────────────────────────────────────────────
+  function selectedIds() { return Object.keys(selected).filter(function (id) { return selected[id]; }); }
+  function refreshSelectionUi() {
+    var ids = selectedIds();
+    if (bulkBar) {
+      bulkBar.classList.toggle('show', ids.length > 0);
+      var c = root.querySelector('[data-usenet-bulk-count]');
+      if (c) c.textContent = plural(ids.length, I18N.bulk_count_tpl);
+    }
+    var all = root.querySelector('[data-usenet-select-all]');
+    if (all) {
+      var vis = visibleQueue();
+      all.checked = vis.length > 0 && vis.every(function (j) { return selected[j.id]; });
+    }
+  }
+
+  // ── Detail modal ──────────────────────────────────────────────────────────
+  function prop(label, value) {
+    return '<div class="col-6"><div class="usenet-prop"><div class="usenet-prop-label">' + esc(label) + '</div>'
+      + '<div class="usenet-prop-value">' + value + '</div></div></div>';
+  }
+  function openDetail(j) {
+    var title = root.querySelector('[data-usenet-detail-title]');
+    var body = root.querySelector('[data-usenet-detail-body]');
+    if (!title || !body) return;
+    title.textContent = j.name;
+    var pct = Math.max(0, Math.min(100, j.percentage || 0));
+    var html = prop(I18N.detail.status, esc(I18N.status[j.status] || j.status))
+      + prop(I18N.detail.category, esc(j.category || I18N.detail.none))
+      + prop(I18N.detail.size, bytes(j.size))
+      + prop(I18N.detail.remaining, bytes(j.remaining))
+      + prop(I18N.detail.progress, pct.toFixed(1) + '%')
+      + prop(I18N.detail.speed, speed(j.speed))
+      + prop(I18N.detail.eta, eta(j.eta))
+      + prop(I18N.detail.id, '<span style="font-family:\'SF Mono\',Menlo,monospace;font-size:.72rem;">' + esc(j.id) + '</span>');
+    if (j.fail) html += '<div class="col-12">' + prop(I18N.detail.fail, '<span style="color:#ef4444;">' + esc(j.fail) + '</span>') + '</div>';
+    body.innerHTML = html;
+    // Open via a hidden Bootstrap trigger (window.bootstrap isn't exposed),
+    // same pattern as the qBittorrent detail modal.
+    var trig = root.querySelector('[data-usenet-detail-trigger]');
+    if (trig) trig.click();
+  }
+
+  // ── Poll ────────────────────────────────────────────────────────────────
   var failCount = 0;
   function poll() {
     fetch(QUEUE_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
@@ -231,8 +624,20 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
         setStat('speed', speed(d.speed || 0));
         setStat('eta', eta(d.eta));
         setStat('free_space', bytes(d.free_space || 0));
-        render('[data-usenet-queue]', '[data-usenet-queue-empty]', d.items || []);
-        render('[data-usenet-history]', '[data-usenet-history-empty]', d.history || []);
+        if (pauseAllBtn)  pauseAllBtn.hidden  = !!d.paused;
+        if (resumeAllBtn) resumeAllBtn.hidden = !d.paused;
+        if (speedInput && document.activeElement !== speedInput) {
+          var lim = d.speed_limit || 0;
+          speedInput.value = lim > 0 ? Math.round(lim / (1024 * 1024)) : '';
+        }
+        lastItems = d.items || [];
+        lastHistory = d.history || [];
+        // Drop selections for jobs that vanished.
+        var present = {};
+        lastItems.forEach(function (j) { present[j.id] = true; });
+        Object.keys(selected).forEach(function (id) { if (!present[id]) delete selected[id]; });
+        renderQueue();
+        renderHistory();
       })
       .catch(function () { failCount++; })
       .then(function () {
@@ -241,13 +646,180 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
         window._usenetTimer = setTimeout(poll, delay);
       });
   }
+  function setStat(key, val) {
+    var el = root.querySelector('[data-stat="' + key + '"]');
+    if (el) el.textContent = val;
+  }
 
-  var searchInput = root.querySelector('[data-usenet-search]');
-  if (searchInput) searchInput.addEventListener('input', function () {
-    // re-render from the last payload would need caching; cheapest is to repoll
-    poll();
+  // ── Events ──────────────────────────────────────────────────────────────
+  function setView(v) {
+    view = v;
+    localStorage.setItem(VKEY, v);
+    root.querySelectorAll('.usenet-view-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.view === v); });
+    renderQueue();
+  }
+  root.querySelectorAll('.usenet-view-btn').forEach(function (b) {
+    b.addEventListener('click', function () { setView(b.dataset.view); });
+  });
+  setView(view);
+
+  var sortSel = root.querySelector('[data-usenet-sort]');
+  if (sortSel) {
+    sortSel.value = sortField + '|' + (sortDesc ? '1' : '0');
+    sortSel.addEventListener('change', function () {
+      var p = sortSel.value.split('|');
+      sortField = p[0]; sortDesc = p[1] === '1';
+      localStorage.setItem(SKEY, sortSel.value);
+      syncSortHeader();
+      renderQueue();
+    });
+  }
+  function syncSortHeader() {
+    root.querySelectorAll('#usenet-table-header .usenet-sort').forEach(function (h) {
+      var on = h.dataset.sort === sortField;
+      h.classList.toggle('active', on);
+      h.classList.toggle('asc', on && !sortDesc);
+    });
+  }
+  root.querySelectorAll('#usenet-table-header .usenet-sort').forEach(function (h) {
+    h.addEventListener('click', function () {
+      var f = h.dataset.sort;
+      if (sortField === f) sortDesc = !sortDesc; else { sortField = f; sortDesc = (f !== 'name' && f !== 'eta'); }
+      localStorage.setItem(SKEY, sortField + '|' + (sortDesc ? '1' : '0'));
+      if (sortSel) sortSel.value = sortField + '|' + (sortDesc ? '1' : '0');
+      syncSortHeader();
+      renderQueue();
+    });
+  });
+  syncSortHeader();
+
+  root.querySelectorAll('.usenet-filter-btn').forEach(function (b) {
+    b.addEventListener('click', function () {
+      statusFilter = b.dataset.filter;
+      root.querySelectorAll('.usenet-filter-btn').forEach(function (x) { x.classList.toggle('active', x === b); });
+      renderQueue();
+    });
   });
 
+  if (searchInput) searchInput.addEventListener('input', renderQueue);
+
+  // Row interactions (delegated): checkbox, action buttons, row click → detail.
+  if (queueBox) queueBox.addEventListener('click', function (e) {
+    var check = e.target.closest('[data-check]');
+    if (check) { selected[check.dataset.id] = check.checked; refreshSelectionUi();
+      var row = check.closest('.usenet-job'); if (row) row.classList.toggle('selected', check.checked); return; }
+    var act = e.target.closest('[data-act]');
+    if (act) {
+      e.stopPropagation();
+      var id = act.dataset.id, a = act.dataset.act, item = BASE + '/item/' + encodeURIComponent(id) + '/';
+      if (a === 'delete') { if (window.confirm(I18N.actions.confirm)) runAction(item + 'delete', {}); }
+      else if (a === 'pause' || a === 'resume') runAction(item + a, {});
+      return;
+    }
+    var row = e.target.closest('.usenet-job');
+    if (row && row.dataset.id) {
+      var j = lastItems.filter(function (x) { return String(x.id) === row.dataset.id; })[0];
+      if (j) openDetail(j);
+    }
+  });
+
+  var selectAll = root.querySelector('[data-usenet-select-all]');
+  if (selectAll) selectAll.addEventListener('change', function () {
+    visibleQueue().forEach(function (j) { selected[j.id] = selectAll.checked; });
+    renderQueue();
+  });
+
+  root.querySelectorAll('[data-usenet-bulk]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var ids = selectedIds();
+      if (!ids.length) return;
+      var a = b.dataset.usenetBulk;
+      if (a === 'delete' && !window.confirm(I18N.actions.confirm)) return;
+      runAction(BASE + '/bulk/' + a, { ids: ids });
+      selected = {};
+    });
+  });
+  var bulkClear = root.querySelector('[data-usenet-bulk-clear]');
+  if (bulkClear) bulkClear.addEventListener('click', function () { selected = {}; renderQueue(); });
+
+  if (pauseAllBtn)  pauseAllBtn.addEventListener('click',  function () { runAction(BASE + '/pause', {}); });
+  if (resumeAllBtn) resumeAllBtn.addEventListener('click', function () { runAction(BASE + '/resume', {}); });
+  if (speedInput) speedInput.addEventListener('change', function () {
+    var mbps = parseFloat(speedInput.value);
+    if (isNaN(mbps) || mbps < 0) mbps = 0;
+    runAction(BASE + '/speed-limit', { mbps: mbps });
+  });
+
+  // ── Add NZB (drag-drop + URLs) ─────────────────────────────────────────────
+  var pendingFiles = [];
+  var dropZone = root.querySelector('[data-usenet-drop]');
+  var fileInput = root.querySelector('[data-usenet-add-files]');
+  var dropList = root.querySelector('[data-usenet-drop-files]');
+
+  function renderPending() {
+    if (!dropList) return;
+    dropList.innerHTML = pendingFiles.map(function (f, i) {
+      return '<li>' + ICON.file + ' <strong>' + esc(f.name) + '</strong> <span class="text-muted" style="font-size:.7rem;">(' + bytes(f.size) + ')</span>'
+        + '<span class="remove" data-i="' + i + '" title="' + esc(I18N.file_remove) + '">×</span></li>';
+    }).join('');
+  }
+  function addFiles(fileList) {
+    for (var i = 0; i < fileList.length; i++) pendingFiles.push(fileList[i]);
+    renderPending();
+  }
+  if (dropZone && fileInput) {
+    dropZone.onclick = function (e) { if (!e.target.classList.contains('remove')) fileInput.click(); };
+    fileInput.onchange = function () { addFiles(fileInput.files); fileInput.value = ''; };
+    dropZone.ondragover = function (e) { e.preventDefault(); dropZone.classList.add('drag-over'); };
+    dropZone.ondragleave = function () { dropZone.classList.remove('drag-over'); };
+    dropZone.ondrop = function (e) { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer && e.dataTransfer.files) addFiles(e.dataTransfer.files); };
+  }
+  if (dropList) dropList.addEventListener('click', function (e) {
+    var rm = e.target.closest('.remove');
+    if (!rm) return;
+    pendingFiles.splice(parseInt(rm.dataset.i, 10), 1);
+    renderPending();
+  });
+
+  var addSubmit = root.querySelector('[data-usenet-add-submit]');
+  if (addSubmit) addSubmit.addEventListener('click', function () {
+    var urlEl = root.querySelector('[data-usenet-add-url]');
+    var catEl = root.querySelector('[data-usenet-add-category]');
+    var urls = (urlEl && urlEl.value || '').split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
+    var cat = (catEl && catEl.value || '').trim();
+    if (!urls.length && !pendingFiles.length) { toast(I18N.toast.required, 'warning'); return; }
+
+    addSubmit.disabled = true;
+    var chain = Promise.resolve(true);
+    if (pendingFiles.length) {
+      var fd = new FormData();
+      pendingFiles.forEach(function (f) { fd.append('files[]', f); });
+      if (cat) fd.append('category', cat);
+      chain = fetch(BASE + '/add-file', { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }, body: fd })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { return r.ok && j && j.ok; }); })
+        .then(function (ok) { toast(ok ? I18N.toast.added : I18N.toast.error, ok ? 'success' : 'danger'); return ok; })
+        .catch(function () { toast(I18N.toast.error, 'danger'); return false; });
+    }
+    chain.then(function () {
+      // Add URLs sequentially so one bad URL doesn't abort the rest.
+      return urls.reduce(function (p, u) {
+        return p.then(function () { return post(BASE + '/add', { url: u, category: cat || null }).then(function (res) {
+          toast(res.ok ? I18N.toast.added : (res.error || I18N.toast.error), res.ok ? 'success' : 'danger');
+        }); });
+      }, Promise.resolve());
+    }).then(function () {
+      addSubmit.disabled = false;
+      if (urlEl) urlEl.value = '';
+      if (catEl) catEl.value = '';
+      pendingFiles = []; renderPending();
+      var modalEl = document.getElementById('usenet-add');
+      var closeBtn = modalEl && modalEl.querySelector('.btn-close');
+      if (closeBtn) closeBtn.click();
+      poll();
+    }).catch(function () { addSubmit.disabled = false; });
+  });
+
+  // ── Boot + Turbo-safe timer cleanup ────────────────────────────────────────
   if (window._usenetTimer) clearTimeout(window._usenetTimer);
   poll();
 
@@ -255,7 +827,7 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
     window._usenetVisBound = true;
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { if (window._usenetTimer) { clearTimeout(window._usenetTimer); window._usenetTimer = null; } }
-      else poll();
+      else if (document.querySelector('[data-usenet-client]')) poll();
     });
   }
 })();

@@ -3576,6 +3576,8 @@ usenet:
     extracting: Extracting
     completed: Completed
     failed: Failed
+    select_all: 'Select all'
+    sort_label: Sort
   count_tpl: '{count, plural, one {# job} other {# jobs}}'
   table:
     name: Name
@@ -3585,6 +3587,26 @@ usenet:
     speed: Speed
     eta: ETA
     status: Status
+    actions: Actions
+  view:
+    aria_label: 'Queue view'
+    list: List
+    table: Table
+    compact: Compact
+    list_title: 'List view'
+    table_title: 'Table view'
+    compact_title: 'Compact view'
+  sort:
+    name_asc: 'Name (A→Z)'
+    name_desc: 'Name (Z→A)'
+    size_desc: 'Size (largest)'
+    size_asc: 'Size (smallest)'
+    progress_desc: 'Progress (highest)'
+    speed_desc: 'Speed (fastest)'
+    eta_asc: 'ETA (soonest)'
+  bulk:
+    count: '{count, plural, one {# selected} other {# selected}}'
+    clear: Clear
   status:
     downloading: Downloading
     queued: Queued
@@ -3611,6 +3633,35 @@ usenet:
     resume: Resume
     delete: Delete
     delete_confirm: 'Delete this download? Partial files are removed too.'
+  modal_add:
+    title: 'Add NZB'
+    urls_label: 'NZB URLs'
+    urls_placeholder: 'https://indexer.example/abc.nzb (one per line)'
+    urls_hint: 'The download client fetches each NZB from its URL. One URL per line.'
+    file_label: 'Or drop .nzb files'
+    drop_text: 'Drag and drop .nzb files here'
+    drop_browse: 'or click to browse'
+    file_remove_title: Remove
+    category_label: 'Category (optional)'
+    category_placeholder: 'movies, tv…'
+    required: 'Enter a URL or choose a file.'
+    cancel: Cancel
+    submit: Add
+  modal_detail:
+    status: Status
+    category: Category
+    size: Size
+    remaining: Remaining
+    progress: Progress
+    speed: Speed
+    eta: ETA
+    id: ID
+    fail: Error
+    none: '—'
+  toast:
+    done: 'Done.'
+    added: 'NZB added.'
+    error: 'Action failed.'
   api:
     unreachable: 'Download client unreachable.'
     action_failed: 'The download client rejected the action.'
