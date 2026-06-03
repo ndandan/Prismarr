@@ -165,6 +165,41 @@ class UsenetControllerTest extends AbstractWebTestCase
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testBulkPauseAppliesToEachId(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->exactly(2))->method('pauseItem')->willReturn(true);
+
+        $this->post('/usenet/sabnzbd/bulk/pause', '{"ids":["A","B"]}');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $json = $this->jsonResponse();
+        $this->assertTrue($json['ok']);
+        $this->assertSame(2, $json['count']);
+    }
+
+    public function testBulkDeleteRemovesPartialFiles(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $seen = [];
+        $sab->method('deleteItem')->willReturnCallback(function (string $id, bool $files) use (&$seen) {
+            $seen[] = [$id, $files];
+            return true;
+        });
+
+        $this->post('/usenet/sabnzbd/bulk/delete', '{"ids":["A"]}');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertSame([['A', true]], $seen);
+    }
+
+    public function testBulkRequiresIds(): void
+    {
+        $this->configureSabnzbd();
+        $this->post('/usenet/sabnzbd/bulk/pause', '{}');
+        $this->assertSame(400, $this->client->getResponse()->getStatusCode());
+    }
+
     public function testActionRejectsGet(): void
     {
         $this->configureSabnzbd();

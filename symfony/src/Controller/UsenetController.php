@@ -234,6 +234,65 @@ class UsenetController extends AbstractController
         return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->addNzbFromFiles($payload, $category));
     }
 
+    #[Route('/bulk/pause', name: 'bulk_pause', methods: ['POST'])]
+    public function bulkPause(string $client, Request $request): JsonResponse
+    {
+        return $this->runBulk($client, $request, static fn(UsenetClientInterface $c, string $id) => $c->pauseItem($id));
+    }
+
+    #[Route('/bulk/resume', name: 'bulk_resume', methods: ['POST'])]
+    public function bulkResume(string $client, Request $request): JsonResponse
+    {
+        return $this->runBulk($client, $request, static fn(UsenetClientInterface $c, string $id) => $c->resumeItem($id));
+    }
+
+    #[Route('/bulk/delete', name: 'bulk_delete', methods: ['POST'])]
+    public function bulkDelete(string $client, Request $request): JsonResponse
+    {
+        return $this->runBulk($client, $request, static fn(UsenetClientInterface $c, string $id) => $c->deleteItem($id, true));
+    }
+
+    /**
+     * Apply a per-item action to every id in the POST body's `ids` array.
+     * Mirrors the qBittorrent bulk endpoints: best-effort (each id is tried
+     * independently) and reports how many succeeded so the page can toast a
+     * partial result. `ok` is true only when every id succeeded.
+     *
+     * @param callable(UsenetClientInterface, string):bool $fn
+     */
+    private function runBulk(string $client, Request $request, callable $fn): JsonResponse
+    {
+        if (!$this->health->isConfigured($client)) {
+            return $this->json(['ok' => false, 'error' => 'disabled'], 403);
+        }
+        $ids = $request->toArray()['ids'] ?? [];
+        if (!is_array($ids) || $ids === []) {
+            return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.action_failed')], 400);
+        }
+
+        $usenet = $this->client($client);
+        $ok = true;
+        $count = 0;
+        foreach ($ids as $id) {
+            if (!is_string($id) && !is_int($id)) { $ok = false; continue; }
+            try {
+                if ($fn($usenet, (string) $id)) {
+                    $count++;
+                } else {
+                    $ok = false;
+                }
+            } catch (\Throwable $e) {
+                $ok = false;
+                $this->logger->warning('Usenet bulk action crashed', [
+                    'client'    => $client,
+                    'exception' => $e::class,
+                    'message'   => $e->getMessage(),
+                ]);
+            }
+        }
+        return $this->json(['ok' => $ok, 'count' => $count]);
+    }
+
     /**
      * Run a write action against the selected client. Guards the
      * configured/enabled state, swallows upstream failures into the
