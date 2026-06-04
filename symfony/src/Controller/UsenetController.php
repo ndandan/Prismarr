@@ -340,6 +340,7 @@ class UsenetController extends AbstractController
             'speed'       => $d->speedBytes,
             'fail'        => $d->failMessage,
             'history'     => $d->isHistory,
+            'wait'        => $d->waitSeconds,
         ];
     }
 }

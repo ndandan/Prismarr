@@ -37,6 +37,7 @@
 .usenet-job.selected { background:rgba(var(--tblr-primary-rgb),.06); border-color:var(--tblr-primary); }
 .usenet-job[data-status="downloading"] { border-left-color:#3b82f6; }
 .usenet-job[data-status="queued"]      { border-left-color:#6b7280; }
+.usenet-job[data-status="fetching"]    { border-left-color:#6366f1; }
 .usenet-job[data-status="paused"]      { border-left-color:#f59e0b; }
 .usenet-job[data-status="verifying"]   { border-left-color:#06b6d4; }
 .usenet-job[data-status="extracting"]  { border-left-color:#a259ff; }
@@ -57,6 +58,12 @@
 }
 .usenet-ico svg { width:16px; height:16px; }
 .usenet-job[data-status="downloading"] .usenet-ico { background:linear-gradient(135deg, rgba(59,130,246,.15), rgba(59,130,246,.05)); color:#3b82f6; }
+.usenet-job[data-status="queued"] .usenet-ico { background:linear-gradient(135deg, rgba(107,114,128,.12), rgba(107,114,128,.03)); color:#6b7280; }
+.usenet-job[data-status="fetching"] .usenet-ico { background:linear-gradient(135deg, rgba(99,102,241,.12), rgba(99,102,241,.03)); color:#6366f1; }
+.usenet-job[data-status="paused"] .usenet-ico { background:linear-gradient(135deg, rgba(245,158,11,.12), rgba(245,158,11,.03)); color:#f59e0b; }
+.usenet-job[data-status="verifying"] .usenet-ico { background:linear-gradient(135deg, rgba(6,182,212,.12), rgba(6,182,212,.03)); color:#06b6d4; }
+.usenet-job[data-status="extracting"] .usenet-ico { background:linear-gradient(135deg, rgba(162,89,255,.12), rgba(162,89,255,.03)); color:#a259ff; }
+.usenet-job[data-status="moving"] .usenet-ico { background:linear-gradient(135deg, rgba(20,184,166,.12), rgba(20,184,166,.03)); color:#14b8a6; }
 .usenet-job[data-status="failed"] .usenet-ico { background:linear-gradient(135deg, rgba(239,68,68,.15), rgba(239,68,68,.03)); color:#ef4444; }
 .usenet-job[data-status="completed"] .usenet-ico { background:linear-gradient(135deg, rgba(34,197,94,.12), rgba(34,197,94,.03)); color:#22c55e; }
 
@@ -83,6 +90,7 @@ body[data-bs-theme="dark"] .usenet-bar-wrap { background:rgba(255,255,255,.06); 
 .usenet-side { text-align:right; font-size:.7rem; color:var(--tblr-text-secondary); white-space:nowrap; }
 .usenet-side .usenet-pct { font-weight:700; font-size:.8rem; color:var(--tblr-body-color); }
 .usenet-status-pill { display:inline-block; font-size:.6rem; font-weight:700; padding:1px 7px; border-radius:3px; text-transform:uppercase; letter-spacing:.3px; }
+.usenet-wait { color:#6366f1; font-weight:600; font-family:'SF Mono', Menlo, monospace; }
 
 .usenet-row-actions { display:flex; gap:.25rem; flex-shrink:0; }
 .usenet-row-actions .btn { display:inline-flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border-radius:5px; line-height:1; }
@@ -385,6 +393,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   var I18N = {
     status: {{ {
       downloading: 'usenet.status.downloading'|trans, queued: 'usenet.status.queued'|trans,
+      fetching: 'usenet.status.fetching'|trans,
       paused: 'usenet.status.paused'|trans, verifying: 'usenet.status.verifying'|trans,
       extracting: 'usenet.status.extracting'|trans, moving: 'usenet.status.moving'|trans,
       completed: 'usenet.status.completed'|trans, failed: 'usenet.status.failed'|trans,
@@ -405,8 +414,13 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       done: 'usenet.toast.done'|trans, added: 'usenet.toast.added'|trans,
       error: 'usenet.toast.error'|trans, required: 'usenet.modal_add.required'|trans
     }|json_encode|raw }},
-    count_tpl: {{ 'usenet.count_tpl'|trans({count: 0})|json_encode|raw }},
-    bulk_count_tpl: {{ 'usenet.bulk.count'|trans({count: 0})|json_encode|raw }},
+    // ICU plural one/many variants — `#` is rendered now, the sentinel 42 is
+    // swapped for the real count in JS (see plural()). Mirrors the qBit page.
+    count_one:  {{ 'usenet.count_tpl'|trans({count: 1})|json_encode|raw }},
+    count_many: {{ 'usenet.count_tpl'|trans({count: 42})|json_encode|raw }},
+    bulk_one:   {{ 'usenet.bulk.count'|trans({count: 1})|json_encode|raw }},
+    bulk_many:  {{ 'usenet.bulk.count'|trans({count: 42})|json_encode|raw }},
+    wait_tpl:   {{ 'usenet.wait_tpl'|trans|json_encode|raw }},
     file_remove: {{ 'usenet.modal_add.file_remove_title'|trans|json_encode|raw }}
   };
   // Bare inline SVGs (no macro) for the action buttons — same pattern as the
@@ -416,9 +430,26 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     pause: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6z"/><path d="M14 4h4v16h-4z"/></svg>',
     play:  '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16l13-8z"/></svg>',
     trash: '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12"/><path d="M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>',
-    file:  {{ ico.icon('file', '', 14)|json_encode|raw }},
-    job:   {{ ico.icon('download', '', 16)|json_encode|raw }}
+    file:  {{ ico.icon('file', '', 14)|json_encode|raw }}
   };
+
+  // Row icon per download state (bare inline SVG, like the qBittorrent page;
+  // CSS sizes/colours it via .usenet-ico). Falls back to an info glyph.
+  function stateIcon(status) {
+    var o = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+    switch (status) {
+      case 'downloading': return o + '<path d="M12 4v13"/><path d="M6 11l6 6 6-6"/></svg>';
+      case 'queued':      return o + '<path d="M4 6h16M4 12h16M4 18h10"/></svg>';
+      case 'fetching':    return o + '<path d="M6.5 7h11"/><path d="M6.5 17h11"/><path d="M6 20v-2a6 6 0 1 1 12 0v2a1 1 0 0 1 -1 1h-10a1 1 0 0 1 -1 -1"/><path d="M6 4v2a6 6 0 1 0 12 0v-2a1 1 0 0 0 -1 -1h-10a1 1 0 0 0 -1 1"/></svg>';
+      case 'paused':      return o + '<rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>';
+      case 'verifying':   return o + '<path d="M20 11a8.1 8.1 0 0 0-15.5-2m-.5-4v4h4"/><path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"/></svg>';
+      case 'extracting':  return o + '<path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5"/><path d="M12 12v9"/><path d="M12 12L4 7.5"/></svg>';
+      case 'moving':      return o + '<path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg>';
+      case 'completed':   return o + '<path d="M5 12l5 5L20 7"/></svg>';
+      case 'failed':      return o + '<path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.24 3.957l-8.422 14.06a1.989 1.989 0 0 0 1.7 2.983h16.845a1.989 1.989 0 0 0 1.7 -2.983l-8.423 -14.06a1.989 1.989 0 0 0 -3.4 0z"/></svg>';
+      default:            return o + '<circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>';
+    }
+  }
 
   function esc(s) { return window.escHtml ? window.escHtml(s) : String(s == null ? '' : s); }
   function bytes(n) { return window.prismarrBytes ? window.prismarrBytes(n) : (n + ' B'); }
@@ -430,7 +461,16 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     if (m > 0) return m + 'm' + (sec < 10 ? '0' : '') + sec + 's';
     return sec + 's';
   }
-  function plural(n, tpl) { return (tpl || '').replace('__COUNT__', n).replace('{count}', n); }
+  function tpl(t, map) {
+    var s = String(t == null ? '' : t);
+    for (var k in map) { if (Object.prototype.hasOwnProperty.call(map, k)) s = s.split('__' + k + '__').join(map[k]); }
+    return s;
+  }
+  // ICU one/many variants pre-rendered (count:1 / count:42 sentinel); swap 42.
+  function plural(n, oneStr, manyStr) {
+    if (n === 1) return String(oneStr == null ? n : oneStr);
+    return String(manyStr == null ? n : manyStr).replace('42', n);
+  }
 
   // ── State ───────────────────────────────────────────────────────────────
   var lastItems = [], lastHistory = [];
@@ -479,37 +519,46 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     return '<div class="usenet-row-actions">' + toggle + actionBtn('delete', j.id, I18N.actions.delete, ICON.trash, true) + '</div>';
   }
 
+  function waitText(j) {
+    return j.wait != null ? tpl(I18N.wait_tpl, { SECONDS: j.wait }) : (I18N.status.fetching || 'Fetching');
+  }
+
   function queueRow(j) {
     var pct = Math.max(0, Math.min(100, j.percentage || 0));
+    var fetching = j.status === 'fetching';
     var sel = selected[j.id] ? ' selected' : '';
     var checked = selected[j.id] ? ' checked' : '';
     var cat = j.category ? '<span class="usenet-tag usenet-tag-cat">' + esc(j.category) + '</span>' : '';
     var head = '<div class="usenet-job' + sel + '" data-status="' + esc(j.status) + '" data-id="' + esc(j.id) + '">'
       + '<input type="checkbox" class="form-check-input usenet-check" data-check data-id="' + esc(j.id) + '"' + checked + '>'
-      + '<div class="usenet-ico">' + ICON.job + '</div>';
+      + '<div class="usenet-ico">' + stateIcon(j.status) + '</div>';
 
     if (view === 'table') {
       return head
         + '<div class="usenet-main"><div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span></div></div>'
         + '<div class="usenet-tcell tnum">' + bytes(j.size) + '</div>'
-        + '<div class="usenet-tcell tprog"><span class="usenet-tmini"><div style="width:' + pct + '%"></div></span>' + pct.toFixed(0) + '%</div>'
-        + '<div class="usenet-tcell tnum">' + speed(j.speed) + '</div>'
-        + '<div class="usenet-tcell tnum">' + eta(j.eta) + '</div>'
+        + '<div class="usenet-tcell tprog">' + (fetching
+            ? '<span class="usenet-wait">' + esc(waitText(j)) + '</span>'
+            : '<span class="usenet-tmini"><div style="width:' + pct + '%"></div></span>' + pct.toFixed(0) + '%') + '</div>'
+        + '<div class="usenet-tcell tnum">' + (fetching ? '—' : speed(j.speed)) + '</div>'
+        + '<div class="usenet-tcell tnum">' + (fetching ? '—' : eta(j.eta)) + '</div>'
         + '<div class="usenet-tcell">' + esc(I18N.status[j.status] || j.status) + '</div>'
         + rowActions(j)
         + '</div>';
     }
 
-    var bar = '<div class="usenet-bar-wrap mt-1"><div class="usenet-bar" style="width:' + pct + '%"></div></div>';
+    var bar = fetching ? '' : '<div class="usenet-bar-wrap mt-1"><div class="usenet-bar" style="width:' + pct + '%"></div></div>';
     var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(j.fail) + '</div>' : '';
-    var statsLine = '<div class="usenet-stats-line"><span><strong>' + bytes(j.size) + '</strong></span>'
-      + '<span class="dl-speed">' + speed(j.speed) + '</span><span>' + eta(j.eta) + '</span></div>';
+    var statsLine = fetching
+      ? '<div class="usenet-stats-line"><span class="usenet-wait">' + esc(waitText(j)) + '</span></div>'
+      : '<div class="usenet-stats-line"><span><strong>' + bytes(j.size) + '</strong></span>'
+        + '<span class="dl-speed">' + speed(j.speed) + '</span><span>' + eta(j.eta) + '</span></div>';
     return head
       + '<div class="usenet-main">'
       +   '<div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span>' + cat + '</div>'
       +   bar + statsLine + failLine
       + '</div>'
-      + '<div class="usenet-compact-pct">' + pct.toFixed(0) + '%</div>'
+      + '<div class="usenet-compact-pct">' + (fetching ? esc(waitText(j)) : pct.toFixed(0) + '%') + '</div>'
       + rowActions(j)
       + '</div>';
   }
@@ -518,8 +567,8 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     var statusLabel = I18N.status[j.status] || j.status;
     var cat = j.category ? '<span class="usenet-tag usenet-tag-cat">' + esc(j.category) + '</span>' : '';
     var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(j.fail) + '</div>' : '';
-    return '<div class="usenet-job" data-status="' + esc(j.status) + '">'
-      + '<div></div><div class="usenet-ico">' + ICON.job + '</div>'
+    return '<div class="usenet-job" data-status="' + esc(j.status) + '" data-id="' + esc(j.id) + '">'
+      + '<div></div><div class="usenet-ico">' + stateIcon(j.status) + '</div>'
       + '<div class="usenet-main"><div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span>' + cat + '</div>'
       +   '<div class="usenet-meta">' + bytes(j.size) + '</div>' + failLine + '</div>'
       + '<div class="usenet-side"><div class="usenet-status-pill">' + esc(statusLabel) + '</div></div>'
@@ -557,7 +606,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     var empty = root.querySelector('[data-usenet-queue-empty]');
     if (empty) empty.hidden = list.length > 0;
     var countEl = root.querySelector('[data-usenet-count]');
-    if (countEl) countEl.textContent = plural(list.length, I18N.count_tpl);
+    if (countEl) countEl.textContent = plural(list.length, I18N.count_one, I18N.count_many);
     if (tableHeader) tableHeader.classList.toggle('show', view === 'table' && list.length > 0);
     refreshSelectionUi();
   }
@@ -575,7 +624,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     if (bulkBar) {
       bulkBar.classList.toggle('show', ids.length > 0);
       var c = root.querySelector('[data-usenet-bulk-count]');
-      if (c) c.textContent = plural(ids.length, I18N.bulk_count_tpl);
+      if (c) c.textContent = plural(ids.length, I18N.bulk_one, I18N.bulk_many);
     }
     var all = root.querySelector('[data-usenet-select-all]');
     if (all) {
@@ -721,6 +770,14 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       var j = lastItems.filter(function (x) { return String(x.id) === row.dataset.id; })[0];
       if (j) openDetail(j);
     }
+  });
+
+  // History rows are clickable too — handy to read a failed entry's error.
+  if (historyBox) historyBox.addEventListener('click', function (e) {
+    var row = e.target.closest('.usenet-job');
+    if (!row || !row.dataset.id) return;
+    var j = lastHistory.filter(function (x) { return String(x.id) === row.dataset.id; })[0];
+    if (j) openDetail(j);
   });
 
   var selectAll = root.querySelector('[data-usenet-select-all]');

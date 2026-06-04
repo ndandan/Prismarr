@@ -3610,6 +3610,7 @@ usenet:
   status:
     downloading: Downloading
     queued: Queued
+    fetching: Fetching
     paused: Paused
     verifying: Repairing
     extracting: Extracting
@@ -3617,6 +3618,7 @@ usenet:
     completed: Completed
     failed: Failed
     unknown: Unknown
+  wait_tpl: 'Wait __SECONDS__ s'
   history:
     title: History
     empty: 'No history yet.'

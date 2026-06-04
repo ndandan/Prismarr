@@ -3609,6 +3609,7 @@ usenet:
   status:
     downloading: En cours
     queued: En attente
+    fetching: Récupération
     paused: En pause
     verifying: Réparation
     extracting: Extraction
@@ -3616,6 +3617,7 @@ usenet:
     completed: Terminé
     failed: Échoué
     unknown: Inconnu
+  wait_tpl: 'Patienter __SECONDS__ s'
   history:
     title: Historique
     empty: 'Aucun historique pour le moment.'

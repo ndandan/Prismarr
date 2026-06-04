@@ -19,6 +19,8 @@ class UsenetStatusTest extends TestCase
         return [
             ['Downloading', UsenetStatus::DOWNLOADING],
             ['Queued',      UsenetStatus::QUEUED],
+            ['Grabbing',    UsenetStatus::FETCHING],
+            ['Fetching',    UsenetStatus::FETCHING],
             ['Paused',      UsenetStatus::PAUSED],
             ['Repairing',   UsenetStatus::VERIFYING],
             ['Extracting',  UsenetStatus::EXTRACTING],
@@ -39,6 +41,7 @@ class UsenetStatusTest extends TestCase
     {
         return [
             ['DOWNLOADING', UsenetStatus::DOWNLOADING],
+            ['FETCHING',    UsenetStatus::FETCHING],
             ['QUEUED',      UsenetStatus::QUEUED],
             ['PP_QUEUED',   UsenetStatus::QUEUED],
             ['PAUSED',      UsenetStatus::PAUSED],

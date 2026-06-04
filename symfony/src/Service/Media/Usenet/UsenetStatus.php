@@ -11,6 +11,7 @@ final class UsenetStatus
 {
     public const DOWNLOADING = 'downloading';
     public const QUEUED      = 'queued';
+    public const FETCHING    = 'fetching';     // grabbing the NZB from a URL
     public const PAUSED      = 'paused';
     public const VERIFYING   = 'verifying';   // par2 check / repair
     public const EXTRACTING  = 'extracting';  // unpack
@@ -24,11 +25,12 @@ final class UsenetStatus
     {
         return match (strtolower($status)) {
             'downloading'            => self::DOWNLOADING,
-            'queued', 'grabbing'     => self::QUEUED,
+            'queued'                 => self::QUEUED,
+            'grabbing', 'fetching'   => self::FETCHING,
             'paused'                 => self::PAUSED,
             'checking', 'verifying', 'repairing' => self::VERIFYING,
             'extracting', 'unpacking'            => self::EXTRACTING,
-            'moving', 'running', 'fetching'      => self::MOVING,
+            'moving', 'running'                  => self::MOVING,
             'completed'              => self::COMPLETED,
             'failed'                 => self::FAILED,
             default                  => self::UNKNOWN,
@@ -45,7 +47,8 @@ final class UsenetStatus
     {
         return match (strtoupper($status)) {
             'DOWNLOADING'                 => self::DOWNLOADING,
-            'QUEUED', 'FETCHING', 'PP_QUEUED' => self::QUEUED,
+            'FETCHING'                    => self::FETCHING,
+            'QUEUED', 'PP_QUEUED'         => self::QUEUED,
             'PAUSED'                      => self::PAUSED,
             'LOADING_PARS', 'VERIFYING_SOURCES', 'VERIFYING_REPAIRED', 'VERIFYING', 'REPAIRING'
                                           => self::VERIFYING,

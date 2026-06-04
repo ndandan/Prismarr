@@ -116,6 +116,32 @@ class SabnzbdClientTest extends TestCase
         self::assertSame($expected, $this->call('parseClock', $clock));
     }
 
+    public function testGrabbingSlotExposesWaitSecondsFromLabels(): void
+    {
+        // SABnzbd parks the URL-fetch retry countdown in the slot labels as a
+        // localized string; we surface the integer so the UI shows "wait Xs".
+        /** @var UsenetDownload $d */
+        $d = $this->call('normalizeQueueSlot', [
+            'status'   => 'Grabbing',
+            'filename' => 'Fetching NZB from http://indexer/x.nzb',
+            'nzo_id'   => 'SABnzbd_nzo_grab',
+            'labels'   => ['WAIT 58 sec'],
+        ]);
+
+        self::assertSame(UsenetStatus::FETCHING, $d->status);
+        self::assertSame(58, $d->waitSeconds);
+    }
+
+    public function testQueueSlotWithoutLabelsHasNoWait(): void
+    {
+        /** @var UsenetDownload $d */
+        $d = $this->call('normalizeQueueSlot', [
+            'status' => 'Downloading', 'filename' => 'x', 'nzo_id' => 'a',
+        ]);
+
+        self::assertNull($d->waitSeconds);
+    }
+
     public function testGetKind(): void
     {
         self::assertSame('sabnzbd', $this->makeClient()->getKind());

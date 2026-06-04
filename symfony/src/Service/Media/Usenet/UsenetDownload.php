@@ -30,5 +30,7 @@ final readonly class UsenetDownload
         /** Non-null only for failed history entries. */
         public ?string $failMessage,
         public bool $isHistory,
+        /** Retry countdown (seconds) while FETCHING an NZB from a URL, else null. */
+        public ?int $waitSeconds = null,
     ) {}
 }

@@ -223,7 +223,26 @@ class SabnzbdClient implements UsenetClientInterface
             speedBytes:     0, // SABnzbd reports no per-item rate
             failMessage:    null,
             isHistory:      false,
+            waitSeconds:    $this->parseWaitSeconds($s['labels'] ?? null),
         );
+    }
+
+    /**
+     * While grabbing an NZB from a URL, SABnzbd parks a retry countdown in the
+     * slot `labels` as a localized string ("WAIT 58 sec" / "PATIENTER 58 sec").
+     * Pull the first integer out so the UI can show a "wait Xs" badge.
+     *
+     * @param mixed $labels
+     */
+    private function parseWaitSeconds(mixed $labels): ?int
+    {
+        if (!is_array($labels)) return null;
+        foreach ($labels as $label) {
+            if (is_string($label) && preg_match('/(\d+)/', $label, $m)) {
+                return (int) $m[1];
+            }
+        }
+        return null;
     }
 
     private function normalizeHistorySlot(array $s): UsenetDownload
