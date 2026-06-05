@@ -3662,6 +3662,10 @@ usenet:
   toast:
     done: 'Fait.'
     added: 'NZB ajouté.'
+    paused: 'Mis en pause.'
+    resumed: 'Repris.'
+    deleted: 'Supprimé.'
+    speed_set: 'Limite de vitesse mise à jour.'
     error: 'Action échouée.'
   api:
     unreachable: 'Client de téléchargement injoignable.'

@@ -412,6 +412,8 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     }|json_encode|raw }},
     toast: {{ {
       done: 'usenet.toast.done'|trans, added: 'usenet.toast.added'|trans,
+      paused: 'usenet.toast.paused'|trans, resumed: 'usenet.toast.resumed'|trans,
+      deleted: 'usenet.toast.deleted'|trans, speed_set: 'usenet.toast.speed_set'|trans,
       error: 'usenet.toast.error'|trans, required: 'usenet.modal_add.required'|trans
     }|json_encode|raw }},
     // ICU plural one/many variants — `#` is rendered now, the sentinel 42 is
@@ -761,8 +763,9 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     if (act) {
       e.stopPropagation();
       var id = act.dataset.id, a = act.dataset.act, item = BASE + '/item/' + encodeURIComponent(id) + '/';
-      if (a === 'delete') { if (window.confirm(I18N.actions.confirm)) runAction(item + 'delete', {}); }
-      else if (a === 'pause' || a === 'resume') runAction(item + a, {});
+      if (a === 'delete') { if (window.confirm(I18N.actions.confirm)) runAction(item + 'delete', {}, I18N.toast.deleted); }
+      else if (a === 'pause') runAction(item + 'pause', {}, I18N.toast.paused);
+      else if (a === 'resume') runAction(item + 'resume', {}, I18N.toast.resumed);
       return;
     }
     var row = e.target.closest('.usenet-job');
@@ -792,19 +795,20 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       if (!ids.length) return;
       var a = b.dataset.usenetBulk;
       if (a === 'delete' && !window.confirm(I18N.actions.confirm)) return;
-      runAction(BASE + '/bulk/' + a, { ids: ids });
+      var msg = a === 'pause' ? I18N.toast.paused : a === 'resume' ? I18N.toast.resumed : I18N.toast.deleted;
+      runAction(BASE + '/bulk/' + a, { ids: ids }, msg);
       selected = {};
     });
   });
   var bulkClear = root.querySelector('[data-usenet-bulk-clear]');
   if (bulkClear) bulkClear.addEventListener('click', function () { selected = {}; renderQueue(); });
 
-  if (pauseAllBtn)  pauseAllBtn.addEventListener('click',  function () { runAction(BASE + '/pause', {}); });
-  if (resumeAllBtn) resumeAllBtn.addEventListener('click', function () { runAction(BASE + '/resume', {}); });
+  if (pauseAllBtn)  pauseAllBtn.addEventListener('click',  function () { runAction(BASE + '/pause', {}, I18N.toast.paused); });
+  if (resumeAllBtn) resumeAllBtn.addEventListener('click', function () { runAction(BASE + '/resume', {}, I18N.toast.resumed); });
   if (speedInput) speedInput.addEventListener('change', function () {
     var mbps = parseFloat(speedInput.value);
     if (isNaN(mbps) || mbps < 0) mbps = 0;
-    runAction(BASE + '/speed-limit', { mbps: mbps });
+    runAction(BASE + '/speed-limit', { mbps: mbps }, I18N.toast.speed_set);
   });
 
   // ── Add NZB (drag-drop + URLs) ─────────────────────────────────────────────

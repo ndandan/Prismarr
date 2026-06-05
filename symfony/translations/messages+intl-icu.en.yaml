@@ -3663,6 +3663,10 @@ usenet:
   toast:
     done: 'Done.'
     added: 'NZB added.'
+    paused: 'Paused.'
+    resumed: 'Resumed.'
+    deleted: 'Deleted.'
+    speed_set: 'Speed limit updated.'
     error: 'Action failed.'
   api:
     unreachable: 'Download client unreachable.'
