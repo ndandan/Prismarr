@@ -387,6 +387,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
 
   var QUEUE_URL = root.dataset.queueUrl;
   var BASE = root.dataset.base;
+  var CLIENT = root.dataset.usenetClient;
   var REFRESH = Math.max(2, parseInt(root.dataset.refresh, 10) || 5) * 1000;
   var VKEY = 'usenet_view', SKEY = 'usenet_sort';
 
@@ -415,6 +416,14 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       paused: 'usenet.toast.paused'|trans, resumed: 'usenet.toast.resumed'|trans,
       deleted: 'usenet.toast.deleted'|trans, speed_set: 'usenet.toast.speed_set'|trans,
       error: 'usenet.toast.error'|trans, required: 'usenet.modal_add.required'|trans
+    }|json_encode|raw }},
+    nzbget_fail: {{ {
+      par: 'usenet.nzbget_fail.par'|trans, unpack: 'usenet.nzbget_fail.unpack'|trans,
+      move: 'usenet.nzbget_fail.move'|trans, health: 'usenet.nzbget_fail.health'|trans,
+      bad: 'usenet.nzbget_fail.bad'|trans, nzb: 'usenet.nzbget_fail.nzb'|trans,
+      scan: 'usenet.nzbget_fail.scan'|trans, manual: 'usenet.nzbget_fail.manual'|trans,
+      dupe: 'usenet.nzbget_fail.dupe'|trans, copy: 'usenet.nzbget_fail.dupe'|trans,
+      good: 'usenet.nzbget_fail.good'|trans
     }|json_encode|raw }},
     // ICU plural one/many variants — `#` is rendered now, the sentinel 42 is
     // swapped for the real count in JS (see plural()). Mirrors the qBit page.
@@ -454,6 +463,15 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   }
 
   function esc(s) { return window.escHtml ? window.escHtml(s) : String(s == null ? '' : s); }
+  // NZBGet reports a failure as a "CATEGORY/REASON" code (e.g. FAILURE/PAR).
+  // Map the reason to a readable, localized message; SABnzbd already sends text.
+  function failText(j) {
+    if (CLIENT === 'nzbget' && j.fail) {
+      var reason = (String(j.fail).split('/')[1] || '').toLowerCase();
+      if (I18N.nzbget_fail[reason]) return I18N.nzbget_fail[reason];
+    }
+    return j.fail;
+  }
   function bytes(n) { return window.prismarrBytes ? window.prismarrBytes(n) : (n + ' B'); }
   function speed(n) { return n > 0 ? bytes(n) + '/s' : '—'; }
   function eta(s) {
@@ -550,7 +568,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     }
 
     var bar = fetching ? '' : '<div class="usenet-bar-wrap mt-1"><div class="usenet-bar" style="width:' + pct + '%"></div></div>';
-    var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(j.fail) + '</div>' : '';
+    var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(failText(j)) + '</div>' : '';
     var statsLine = fetching
       ? '<div class="usenet-stats-line"><span class="usenet-wait">' + esc(waitText(j)) + '</span></div>'
       : '<div class="usenet-stats-line"><span><strong>' + bytes(j.size) + '</strong></span>'
@@ -568,7 +586,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   function historyRow(j) {
     var statusLabel = I18N.status[j.status] || j.status;
     var cat = j.category ? '<span class="usenet-tag usenet-tag-cat">' + esc(j.category) + '</span>' : '';
-    var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(j.fail) + '</div>' : '';
+    var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(failText(j)) + '</div>' : '';
     return '<div class="usenet-job" data-status="' + esc(j.status) + '" data-id="' + esc(j.id) + '">'
       + '<div></div><div class="usenet-ico">' + stateIcon(j.status) + '</div>'
       + '<div class="usenet-main"><div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span>' + cat + '</div>'
@@ -654,7 +672,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       + prop(I18N.detail.speed, speed(j.speed))
       + prop(I18N.detail.eta, eta(j.eta))
       + prop(I18N.detail.id, '<span style="font-family:\'SF Mono\',Menlo,monospace;font-size:.72rem;">' + esc(j.id) + '</span>');
-    if (j.fail) html += '<div class="col-12">' + prop(I18N.detail.fail, '<span style="color:#ef4444;">' + esc(j.fail) + '</span>') + '</div>';
+    if (j.fail) html += '<div class="col-12">' + prop(I18N.detail.fail, '<span style="color:#ef4444;">' + esc(failText(j)) + '</span>') + '</div>';
     body.innerHTML = html;
     // Open via a hidden Bootstrap trigger (window.bootstrap isn't exposed),
     // same pattern as the qBittorrent detail modal.

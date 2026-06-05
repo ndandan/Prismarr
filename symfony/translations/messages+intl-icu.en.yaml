@@ -3668,6 +3668,17 @@ usenet:
     deleted: 'Deleted.'
     speed_set: 'Speed limit updated.'
     error: 'Action failed.'
+  nzbget_fail:
+    par: 'Repair failed (par2)'
+    unpack: 'Unpacking failed'
+    move: 'Move to the final folder failed'
+    health: 'Too many damaged articles'
+    bad: 'Marked bad by a script'
+    nzb: 'Could not fetch the NZB'
+    scan: 'Could not read the NZB'
+    manual: 'Deleted manually'
+    dupe: 'Removed as a duplicate'
+    good: 'A better copy already exists'
   api:
     unreachable: 'Download client unreachable.'
     action_failed: 'The download client rejected the action.'
