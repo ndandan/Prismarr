@@ -98,8 +98,51 @@ class UsenetController extends AbstractController
     }
 
     /**
-     * JSON feed for the async page: the normalized queue snapshot plus the
-     * recent history. Filtering / sorting is client-side, like qBittorrent.
+     * Dedicated, server-paginated history page (the downloads page only shows a
+     * compact preview). SABnzbd paginates upstream; NZBGet is sliced locally.
+     */
+    #[Route('/history', name: 'history', methods: ['GET'])]
+    public function historyPage(string $client, Request $request): Response
+    {
+        $label = $client === 'nzbget' ? 'NZBGet' : 'SABnzbd';
+        if (!$this->health->isConfigured($client)) {
+            $this->addFlash('warning', $this->translator->trans('usenet.disabled_notice', ['client' => $label]));
+            return $this->redirectToRoute('app_home');
+        }
+
+        $perPage = 50;
+        $page    = max(1, $request->query->getInt('page', 1));
+
+        $items = [];
+        $total = 0;
+        $error = false;
+        try {
+            $result = $this->client($client)->getHistoryPage(($page - 1) * $perPage, $perPage);
+            $items  = $result['items'];
+            $total  = $result['total'];
+        } catch (\Throwable $e) {
+            $error = true;
+            $this->logger->warning('Usenet history page failed', [
+                'client'    => $client,
+                'exception' => $e::class,
+                'message'   => $e->getMessage(),
+            ]);
+        }
+
+        return $this->render('usenet/history.html.twig', [
+            'client'       => $client,
+            'client_label' => $label,
+            'items'        => $items,
+            'page'         => $page,
+            'total_pages'  => max(1, (int) ceil($total / $perPage)),
+            'total'        => $total,
+            'error'        => $error,
+        ]);
+    }
+
+    /**
+     * JSON feed for the async page: the normalized active-queue snapshot.
+     * Filtering / sorting is client-side, like qBittorrent.
      */
     #[Route('/api/queue', name: 'api_queue', methods: ['GET'])]
     public function apiQueue(string $client): JsonResponse
@@ -112,9 +155,9 @@ class UsenetController extends AbstractController
         }
 
         try {
-            $c = $this->client($client);
-            $queue   = $c->getQueue();
-            $history = $c->getHistory(50);
+            // History lives on its own paginated page now — the live queue feed
+            // only carries the active queue, saving a call per poll.
+            $queue = $this->client($client)->getQueue();
 
             return $this->json([
                 'paused'      => $queue->paused,
@@ -126,7 +169,6 @@ class UsenetController extends AbstractController
                 'eta'         => $queue->etaSeconds,
                 'free_space'  => $queue->freeSpaceBytes,
                 'items'       => array_map([$this, 'serializeItem'], $queue->items),
-                'history'     => array_map([$this, 'serializeItem'], $history),
             ]);
         } catch (\Throwable $e) {
             $this->logger->warning('Usenet apiQueue failed', [

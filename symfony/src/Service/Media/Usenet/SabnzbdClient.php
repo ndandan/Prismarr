@@ -125,18 +125,20 @@ class SabnzbdClient implements UsenetClientInterface
         );
     }
 
-    public function getHistory(int $limit = 50): array
+    public function getHistoryPage(int $offset, int $limit): array
     {
-        $data = $this->call(['mode' => 'history', 'limit' => (string) max(1, $limit)]);
+        // SABnzbd paginates natively via start/limit and reports the grand
+        // total in `noofslots`.
+        $data = $this->call(['mode' => 'history', 'start' => (string) max(0, $offset), 'limit' => (string) max(1, $limit)]);
         $h = $data['history'] ?? null;
-        if (!is_array($h)) return [];
+        if (!is_array($h)) return ['items' => [], 'total' => 0];
 
         $out = [];
         foreach (($h['slots'] ?? []) as $slot) {
             if (!is_array($slot)) continue;
             $out[] = $this->normalizeHistorySlot($slot);
         }
-        return $out;
+        return ['items' => $out, 'total' => (int) ($h['noofslots'] ?? count($out))];
     }
 
     // ── Actions ─────────────────────────────────────────────────────────────────

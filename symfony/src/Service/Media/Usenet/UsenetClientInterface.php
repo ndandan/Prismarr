@@ -26,8 +26,12 @@ interface UsenetClientInterface extends ResetInterface
 
     public function getQueue(): UsenetQueueSnapshot;
 
-    /** @return UsenetDownload[] Most recent first. */
-    public function getHistory(int $limit = 50): array;
+    /**
+     * A slice of the history for the dedicated, paginated history page.
+     *
+     * @return array{items: list<UsenetDownload>, total: int} Most recent first.
+     */
+    public function getHistoryPage(int $offset, int $limit): array;
 
     public function pauseAll(): bool;
 

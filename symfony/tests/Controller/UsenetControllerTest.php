@@ -5,6 +5,8 @@ namespace App\Tests\Controller;
 use App\Entity\Setting;
 use App\Service\HealthService;
 use App\Service\Media\Usenet\SabnzbdClient;
+use App\Service\Media\Usenet\UsenetDownload;
+use App\Service\Media\Usenet\UsenetStatus;
 use App\Tests\AbstractWebTestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
@@ -94,6 +96,54 @@ class UsenetControllerTest extends AbstractWebTestCase
         // No sabnzbd_* settings seeded → not configured → redirect with flash.
         $this->client->request('GET', '/usenet/sabnzbd');
         $this->assertTrue($this->client->getResponse()->isRedirect());
+    }
+
+    // ── History page ─────────────────────────────────────────────────────────
+
+    public function testHistoryPageRendersItems(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->method('getHistoryPage')->willReturn([
+            'items' => [$this->historyItem('My.Test.Release', UsenetStatus::COMPLETED)],
+            'total' => 1,
+        ]);
+
+        $this->client->request('GET', '/usenet/sabnzbd/history');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertStringContainsString('My.Test.Release', (string) $this->client->getResponse()->getContent());
+    }
+
+    public function testHistoryPagePaginates(): void
+    {
+        $sab = $this->configureSabnzbd();
+        // 120 entries / 50 per page → 3 pages; on page 2 both prev (1) and next (3) link.
+        $sab->method('getHistoryPage')->willReturn([
+            'items' => [$this->historyItem('Some.Release', UsenetStatus::FAILED)],
+            'total' => 120,
+        ]);
+
+        $this->client->request('GET', '/usenet/sabnzbd/history?page=2');
+        $html = (string) $this->client->getResponse()->getContent();
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertStringContainsString('history?page=1', $html);
+        $this->assertStringContainsString('history?page=3', $html);
+    }
+
+    public function testHistoryPageUnconfiguredRedirects(): void
+    {
+        $this->client->request('GET', '/usenet/sabnzbd/history');
+        $this->assertTrue($this->client->getResponse()->isRedirect());
+    }
+
+    private function historyItem(string $name, string $status): UsenetDownload
+    {
+        return new UsenetDownload(
+            id: 'x', name: $name, status: $status, rawStatus: 'Completed',
+            sizeBytes: 1048576, remainingBytes: 0, percentage: 100.0, category: 'movies',
+            etaSeconds: null, speedBytes: 0, failMessage: null, isHistory: true,
+        );
     }
 
     // ── Actions (write) ──────────────────────────────────────────────────────

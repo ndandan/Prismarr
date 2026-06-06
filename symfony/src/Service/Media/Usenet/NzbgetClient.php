@@ -124,18 +124,20 @@ class NzbgetClient implements UsenetClientInterface
         );
     }
 
-    public function getHistory(int $limit = 50): array
+    public function getHistoryPage(int $offset, int $limit): array
     {
+        // NZBGet's history RPC returns the whole list (most recent first), with
+        // no native paging — slice it server-side.
         $hist = $this->rpc('history', [false]);
-        if (!is_array($hist)) return [];
+        if (!is_array($hist)) return ['items' => [], 'total' => 0];
 
+        $total = count($hist);
         $out = [];
-        foreach ($hist as $h) {
+        foreach (array_slice($hist, max(0, $offset), max(1, $limit)) as $h) {
             if (!is_array($h)) continue;
             $out[] = $this->normalizeHistory($h);
-            if (count($out) >= $limit) break;
         }
-        return $out;
+        return ['items' => $out, 'total' => $total];
     }
 
     // ── Actions ─────────────────────────────────────────────────────────────────

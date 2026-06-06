@@ -138,9 +138,6 @@ body[data-bs-theme="dark"] .usenet-tmini { background:rgba(255,255,255,.08); }
 .usenet-list:not([data-view="table"]) .usenet-tcell { display:none; }
 
 /* ── Filters / view switcher / bulk bar ──────────────────────────────────── */
-.usenet-filter-btn { border-radius:6px !important; background:transparent !important; font-size:.78rem; padding:4px 10px; }
-.usenet-filter-btn:hover { background:rgba(var(--tblr-primary-rgb),.08) !important; }
-.usenet-filter-btn.active { font-weight:600; background:rgba(var(--tblr-primary-rgb),.16) !important; color:var(--tblr-primary) !important; }
 
 .usenet-view-switcher { display:inline-flex; background:rgba(0,0,0,.04); border-radius:6px; padding:2px; gap:1px; }
 body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.05); }
@@ -224,24 +221,31 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
 
   {# ─── Toolbar ──────────────────────────────────────────────────── #}
   <div class="card mb-3"><div class="card-body py-2">
-    <div class="d-flex align-items-center gap-3 flex-wrap">
+    <div class="d-flex align-items-center gap-2 flex-wrap">
       <div class="input-icon" style="max-width:240px;">
         <span class="input-icon-addon">{{ ico.icon('search', '', 16) }}</span>
         <input type="search" class="form-control form-control-sm" data-usenet-search
                placeholder="{{ 'usenet.filters.search_placeholder'|trans }}" autocomplete="off">
       </div>
-      <div class="d-flex gap-1 flex-wrap">
-        {% for f in ['all', 'downloading', 'queued', 'paused', 'verifying', 'extracting', 'completed', 'failed'] %}
-          <button type="button" class="btn btn-sm usenet-filter-btn{{ f == 'all' ? ' active' }}" data-filter="{{ f }}">{{ ('usenet.filters.' ~ f)|trans }}</button>
-        {% endfor %}
+      <div class="d-flex align-items-center gap-1">
+        <span class="text-muted" style="font-size:.78rem;white-space:nowrap;font-weight:500;">{{ 'usenet.filters.status_label'|trans }}</span>
+        <select class="form-select form-select-sm" data-usenet-filter style="min-width:140px;font-size:.78rem;padding:4px 28px 4px 10px;">
+          {% for f in ['all', 'downloading', 'fetching', 'queued', 'paused', 'verifying', 'extracting', 'completed', 'failed'] %}
+            <option value="{{ f }}">{{ ('usenet.filters.' ~ f)|trans }}</option>
+          {% endfor %}
+        </select>
       </div>
       <span class="text-muted small ms-auto" data-usenet-count></span>
-      <div class="d-flex gap-1">
+      <div class="d-flex gap-1 flex-shrink-0">
         <button type="button" class="btn btn-sm btn-primary d-inline-flex align-items-center gap-1" data-bs-toggle="modal" data-bs-target="#usenet-add">
           {{ ico.icon('download', '', 14) }} {{ 'usenet.toolbar.add_nzb'|trans }}
         </button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-usenet-pause-all hidden title="{{ 'usenet.toolbar.pause_all'|trans }}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6z"/><path d="M14 4h4v16h-4z"/></svg></button>
-        <button type="button" class="btn btn-sm btn-outline-secondary" data-usenet-resume-all hidden title="{{ 'usenet.toolbar.resume_all'|trans }}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16l13-8z"/></svg></button>
+        <a href="{{ path('app_usenet_history', {client: client}) }}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1" title="{{ 'usenet.history.title'|trans }}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><path d="M3 4v5h5"/></svg>
+          {{ 'usenet.history.title'|trans }}
+        </a>
+        <button type="button" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center justify-content-center" data-usenet-pause-all hidden title="{{ 'usenet.toolbar.pause_all'|trans }}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 4h4v16H6z"/><path d="M14 4h4v16h-4z"/></svg></button>
+        <button type="button" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center justify-content-center" data-usenet-resume-all hidden title="{{ 'usenet.toolbar.resume_all'|trans }}"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 4v16l13-8z"/></svg></button>
       </div>
     </div>
     <div class="d-flex align-items-center gap-2 mt-2 pt-2 flex-wrap" style="border-top:1px solid var(--tblr-border-color);">
@@ -299,15 +303,6 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   {# ─── Queue ───────────────────────────────────────────────────── #}
   <div class="usenet-list" data-usenet-queue data-view="list"></div>
   <div class="usenet-empty text-muted small text-center py-3" data-usenet-queue-empty hidden>{{ 'usenet.empty'|trans }}</div>
-
-  {# ─── History ─────────────────────────────────────────────────── #}
-  <div class="card mt-3">
-    <div class="card-header py-2"><h3 class="card-title m-0" style="font-size:.85rem;">{{ 'usenet.history.title'|trans }}</h3></div>
-    <div class="card-body">
-      <div class="usenet-list" data-usenet-history data-view="list"></div>
-      <div class="usenet-empty text-muted small" data-usenet-history-empty hidden>{{ 'usenet.history.empty'|trans }}</div>
-    </div>
-  </div>
 
   {# ─── Bulk action bar ─────────────────────────────────────────── #}
   <div class="usenet-bulk-bar" data-usenet-bulk-bar>
@@ -493,7 +488,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   }
 
   // ── State ───────────────────────────────────────────────────────────────
-  var lastItems = [], lastHistory = [];
+  var lastItems = [];
   var selected = {};
   var view = localStorage.getItem(VKEY) || 'list';
   var sortSpec = (localStorage.getItem(SKEY) || 'name|0').split('|');
@@ -501,7 +496,6 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   var statusFilter = 'all';
 
   var queueBox   = root.querySelector('[data-usenet-queue]');
-  var historyBox = root.querySelector('[data-usenet-history]');
   var tableHeader = root.querySelector('#usenet-table-header');
   var pauseAllBtn  = root.querySelector('[data-usenet-pause-all]');
   var resumeAllBtn = root.querySelector('[data-usenet-resume-all]');
@@ -583,18 +577,6 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       + '</div>';
   }
 
-  function historyRow(j) {
-    var statusLabel = I18N.status[j.status] || j.status;
-    var cat = j.category ? '<span class="usenet-tag usenet-tag-cat">' + esc(j.category) + '</span>' : '';
-    var failLine = j.fail ? '<div class="usenet-meta" style="color:#ef4444;">' + esc(failText(j)) + '</div>' : '';
-    return '<div class="usenet-job" data-status="' + esc(j.status) + '" data-id="' + esc(j.id) + '">'
-      + '<div></div><div class="usenet-ico">' + stateIcon(j.status) + '</div>'
-      + '<div class="usenet-main"><div class="usenet-name-row"><span class="usenet-name" title="' + esc(j.name) + '">' + esc(j.name) + '</span>' + cat + '</div>'
-      +   '<div class="usenet-meta">' + bytes(j.size) + '</div>' + failLine + '</div>'
-      + '<div class="usenet-side"><div class="usenet-status-pill">' + esc(statusLabel) + '</div></div>'
-      + '</div>';
-  }
-
   function sortItems(items) {
     var f = sortField, dir = sortDesc ? -1 : 1;
     return items.slice().sort(function (a, b) {
@@ -629,12 +611,6 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     if (countEl) countEl.textContent = plural(list.length, I18N.count_one, I18N.count_many);
     if (tableHeader) tableHeader.classList.toggle('show', view === 'table' && list.length > 0);
     refreshSelectionUi();
-  }
-
-  function renderHistory() {
-    historyBox.innerHTML = lastHistory.map(historyRow).join('');
-    var empty = root.querySelector('[data-usenet-history-empty]');
-    if (empty) empty.hidden = lastHistory.length > 0;
   }
 
   // ── Selection ─────────────────────────────────────────────────────────────
@@ -700,13 +676,11 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
           speedInput.value = lim > 0 ? Math.round(lim / (1024 * 1024)) : '';
         }
         lastItems = d.items || [];
-        lastHistory = d.history || [];
         // Drop selections for jobs that vanished.
         var present = {};
         lastItems.forEach(function (j) { present[j.id] = true; });
         Object.keys(selected).forEach(function (id) { if (!present[id]) delete selected[id]; });
         renderQueue();
-        renderHistory();
       })
       .catch(function () { failCount++; })
       .then(function () {
@@ -762,12 +736,10 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   });
   syncSortHeader();
 
-  root.querySelectorAll('.usenet-filter-btn').forEach(function (b) {
-    b.addEventListener('click', function () {
-      statusFilter = b.dataset.filter;
-      root.querySelectorAll('.usenet-filter-btn').forEach(function (x) { x.classList.toggle('active', x === b); });
-      renderQueue();
-    });
+  var filterSel = root.querySelector('[data-usenet-filter]');
+  if (filterSel) filterSel.addEventListener('change', function () {
+    statusFilter = filterSel.value;
+    renderQueue();
   });
 
   if (searchInput) searchInput.addEventListener('input', renderQueue);
@@ -791,14 +763,6 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       var j = lastItems.filter(function (x) { return String(x.id) === row.dataset.id; })[0];
       if (j) openDetail(j);
     }
-  });
-
-  // History rows are clickable too — handy to read a failed entry's error.
-  if (historyBox) historyBox.addEventListener('click', function (e) {
-    var row = e.target.closest('.usenet-job');
-    if (!row || !row.dataset.id) return;
-    var j = lastHistory.filter(function (x) { return String(x.id) === row.dataset.id; })[0];
-    if (j) openDetail(j);
   });
 
   var selectAll = root.querySelector('[data-usenet-select-all]');

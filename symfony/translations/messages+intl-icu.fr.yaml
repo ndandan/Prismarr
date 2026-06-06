@@ -3567,8 +3567,10 @@ usenet:
     paused: En pause
   filters:
     search_placeholder: 'Rechercher...'
+    status_label: Statut
     all: Tous
     downloading: En cours
+    fetching: Récupération
     queued: En attente
     paused: En pause
     verifying: Réparation
@@ -3621,6 +3623,10 @@ usenet:
   history:
     title: Historique
     empty: 'Aucun historique pour le moment.'
+    count: '{count, plural, =0 {Aucune entrée} one {# entrée} other {# entrées}}'
+    prev: Précédent
+    next: Suivant
+    page_of: 'Page {current} / {total}'
   empty: 'La file est vide.'
   toolbar:
     pause_all: Tout mettre en pause

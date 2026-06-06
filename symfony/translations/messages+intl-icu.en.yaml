@@ -3568,8 +3568,10 @@ usenet:
     paused: Paused
   filters:
     search_placeholder: 'Search...'
+    status_label: Status
     all: All
     downloading: Downloading
+    fetching: Fetching
     queued: Queued
     paused: Paused
     verifying: Repairing
@@ -3622,6 +3624,10 @@ usenet:
   history:
     title: History
     empty: 'No history yet.'
+    count: '{count, plural, =0 {No entries} one {# entry} other {# entries}}'
+    prev: Previous
+    next: Next
+    page_of: 'Page {current} / {total}'
   empty: 'The queue is empty.'
   toolbar:
     pause_all: Pause all
