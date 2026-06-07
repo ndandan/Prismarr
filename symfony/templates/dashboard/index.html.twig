@@ -691,6 +691,26 @@
     }
     document.addEventListener('turbo:load', hydrateDashWidgets);
     if (document.readyState !== 'loading') { hydrateDashWidgets(); }
+
+    // Keep the services-health widget live instead of frozen at first paint:
+    // re-fetch just that fragment on an interval. It's cheap — isHealthy() is
+    // 10s-cached server-side. Turbo-safe singleton (window._dashHealthTimer) so
+    // navigating away and back doesn't stack timers; skipped while the tab is
+    // hidden so a background dashboard isn't polling.
+    function refreshHealth() {
+      if (document.hidden) return;
+      var node = document.querySelector('[data-dash-widget="health"][data-dash-url]');
+      if (!node) return;
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
+        .catch(function () {});
+    }
+    if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); }
+    window._dashHealthTimer = setInterval(refreshHealth, 30000);
+    document.addEventListener('turbo:before-render', function () {
+      if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
+    });
   })();
 </script>
 {% endblock %}
