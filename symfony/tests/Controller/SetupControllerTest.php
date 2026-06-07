@@ -430,4 +430,61 @@ class SetupControllerTest extends TestCase
         $this->assertInstanceOf(RedirectResponse::class, $response);
         $this->assertStringContainsString('app_setup_tmdb', $response->getTargetUrl());
     }
+
+    /**
+     * Regression: a plain "Save" with an empty secret field must NOT wipe the
+     * stored secret. prefill() renders secrets blank, so an empty api-key /
+     * password on submit means "not re-entered", not "clear it". Re-submitting
+     * a wizard step used to silently null every configured credential.
+     */
+    public function testSaveLeavesEmptySecretFieldsUntouched(): void
+    {
+        $captured = null;
+        $settings = $this->createMock(SettingRepository::class);
+        $settings->method('setMany')->willReturnCallback(function (array $p) use (&$captured) { $captured = $p; });
+
+        $controller = $this->newController(
+            $this->createMock(UserRepository::class),
+            $this->createMock(EntityManagerInterface::class),
+            $settings,
+        );
+
+        $save = new \ReflectionMethod(SetupController::class, 'save');
+        $save->setAccessible(true);
+        $save->invoke($controller, [
+            'sabnzbd_api_key'   => '',       // empty secret -> must be preserved
+            'nzbget_password'   => '',       // empty secret -> must be preserved
+            'sabnzbd_url'       => '',       // empty non-secret -> cleared to null
+            'qbittorrent_user'  => 'admin',  // non-secret -> written as-is
+            'qbittorrent_password' => 'pw',  // filled secret -> written
+        ], false);
+
+        $this->assertIsArray($captured);
+        $this->assertArrayNotHasKey('sabnzbd_api_key', $captured, 'empty secret must not be nulled');
+        $this->assertArrayNotHasKey('nzbget_password', $captured, 'empty secret must not be nulled');
+        $this->assertNull($captured['sabnzbd_url'], 'empty non-secret is cleared');
+        $this->assertSame('admin', $captured['qbittorrent_user']);
+        $this->assertSame('pw', $captured['qbittorrent_password']);
+    }
+
+    /** Skip still intentionally clears everything, secrets included. */
+    public function testSaveWithSkipNullsSecrets(): void
+    {
+        $captured = null;
+        $settings = $this->createMock(SettingRepository::class);
+        $settings->method('setMany')->willReturnCallback(function (array $p) use (&$captured) { $captured = $p; });
+
+        $controller = $this->newController(
+            $this->createMock(UserRepository::class),
+            $this->createMock(EntityManagerInterface::class),
+            $settings,
+        );
+
+        $save = new \ReflectionMethod(SetupController::class, 'save');
+        $save->setAccessible(true);
+        $save->invoke($controller, ['sabnzbd_api_key' => 'x', 'sabnzbd_url' => 'y'], true);
+
+        $this->assertNull($captured['sabnzbd_api_key']);
+        $this->assertNull($captured['sabnzbd_url']);
+    }
 }

@@ -314,6 +314,12 @@ class SetupController extends AbstractController
             'gluetun_url' => '',
             'gluetun_api_key' => '',
             'gluetun_protocol' => '',
+            // Usenet download clients (optional, like qBittorrent above).
+            'sabnzbd_url' => '',
+            'sabnzbd_api_key' => '',
+            'nzbget_url' => '',
+            'nzbget_user' => '',
+            'nzbget_password' => '',
         ];
         $this->prefill($fields);
         $errors = [];
@@ -369,7 +375,7 @@ class SetupController extends AbstractController
     #[Route(
         '/test/{service}',
         name: 'app_setup_test',
-        requirements: ['service' => 'tmdb|radarr|sonarr|prowlarr|jellyseerr|qbittorrent'],
+        requirements: ['service' => 'tmdb|radarr|sonarr|prowlarr|jellyseerr|qbittorrent|sabnzbd|nzbget'],
         methods: ['POST'],
     )]
     #[IsGranted('ROLE_USER')]
@@ -432,6 +438,8 @@ class SetupController extends AbstractController
             'prowlarr'    => ['prowlarr_url', 'prowlarr_api_key'],
             'jellyseerr'  => ['jellyseerr_url', 'jellyseerr_api_key'],
             'qbittorrent' => ['qbittorrent_url', 'qbittorrent_user', 'qbittorrent_password'],
+            'sabnzbd'     => ['sabnzbd_url', 'sabnzbd_api_key'],
+            'nzbget'      => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
         ];
         $out = [];
         foreach ($fieldsPerService[$service] ?? [] as $f) {
@@ -548,6 +556,13 @@ class SetupController extends AbstractController
 
     /**
      * Persists to DB; `skip` = write nulls to intentionally mark as empty.
+     *
+     * Secrets need special care: prefill() renders api-key/password fields blank
+     * (never echoes a stored secret), so a plain "Save" submits them empty. We
+     * must NOT take that to mean "clear it" — that silently wiped configured
+     * credentials when a user re-submitted a step. An empty secret on Save is
+     * therefore left untouched; clearing a secret is only possible via Skip.
+     *
      * @param array<string, string> $fields
      */
     private function save(array $fields, bool $skip): void
@@ -556,11 +571,15 @@ class SetupController extends AbstractController
         foreach ($fields as $key => $value) {
             if ($skip) {
                 $payload[$key] = null;
+            } elseif ($value === '' && $this->isSensitiveKey($key)) {
+                continue; // empty secret = "not re-entered", keep the stored value
             } else {
                 $payload[$key] = $value !== '' ? $value : null;
             }
         }
-        $this->settings->setMany($payload);
+        if ($payload !== []) {
+            $this->settings->setMany($payload);
+        }
         $this->config->invalidate();
     }
 
@@ -615,6 +634,8 @@ class SetupController extends AbstractController
             $this->summaryRow('Prowlarr',    'prowlarr_url'),
             $this->summaryRow('Seerr',       'jellyseerr_url'),
             $this->summaryRow('qBittorrent', 'qbittorrent_url'),
+            $this->summaryRow('SABnzbd',     'sabnzbd_url'),
+            $this->summaryRow('NZBGet',      'nzbget_url'),
             $this->summaryRow('Gluetun',     'gluetun_url'),
         ];
     }
