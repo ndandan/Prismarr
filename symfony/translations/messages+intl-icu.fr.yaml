@@ -3697,6 +3697,7 @@ usenet:
     unreachable: 'Client de téléchargement injoignable.'
     action_failed: 'Le client de téléchargement a refusé l''action.'
     add_no_url: 'Saisissez une URL de NZB.'
+    add_bad_url: 'Cette URL n''est pas autorisée.'
     add_no_file: 'Choisissez au moins un fichier NZB.'
 
 prowlarr:

@@ -3698,6 +3698,7 @@ usenet:
     unreachable: 'Download client unreachable.'
     action_failed: 'The download client rejected the action.'
     add_no_url: 'Enter an NZB URL.'
+    add_bad_url: 'That URL is not allowed.'
     add_no_file: 'Choose at least one NZB file.'
 
 prowlarr:

@@ -252,7 +252,10 @@ class SabnzbdClient implements UsenetClientInterface
     {
         if (!is_array($labels)) return null;
         foreach ($labels as $label) {
-            if (is_string($label) && preg_match('/(\d+)/', $label, $m)) {
+            // Only the retry-countdown label carries a "sec" unit ("WAIT 58 sec",
+            // "PATIENTER 58 sec"). Other labels ("3 RETRIES", "DUPLICATE", …)
+            // must NOT be mistaken for a wait countdown.
+            if (is_string($label) && stripos($label, 'sec') !== false && preg_match('/(\d+)/', $label, $m)) {
                 return (int) $m[1];
             }
         }

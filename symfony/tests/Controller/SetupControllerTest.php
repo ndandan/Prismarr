@@ -3,6 +3,7 @@
 namespace App\Tests\Controller;
 
 use App\Controller\SetupController;
+use App\Entity\ServiceInstance;
 use App\Repository\SettingRepository;
 use App\Repository\UserRepository;
 use App\Service\ConfigService;
@@ -465,6 +466,32 @@ class SetupControllerTest extends TestCase
         $this->assertNull($captured['sabnzbd_url'], 'empty non-secret is cleared');
         $this->assertSame('admin', $captured['qbittorrent_user']);
         $this->assertSame('pw', $captured['qbittorrent_password']);
+    }
+
+    /**
+     * Regression: the managers step renders the Radarr/Sonarr api-key blank, so
+     * an empty submitted key must fall back to the stored key (keepApiKey),
+     * never wipe the instance's credential.
+     */
+    public function testManagersKeepApiKeyFallsBackToStoredKey(): void
+    {
+        $inst = $this->createMock(ServiceInstance::class);
+        $inst->method('getApiKey')->willReturn('stored-key');
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getDefault')->willReturn($inst);
+
+        $controller = $this->newController(
+            $this->createMock(UserRepository::class),
+            $this->createMock(EntityManagerInterface::class),
+            null,
+            null,
+            $instances,
+        );
+
+        $keep = new \ReflectionMethod(SetupController::class, 'keepApiKey');
+        $keep->setAccessible(true);
+        self::assertSame('stored-key', $keep->invoke($controller, ServiceInstance::TYPE_RADARR, ''));
+        self::assertSame('typed-key', $keep->invoke($controller, ServiceInstance::TYPE_RADARR, 'typed-key'));
     }
 
     /** Skip still intentionally clears everything, secrets included. */

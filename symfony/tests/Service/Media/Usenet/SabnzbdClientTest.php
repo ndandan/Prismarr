@@ -142,6 +142,19 @@ class SabnzbdClientTest extends TestCase
         self::assertNull($d->waitSeconds);
     }
 
+    public function testNonWaitLabelsDoNotProduceWaitSeconds(): void
+    {
+        // Only a "… sec" retry-countdown label is a wait; other labels with
+        // digits ("3 RETRIES") must not be mistaken for a countdown.
+        /** @var UsenetDownload $d */
+        $d = $this->call('normalizeQueueSlot', [
+            'status' => 'Downloading', 'filename' => 'x', 'nzo_id' => 'a',
+            'labels' => ['3 RETRIES LEFT', 'DUPLICATE'],
+        ]);
+
+        self::assertNull($d->waitSeconds);
+    }
+
     public function testGetKind(): void
     {
         self::assertSame('sabnzbd', $this->makeClient()->getKind());

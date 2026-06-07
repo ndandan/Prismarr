@@ -214,12 +214,12 @@ class SetupController extends AbstractController
                 $this->instances->saveDefault(
                     ServiceInstance::TYPE_RADARR,
                     $skip ? null : $fields['radarr_url'],
-                    $skip ? null : $fields['radarr_api_key'],
+                    $skip ? null : $this->keepApiKey(ServiceInstance::TYPE_RADARR, $fields['radarr_api_key']),
                 );
                 $this->instances->saveDefault(
                     ServiceInstance::TYPE_SONARR,
                     $skip ? null : $fields['sonarr_url'],
-                    $skip ? null : $fields['sonarr_api_key'],
+                    $skip ? null : $this->keepApiKey(ServiceInstance::TYPE_SONARR, $fields['sonarr_api_key']),
                 );
                 return $this->redirectToRoute($this->nextRoute($action, 'app_setup_indexers', 'app_setup_tmdb'));
             }
@@ -581,6 +581,20 @@ class SetupController extends AbstractController
             $this->settings->setMany($payload);
         }
         $this->config->invalidate();
+    }
+
+    /**
+     * The managers step renders the Radarr/Sonarr api-key field blank (secrets
+     * are never re-emitted — see prefillManagersFromInstances), so an empty
+     * submitted key means "unchanged": fall back to the stored key instead of
+     * wiping it. Mirrors AdminSettingsController's handling.
+     */
+    private function keepApiKey(string $type, string $submitted): ?string
+    {
+        if ($submitted !== '') {
+            return $submitted;
+        }
+        return $this->instances->getDefault($type)?->getApiKey();
     }
 
     private function validateCsrf(Request $request, string $id, array &$errors): void

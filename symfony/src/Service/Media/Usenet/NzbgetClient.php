@@ -296,7 +296,10 @@ class NzbgetClient implements UsenetClientInterface
     private function combineBytes(array $data, string $field): int
     {
         if (isset($data[$field . 'Lo']) || isset($data[$field . 'Hi'])) {
-            $lo = (int) ($data[$field . 'Lo'] ?? 0);
+            // NZBGet emits the low half as a SIGNED 32-bit int, so any value
+            // with bit 31 set arrives negative (e.g. -1 for 0xFFFFFFFF). Mask it
+            // back to unsigned or the recombination undercounts by up to ~4 GB.
+            $lo = ((int) ($data[$field . 'Lo'] ?? 0)) & 0xFFFFFFFF;
             $hi = (int) ($data[$field . 'Hi'] ?? 0);
             return $hi * 4294967296 + $lo;
         }

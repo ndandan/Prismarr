@@ -208,7 +208,9 @@ class UsenetController extends AbstractController
                 'exception' => $e::class,
                 'message'   => $e->getMessage(),
             ]);
-            return $this->json(['error' => $e->getMessage()], 502);
+            // Don't echo the exception message to the client — keep it generic
+            // like the other endpoints (the detail is logged above).
+            return $this->json(['error' => 'unreachable'], 502);
         }
     }
 
@@ -261,6 +263,12 @@ class UsenetController extends AbstractController
         $category = trim((string) ($data['category'] ?? '')) ?: null;
         if ($url === '') {
             return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_no_url')], 400);
+        }
+        // The downloader fetches this URL server-side, so an unvalidated URL
+        // turns it into an SSRF proxy (cloud metadata, intranet, file://).
+        // Reuse the same guard the qBittorrent add path uses.
+        if (HealthService::urlBlockedReason($url) !== null) {
+            return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_bad_url')], 400);
         }
         return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->addNzbFromUrl($url, $category));
     }

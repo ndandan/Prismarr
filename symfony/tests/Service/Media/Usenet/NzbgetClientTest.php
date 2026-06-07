@@ -42,6 +42,14 @@ class NzbgetClientTest extends TestCase
         self::assertSame(5368709120, $bytes);
     }
 
+    public function testCombineBytesHandlesUnsignedLowHalf(): void
+    {
+        // NZBGet sends the low half as a SIGNED 32-bit int: 0xFFFFFFFF arrives
+        // as -1; it must recombine to the unsigned value, not undercount by ~4GB.
+        $bytes = $this->call('combineBytes', ['FileSizeLo' => -1, 'FileSizeHi' => 1], 'FileSize');
+        self::assertSame(4294967296 + 4294967295, $bytes);
+    }
+
     public function testCombineBytesFallsBackToMbWhenPairAbsent(): void
     {
         $bytes = $this->call('combineBytes', ['FileSizeMB' => 100], 'FileSize');

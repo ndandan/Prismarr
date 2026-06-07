@@ -204,6 +204,19 @@ class UsenetControllerTest extends AbstractWebTestCase
         $this->assertFalse($this->jsonResponse()['ok']);
     }
 
+    public function testAddUrlRejectsSsrfUrl(): void
+    {
+        // The downloader fetches the URL server-side; a link-local / metadata
+        // URL must be rejected before it ever reaches the client.
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->never())->method('addNzbFromUrl');
+
+        $this->post('/usenet/sabnzbd/add', '{"url":"http://169.254.169.254/latest/meta-data/"}');
+
+        $this->assertSame(400, $this->client->getResponse()->getStatusCode());
+        $this->assertFalse($this->jsonResponse()['ok']);
+    }
+
     public function testAddUrlForwardsToClient(): void
     {
         $sab = $this->configureSabnzbd();
