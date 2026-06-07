@@ -88,12 +88,21 @@ class UsenetController extends AbstractController
             ]);
         }
 
+        // Categories for the Add NZB picker — optional UI sugar, never block on
+        // them (the circuit breaker keeps this cheap when the client is down).
+        $categories = [];
+        try {
+            $categories = $this->client($client)->getCategories();
+        } catch (\Throwable) {
+        }
+
         return $this->render('usenet/index.html.twig', [
             'client'       => $client,
             'client_label' => $label,
             'error'        => $reason !== null,
             'error_reason' => $reason ?? 'unreachable',
             'service_url'  => $this->config->get($client . '_url'),
+            'categories'   => $categories,
         ]);
     }
 

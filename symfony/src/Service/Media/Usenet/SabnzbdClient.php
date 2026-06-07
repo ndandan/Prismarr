@@ -125,6 +125,18 @@ class SabnzbdClient implements UsenetClientInterface
         );
     }
 
+    public function getCategories(): array
+    {
+        $data = $this->call(['mode' => 'get_cats']);
+        $cats = $data['categories'] ?? [];
+        if (!is_array($cats)) return [];
+        // SABnzbd lists "*" (the default catch-all) first — drop it.
+        return array_values(array_filter(
+            array_map('strval', $cats),
+            static fn(string $c): bool => $c !== '' && $c !== '*',
+        ));
+    }
+
     public function getHistoryPage(int $offset, int $limit): array
     {
         // SABnzbd paginates natively via start/limit and reports the grand

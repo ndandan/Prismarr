@@ -288,6 +288,14 @@ setup:
         user: Utilisateur
         password: Mot de passe
         reverse_proxy_hint: 'Laissez l''utilisateur et le mot de passe vides si qBittorrent est derrière un reverse proxy qui injecte lui-même l''authentification (qui, traefik forward auth, …).'
+      usenet_optional: 'Usenet — optionnel'
+      sabnzbd:
+        section: 'SABnzbd'
+        subtitle: 'Client de téléchargement Usenet. Nécessite l''URL et la clé API.'
+        api_key: 'Clé API'
+      nzbget:
+        section: 'NZBGet'
+        subtitle: 'Client de téléchargement Usenet. Utilisateur et mot de passe optionnels (reverse proxy / auth désactivée sur le LAN).'
       gluetun:
         section: 'Gluetun'
         section_suffix: 'VPN — optionnel'
@@ -316,6 +324,7 @@ setup:
     category:
       network: Service injoignable
       auth: Clé API ou mot de passe incorrect
+      host_whitelist: 'Hôte bloqué par SABnzbd (ajoutez-le au host_whitelist)'
       forbidden: Accès refusé (403)
       not_found: Endpoint introuvable (404)
       server_error: Erreur du service (5xx)

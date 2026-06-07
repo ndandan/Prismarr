@@ -124,6 +124,25 @@ class NzbgetClient implements UsenetClientInterface
         );
     }
 
+    public function getCategories(): array
+    {
+        // NZBGet has no category list RPC; they live in the config as
+        // CategoryN.Name entries returned by the `config` method.
+        $config = $this->rpc('config');
+        if (!is_array($config)) return [];
+
+        $out = [];
+        foreach ($config as $entry) {
+            if (is_array($entry)
+                && isset($entry['Name'], $entry['Value'])
+                && preg_match('/^Category\d+\.Name$/', (string) $entry['Name'])
+                && (string) $entry['Value'] !== '') {
+                $out[] = (string) $entry['Value'];
+            }
+        }
+        return $out;
+    }
+
     public function getHistoryPage(int $offset, int $limit): array
     {
         // NZBGet's history RPC returns the whole list (most recent first), with

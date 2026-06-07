@@ -26,6 +26,9 @@ interface UsenetClientInterface extends ResetInterface
 
     public function getQueue(): UsenetQueueSnapshot;
 
+    /** @return list<string> Configured category names (empty if none / unsupported). */
+    public function getCategories(): array;
+
     /**
      * A slice of the history for the dedicated, paginated history page.
      *

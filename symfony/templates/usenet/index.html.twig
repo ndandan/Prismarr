@@ -344,7 +344,10 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
           </div>
           <div>
             <label class="form-label">{{ 'usenet.modal_add.category_label'|trans }}</label>
-            <input type="text" class="form-control" data-usenet-add-category placeholder="{{ 'usenet.modal_add.category_placeholder'|trans }}">
+            <input type="text" class="form-control" data-usenet-add-category list="usenet-cat-list" autocomplete="off" placeholder="{{ 'usenet.modal_add.category_placeholder'|trans }}">
+            <datalist id="usenet-cat-list">
+              {% for c in categories %}<option value="{{ c }}"></option>{% endfor %}
+            </datalist>
           </div>
         </div>
         <div class="modal-footer py-2">
