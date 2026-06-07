@@ -126,9 +126,17 @@ class UsenetController extends AbstractController
         $total = 0;
         $error = false;
         try {
-            $result = $this->client($client)->getHistoryPage(($page - 1) * $perPage, $perPage);
-            $items  = $result['items'];
+            $usenet = $this->client($client);
+            $result = $usenet->getHistoryPage(($page - 1) * $perPage, $perPage);
             $total  = $result['total'];
+            // Clamp a past-the-end page back to the last real page so the UI
+            // doesn't show "Page 99999 of 3" with an empty list.
+            $lastPage = max(1, (int) ceil($total / $perPage));
+            if ($page > $lastPage) {
+                $page   = $lastPage;
+                $result = $usenet->getHistoryPage(($page - 1) * $perPage, $perPage);
+            }
+            $items = $result['items'];
         } catch (\Throwable $e) {
             $error = true;
             $this->logger->warning('Usenet history page failed', [
@@ -265,8 +273,9 @@ class UsenetController extends AbstractController
             return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_no_url')], 400);
         }
         // The downloader fetches this URL server-side, so an unvalidated URL
-        // turns it into an SSRF proxy (cloud metadata, intranet, file://).
-        // Reuse the same guard the qBittorrent add path uses.
+        // turns it into an SSRF proxy (cloud metadata, intranet, file://). Guard
+        // it with the shared scheme + link-local check (qBittorrent uses a
+        // separate, weaker literal-host blocklist).
         if (HealthService::urlBlockedReason($url) !== null) {
             return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_bad_url')], 400);
         }

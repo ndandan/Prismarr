@@ -257,7 +257,9 @@ class NzbgetClient implements UsenetClientInterface
             rawStatus:      $raw,
             sizeBytes:      $total,
             remainingBytes: $remaining,
-            percentage:     $total > 0 ? round($done / $total * 100, 1) : 0.0,
+            // Clamp to 0-100: NZBGet can report RemainingSize > FileSize during
+            // post-processing, which would otherwise yield a negative percentage.
+            percentage:     $total > 0 ? max(0.0, min(100.0, round($done / $total * 100, 1))) : 0.0,
             category:       (string) ($g['Category'] ?? ''),
             etaSeconds:     null, // NZBGet has no reliable per-group ETA
             speedBytes:     (int) ($g['DownloadRate'] ?? 0),

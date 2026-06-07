@@ -386,7 +386,11 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   var QUEUE_URL = root.dataset.queueUrl;
   var BASE = root.dataset.base;
   var CLIENT = root.dataset.usenetClient;
-  var REFRESH = Math.max(2, parseInt(root.dataset.refresh, 10) || 5) * 1000;
+  var REFRESH_PREF = parseInt(root.dataset.refresh, 10);
+  // 0 (or negative) = the user disabled auto-refresh (same pref as qBit). We
+  // still poll ONCE to populate the JS-rendered page, then don't loop.
+  var AUTO_REFRESH = !(REFRESH_PREF <= 0);
+  var REFRESH = Math.max(2, REFRESH_PREF || 5) * 1000;
   var VKEY = 'usenet_view', SKEY = 'usenet_sort';
 
   var I18N = {
@@ -687,6 +691,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
       })
       .catch(function () { failCount++; })
       .then(function () {
+        if (!AUTO_REFRESH) return; // one-shot: populated once, no auto-refresh loop
         var delay = failCount > 0 ? Math.min(REFRESH * Math.pow(2, failCount - 1), 60000) : REFRESH;
         if (window._usenetTimer) clearTimeout(window._usenetTimer);
         window._usenetTimer = setTimeout(poll, delay);
@@ -873,7 +878,7 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
     window._usenetVisBound = true;
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { if (window._usenetTimer) { clearTimeout(window._usenetTimer); window._usenetTimer = null; } }
-      else if (document.querySelector('[data-usenet-client]')) poll();
+      else if (AUTO_REFRESH && document.querySelector('[data-usenet-client]')) poll();
     });
   }
 })();

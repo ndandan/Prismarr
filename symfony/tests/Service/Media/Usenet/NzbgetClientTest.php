@@ -56,6 +56,20 @@ class NzbgetClientTest extends TestCase
         self::assertSame(100 * 1024 * 1024, $bytes);
     }
 
+    public function testNormalizeGroupClampsNegativePercentage(): void
+    {
+        // NZBGet can report RemainingSize > FileSize during post-processing,
+        // which would otherwise produce a negative percentage.
+        /** @var UsenetDownload $d */
+        $d = $this->call('normalizeGroup', [
+            'NZBID' => 1, 'NZBName' => 'x', 'Status' => 'DOWNLOADING',
+            'FileSizeLo' => 1000, 'FileSizeHi' => 0,
+            'RemainingSizeLo' => 2000, 'RemainingSizeHi' => 0,
+        ]);
+
+        self::assertSame(0.0, $d->percentage);
+    }
+
     public function testNormalizeGroupComputesPercentageFromRemaining(): void
     {
         /** @var UsenetDownload $d */

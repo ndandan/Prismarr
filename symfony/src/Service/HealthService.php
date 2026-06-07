@@ -459,6 +459,11 @@ class HealthService
         if (!is_string($host) || $host === '') {
             return 'host';
         }
+        // Normalize evasions: a trailing dot (rooted FQDN / numeric) and IPv6
+        // literal brackets, both of which slip past FILTER_VALIDATE_IP yet still
+        // resolve at curl time.
+        $host = rtrim($host, '.');
+        $host = trim($host, '[]');
 
         // Resolve hostname to IPs. gethostbynamel returns the A records
         // (IPv4); IPv6 link-local literals are caught further down via the
@@ -470,6 +475,9 @@ class HealthService
             $ips = is_array($resolved) ? $resolved : [];
         }
         foreach ($ips as $ip) {
+            // An IPv4-mapped IPv6 literal (::ffff:169.254.169.254) must be
+            // checked as the embedded IPv4, or the metadata block is bypassed.
+            $ip = self::unmapIpv4($ip);
             if (str_starts_with($ip, '169.254.')) {
                 return 'link-local';
             }
@@ -482,6 +490,18 @@ class HealthService
             }
         }
         return null;
+    }
+
+    /** ::ffff:a.b.c.d (IPv4-mapped IPv6) → a.b.c.d, so it can't dodge the checks. */
+    private static function unmapIpv4(string $ip): string
+    {
+        $bin = @inet_pton($ip);
+        if ($bin !== false && strlen($bin) === 16
+            && str_starts_with($bin, "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\xff\xff")) {
+            $v4 = @inet_ntop(substr($bin, 12));
+            return $v4 !== false ? $v4 : $ip;
+        }
+        return $ip;
     }
 
     /**

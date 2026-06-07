@@ -401,6 +401,21 @@ class HealthServiceTest extends TestCase
         $this->assertSame('link-local', HealthService::urlBlockedReason('http://169.254.0.1/'));
     }
 
+    public function testUrlBlockedReasonRejectsLinkLocalEvasions(): void
+    {
+        // IPv4-mapped IPv6 literal and a trailing-dot host both slipped past the
+        // first guard yet still resolve to the metadata IP at curl time.
+        $this->assertSame('link-local', HealthService::urlBlockedReason('http://[::ffff:169.254.169.254]/latest/meta-data/'));
+        $this->assertSame('link-local', HealthService::urlBlockedReason('http://169.254.169.254./'));
+    }
+
+    public function testUrlBlockedReasonAllowsIpv6LoopbackLiteral(): void
+    {
+        // Stripping the [] brackets must not break a legitimate IPv6 literal
+        // (loopback is allowed, same homelab stance as RFC1918).
+        $this->assertNull(HealthService::urlBlockedReason('http://[::1]:8080/'));
+    }
+
     public function testUrlBlockedReasonAllowsRfc1918LanIps(): void
     {
         // Critical: Prismarr MUST be able to reach Radarr on 192.168.x or

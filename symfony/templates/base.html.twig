@@ -2458,6 +2458,9 @@
     if (window._usenetBadgeStarted) return;
     window._usenetBadgeStarted = true;
 
+    // Respect the "disable polling" preference (0 = off), like the qBit badge.
+    if (parseInt('{{ display_pref('qbit_refresh_seconds') }}', 10) <= 0) return;
+
     var CLIENTS = [
       {% if service_configured('sabnzbd') %}{ id: 'sidebar-sabnzbd-badge', url: '{{ path('app_usenet_api_poll_summary', {client: 'sabnzbd'}) }}' },{% endif %}
       {% if service_configured('nzbget') %}{ id: 'sidebar-nzbget-badge', url: '{{ path('app_usenet_api_poll_summary', {client: 'nzbget'}) }}' },{% endif %}
