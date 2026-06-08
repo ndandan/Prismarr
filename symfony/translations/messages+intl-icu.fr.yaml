@@ -750,6 +750,11 @@ admin:
       bug: 'Signaler un bug ↗'
       docs: 'Documentation ↗'
       roadmap: 'Roadmap ↗'
+  support:
+    title: Soutien & Communauté
+    donate: Soutenir Prismarr
+    discord: Rejoindre le Discord
+    nav_donate: Soutenir
   save: Enregistrer les modifications
   flash:
     saved: Modifications enregistrées.

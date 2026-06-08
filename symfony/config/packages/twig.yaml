@@ -1,5 +1,10 @@
 twig:
     file_name_pattern: '*.twig'
+    globals:
+        # Project-wide support links. Single source of truth, consumed by the
+        # settings sidebar footer and the About "Support" card.
+        support_donate_url: 'https://buymeacoffee.com/shoshuo'
+        support_discord_url: 'https://discord.gg/wd4hwU3jTF'
 
 when@test:
     twig:

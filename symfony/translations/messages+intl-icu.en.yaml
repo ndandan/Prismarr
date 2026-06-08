@@ -751,6 +751,11 @@ admin:
       bug: 'Report a bug ↗'
       docs: 'Documentation ↗'
       roadmap: 'Roadmap ↗'
+  support:
+    title: Support & Community
+    donate: Support Prismarr
+    discord: Join our Discord
+    nav_donate: Support
   save: Save changes
   flash:
     saved: Changes saved.

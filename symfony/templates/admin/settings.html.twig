@@ -68,6 +68,12 @@
     opacity: .7;
   }
 
+  .settings-nav-support {
+    margin-top: .75rem;
+    padding-top: .75rem;
+    border-top: 1px solid rgba(255,255,255,.08);
+  }
+
   .settings-content { min-width: 0; }
 
   .settings-header { margin-bottom: 1.5rem; }
@@ -385,6 +391,12 @@
           </svg>
           {{ 'admin.nav.about'|trans }}
         </a>
+
+        <div class="settings-nav-support">
+          <a href="{{ support_donate_url }}" target="_blank" rel="noopener">
+            {{ ico.icon('heart', '', 16) }} {{ 'admin.support.nav_donate'|trans }}
+          </a>
+        </div>
       </nav>
 
       {# ── Content ───────────────────────────────────────────────── #}
@@ -1172,6 +1184,18 @@
                 </a>
                 <a href="https://github.com/users/Shoshuo/projects/3" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
                   {{ ico.icon('map', '', 16) }} {{ 'admin.about.links.roadmap'|trans }}
+                </a>
+              </div>
+            </div>
+
+            <div class="service-card" style="margin-top:1rem;">
+              <p class="service-card-title" style="margin-bottom:.4rem;">{{ 'admin.support.title'|trans }}</p>
+              <div class="d-flex flex-wrap gap-2">
+                <a href="{{ support_donate_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
+                  {{ ico.icon('heart', '', 16) }} {{ 'admin.support.donate'|trans }}
+                </a>
+                <a href="{{ support_discord_url }}" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
+                  {{ ico.icon('brand-discord', '', 16) }} {{ 'admin.support.discord'|trans }}
                 </a>
               </div>
             </div>
