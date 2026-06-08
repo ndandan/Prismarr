@@ -13,6 +13,8 @@
   <a href="https://hub.docker.com/r/shoshuo/prismarr"><img src="https://img.shields.io/docker/image-size/shoshuo/prismarr/latest?color=2496ED&logo=docker&logoColor=white" alt="Image size"></a>
   <a href="https://github.com/Shoshuo/Prismarr"><img src="https://img.shields.io/github/stars/Shoshuo/Prismarr?style=flat&color=f59e0b" alt="Stars"></a>
   <a href="https://github.com/Shoshuo/Prismarr/commits/main"><img src="https://img.shields.io/github/last-commit/Shoshuo/Prismarr?color=6366f1" alt="Last commit"></a>
+  <a href="https://discord.gg/wd4hwU3jTF"><img src="https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white" alt="Discord"></a>
+  <a href="https://buymeacoffee.com/shoshuo"><img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-support-FFDD00?logo=buymeacoffee&logoColor=black" alt="Buy Me a Coffee"></a>
 </p>
 
 <p align="center">
@@ -30,6 +32,7 @@
   <a href="#upgrade">Upgrade</a> ·
   <a href="#troubleshooting">Troubleshooting</a> ·
   <a href="#whats-next">What's next</a> ·
+  <a href="#support-and-community">Support</a> ·
   <a href="#license">License</a> ·
   <a href="#note-on-ai-usage">AI</a>
 </p>
@@ -420,6 +423,21 @@ and not a bind mount onto a directory owned by root.
 ## What's next
 
 Everything lives on the [public Kanban](https://github.com/users/Shoshuo/projects/3): what's in progress, what's planned for the next release, and what's parked for later.
+
+---
+
+## Support and community
+
+Prismarr is built by one person in spare time. Two ways to be part of it:
+
+- **Join the [Discord](https://discord.gg/wd4hwU3jTF)** to ask for help, report
+  issues, share setups, or follow what's coming next.
+- **[Buy me a coffee](https://buymeacoffee.com/shoshuo)** if Prismarr is useful
+  to you and you'd like to support the time that goes into it. Entirely
+  optional, and every bit is appreciated.
+
+For anything that needs tracking (bugs, feature requests), GitHub issues and
+pull requests stay the right place. See [Contributing](#contributing).
 
 ---
 
