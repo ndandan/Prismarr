@@ -1,0 +1,28 @@
+<?xml version="1.0"?>
+<Container version="2">
+  <Name>Prismarr</Name>
+  <Repository>shoshuo/prismarr:latest</Repository>
+  <Registry>https://hub.docker.com/r/shoshuo/prismarr</Registry>
+  <Network>bridge</Network>
+  <MyIP/>
+  <Shell>sh</Shell>
+  <Privileged>false</Privileged>
+  <Support>https://github.com/Shoshuo/Prismarr/issues</Support>
+  <Project>https://github.com/Shoshuo/Prismarr</Project>
+  <Overview>One dashboard for your self-hosted media stack. Prismarr brings qBittorrent, Radarr, Sonarr, Prowlarr, Seerr and TMDb together in a single modern interface: unified Ctrl+K search, a merged movie/episode calendar, a dashboard that surfaces what matters today, and one settings page where every API key lives (stored in SQLite, never in environment variables).&#xD;&#xD;Ships as a single container with SQLite inside, no external database and no Redis. First boot opens a 7-step setup wizard: create the admin, plug your services in, done.&#xD;&#xD;IMPORTANT: the data volume must map to /var/www/html/var/data (Prismarr does NOT use the Servarr /config convention). All credentials are configured from the UI and kept in the database.</Overview>
+  <Category>MediaApp:Other Tools: Network:Management</Category>
+  <WebUI>http://[IP]:[PORT:7070]/</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/Shoshuo/Prismarr/main/unraid/prismarr.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/Shoshuo/Prismarr/main/symfony/public/img/prismarr/prismarr-icon-512.png</Icon>
+  <ExtraParams>--stop-timeout=30</ExtraParams>
+  <PostArgs/>
+  <DonateText>Buy me a coffee</DonateText>
+  <DonateLink>https://buymeacoffee.com/shoshuo</DonateLink>
+  <Description>One dashboard for your self-hosted media stack (Radarr, Sonarr, Prowlarr, qBittorrent, Seerr, TMDb). Single container, SQLite inside, configured entirely from the UI. Map the data volume to /var/www/html/var/data.</Description>
+  <Config Name="WebUI Port" Target="7070" Default="7070" Mode="tcp" Description="HTTP port Prismarr listens on." Type="Port" Display="always" Required="true" Mask="false">7070</Config>
+  <Config Name="Data" Target="/var/www/html/var/data" Default="/mnt/user/appdata/prismarr" Mode="rw" Description="Persistent data: SQLite DB, auto-generated secrets, sessions, cache, avatars. Container target MUST stay /var/www/html/var/data." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/prismarr</Config>
+  <Config Name="TZ" Target="TZ" Default="UTC" Mode="" Description="IANA timezone for the clock and date helpers, e.g. Europe/Paris. Falls back to UTC if unset." Type="Variable" Display="always" Required="false" Mask="false">UTC</Config>
+  <Config Name="PHP_MEMORY_LIMIT" Target="PHP_MEMORY_LIMIT" Default="1024M" Mode="" Description="PHP memory ceiling per request. Bump (e.g. 2048M, or -1 for unlimited) for very large Radarr/Sonarr libraries." Type="Variable" Display="advanced" Required="false" Mask="false">1024M</Config>
+  <Config Name="PHP_MAX_EXECUTION_TIME" Target="PHP_MAX_EXECUTION_TIME" Default="120" Mode="" Description="PHP wall-time ceiling per request, in seconds. Bump alongside PHP_MEMORY_LIMIT if the films/series page times out." Type="Variable" Display="advanced" Required="false" Mask="false">120</Config>
+  <Config Name="TRUSTED_PROXIES" Target="TRUSTED_PROXIES" Default="" Mode="" Description="Set to your reverse-proxy network (Traefik, nginx, Caddy, Cloudflare Tunnel) so Symfony reads the right X-Forwarded-* headers. Leave empty otherwise." Type="Variable" Display="advanced" Required="false" Mask="false"/>
+</Container>
