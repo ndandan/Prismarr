@@ -128,6 +128,10 @@
     align-items: start;
   }
   .service-grid-2col .service-card { margin-top: 0; }
+  /* Multi-instance cards (Radarr/Sonarr) hold a 6-column table that can't fit
+     a half-width column, so they span the full row; only the simple URL+key
+     cards share the two columns. */
+  .service-grid-2col .service-card--wide { grid-column: 1 / -1; }
 
   .service-card-head {
     display: flex;
