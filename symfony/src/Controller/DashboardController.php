@@ -502,48 +502,42 @@ class DashboardController extends AbstractController
     }
 
     /**
-     * @return array<string, bool|null>  service id => healthy?  (null = not configured)
+     * @return list<array{id: string, name: string, state: bool}>
      *
-     * v1.1.0 — radarr/sonarr aggregate across every enabled instance:
-     * the dashboard card shows green only when ALL instances are up
-     * (matches the topbar dropdown / `/api/health/services` semantics).
-     * Mono-instance / mono-service entries (prowlarr, jellyseerr, qbit, tmdb)
-     * keep the simple isHealthy() flow.
+     * v1.1.0 — radarr/sonarr expand to one chip PER enabled instance, named
+     * after the instance (Radarr 1080p, Radarr 4K…), matching the topbar
+     * dropdown / `/api/health/services` rather than collapsing to a single
+     * aggregate dot. Mono-instance services (prowlarr, jellyseerr, qbit, tmdb)
+     * keep one chip each. Unconfigured entries (isHealthy null) are dropped.
      */
     private function servicesHealth(): array
     {
-        $out = [];
+        $chips = [];
 
         foreach ([ServiceInstance::TYPE_RADARR, ServiceInstance::TYPE_SONARR] as $type) {
-            $enabled = $this->instances->getEnabled($type);
-            if ($enabled === []) {
-                $out[$type] = null;
-                continue;
-            }
-            $allOk     = true;
-            $anyTested = false;
-            foreach ($enabled as $inst) {
+            foreach ($this->instances->getEnabled($type) as $inst) {
                 try {
                     $h = $this->health->isHealthy($type, $inst->getSlug());
                 } catch (\Throwable) {
                     $h = false;
                 }
-                if ($h === null) continue; // instance not configured — skip
-                $anyTested = true;
-                if ($h === false) { $allOk = false; break; }
+                if ($h === null) continue; // instance has no credentials yet
+                $chips[] = ['id' => $type, 'name' => $inst->getName(), 'state' => $h];
             }
-            $out[$type] = $anyTested ? $allOk : null;
         }
 
-        foreach (['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb'] as $s) {
+        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'tmdb' => 'TMDb'];
+        foreach ($labels as $service => $label) {
             try {
-                $out[$s] = $this->health->isHealthy($s);
+                $h = $this->health->isHealthy($service);
             } catch (\Throwable) {
-                $out[$s] = null;
+                $h = null;
             }
+            if ($h === null) continue; // not configured / disabled
+            $chips[] = ['id' => $service, 'name' => $label, 'state' => $h];
         }
 
-        return $out;
+        return $chips;
     }
 
     private function recommendations(): array
