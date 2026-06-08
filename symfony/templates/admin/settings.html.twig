@@ -132,6 +132,10 @@
      a half-width column, so they span the full row; only the simple URL+key
      cards share the two columns. */
   .service-grid-2col .service-card--wide { grid-column: 1 / -1; }
+  /* The 6-column instance table can't shrink to phone width, so let it scroll
+     horizontally inside the card instead of overflowing the layout. */
+  .instance-list { overflow-x: auto; }
+  .instance-list > table { min-width: 640px; }
 
   .service-card-head {
     display: flex;
