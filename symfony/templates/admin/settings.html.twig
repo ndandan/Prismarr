@@ -117,6 +117,18 @@
   .service-card + .service-card { margin-top: 1rem; }
   .service-card:focus-within { border-color: rgba(var(--tblr-primary-rgb),.55); }
 
+  /* Two-column layout for the service cards so the list doesn't grow into a
+     very tall single column. Collapses to one column under ~700px; the grid
+     gap replaces the stacked margin, and align-items:start keeps a short card
+     from stretching to match a tall neighbour. */
+  .service-grid-2col {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1rem;
+    align-items: start;
+  }
+  .service-grid-2col .service-card { margin-top: 0; }
+
   .service-card-head {
     display: flex;
     align-items: center;
@@ -422,6 +434,7 @@
                 {{ group_label }}
               </div>
 
+              <div class="service-grid-2col">
               {% for service_id in service_ids %}
                 {% set meta = service_meta[service_id] %}
                 {# v1.1.0 — radarr/sonarr render as a multi-instance list,
@@ -536,6 +549,7 @@
                 </div>
                 {% endif %}
               {% endfor %}
+              </div>
             {% endfor %}
           </section>
 
