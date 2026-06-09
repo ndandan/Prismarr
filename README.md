@@ -102,7 +102,7 @@ carefully and reply. Open an issue, drop a PR, or just tell me what's
 missing or what could be better. Outside contributors are exactly how a
 solo project becomes a real one, and I'd love that to happen.
 
-The [CHANGELOG](CHANGELOG.md) is kept up to date, and the [public Kanban](https://github.com/users/Shoshuo/projects/3)
+The [CHANGELOG](CHANGELOG.md) is kept up to date, and the [public Kanban](https://github.com/users/Shoshuo/projects/4)
 shows what's in progress, what's planned for the next release and what's
 queued for later.
 
@@ -422,7 +422,7 @@ and not a bind mount onto a directory owned by root.
 
 ## What's next
 
-Everything lives on the [public Kanban](https://github.com/users/Shoshuo/projects/3): what's in progress, what's planned for the next release, and what's parked for later.
+Everything lives on the [public Kanban](https://github.com/users/Shoshuo/projects/4): what's in progress, what's planned for the next release, and what's parked for later.
 
 ---
 
