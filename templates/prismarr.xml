@@ -12,7 +12,7 @@
   <Overview>One dashboard for your self-hosted media stack. Prismarr brings qBittorrent, Radarr, Sonarr, Prowlarr, Seerr and TMDb together in a single modern interface: unified Ctrl+K search, a merged movie/episode calendar, a dashboard that surfaces what matters today, and one settings page where every API key lives (stored in SQLite, never in environment variables).&#xD;&#xD;Ships as a single container with SQLite inside, no external database and no Redis. First boot opens a 7-step setup wizard: create the admin, plug your services in, done.&#xD;&#xD;IMPORTANT: the data volume must map to /var/www/html/var/data (Prismarr does NOT use the Servarr /config convention). All credentials are configured from the UI and kept in the database.</Overview>
   <Category>MediaApp:Other Tools: Network:Management</Category>
   <WebUI>http://[IP]:[PORT:7070]/</WebUI>
-  <TemplateURL>https://raw.githubusercontent.com/Shoshuo/Prismarr/main/unraid/prismarr.xml</TemplateURL>
+  <TemplateURL>https://raw.githubusercontent.com/Shoshuo/Prismarr/main/templates/prismarr.xml</TemplateURL>
   <Icon>https://raw.githubusercontent.com/Shoshuo/Prismarr/main/symfony/public/img/prismarr/prismarr-icon-512.png</Icon>
   <ExtraParams>--stop-timeout=30</ExtraParams>
   <PostArgs/>

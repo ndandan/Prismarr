@@ -1,0 +1,12 @@
+<CommunityApplications>
+  <Profile>
+Prismarr is a self-hosted dashboard that unifies Radarr, Sonarr, Prowlarr, Seerr, qBittorrent and TMDb behind one interface: one search, one merged calendar, one dashboard, and one settings page where every API key lives. Single Docker container with SQLite inside, no external database and no Redis. First boot opens a 7-step setup wizard.
+
+Support and bug reports: https://github.com/Shoshuo/Prismarr/issues
+  </Profile>
+  <Icon>https://raw.githubusercontent.com/Shoshuo/Prismarr/main/symfony/public/img/prismarr/prismarr-icon-512.png</Icon>
+  <WebPage>https://github.com/Shoshuo/Prismarr</WebPage>
+  <Discord>https://discord.gg/wd4hwU3jTF</Discord>
+  <DonateLink>https://buymeacoffee.com/shoshuo</DonateLink>
+  <DonateText>Buy me a coffee</DonateText>
+</CommunityApplications>
