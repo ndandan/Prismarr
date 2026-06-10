@@ -5,7 +5,7 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.1] - 2026-06-10
 
 ### Fixed
 - **qBittorrent 5.2+ integration broke, every data call returned 403** ([#33](https://github.com/Shoshuo/Prismarr/issues/33)). qBittorrent 5.2.0 renamed the WebUI session cookie from `SID` to `QBT_SID_<port>` (and added `HttpOnly` / `SameSite`). The login cookie extraction only matched `SID=`, so the client got no session and every authenticated GET/POST 403'd, while the connection test (which only checks the HTTP status) still showed "Connected". The cookie is now captured under whichever name qBit returns (`SID` or `QBT_SID_<port>`) and echoed back verbatim. Affected users on an unpatched build can stay on / roll back to qBittorrent 5.1.4 in the meantime.
