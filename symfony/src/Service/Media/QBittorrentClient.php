@@ -23,7 +23,12 @@ class QBittorrentClient implements ResetInterface
      */
     private const NO_AUTH_SID = '__noauth__';
 
-    /** qBittorrent session reused between calls (avoids a curl POST auth per method). */
+    /**
+     * qBittorrent session cookie as a ready-to-send "name=value" pair
+     * (`SID=…` on <5.2, `QBT_SID_<port>=…` on 5.2+), reused between calls to
+     * avoid a curl POST auth per method. Holds the NO_AUTH_SID sentinel in
+     * reverse-proxy mode.
+     */
     private ?string $sid = null;
 
     /** Short cache for server_state (alltime_dl/ul changes slowly, /sync/maindata is expensive). */
@@ -419,7 +424,7 @@ class QBittorrentClient implements ResetInterface
                 CURLOPT_POSTFIELDS     => $postFields,
                 // Issue #10 — reverse-proxy mode skips the Cookie header
                 // (proxy injects auth itself); see NO_AUTH_SID docblock.
-                CURLOPT_HTTPHEADER     => $sid !== self::NO_AUTH_SID ? ['Cookie: SID=' . $sid] : [],
+                CURLOPT_HTTPHEADER     => $sid !== self::NO_AUTH_SID ? ['Cookie: ' . $sid] : [],
             ]);
             $response = curl_exec($ch);
             $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -783,8 +788,7 @@ class QBittorrentClient implements ResetInterface
             $this->health->markDown(self::SERVICE_KEY);
         }
 
-        preg_match('/Set-Cookie:\s*SID=([^;]+)/i', $response, $m);
-        $this->sid = $m[1] ?? null;
+        $this->sid = self::extractSessionCookie($response);
         if ($this->sid !== null) {
             $this->health->clear(self::SERVICE_KEY);
         }
@@ -795,6 +799,24 @@ class QBittorrentClient implements ResetInterface
     private function invalidateSession(): void
     {
         $this->sid = null;
+    }
+
+    /**
+     * Extract the qBittorrent session cookie from the raw login response
+     * headers as a ready-to-send "name=value" pair.
+     *
+     * qBittorrent < 5.2 named it `SID`; 5.2.0+ renamed it to `QBT_SID_<port>`
+     * (e.g. QBT_SID_8112) and added HttpOnly/SameSite attributes (issue #33).
+     * The old `SID=` extraction stopped matching, so login() produced no
+     * session and every authenticated call 403'd. The cookie has to be echoed
+     * back under the exact name qBit set, so we capture name and value both.
+     */
+    private static function extractSessionCookie(string $responseHeaders): ?string
+    {
+        if (preg_match('/Set-Cookie:\s*(QBT_SID_\d+|SID)=([^;\s]+)/i', $responseHeaders, $m)) {
+            return $m[1] . '=' . $m[2];
+        }
+        return null;
     }
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -837,7 +859,7 @@ class QBittorrentClient implements ResetInterface
         $headers = [];
         // Issue #10 — in reverse-proxy mode the SID is a sentinel that
         // must NOT be echoed as a real qBit cookie (qBit would reject it).
-        if ($sid && $sid !== self::NO_AUTH_SID) $headers[] = 'Cookie: SID=' . $sid;
+        if ($sid && $sid !== self::NO_AUTH_SID) $headers[] = 'Cookie: ' . $sid;
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [
@@ -899,7 +921,7 @@ class QBittorrentClient implements ResetInterface
         $url = rtrim($this->baseUrl, '/') . $path;
         // Issue #10 — reverse-proxy mode: skip Cookie header when login()
         // returned the sentinel (proxy injects auth itself).
-        $headers = $sid !== self::NO_AUTH_SID ? ['Cookie: SID=' . $sid] : [];
+        $headers = $sid !== self::NO_AUTH_SID ? ['Cookie: ' . $sid] : [];
 
         $ch = curl_init($url);
         curl_setopt_array($ch, [

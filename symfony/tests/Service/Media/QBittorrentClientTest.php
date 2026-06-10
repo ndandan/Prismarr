@@ -46,4 +46,42 @@ class QBittorrentClientTest extends TestCase
 
         $this->assertSame($expected, $m->invoke(null, $code));
     }
+
+    /**
+     * Issue #33 — qBittorrent 5.2.0 renamed the session cookie from `SID` to
+     * `QBT_SID_<port>` (and added HttpOnly/SameSite attributes). The old
+     * `Set-Cookie: SID=` extraction stopped matching, so login() produced no
+     * session, every authenticated GET 403'd and the qBittorrent tab read
+     * "cannot reach" while the connection test still passed. We now capture
+     * whichever cookie name is present and echo it back verbatim.
+     *
+     * @return iterable<string, array{string, ?string}>
+     */
+    public static function setCookieHeaders(): iterable
+    {
+        yield 'legacy SID (<5.2)' => [
+            "HTTP/1.1 200 OK\r\nSet-Cookie: SID=abc123XYZ; path=/\r\n\r\n",
+            'SID=abc123XYZ',
+        ];
+        yield 'qBit 5.2.0+ QBT_SID_<port>' => [
+            "HTTP/1.1 204 No Content\r\nSet-Cookie: QBT_SID_8112=Zm9vYmFy0=; HttpOnly; SameSite=Strict\r\n\r\n",
+            'QBT_SID_8112=Zm9vYmFy0=',
+        ];
+        yield 'no cookie (wrong creds)' => [
+            "HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nFails.",
+            null,
+        ];
+    }
+
+    #[DataProvider('setCookieHeaders')]
+    public function testExtractSessionCookieHandlesLegacyAndQBit52(string $rawHeaders, ?string $expected): void
+    {
+        $config = $this->createMock(ConfigService::class);
+        $client = new QBittorrentClient($config, new NullLogger(), new ServiceHealthCache(new ArrayAdapter()));
+
+        $m = (new \ReflectionClass($client))->getMethod('extractSessionCookie');
+        $m->setAccessible(true);
+
+        $this->assertSame($expected, $m->invoke(null, $rawHeaders));
+    }
 }
