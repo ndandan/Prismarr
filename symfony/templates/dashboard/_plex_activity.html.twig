@@ -44,7 +44,15 @@
       {% set dec_label = {'direct play': 'dashboard.plex.decision.direct_play', 'copy': 'dashboard.plex.decision.direct_stream', 'transcode': 'dashboard.plex.decision.transcode'} %}
       {% set dec_cls = {'direct play': 'bg-green-lt text-green', 'copy': 'bg-azure-lt text-azure', 'transcode': 'bg-orange-lt text-orange'} %}
       <div class="plex-session">
-        <div class="plex-poster">{{ ico.icon(s.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}</div>
+        <div class="plex-poster">
+          {{ ico.icon(s.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}
+          {% if s.posterPath %}
+            {# Poster streamed server-side via the Tautulli image proxy (no API
+               key in the browser). Sits over the icon; a miss returns 404 and
+               the icon shows through. #}
+            <img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: s.posterPath}) }}" alt="" loading="lazy">
+          {% endif %}
+        </div>
         <div class="plex-session-main">
           <div class="plex-session-title text-truncate">
             {{ s.title ?? 'dashboard.plex.unknown_title'|trans }}{% if s.year %} <span class="plex-session-year">({{ s.year }})</span>{% endif %}

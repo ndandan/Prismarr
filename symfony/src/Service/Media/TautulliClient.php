@@ -136,6 +136,101 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Server-side fetch of a Plex poster via Tautulli's `pms_image_proxy`
+     * command. The API key never leaves the server — the browser only ever
+     * receives the image bytes (streamed by TautulliController::apiImage).
+     *
+     * `fallback=poster` makes Tautulli return its own neutral poster when the
+     * art can't be retrieved, so the widget shows a grey poster rather than a
+     * broken image. Returns null only when Tautulli is disabled / unconfigured
+     * / unreachable, the path isn't a proxyable Plex image path, or the
+     * response wasn't actually an image.
+     *
+     * @return array{body: string, contentType: string}|null
+     */
+    public function fetchImage(string $img, int $width = 300, int $height = 450): ?array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return null;
+        }
+        // Allow-list the path before opening any socket — never proxy an
+        // arbitrary URL/route through our authenticated server.
+        if (!self::isProxyableImagePath($img)) {
+            return null;
+        }
+        if ($this->health?->isDown(self::SERVICE)) {
+            return null;
+        }
+
+        $endpoint = rtrim($this->baseUrl, '/') . '/api/v2';
+        if (HealthService::urlBlockedReason($endpoint) !== null) {
+            return null;
+        }
+
+        $url = $endpoint . '?' . http_build_query([
+            'apikey'   => $this->apiKey,
+            'cmd'      => 'pms_image_proxy',
+            'img'      => $img,
+            'width'    => $width,
+            'height'   => $height,
+            'fallback' => 'poster',
+        ]);
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER  => true,
+            CURLOPT_CONNECTTIMEOUT  => 3,
+            CURLOPT_TIMEOUT         => 10,
+            CURLOPT_NOSIGNAL        => true,
+            CURLOPT_FOLLOWLOCATION  => false,
+            CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_SSL_VERIFYPEER  => true,
+            CURLOPT_SSL_VERIFYHOST  => 2,
+        ]);
+        $body = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $type = (string) curl_getinfo($ch, CURLINFO_CONTENT_TYPE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false || $err !== '' || $code !== 200) {
+            $this->health?->markDown(self::SERVICE);
+            return null;
+        }
+        $this->health?->clear(self::SERVICE);
+
+        // Only ever hand back a genuine image — never an error envelope or HTML.
+        $contentType = strtolower(trim(explode(';', $type)[0]));
+        if (!str_starts_with($contentType, 'image/') || !is_string($body) || $body === '') {
+            return null;
+        }
+
+        return ['body' => $body, 'contentType' => $contentType];
+    }
+
+    /**
+     * True only for Plex library image paths (e.g. /library/metadata/12/thumb/3).
+     * Rejects absolute URLs, schemes, protocol-relative refs, path traversal,
+     * query strings and backslashes — so the image proxy can't be steered at an
+     * arbitrary target (SSRF / open-relay guard). Public + static for testing.
+     */
+    public static function isProxyableImagePath(string $img): bool
+    {
+        if ($img === '' || strlen($img) > 512) {
+            return false;
+        }
+        if (str_contains($img, '..') || str_contains($img, '\\')) {
+            return false;
+        }
+        return preg_match('#^/library/[A-Za-z0-9/_.\-]+$#', $img) === 1;
+    }
+
+    /**
      * Issue the get_activity call. Returns the decoded Tautulli envelope split
      * into a tiny result tuple, or null when the host is unreachable / the
      * response isn't valid JSON. Honors + feeds the cross-request circuit
@@ -282,9 +377,10 @@ class TautulliClient implements ResetInterface
             'year'             => self::str($s['year'] ?? null),
             'mediaType'        => self::str($s['media_type'] ?? null),
             // Plex metadata path (e.g. /library/metadata/123/thumb/456) — NOT a
-            // server filesystem path. Kept for a future server-side image proxy;
-            // the MVP widget renders a placeholder and never requests it.
-            'posterPath'       => self::str($s['thumb'] ?? null),
+            // server filesystem path. Streamed to the browser via the
+            // server-side image proxy (TautulliController::apiImage); the API
+            // key is never exposed. pickPoster() chooses the portrait art.
+            'posterPath'       => self::pickPoster($s, self::str($s['media_type'] ?? null)),
             // Display name only. We deliberately never expose `username` (the
             // Plex login) or any email/IP.
             'userDisplayName'  => self::str($s['friendly_name'] ?? ($s['user'] ?? null)),
@@ -330,6 +426,22 @@ class TautulliClient implements ResetInterface
             ],
             'sessions'          => [],
         ];
+    }
+
+    /**
+     * Pick the portrait poster path for a session. Episodes (and music tracks)
+     * carry a landscape still in `thumb`; the portrait series/album art lives
+     * in `grandparent_thumb`, which suits the poster tile. Movies use `thumb`
+     * directly (already the portrait poster).
+     *
+     * @param array<string, mixed> $s
+     */
+    private static function pickPoster(array $s, ?string $mediaType): ?string
+    {
+        if ($mediaType === 'episode' || $mediaType === 'track') {
+            return self::str($s['grandparent_thumb'] ?? ($s['parent_thumb'] ?? ($s['thumb'] ?? null)));
+        }
+        return self::str($s['thumb'] ?? ($s['grandparent_thumb'] ?? null));
     }
 
     /** Tautulli reports bandwidth in kbps; the UI shows Mbps (1 decimal). */

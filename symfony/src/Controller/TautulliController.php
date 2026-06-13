@@ -5,6 +5,8 @@ namespace App\Controller;
 use App\Service\Media\TautulliClient;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -59,5 +61,33 @@ class TautulliController extends AbstractController
                 'sessions'          => [],
             ]);
         }
+    }
+
+    /**
+     * GET /tautulli/api/image?img=/library/metadata/123/thumb/456 — streams a
+     * Plex poster fetched server-side via Tautulli's pms_image_proxy. The API
+     * key stays on the server; the browser only ever sees the image bytes.
+     *
+     * The `img` value is allow-listed to Plex library image paths inside
+     * TautulliClient::fetchImage (SSRF / open-relay guard). A miss returns 404
+     * so the widget's CSS placeholder shows through rather than a broken image.
+     * The response is privately cacheable for a day — the poster URL is stable
+     * per session, so the browser reuses it across the widget's 10s refreshes.
+     */
+    #[Route('/api/image', name: 'api_image', methods: ['GET'])]
+    public function apiImage(Request $request): Response
+    {
+        $img = (string) $request->query->get('img', '');
+        $image = $img !== '' ? $this->tautulli->fetchImage($img) : null;
+        if ($image === null) {
+            throw $this->createNotFoundException();
+        }
+
+        $response = new Response($image['body']);
+        $response->headers->set('Content-Type', $image['contentType']);
+        $response->setMaxAge(86400);
+        $response->setPrivate();
+
+        return $response;
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Media;
 
 use App\Service\Media\TautulliClient;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -149,5 +150,53 @@ class TautulliClientTest extends TestCase
         unset($data['sessions'][0]['full_title']);
         $out = TautulliClient::normalizeActivity($data);
         self::assertSame('Ghost War', $out['sessions'][0]['title']);
+    }
+
+    /**
+     * Episodes carry a landscape `thumb` (the episode still); the portrait
+     * series poster lives in `grandparent_thumb`. The poster tile wants the
+     * portrait art, so episodes must resolve to grandparent_thumb.
+     */
+    public function testEpisodePosterPrefersGrandparentThumb(): void
+    {
+        $data = $this->fixtureData();
+        $data['sessions'][0]['media_type']       = 'episode';
+        $data['sessions'][0]['thumb']             = '/library/metadata/999/thumb/1';
+        $data['sessions'][0]['grandparent_thumb'] = '/library/metadata/100/thumb/2';
+        $out = TautulliClient::normalizeActivity($data);
+        self::assertSame('/library/metadata/100/thumb/2', $out['sessions'][0]['posterPath']);
+    }
+
+    public function testMoviePosterUsesThumb(): void
+    {
+        $out = TautulliClient::normalizeActivity($this->fixtureData());
+        self::assertSame('/library/metadata/12345/thumb/1700000000', $out['sessions'][0]['posterPath']);
+    }
+
+    /**
+     * The image-proxy endpoint must only ever fetch Plex library image paths —
+     * never an absolute URL, a scheme, a traversal, or a non-image Plex route —
+     * so it can't be abused as an open relay/SSRF vector.
+     */
+    #[DataProvider('proxyablePaths')]
+    public function testIsProxyableImagePath(string $img, bool $expected): void
+    {
+        self::assertSame($expected, TautulliClient::isProxyableImagePath($img));
+    }
+
+    public static function proxyablePaths(): array
+    {
+        return [
+            'metadata thumb'        => ['/library/metadata/12345/thumb/1700000000', true],
+            'grandparent thumb'     => ['/library/metadata/100/art/2', true],
+            'empty'                 => ['', false],
+            'absolute http url'     => ['http://169.254.169.254/latest/meta-data', false],
+            'absolute https url'    => ['https://evil.example.com/x.jpg', false],
+            'protocol-relative'     => ['//evil.example.com/x.jpg', false],
+            'path traversal'        => ['/library/../../etc/passwd', false],
+            'not a library path'    => ['/api/v2?cmd=get_settings', false],
+            'query injection'       => ['/library/metadata/1/thumb/2?cmd=delete', false],
+            'backslash'             => ['/library\\metadata/1', false],
+        ];
     }
 }
