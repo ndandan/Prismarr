@@ -4,7 +4,13 @@
    TautulliClient::getActivity() — no secrets, no raw payload. Fails open: the
    error/empty states below keep the card intact when Tautulli is down. #}
 {% import '_icons.html.twig' as ico %}
+{% set active_tab = plex_tab|default('now') %}
+<ul class="nav nav-tabs plex-tabs" data-plex-tabs>
+  <li class="nav-item"><a href="#" class="nav-link {{ active_tab == 'now' ? 'active' }}" data-plex-tab="now">{{ 'dashboard.plex.tab.now'|trans }}{% if plex.streamCount > 0 %} <span class="badge bg-green-lt text-green ms-1">{{ plex.streamCount }}</span>{% endif %}</a></li>
+  <li class="nav-item"><a href="#" class="nav-link {{ active_tab == 'recent' ? 'active' }}" data-plex-tab="recent">{{ 'dashboard.plex.tab.recent'|trans }}</a></li>
+</ul>
 
+<div class="plex-pane" data-plex-pane="now" {% if active_tab != 'now' %}style="display:none"{% endif %}>
 {% if plex.error == 'unconfigured' %}
   <div class="text-center text-secondary py-4">{{ 'dashboard.plex.error.unconfigured'|trans }}</div>
 {% elseif plex.error == 'auth' %}
@@ -86,3 +92,34 @@
     {% endfor %}
   </div>
 {% endif %}
+</div>
+
+<div class="plex-pane" data-plex-pane="recent" {% if active_tab != 'recent' %}style="display:none"{% endif %}>
+  {% if plex_history is empty %}
+    <div class="text-center text-secondary py-4">{{ 'dashboard.plex.recent.empty'|trans }}</div>
+  {% else %}
+    <div class="plex-sessions">
+      {% for h in plex_history %}
+        <div class="plex-session {% if h.ratingKey %}plex-clickable{% endif %}"
+             {% if h.ratingKey %}data-plex-rating-key="{{ h.ratingKey }}" role="button" tabindex="0"{% endif %}>
+          <div class="plex-poster">
+            {{ ico.icon(h.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}
+            {% if h.posterPath %}<img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: h.posterPath}) }}" alt="" loading="lazy">{% endif %}
+          </div>
+          <div class="plex-session-main">
+            <div class="plex-session-title text-truncate">
+              {% if h.mediaType == 'episode' and h.grandparentTitle %}{{ h.grandparentTitle }}{% else %}{{ h.title }}{% endif %}
+              {% if h.year %}<span class="plex-session-year">({{ h.year }})</span>{% endif %}
+            </div>
+            <div class="plex-session-meta text-truncate">
+              {{ [h.userDisplayName, h.when]|filter(v => v is not null)|join(' · ') }}
+            </div>
+            {% if h.percentComplete > 0 %}
+              <div class="progress plex-progress"><div class="progress-bar" style="width: {{ h.percentComplete }}%"></div></div>
+            {% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>

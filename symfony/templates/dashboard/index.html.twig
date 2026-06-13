@@ -467,6 +467,7 @@
   .plex-session { display: flex; gap: .8rem; align-items: flex-start; }
   .plex-poster { position: relative; overflow: hidden; flex-shrink: 0; width: 42px; height: 63px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); border: 1px solid rgba(148,163,184,.18); }
   .plex-poster-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .plex-tabs { margin-bottom: .75rem; }
   .plex-clickable { cursor: pointer; }
   .plex-session-title.plex-clickable:hover { color: var(--tblr-primary); }
   .plex-session-main { flex: 1 1 auto; min-width: 0; }
@@ -778,7 +779,7 @@
       if (!node) return;
       fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
         .then(function (r) { return r.ok ? r.text() : ''; })
-        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
+        .then(function (html) { if ((html || '').trim()) { applyFragment(node, html); applyPlexTab(node.querySelector('[data-dash-body]') || node); } })
         .catch(function () {});
     }
     if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); }
@@ -814,6 +815,31 @@
         if (!t) return;
         e.preventDefault();
         openPlexModal(t.getAttribute('data-plex-rating-key'), t.getAttribute('data-plex-player'), t.getAttribute('data-plex-device'));
+      });
+    }
+
+    // Plex widget tabs: client-side pane toggle, remembers the active tab so the
+    // 10s fragment refresh doesn't snap the user back to "Now playing".
+    function applyPlexTab(scope) {
+      if (!scope) return;
+      var want = window._plexActiveTab;
+      if (!want) return;
+      scope.querySelectorAll('[data-plex-tab]').forEach(function (a) {
+        a.classList.toggle('active', a.getAttribute('data-plex-tab') === want);
+      });
+      scope.querySelectorAll('[data-plex-pane]').forEach(function (p) {
+        p.style.display = (p.getAttribute('data-plex-pane') === want) ? '' : 'none';
+      });
+    }
+    if (!window._plexTabsDelegated) {
+      window._plexTabsDelegated = true;
+      document.addEventListener('click', function (e) {
+        var tab = e.target.closest('[data-plex-tab]');
+        if (!tab) return;
+        e.preventDefault();
+        window._plexActiveTab = tab.getAttribute('data-plex-tab');
+        var widget = tab.closest('[data-dash-widget="plex"]');
+        applyPlexTab(widget ? (widget.querySelector('[data-dash-body]') || widget) : document);
       });
     }
 
