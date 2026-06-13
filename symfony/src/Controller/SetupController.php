@@ -313,7 +313,6 @@ class SetupController extends AbstractController
             'qbittorrent_password' => '',
             'gluetun_url' => '',
             'gluetun_api_key' => '',
-            'gluetun_protocol' => '',
             // Usenet download clients (optional, like qBittorrent above).
             'sabnzbd_url' => '',
             'sabnzbd_api_key' => '',

@@ -302,11 +302,9 @@ setup:
         section_suffix: 'VPN — optional'
         subtitle: 'Leave blank if qBittorrent does not route through a VPN.'
         url: URL (Control Server)
-        protocol: Protocol
-        protocol_auto: Auto
         api_key: API key
         api_key_optional: (optional)
-        api_key_placeholder: 'Bearer token if the Control Server is protected'
+        api_key_placeholder: 'X-API-Key value if the Control Server is protected'
     finish:
       eyebrow: 'Step 7 of 7'
       title: "You're all set!"
@@ -701,7 +699,6 @@ admin:
     api_key: API key
     username: Username
     password: Password
-    protocol: 'Protocol (openvpn/wireguard)'
     api_key_if_protected: 'API key (if protected)'
     clear: Clear
     tmdb:

@@ -5,6 +5,11 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Gluetun integration with API key set, and incorrect endpoints.** The Gluetun client authenticated using `Authorization: Bearer <key>`, but Gluetun expects it as `X-API-Key`, so it would return a 401 error when an API key is required. Additionally, referring to the older [Control Server Docs](https://github.com/qdm12/gluetun-wiki/blob/7025b1c0e4427d4477e47d4bbd2ef3f1b5c4da71/setup/advanced/control-server.md#openvpn-and-wireguard), WireGuard doesn't get its own endpoint, so the `/v1/wireguard/status` and `/v1/wireguard/portforwarded` calls were incorrect. The client now sends `X-API-Key` and uses the unified `/v1/vpn/status` and `/v1/portforward` endpoints, with the legacy `/v1/openvpn/` paths as a fallback. With that, the protocol selector in the settings becomes redundant and was removed.
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed

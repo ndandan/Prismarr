@@ -301,11 +301,9 @@ setup:
         section_suffix: 'VPN — optionnel'
         subtitle: 'Laissez vide si qBittorrent ne passe pas par un VPN.'
         url: URL (Control Server)
-        protocol: Protocole
-        protocol_auto: Auto
         api_key: Clé API
         api_key_optional: (optionnel)
-        api_key_placeholder: 'Bearer token si le Control Server est protégé'
+        api_key_placeholder: 'Valeur X-API-Key si le Control Server est protégé'
     finish:
       eyebrow: 'Étape 7 sur 7'
       title: 'Tout est prêt !'
@@ -700,7 +698,6 @@ admin:
     api_key: Clé API
     username: Utilisateur
     password: Mot de passe
-    protocol: 'Protocole (openvpn/wireguard)'
     api_key_if_protected: 'Clé API (si protégé)'
     clear: Effacer
     tmdb:

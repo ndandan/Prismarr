@@ -81,7 +81,6 @@ class AdminSettingsController extends AbstractController
         'gluetun' => [
             ['key' => 'gluetun_url',      'type' => 'text',     'label' => 'admin.field.url'],
             ['key' => 'gluetun_api_key',  'type' => 'password', 'label' => 'admin.field.api_key_if_protected'],
-            ['key' => 'gluetun_protocol', 'type' => 'text',     'label' => 'admin.field.protocol'],
         ],
     ];
 
