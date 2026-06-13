@@ -136,6 +136,114 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Full metadata for one Plex item, normalized + sanitized. Shaped like
+     * getActivity(): always returns the flag/error envelope plus the data.
+     *
+     * @return array{
+     *   enabled: bool, configured: bool, connected: bool, error: ?string,
+     *   metadata: array<string, mixed>
+     * }
+     */
+    public function getMetadata(string $ratingKey): array
+    {
+        $this->ensureConfig();
+        $configured = $this->baseUrl !== '' && $this->apiKey !== '';
+
+        $base = ['enabled' => $this->enabled, 'configured' => $configured, 'connected' => false, 'error' => null, 'metadata' => []];
+
+        if (!$this->enabled)      { return $base; }
+        if (!$configured)         { $base['error'] = 'unconfigured'; return $base; }
+        if ($ratingKey === '' || !ctype_digit($ratingKey)) { $base['error'] = 'not_found'; return $base; }
+
+        $resp = $this->request(['cmd' => 'get_metadata', 'rating_key' => $ratingKey]);
+        if ($resp === null)        { $base['error'] = 'unreachable'; return $base; }
+        if ($resp['ok'] !== true)  { $base['error'] = 'auth'; return $base; }
+        if ($resp['data'] === [])  { $base['error'] = 'not_found'; return $base; }
+
+        return ['enabled' => true, 'configured' => true, 'connected' => true, 'error' => null,
+                'metadata' => self::normalizeMetadata($resp['data'])];
+    }
+
+    /**
+     * Pure transform: get_metadata `data` -> sanitized shape. Allow-list only;
+     * file paths, section ids, guids, raw media_info and the raw payload are
+     * dropped by construction.
+     *
+     * @param array<string, mixed> $data
+     * @return array<string, mixed>
+     */
+    public static function normalizeMetadata(array $data): array
+    {
+        $mediaType = self::str($data['media_type'] ?? null);
+        $mi = (is_array($data['media_info'] ?? null) && isset($data['media_info'][0]) && is_array($data['media_info'][0]))
+            ? $data['media_info'][0] : [];
+
+        return [
+            'mediaType'        => $mediaType,
+            'title'            => self::str($data['title'] ?? null),
+            'grandparentTitle' => self::str($data['grandparent_title'] ?? null),
+            'year'             => self::str($data['year'] ?? null),
+            'season'           => isset($data['parent_media_index']) ? (int) $data['parent_media_index'] : null,
+            'episode'          => isset($data['media_index']) ? (int) $data['media_index'] : null,
+            'summary'          => self::str($data['summary'] ?? null),
+            'tagline'          => self::str($data['tagline'] ?? null),
+            'contentRating'    => self::str($data['content_rating'] ?? null),
+            'durationMs'       => (int) ($data['duration'] ?? 0),
+            'durationLabel'    => self::durationLabel((int) ($data['duration'] ?? 0)),
+            'genres'           => self::strList($data['genres'] ?? []),
+            'ratings'          => [
+                'critic'   => is_numeric($data['rating'] ?? null) ? (float) $data['rating'] : null,
+                'audience' => is_numeric($data['audience_rating'] ?? null) ? (float) $data['audience_rating'] : null,
+            ],
+            'directors'        => self::strList($data['directors'] ?? []),
+            'writers'          => self::strList($data['writers'] ?? []),
+            'cast'             => array_slice(self::strList($data['actors'] ?? []), 0, 8),
+            'studio'           => self::str($data['studio'] ?? null),
+            'releaseDate'      => self::str($data['originally_available_at'] ?? null),
+            'media'            => [
+                'resolution'  => self::str($mi['video_full_resolution'] ?? ($mi['video_resolution'] ?? null)),
+                'videoCodec'  => self::str($mi['video_codec'] ?? null),
+                'audioCodec'  => self::str($mi['audio_codec'] ?? null),
+                'container'   => self::str($mi['container'] ?? null),
+                'bitrateKbps' => (int) ($mi['bitrate'] ?? 0),
+            ],
+        ];
+    }
+
+    /** ms -> "1 h 37 min" / "45 min" / null when zero. */
+    private static function durationLabel(int $ms): ?string
+    {
+        if ($ms <= 0) {
+            return null;
+        }
+        $totalMin = (int) round($ms / 60000);
+        $h = intdiv($totalMin, 60);
+        $m = $totalMin % 60;
+        return $h > 0 ? sprintf('%d h %02d min', $h, $m) : sprintf('%d min', $m);
+    }
+
+    /**
+     * Coerce a Tautulli list (array of scalars) to a clean list<string>,
+     * dropping empties. Non-arrays yield [].
+     *
+     * @return list<string>
+     */
+    private static function strList(mixed $v): array
+    {
+        if (!is_array($v)) {
+            return [];
+        }
+        $out = [];
+        foreach ($v as $item) {
+            $s = self::str($item);
+            if ($s !== null) {
+                $out[] = $s;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Server-side fetch of a Plex poster via Tautulli's `pms_image_proxy`
      * command. The API key never leaves the server — the browser only ever
      * receives the image bytes (streamed by TautulliController::apiImage).
@@ -231,14 +339,15 @@ class TautulliClient implements ResetInterface
     }
 
     /**
-     * Issue the get_activity call. Returns the decoded Tautulli envelope split
+     * Issue a Tautulli API call. Returns the decoded Tautulli envelope split
      * into a tiny result tuple, or null when the host is unreachable / the
      * response isn't valid JSON. Honors + feeds the cross-request circuit
      * breaker so a downed Tautulli doesn't cost an 8 s timeout on every poll.
      *
+     * @param array<string, string> $params Tautulli command + args (apikey added here).
      * @return array{ok: bool, data: array<string, mixed>}|null
      */
-    private function request(): ?array
+    private function request(array $params = ['cmd' => 'get_activity']): ?array
     {
         // Circuit breaker: skip the call entirely if Tautulli was just seen
         // down — the 10 s widget poll would otherwise stack connect timeouts.
@@ -255,10 +364,7 @@ class TautulliClient implements ResetInterface
             return null;
         }
 
-        $url = $endpoint . '?' . http_build_query([
-            'apikey' => $this->apiKey,
-            'cmd'    => 'get_activity',
-        ]);
+        $url = $endpoint . '?' . http_build_query(['apikey' => $this->apiKey] + $params);
 
         $ch = curl_init($url);
         if ($ch === false) {
@@ -369,6 +475,7 @@ class TautulliClient implements ResetInterface
         return [
             'sessionKey'       => self::str($s['session_key'] ?? null),
             'sessionId'        => self::str($s['session_id'] ?? null),
+            'ratingKey'        => self::str($s['rating_key'] ?? null),
             'state'            => self::str($s['state'] ?? null),
             // full_title is the human label Tautulli builds ("Show - SxxEyy" /
             // "Movie (year)"); fall back to the bare title if it's missing.

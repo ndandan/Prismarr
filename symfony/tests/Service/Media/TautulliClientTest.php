@@ -199,4 +199,99 @@ class TautulliClientTest extends TestCase
             'backslash'             => ['/library\\metadata/1', false],
         ];
     }
+
+    /** A representative get_metadata `data` object for a movie. */
+    private function metadataMovieFixture(): array
+    {
+        return [
+            'rating_key'     => '12345',
+            'media_type'     => 'movie',
+            'title'          => 'See How They Run',
+            'year'           => '2022',
+            'summary'        => 'In 1950s London, plans for a movie adaptation grind to a halt.',
+            'tagline'        => 'Watch your step.',
+            'content_rating' => 'PG-13',
+            'duration'       => '5820000',
+            'rating'         => '7.5',
+            'audience_rating'=> '8.1',
+            'studio'         => 'Searchlight Pictures',
+            'originally_available_at' => '2022-09-16',
+            'genres'         => ['Comedy', 'Crime', 'Mystery'],
+            'directors'      => ['Tom George'],
+            'writers'        => ['Mark Chappell'],
+            'actors'         => ['Sam Rockwell', 'Saoirse Ronan', 'Adrien Brody', 'Ruth Wilson',
+                                 'Reece Shearsmith', 'Harris Dickinson', 'David Oyelowo', 'Pippa Bennett-Warner',
+                                 'Extra Person Nine'],
+            'thumb'          => '/library/metadata/12345/thumb/1700000000',
+            'media_info'     => [[
+                'container'            => 'mkv',
+                'bitrate'              => '8700',
+                'video_codec'          => 'hevc',
+                'audio_codec'          => 'eac3',
+                'video_full_resolution'=> '1080p',
+            ]],
+            // private fields that must be stripped:
+            'file'           => '/data/media/movies/SeeHowTheyRun.mkv',
+            'section_id'     => '1',
+            'guid'           => 'plex://movie/abc',
+            'live'           => 0,
+        ];
+    }
+
+    public function testNormalizeMetadataMapsMovieFields(): void
+    {
+        $out = TautulliClient::normalizeMetadata($this->metadataMovieFixture());
+
+        self::assertSame('movie', $out['mediaType']);
+        self::assertSame('See How They Run', $out['title']);
+        self::assertSame('2022', $out['year']);
+        self::assertSame('PG-13', $out['contentRating']);
+        self::assertSame('Searchlight Pictures', $out['studio']);
+        self::assertSame(['Comedy', 'Crime', 'Mystery'], $out['genres']);
+        self::assertSame(['Tom George'], $out['directors']);
+        self::assertSame(7.5, $out['ratings']['critic']);
+        self::assertSame(8.1, $out['ratings']['audience']);
+        self::assertSame('1080p', $out['media']['resolution']);
+        self::assertSame('hevc', $out['media']['videoCodec']);
+        self::assertSame('mkv', $out['media']['container']);
+        self::assertSame(8700, $out['media']['bitrateKbps']);
+        self::assertSame('1 h 37 min', $out['durationLabel']);
+    }
+
+    public function testNormalizeMetadataCapsCastAtEight(): void
+    {
+        $out = TautulliClient::normalizeMetadata($this->metadataMovieFixture());
+        self::assertCount(8, $out['cast']);
+        self::assertSame('Sam Rockwell', $out['cast'][0]);
+        self::assertNotContains('Extra Person Nine', $out['cast']);
+    }
+
+    public function testNormalizeMetadataMapsEpisodeFields(): void
+    {
+        $data = $this->metadataMovieFixture();
+        $data['media_type']        = 'episode';
+        $data['title']             = 'Ghost War';
+        $data['grandparent_title'] = "Tom Clancy's Jack Ryan";
+        $data['parent_media_index']= '1';
+        $data['media_index']       = '3';
+        $data['grandparent_thumb'] = '/library/metadata/100/thumb/2';
+
+        $out = TautulliClient::normalizeMetadata($data);
+
+        self::assertSame('episode', $out['mediaType']);
+        self::assertSame("Tom Clancy's Jack Ryan", $out['grandparentTitle']);
+        self::assertSame(1, $out['season']);
+        self::assertSame(3, $out['episode']);
+    }
+
+    public function testNormalizeMetadataStripsPrivateFields(): void
+    {
+        $out = TautulliClient::normalizeMetadata($this->metadataMovieFixture());
+        foreach (['file', 'section_id', 'guid', 'media_info'] as $forbidden) {
+            self::assertArrayNotHasKey($forbidden, $out, "private field {$forbidden} leaked");
+        }
+        $flat = json_encode($out);
+        self::assertStringNotContainsString('/data/media/movies', $flat);
+        self::assertStringNotContainsString('plex://', $flat);
+    }
 }
