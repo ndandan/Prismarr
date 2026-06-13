@@ -620,15 +620,6 @@
     </div>
     {% endif %}
 
-{# Shared Plex info modal — body injected by JS from /tautulli/api/metadata #}
-<div class="modal modal-blur fade" id="plex-info-modal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content" data-plex-modal-body>
-      <div class="modal-body text-center py-5"><span class="spinner-border"></span></div>
-    </div>
-  </div>
-</div>
-
     {# ── Ma watchlist (perso, DB locale) ────────────────────────────── #}
     {% if watchlist is not empty %}
     <div class="row-section">
@@ -709,6 +700,15 @@
     </div>
     {% endif %}
 
+  </div>
+</div>
+
+{# Shared Plex info modal — body injected by JS from /tautulli/api/metadata #}
+<div class="modal modal-blur fade" id="plex-info-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" data-plex-modal-body>
+      <div class="modal-body text-center py-5"><span class="spinner-border"></span></div>
+    </div>
   </div>
 </div>
 {% endblock %}
@@ -806,6 +806,13 @@
       document.addEventListener('click', function (e) {
         var t = e.target.closest('[data-plex-rating-key]');
         if (!t) return;
+        openPlexModal(t.getAttribute('data-plex-rating-key'), t.getAttribute('data-plex-player'), t.getAttribute('data-plex-device'));
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        var t = e.target.closest('[data-plex-rating-key]');
+        if (!t) return;
+        e.preventDefault();
         openPlexModal(t.getAttribute('data-plex-rating-key'), t.getAttribute('data-plex-player'), t.getAttribute('data-plex-device'));
       });
     }
