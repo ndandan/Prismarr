@@ -436,6 +436,19 @@ dashboard:
       unconfigured: Tautulli n'est pas configuré
       unreachable: Tautulli est injoignable
       auth: Clé API Tautulli invalide ou non autorisée
+    tab:
+      now: En cours
+      recent: Vus récemment
+    recent:
+      empty: Aucun historique Plex récent
+    modal:
+      error: Impossible de charger ce titre
+      critic: Critiques
+      directors: 'Réalisation :'
+      writers: 'Scénario :'
+      cast: 'Distribution :'
+      studio: 'Studio :'
+      tech: Flux
   type:
     film: Film
     series: Série

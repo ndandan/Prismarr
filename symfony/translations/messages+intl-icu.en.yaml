@@ -437,6 +437,19 @@ dashboard:
       unconfigured: Tautulli is not configured
       unreachable: Unable to reach Tautulli
       auth: Invalid Tautulli API key or unauthorized
+    tab:
+      now: Now playing
+      recent: Recently watched
+    recent:
+      empty: No recent Plex history
+    modal:
+      error: Couldn't load this title
+      critic: Critics
+      directors: 'Director:'
+      writers: 'Writer:'
+      cast: 'Cast:'
+      studio: 'Studio:'
+      tech: Stream
   type:
     film: Movie
     series: TV Show
