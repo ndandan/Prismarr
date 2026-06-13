@@ -324,4 +324,75 @@ class TautulliClientTest extends TestCase
         self::assertNull($out['media']['container']);
         self::assertSame(0, $out['media']['bitrateKbps']);
     }
+
+    /** A representative get_history `data` envelope (Tautulli wraps rows in `data`). */
+    private function historyFixture(): array
+    {
+        return [
+            'recordsFiltered' => 2,
+            'data' => [
+                [
+                    'rating_key'        => '12345',
+                    'media_type'        => 'movie',
+                    'full_title'        => 'See How They Run',
+                    'title'             => 'See How They Run',
+                    'year'              => '2022',
+                    'thumb'             => '/library/metadata/12345/thumb/1',
+                    'friendly_name'     => 'nDanDan',
+                    'user'              => 'nDanDan',
+                    'date'              => 1781377600,
+                    'percent_complete'  => 96,
+                    'watched_status'    => 1,
+                    'ip_address'        => '192.168.1.5',
+                    'user_id'           => 99,
+                ],
+                [
+                    'rating_key'        => '777',
+                    'media_type'        => 'episode',
+                    'full_title'        => "Tom Clancy's Jack Ryan - Ghost War",
+                    'title'             => 'Ghost War',
+                    'grandparent_title' => "Tom Clancy's Jack Ryan",
+                    'grandparent_thumb' => '/library/metadata/100/thumb/2',
+                    'thumb'             => '/library/metadata/777/thumb/3',
+                    'friendly_name'     => 'nDanDan',
+                    'username'          => 'plexlogin_secret',
+                    'date'              => 1781370000,
+                    'percent_complete'  => 50,
+                ],
+            ],
+        ];
+    }
+
+    public function testNormalizeHistoryMapsRows(): void
+    {
+        $out = TautulliClient::normalizeHistory($this->historyFixture());
+        self::assertCount(2, $out);
+
+        self::assertSame('12345', $out[0]['ratingKey']);
+        self::assertSame('See How They Run', $out[0]['title']);
+        self::assertSame('nDanDan', $out[0]['userDisplayName']);
+        self::assertSame(1781377600, $out[0]['watchedAt']);
+        self::assertSame(96, $out[0]['percentComplete']);
+        self::assertSame('/library/metadata/12345/thumb/1', $out[0]['posterPath']);
+    }
+
+    public function testNormalizeHistoryEpisodePrefersGrandparentPoster(): void
+    {
+        $out = TautulliClient::normalizeHistory($this->historyFixture());
+        self::assertSame('episode', $out[1]['mediaType']);
+        self::assertSame("Tom Clancy's Jack Ryan", $out[1]['grandparentTitle']);
+        self::assertSame('/library/metadata/100/thumb/2', $out[1]['posterPath']);
+    }
+
+    public function testNormalizeHistoryNeverLeaksPlexLogin(): void
+    {
+        $out = TautulliClient::normalizeHistory($this->historyFixture());
+        $flat = json_encode($out);
+        self::assertStringNotContainsString('plexlogin_secret', $flat);
+        self::assertStringNotContainsString('192.168.1.5', $flat);
+        foreach ($out as $row) {
+            self::assertArrayNotHasKey('username', $row);
+            self::assertArrayNotHasKey('ip_address', $row);
+        }
+    }
 }

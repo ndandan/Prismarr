@@ -166,6 +166,63 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Recent watch history, normalized + sanitized. Returns a plain list (no
+     * envelope) — an empty list covers disabled/unconfigured/unreachable so the
+     * widget's "recently watched" pane just shows its empty state.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getHistory(int $length = 8): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return [];
+        }
+        $resp = $this->request([
+            'cmd'          => 'get_history',
+            'length'       => (string) max(1, min(50, $length)),
+            'order_column' => 'date',
+            'order_dir'    => 'desc',
+        ]);
+        if ($resp === null || $resp['ok'] !== true) {
+            return [];
+        }
+        return self::normalizeHistory($resp['data']);
+    }
+
+    /**
+     * Pure transform: get_history `data` envelope -> sanitized rows. Allow-list
+     * only; usernames/emails/IPs/file paths are never copied out.
+     *
+     * @param array<string, mixed> $data
+     * @return list<array<string, mixed>>
+     */
+    public static function normalizeHistory(array $data): array
+    {
+        $rows = is_array($data['data'] ?? null) ? $data['data'] : [];
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $mediaType = self::str($r['media_type'] ?? null);
+            $out[] = [
+                'ratingKey'        => self::str($r['rating_key'] ?? null),
+                'mediaType'        => $mediaType,
+                'title'            => self::str($r['title'] ?? ($r['full_title'] ?? null)),
+                'grandparentTitle' => self::str($r['grandparent_title'] ?? null),
+                'year'             => self::str($r['year'] ?? null),
+                'posterPath'       => self::pickPoster($r, $mediaType),
+                // Display name only — never username (Plex login) or email.
+                'userDisplayName'  => self::str($r['friendly_name'] ?? ($r['user'] ?? null)),
+                'watchedAt'        => (int) ($r['date'] ?? 0),
+                'percentComplete'  => (int) ($r['percent_complete'] ?? 0),
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Pure transform: get_metadata `data` -> sanitized shape. Allow-list only;
      * file paths, section ids, guids, raw media_info and the raw payload are
      * dropped by construction.
