@@ -90,4 +90,26 @@ class TautulliController extends AbstractController
 
         return $response;
     }
+
+    /**
+     * GET /tautulli/api/metadata/{ratingKey} — renders the info-modal body for a
+     * Plex item. ratingKey is digits-only (route requirement). Optional
+     * player/device query params are display-only (live now-playing line) and
+     * are Twig-escaped. Fails open: the template renders a clean error state.
+     */
+    #[Route('/api/metadata/{ratingKey}', name: 'api_metadata', methods: ['GET'], requirements: ['ratingKey' => '\d+'])]
+    public function apiMetadata(string $ratingKey, Request $request): Response
+    {
+        try {
+            $data = $this->tautulli->getMetadata($ratingKey);
+        } catch (\Throwable) {
+            $data = ['enabled' => true, 'configured' => true, 'connected' => false, 'error' => 'unreachable', 'metadata' => []];
+        }
+
+        return $this->render('dashboard/_plex_metadata.html.twig', [
+            'plex'   => $data,
+            'player' => trim((string) $request->query->get('player', '')),
+            'device' => trim((string) $request->query->get('device', '')),
+        ]);
+    }
 }
