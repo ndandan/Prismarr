@@ -704,7 +704,10 @@
   </div>
 </div>
 
-{# Shared Plex info modal — body injected by JS from /tautulli/api/metadata #}
+{# Shared Plex info modal — body injected by JS from /tautulli/api/metadata.
+   Opened via the hidden trigger below (Tabler doesn't expose window.bootstrap,
+   so we drive Bootstrap's data-API the same way the usenet/qBit detail modals do). #}
+<button type="button" class="d-none" data-plex-modal-trigger data-bs-toggle="modal" data-bs-target="#plex-info-modal"></button>
 <div class="modal modal-blur fade" id="plex-info-modal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content" data-plex-modal-body>
@@ -788,11 +791,13 @@
     // Plex info modal: delegated click on any [data-plex-rating-key] trigger.
     function openPlexModal(ratingKey, player, device) {
       var modalEl = document.getElementById('plex-info-modal');
-      if (!modalEl || !window.bootstrap) return;
+      var trigger = document.querySelector('[data-plex-modal-trigger]');
+      if (!modalEl || !trigger) return;
       var body = modalEl.querySelector('[data-plex-modal-body]');
       body.innerHTML = '<div class="modal-body text-center py-5"><span class="spinner-border"></span></div>';
-      var modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
-      modal.show();
+      // Tabler doesn't expose window.bootstrap; open via the hidden data-API
+      // trigger (same pattern as the usenet/qBit detail modals).
+      trigger.click();
       // Build the URL directly — we can't use path() with a placeholder because
       // the route's \d+ requirement rejects a non-numeric stand-in at render time.
       var url = '/tautulli/api/metadata/' + encodeURIComponent(ratingKey)
