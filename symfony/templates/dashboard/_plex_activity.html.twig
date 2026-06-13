@@ -44,7 +44,8 @@
       {% set dec_label = {'direct play': 'dashboard.plex.decision.direct_play', 'copy': 'dashboard.plex.decision.direct_stream', 'transcode': 'dashboard.plex.decision.transcode'} %}
       {% set dec_cls = {'direct play': 'bg-green-lt text-green', 'copy': 'bg-azure-lt text-azure', 'transcode': 'bg-orange-lt text-orange'} %}
       <div class="plex-session">
-        <div class="plex-poster">
+        <div class="plex-poster {% if s.ratingKey %}plex-clickable{% endif %}"
+             {% if s.ratingKey %}data-plex-rating-key="{{ s.ratingKey }}" data-plex-player="{{ s.player }}" data-plex-device="{{ s.device }}" role="button" tabindex="0"{% endif %}>
           {{ ico.icon(s.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}
           {% if s.posterPath %}
             {# Poster streamed server-side via the Tautulli image proxy (no API
@@ -54,7 +55,8 @@
           {% endif %}
         </div>
         <div class="plex-session-main">
-          <div class="plex-session-title text-truncate">
+          <div class="plex-session-title text-truncate {% if s.ratingKey %}plex-clickable{% endif %}"
+               {% if s.ratingKey %}data-plex-rating-key="{{ s.ratingKey }}" data-plex-player="{{ s.player }}" data-plex-device="{{ s.device }}" role="button" tabindex="0"{% endif %}>
             {{ s.title ?? 'dashboard.plex.unknown_title'|trans }}{% if s.year %} <span class="plex-session-year">({{ s.year }})</span>{% endif %}
           </div>
           <div class="plex-session-meta text-truncate">

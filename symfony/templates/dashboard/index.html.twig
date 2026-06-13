@@ -467,6 +467,8 @@
   .plex-session { display: flex; gap: .8rem; align-items: flex-start; }
   .plex-poster { position: relative; overflow: hidden; flex-shrink: 0; width: 42px; height: 63px; border-radius: 6px; display: flex; align-items: center; justify-content: center; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); border: 1px solid rgba(148,163,184,.18); }
   .plex-poster-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .plex-clickable { cursor: pointer; }
+  .plex-session-title.plex-clickable:hover { color: var(--tblr-primary); }
   .plex-session-main { flex: 1 1 auto; min-width: 0; }
   .plex-session-title { font-size: .88rem; font-weight: 600; }
   .plex-session-year { font-weight: 400; color: var(--tblr-secondary); }
@@ -617,6 +619,15 @@
       </div>
     </div>
     {% endif %}
+
+{# Shared Plex info modal — body injected by JS from /tautulli/api/metadata #}
+<div class="modal modal-blur fade" id="plex-info-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content" data-plex-modal-body>
+      <div class="modal-body text-center py-5"><span class="spinner-border"></span></div>
+    </div>
+  </div>
+</div>
 
     {# ── Ma watchlist (perso, DB locale) ────────────────────────────── #}
     {% if watchlist is not empty %}
@@ -772,6 +783,32 @@
     }
     if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); }
     window._dashPlexTimer = setInterval(refreshPlex, 10000);
+
+    // Plex info modal: delegated click on any [data-plex-rating-key] trigger.
+    function openPlexModal(ratingKey, player, device) {
+      var modalEl = document.getElementById('plex-info-modal');
+      if (!modalEl || !window.bootstrap) return;
+      var body = modalEl.querySelector('[data-plex-modal-body]');
+      body.innerHTML = '<div class="modal-body text-center py-5"><span class="spinner-border"></span></div>';
+      var modal = window.bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+      // Build the URL directly — we can't use path() with a placeholder because
+      // the route's \d+ requirement rejects a non-numeric stand-in at render time.
+      var url = '/tautulli/api/metadata/' + encodeURIComponent(ratingKey)
+        + '?player=' + encodeURIComponent(player || '') + '&device=' + encodeURIComponent(device || '');
+      fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { body.innerHTML = html || '<div class="modal-body text-center text-secondary py-5">—</div>'; })
+        .catch(function () { body.innerHTML = '<div class="modal-body text-center text-secondary py-5">—</div>'; });
+    }
+    if (!window._plexModalDelegated) {
+      window._plexModalDelegated = true;
+      document.addEventListener('click', function (e) {
+        var t = e.target.closest('[data-plex-rating-key]');
+        if (!t) return;
+        openPlexModal(t.getAttribute('data-plex-rating-key'), t.getAttribute('data-plex-player'), t.getAttribute('data-plex-device'));
+      });
+    }
 
     document.addEventListener('turbo:before-render', function () {
       if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
