@@ -8,6 +8,7 @@ use App\Service\HealthService;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
+use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
 use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
@@ -61,6 +62,7 @@ class DashboardController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
         private readonly CacheInterface $cache,
+        private readonly TautulliClient $tautulli,
     ) {}
 
     /**
@@ -153,6 +155,7 @@ class DashboardController extends AbstractController
             'sonarr'     => $this->health->isConfigured('sonarr'),
             'jellyseerr' => $this->health->isConfigured('jellyseerr'),
             'tmdb'       => $this->health->isConfigured('tmdb'),
+            'tautulli'   => $this->health->isConfigured('tautulli'),
         ];
 
         return $this->render('dashboard/index.html.twig', [
@@ -248,6 +251,26 @@ class DashboardController extends AbstractController
 
         return $this->render('dashboard/_health.html.twig', [
             'services_health' => $this->servicesHealth(),
+        ]);
+    }
+
+    /**
+     * Async fragment — current Plex activity from Tautulli. Skipped entirely
+     * (empty body → hidden client-side) when Tautulli isn't configured /
+     * enabled. Otherwise renders the widget body; the fragment re-fetches on a
+     * 10 s interval (see index.html.twig) and fails open to an error state, so
+     * a down/misconfigured Tautulli never breaks the dashboard.
+     */
+    #[Route('/tableau-de-bord/widget/plex', name: 'app_dashboard_widget_plex')]
+    public function widgetPlex(): Response
+    {
+        if (!$this->health->isConfigured('tautulli')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        return $this->render('dashboard/_plex_activity.html.twig', [
+            'plex' => $this->tautulli->getActivity(),
         ]);
     }
 
@@ -526,7 +549,7 @@ class DashboardController extends AbstractController
             }
         }
 
-        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'tmdb' => 'TMDb'];
+        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli'];
         foreach ($labels as $service => $label) {
             try {
                 $h = $this->health->isHealthy($service);

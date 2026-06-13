@@ -1,0 +1,369 @@
+<?php
+
+namespace App\Service\Media;
+
+use App\Service\ConfigService;
+use App\Service\HealthService;
+use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Service\ResetInterface;
+
+/**
+ * Read-only client for the Tautulli API (current Plex activity).
+ *
+ * Optional service — Prismarr never talks to Plex directly; it consumes an
+ * existing Tautulli instance's HTTP API. Only the `get_activity` command is
+ * used, and the raw response is reduced to a small, sanitized shape before it
+ * ever leaves the server: IP addresses, Plex/server tokens, machine ids, file
+ * paths and the raw payload are dropped (allow-list, not deny-list).
+ *
+ * Endpoint: GET {tautulli_url}/api/v2?apikey={key}&cmd=get_activity
+ * Docs: https://github.com/Tautulli/Tautulli/blob/master/API.md
+ *
+ * Like the other flat-config clients (Gluetun, qBittorrent), config is read
+ * lazily from the `setting` table via ConfigService and the client fails open:
+ * a disabled / unconfigured / unreachable Tautulli yields a neutral shape with
+ * an `error` code instead of throwing, so the dashboard never breaks.
+ */
+class TautulliClient implements ResetInterface
+{
+    /** Short slug — circuit-breaker key + HealthService service id. */
+    public const SERVICE = 'tautulli';
+
+    private bool $configLoaded = false;
+    private bool $enabled = true;
+    private string $baseUrl = '';
+    private string $apiKey = '';
+
+    /** @var array{code:int, method:string, path:string, message:string}|null */
+    private ?array $lastError = null;
+
+    public function __construct(
+        private readonly ConfigService $config,
+        private readonly LoggerInterface $logger,
+        private readonly ?ServiceHealthCache $health = null,
+    ) {}
+
+    public function reset(): void
+    {
+        $this->configLoaded = false;
+        $this->enabled      = true;
+        $this->baseUrl      = '';
+        $this->apiKey       = '';
+        $this->lastError    = null;
+    }
+
+    /** @return array{code:int, method:string, path:string, message:string}|null */
+    public function getLastError(): ?array
+    {
+        return $this->lastError;
+    }
+
+    private function ensureConfig(): void
+    {
+        if ($this->configLoaded) {
+            return;
+        }
+        // Explicit kill switch (issue #15 pattern): only '0' disables; a
+        // missing row means the toggle was never touched → stays enabled.
+        $this->enabled = $this->config->get('tautulli_enabled') !== '0';
+        $this->baseUrl = (string) ($this->config->get('tautulli_url') ?? '');
+        $this->apiKey  = (string) ($this->config->get('tautulli_api_key') ?? '');
+        $this->configLoaded = true;
+    }
+
+    /**
+     * Lightweight reachability probe for HealthService. True when a fresh
+     * get_activity call returns a successful Tautulli envelope.
+     */
+    public function ping(): bool
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return false;
+        }
+        $resp = $this->request();
+        return $resp !== null && $resp['ok'] === true;
+    }
+
+    /**
+     * Current Plex activity, normalized + sanitized for the frontend.
+     *
+     * Always returns the full shape — `enabled`, `configured`, `connected`
+     * flags plus an `error` code (null | 'unconfigured' | 'unreachable' |
+     * 'auth') so the widget can render the right empty/error state without
+     * ever seeing a stack trace or a secret.
+     *
+     * @return array{
+     *   enabled: bool, configured: bool, connected: bool, error: ?string,
+     *   streamCount: int, directPlayCount: int, directStreamCount: int,
+     *   transcodeCount: int,
+     *   bandwidth: array{totalKbps:int, lanKbps:int, wanKbps:int, totalMbps:float, lanMbps:float, wanMbps:float},
+     *   sessions: list<array<string, mixed>>
+     * }
+     */
+    public function getActivity(): array
+    {
+        $this->ensureConfig();
+
+        $configured = $this->baseUrl !== '' && $this->apiKey !== '';
+        $base = self::emptyShape($this->enabled, $configured);
+
+        if (!$this->enabled) {
+            return $base; // error stays null — the widget is hidden upstream anyway
+        }
+        if (!$configured) {
+            $base['error'] = 'unconfigured';
+            return $base;
+        }
+
+        $resp = $this->request();
+        if ($resp === null) {
+            $base['error'] = 'unreachable';
+            return $base;
+        }
+        if ($resp['ok'] !== true) {
+            // Tautulli answers HTTP 200 with result:"error" on a bad apikey.
+            $base['error'] = 'auth';
+            return $base;
+        }
+
+        return [
+            'enabled'    => true,
+            'configured' => true,
+            'connected'  => true,
+            'error'      => null,
+        ] + self::normalizeActivity($resp['data']);
+    }
+
+    /**
+     * Issue the get_activity call. Returns the decoded Tautulli envelope split
+     * into a tiny result tuple, or null when the host is unreachable / the
+     * response isn't valid JSON. Honors + feeds the cross-request circuit
+     * breaker so a downed Tautulli doesn't cost an 8 s timeout on every poll.
+     *
+     * @return array{ok: bool, data: array<string, mixed>}|null
+     */
+    private function request(): ?array
+    {
+        // Circuit breaker: skip the call entirely if Tautulli was just seen
+        // down — the 10 s widget poll would otherwise stack connect timeouts.
+        if ($this->health?->isDown(self::SERVICE)) {
+            return null;
+        }
+
+        // SSRF guard #1 — reuse the shared validator (blocks non-http(s)
+        // schemes + link-local / cloud-metadata IPs) before opening a socket.
+        $endpoint = rtrim($this->baseUrl, '/') . '/api/v2';
+        if (($reason = HealthService::urlBlockedReason($endpoint)) !== null) {
+            $this->recordError(0, 'blocked: ' . $reason);
+            $this->logger->warning('Tautulli URL blocked', ['reason' => $reason]);
+            return null;
+        }
+
+        $url = $endpoint . '?' . http_build_query([
+            'apikey' => $this->apiKey,
+            'cmd'    => 'get_activity',
+        ]);
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_NOSIGNAL       => true, // critical under FrankenPHP/Alpine
+            CURLOPT_FOLLOWLOCATION => false,
+            // SSRF guard #2 — lock the protocol even across any redirect.
+            CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER     => ['Accept: application/json'],
+        ]);
+        $body = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if ($body === false || $err !== '' || $code === 0) {
+            $this->recordError($code, $err !== '' ? $err : 'connection failed');
+            $this->health?->markDown(self::SERVICE);
+            return null;
+        }
+
+        $json = json_decode((string) $body, true);
+        if (!is_array($json)) {
+            $this->recordError($code, 'invalid JSON response');
+            $this->health?->markDown(self::SERVICE);
+            return null;
+        }
+
+        // A reachable host clears the breaker even on an auth error — the box
+        // is up, only the key is wrong.
+        $this->health?->clear(self::SERVICE);
+
+        $resp   = is_array($json['response'] ?? null) ? $json['response'] : [];
+        $result = $resp['result'] ?? null;
+        if ($result !== 'success') {
+            $this->recordError($code, 'tautulli result: ' . (is_string($result) ? $result : 'error'));
+            return ['ok' => false, 'data' => []];
+        }
+
+        $this->lastError = null;
+        $data = is_array($resp['data'] ?? null) ? $resp['data'] : [];
+        return ['ok' => true, 'data' => $data];
+    }
+
+    /**
+     * Pure transform: Tautulli `get_activity` `data` object → sanitized shape.
+     * Public + static so it can be unit-tested against a captured fixture
+     * without any network. Only allow-listed fields are copied out — anything
+     * sensitive (ip_address[_public], machine_id, *_token, file, …) is dropped
+     * by construction because it is never read here.
+     *
+     * @param array<string, mixed> $data
+     * @return array{
+     *   streamCount:int, directPlayCount:int, directStreamCount:int, transcodeCount:int,
+     *   bandwidth: array{totalKbps:int, lanKbps:int, wanKbps:int, totalMbps:float, lanMbps:float, wanMbps:float},
+     *   sessions: list<array<string, mixed>>
+     * }
+     */
+    public static function normalizeActivity(array $data): array
+    {
+        $sessions = [];
+        $rawSessions = $data['sessions'] ?? [];
+        if (is_array($rawSessions)) {
+            foreach ($rawSessions as $s) {
+                if (is_array($s)) {
+                    $sessions[] = self::normalizeSession($s);
+                }
+            }
+        }
+
+        $total = (int) ($data['total_bandwidth'] ?? 0);
+        $lan   = (int) ($data['lan_bandwidth'] ?? 0);
+        $wan   = (int) ($data['wan_bandwidth'] ?? 0);
+
+        return [
+            'streamCount'       => (int) ($data['stream_count'] ?? 0),
+            'directPlayCount'   => (int) ($data['stream_count_direct_play'] ?? 0),
+            'directStreamCount' => (int) ($data['stream_count_direct_stream'] ?? 0),
+            'transcodeCount'    => (int) ($data['stream_count_transcode'] ?? 0),
+            'bandwidth'         => [
+                'totalKbps' => $total,
+                'lanKbps'   => $lan,
+                'wanKbps'   => $wan,
+                'totalMbps' => self::toMbps($total),
+                'lanMbps'   => self::toMbps($lan),
+                'wanMbps'   => self::toMbps($wan),
+            ],
+            'sessions'          => $sessions,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $s
+     * @return array<string, mixed>
+     */
+    private static function normalizeSession(array $s): array
+    {
+        $bw = (int) ($s['bandwidth'] ?? 0);
+
+        return [
+            'sessionKey'       => self::str($s['session_key'] ?? null),
+            'sessionId'        => self::str($s['session_id'] ?? null),
+            'state'            => self::str($s['state'] ?? null),
+            // full_title is the human label Tautulli builds ("Show - SxxEyy" /
+            // "Movie (year)"); fall back to the bare title if it's missing.
+            'title'            => self::str($s['full_title'] ?? ($s['title'] ?? null)),
+            'grandparentTitle' => self::str($s['grandparent_title'] ?? null),
+            'year'             => self::str($s['year'] ?? null),
+            'mediaType'        => self::str($s['media_type'] ?? null),
+            // Plex metadata path (e.g. /library/metadata/123/thumb/456) — NOT a
+            // server filesystem path. Kept for a future server-side image proxy;
+            // the MVP widget renders a placeholder and never requests it.
+            'posterPath'       => self::str($s['thumb'] ?? null),
+            // Display name only. We deliberately never expose `username` (the
+            // Plex login) or any email/IP.
+            'userDisplayName'  => self::str($s['friendly_name'] ?? ($s['user'] ?? null)),
+            'product'          => self::str($s['product'] ?? null),
+            'player'           => self::str($s['player'] ?? null),
+            'device'           => self::str($s['device'] ?? null),
+            'platform'         => self::str($s['platform'] ?? null),
+            'quality'          => self::str($s['quality_profile'] ?? null),
+            'containerDecision'=> self::str($s['container_decision'] ?? null),
+            'videoDecision'    => self::str($s['video_decision'] ?? null),
+            'audioDecision'    => self::str($s['audio_decision'] ?? null),
+            'subtitleDecision' => self::str($s['subtitle_decision'] ?? null),
+            'transcodeDecision'=> self::str($s['transcode_decision'] ?? null),
+            'location'         => self::str($s['location'] ?? null),
+            'bandwidthKbps'    => $bw,
+            'bandwidthMbps'    => self::toMbps($bw),
+            'progressPercent'  => self::pct($s['progress_percent'] ?? null),
+        ];
+    }
+
+    /**
+     * @return array{
+     *   enabled: bool, configured: bool, connected: bool, error: ?string,
+     *   streamCount: int, directPlayCount: int, directStreamCount: int, transcodeCount: int,
+     *   bandwidth: array{totalKbps:int, lanKbps:int, wanKbps:int, totalMbps:float, lanMbps:float, wanMbps:float},
+     *   sessions: list<array<string, mixed>>
+     * }
+     */
+    private static function emptyShape(bool $enabled, bool $configured): array
+    {
+        return [
+            'enabled'    => $enabled,
+            'configured' => $configured,
+            'connected'  => false,
+            'error'      => null,
+            'streamCount'       => 0,
+            'directPlayCount'   => 0,
+            'directStreamCount' => 0,
+            'transcodeCount'    => 0,
+            'bandwidth'         => [
+                'totalKbps' => 0, 'lanKbps' => 0, 'wanKbps' => 0,
+                'totalMbps' => 0.0, 'lanMbps' => 0.0, 'wanMbps' => 0.0,
+            ],
+            'sessions'          => [],
+        ];
+    }
+
+    /** Tautulli reports bandwidth in kbps; the UI shows Mbps (1 decimal). */
+    private static function toMbps(int $kbps): float
+    {
+        return $kbps > 0 ? round($kbps / 1000, 1) : 0.0;
+    }
+
+    /** Coerce a Tautulli scalar to a trimmed string, or null when absent/empty. */
+    private static function str(mixed $v): ?string
+    {
+        if ($v === null || is_array($v)) {
+            return null;
+        }
+        $s = trim((string) $v);
+        return $s === '' ? null : $s;
+    }
+
+    /** progress_percent comes back as a numeric string; clamp to 0-100. */
+    private static function pct(mixed $v): float
+    {
+        if (!is_numeric($v)) {
+            return 0.0;
+        }
+        return max(0.0, min(100.0, round((float) $v, 1)));
+    }
+
+    private function recordError(int $code, string $message): void
+    {
+        $this->lastError = [
+            'code'    => $code,
+            'method'  => 'GET',
+            'path'    => '/api/v2?cmd=get_activity',
+            'message' => $message,
+        ];
+    }
+}

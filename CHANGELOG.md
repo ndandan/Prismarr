@@ -5,6 +5,11 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Tautulli API integration for current Plex activity.** A new optional integration consumes an existing Tautulli instance's API (`get_activity`) and surfaces current Plex streams in a "Current Plex activity" dashboard widget: active stream count, Direct Play / Direct Stream / Transcode breakdown, total/LAN/WAN bandwidth in Mbps, and one card per session (title, user, player/device, quality, decision badges, location, bandwidth, progress and play state). Configure it under **Settings → Services → Monitoring** (URL + API key, with an enable toggle and a Test-connection button) and it also gets a health chip on the dashboard. Read-only by design — no mutating Tautulli commands are implemented. Every call is server-side, the API key never reaches the browser, and the response is sanitized to a normalized shape (no IPs, tokens, machine ids, file paths or raw payload) before it leaves Prismarr. The widget polls every 10 s and fails open: a disabled, unconfigured, unreachable or wrong-key Tautulli shows a clean message instead of breaking the dashboard.
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed

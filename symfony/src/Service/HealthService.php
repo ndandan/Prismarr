@@ -9,6 +9,7 @@ use App\Service\Media\QBittorrentClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
+use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
@@ -47,6 +48,9 @@ class HealthService
         // working without each having to provide a fake SAB/NZBGet.
         private readonly ?SabnzbdClient    $sabnzbd = null,
         private readonly ?NzbgetClient     $nzbget = null,
+        // Tautulli (current Plex activity) — nullable + last for the same
+        // legacy-test-constructor reason as the Usenet clients above.
+        private readonly ?TautulliClient   $tautulli = null,
     ) {}
 
     /**
@@ -119,6 +123,7 @@ class HealthService
             // banner still uses diagnose() to tell auth vs host_whitelist apart.
             'sabnzbd'     => $this->sabnzbd?->ping() ?? false,
             'nzbget'      => $this->nzbget?->ping() ?? false,
+            'tautulli'    => $this->tautulli?->ping() ?? false,
             default       => true,
         };
     }
@@ -135,7 +140,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
 
     public function isConfigured(string $service): bool
     {
@@ -176,6 +181,10 @@ class HealthService
                 $this->config->has('sabnzbd_url') && $this->config->has('sabnzbd_api_key'),
             'nzbget' =>
                 $this->config->has('nzbget_url'),
+            // Tautulli needs both the URL and the API key (every command,
+            // including get_activity, is apikey-authenticated).
+            'tautulli' =>
+                $this->config->has('tautulli_url') && $this->config->has('tautulli_api_key'),
             default => true,
         };
     }
@@ -192,7 +201,7 @@ class HealthService
         if ($service === null) {
             $this->cache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -277,6 +286,21 @@ class HealthService
             if (stripos($body, 'api key') !== false) {
                 return ['ok' => false, 'category' => 'auth', 'http' => $http];
             }
+        }
+        // Tautulli always answers HTTP 200, even on a bad apikey — the real
+        // status lives in the JSON envelope ({"response":{"result":"error",
+        // "message":"Invalid apikey"}}). Treat any non-"success" result as an
+        // auth failure so the admin gets an actionable hint instead of a
+        // misleading green check.
+        if ($service === 'tautulli' && $http === 200 && is_string($body)) {
+            $decoded = json_decode($body, true);
+            $result  = is_array($decoded) && is_array($decoded['response'] ?? null)
+                ? ($decoded['response']['result'] ?? null)
+                : null;
+            if ($result !== 'success') {
+                return ['ok' => false, 'category' => 'auth', 'http' => $http];
+            }
+            return ['ok' => true, 'category' => 'ok', 'http' => $http];
         }
         if ($http !== null && $http >= 200 && $http < 300) {
             return ['ok' => true, 'category' => 'ok', 'http' => $http];
@@ -407,6 +431,18 @@ class HealthService
                 // diagnoseFromResponse() tells those two 403s apart by body.
                 return [
                     'url' => rtrim($url, '/') . '/api?mode=queue&output=json&apikey=' . urlencode($key),
+                ];
+            }
+            case 'tautulli': {
+                $url = $get('tautulli_url');
+                $key = $get('tautulli_api_key');
+                if ($url === '' || $key === '') return null;
+                // get_activity is the same read-only command the widget uses.
+                // It also validates the key: a bad apikey returns HTTP 200 with
+                // result:"error", which diagnoseFromResponse() maps to `auth`.
+                return [
+                    'url'     => rtrim($url, '/') . '/api/v2?' . http_build_query(['apikey' => $key, 'cmd' => 'get_activity']),
+                    'headers' => ['Accept: application/json'],
                 ];
             }
             case 'nzbget': {

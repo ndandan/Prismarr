@@ -405,6 +405,37 @@ dashboard:
     discover_cta: 'Découverte →'
   recent:
     title: Ajouts récents à votre bibliothèque
+  plex:
+    title: Activité Plex en cours
+    settings_cta: 'Réglages →'
+    streams: Flux
+    mbps: Mbps
+    unknown_title: Inconnu
+    empty: Aucun flux Plex en cours
+    summary:
+      direct_play: '{count} Direct Play'
+      direct_stream: '{count} Direct Stream'
+      transcode: '{count} Transcodage'
+    bandwidth:
+      total: Bande passante totale
+      lan: LAN
+      wan: WAN
+    state:
+      playing: En lecture
+      paused: En pause
+      buffering: Mise en mémoire tampon
+    decision:
+      direct_play: Direct Play
+      direct_stream: Direct Stream
+      transcode: Transcodage
+    track:
+      video: 'Vidéo :'
+      audio: 'Audio :'
+      subtitle: 'Sous-titres :'
+    error:
+      unconfigured: Tautulli n'est pas configuré
+      unreachable: Tautulli est injoignable
+      auth: Clé API Tautulli invalide ou non autorisée
   type:
     film: Film
     series: Série
@@ -526,6 +557,7 @@ admin:
       managers: Gestionnaires
       indexers: Indexeurs & requêtes
       downloads: Téléchargements
+      monitoring: Supervision
     subtitle:
       tmdb: Découverte films & séries, watchlist
       radarr: Gestionnaire de films
@@ -536,6 +568,7 @@ admin:
       sabnzbd: Téléchargeur Usenet
       nzbget: Téléchargeur Usenet
       gluetun: 'VPN / port forwarding'
+      tautulli: 'Activité Plex (via Tautulli)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Afficher dans le menu latéral
     status:
