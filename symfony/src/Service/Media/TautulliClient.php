@@ -190,6 +190,99 @@ class TautulliClient implements ResetInterface
         return self::normalizeHistory($resp['data']);
     }
 
+    /** Clamp a stats window to the allowed presets; anything else → 30 days. */
+    private static function clampRange(int $days): int
+    {
+        return in_array($days, [7, 30, 90], true) ? $days : 30;
+    }
+
+    /**
+     * Watch statistics for the home page, normalized + sanitized. Returns the
+     * four lists the activity page renders; an all-empty shape covers
+     * disabled/unconfigured/unreachable.
+     *
+     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>}
+     */
+    public function getHomeStats(int $days): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return self::normalizeHomeStats([]);
+        }
+        $resp = $this->request([
+            'cmd'         => 'get_home_stats',
+            'time_range'  => (string) self::clampRange($days),
+            'stats_count' => '5',
+        ]);
+        if ($resp === null || $resp['ok'] !== true) {
+            return self::normalizeHomeStats([]);
+        }
+        return self::normalizeHomeStats(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Pure transform: get_home_stats `data` (list of stat groups) → sanitized
+     * lists. Allow-list only: usernames/emails/ids/avatars/file paths/guids are
+     * never copied out. Only the four groups we render are kept.
+     *
+     * @param array<int, mixed> $data
+     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>}
+     */
+    public static function normalizeHomeStats(array $data): array
+    {
+        $out = ['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []];
+        foreach ($data as $group) {
+            if (!is_array($group)) {
+                continue;
+            }
+            $rows = is_array($group['rows'] ?? null) ? $group['rows'] : [];
+            switch (self::str($group['stat_id'] ?? null)) {
+                case 'top_movies':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['topMovies'][] = [
+                            'ratingKey'  => self::str($r['rating_key'] ?? null),
+                            'title'      => self::str($r['title'] ?? null),
+                            'year'       => self::str($r['year'] ?? null),
+                            'posterPath' => self::str($r['thumb'] ?? ($r['grandparent_thumb'] ?? null)),
+                            'plays'      => (int) ($r['total_plays'] ?? 0),
+                        ];
+                    }
+                    break;
+                case 'top_tv':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['topShows'][] = [
+                            'ratingKey'  => self::str($r['rating_key'] ?? null),
+                            'title'      => self::str($r['title'] ?? null),
+                            'posterPath' => self::str($r['grandparent_thumb'] ?? ($r['thumb'] ?? null)),
+                            'plays'      => (int) ($r['total_plays'] ?? 0),
+                        ];
+                    }
+                    break;
+                case 'top_users':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['topUsers'][] = [
+                            'userDisplayName' => self::str($r['friendly_name'] ?? null),
+                            'plays'           => (int) ($r['total_plays'] ?? 0),
+                        ];
+                    }
+                    break;
+                case 'top_platforms':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['topPlatforms'][] = [
+                            'platform' => self::str($r['platform_name'] ?? ($r['platform'] ?? null)),
+                            'plays'    => (int) ($r['total_plays'] ?? 0),
+                        ];
+                    }
+                    break;
+            }
+        }
+        return $out;
+    }
+
     /**
      * Pure transform: get_history `data` envelope -> sanitized rows. Allow-list
      * only; usernames/emails/IPs/file paths are never copied out.

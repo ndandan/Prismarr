@@ -395,4 +395,67 @@ class TautulliClientTest extends TestCase
             self::assertArrayNotHasKey('ip_address', $row);
         }
     }
+
+    /** A representative get_home_stats `data` list (groups with rows). */
+    private function homeStatsFixture(): array
+    {
+        return [
+            ['stat_id' => 'top_movies', 'rows' => [
+                ['rating_key' => '12345', 'title' => 'See How They Run', 'year' => '2022',
+                 'total_plays' => 7, 'thumb' => '/library/metadata/12345/thumb/1',
+                 'file' => '/data/media/x.mkv', 'guid' => 'plex://movie/abc'],
+            ]],
+            ['stat_id' => 'top_tv', 'rows' => [
+                ['rating_key' => '777', 'title' => "Tom Clancy's Jack Ryan", 'total_plays' => 12,
+                 'thumb' => '/library/metadata/700/thumb/9', 'grandparent_thumb' => '/library/metadata/100/thumb/2'],
+            ]],
+            ['stat_id' => 'top_users', 'rows' => [
+                ['user' => 'plexlogin_secret', 'friendly_name' => 'nDanDan', 'user_id' => 99,
+                 'total_plays' => 30, 'user_thumb' => 'https://plex.tv/users/abc/avatar'],
+            ]],
+            ['stat_id' => 'top_platforms', 'rows' => [
+                ['platform' => 'Chrome', 'platform_name' => 'Chrome', 'total_plays' => 18],
+            ]],
+            ['stat_id' => 'last_watched', 'rows' => [['title' => 'ignored']]],
+        ];
+    }
+
+    public function testNormalizeHomeStatsMapsGroups(): void
+    {
+        $out = TautulliClient::normalizeHomeStats($this->homeStatsFixture());
+
+        self::assertSame('12345', $out['topMovies'][0]['ratingKey']);
+        self::assertSame('See How They Run', $out['topMovies'][0]['title']);
+        self::assertSame('2022', $out['topMovies'][0]['year']);
+        self::assertSame('/library/metadata/12345/thumb/1', $out['topMovies'][0]['posterPath']);
+        self::assertSame(7, $out['topMovies'][0]['plays']);
+
+        self::assertSame('/library/metadata/100/thumb/2', $out['topShows'][0]['posterPath']);
+        self::assertSame(12, $out['topShows'][0]['plays']);
+
+        self::assertSame('nDanDan', $out['topUsers'][0]['userDisplayName']);
+        self::assertSame(30, $out['topUsers'][0]['plays']);
+
+        self::assertSame('Chrome', $out['topPlatforms'][0]['platform']);
+        self::assertSame(18, $out['topPlatforms'][0]['plays']);
+    }
+
+    public function testNormalizeHomeStatsNeverLeaksPrivateFields(): void
+    {
+        $flat = json_encode(TautulliClient::normalizeHomeStats($this->homeStatsFixture()));
+        self::assertStringNotContainsString('plexlogin_secret', $flat);
+        self::assertStringNotContainsString('/data/media', $flat);
+        self::assertStringNotContainsString('plex://', $flat);
+        self::assertStringNotContainsString('avatar', $flat);
+        foreach (TautulliClient::normalizeHomeStats($this->homeStatsFixture())['topUsers'] as $u) {
+            self::assertArrayNotHasKey('user', $u);
+            self::assertArrayNotHasKey('user_id', $u);
+        }
+    }
+
+    public function testNormalizeHomeStatsEmptyInputYieldsEmptyLists(): void
+    {
+        $out = TautulliClient::normalizeHomeStats([]);
+        self::assertSame(['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []], $out);
+    }
 }
