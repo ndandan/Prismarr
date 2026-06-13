@@ -9,6 +9,7 @@ use App\Service\HealthService;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
+use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -67,6 +68,7 @@ class DashboardControllerTest extends TestCase
             new NullLogger(),
             $this->createMock(TranslatorInterface::class),
             $this->createMock(CacheInterface::class),
+            $this->createMock(TautulliClient::class),
         );
 
         $m = new ReflectionMethod(DashboardController::class, 'servicesHealth');
