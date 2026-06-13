@@ -294,4 +294,34 @@ class TautulliClientTest extends TestCase
         self::assertStringNotContainsString('/data/media/movies', $flat);
         self::assertStringNotContainsString('plex://', $flat);
     }
+
+    public function testNormalizeMetadataDurationUnderOneHourAndZero(): void
+    {
+        // 2_700_000 ms = 45 min
+        self::assertSame('45 min', TautulliClient::normalizeMetadata(['duration' => '2700000'])['durationLabel']);
+        // zero / missing duration -> null label
+        self::assertNull(TautulliClient::normalizeMetadata(['duration' => '0'])['durationLabel']);
+        self::assertNull(TautulliClient::normalizeMetadata([])['durationLabel']);
+    }
+
+    public function testNormalizeMetadataRatingsAbsentVsZero(): void
+    {
+        // absent ratings -> null
+        $out = TautulliClient::normalizeMetadata([]);
+        self::assertNull($out['ratings']['critic']);
+        self::assertNull($out['ratings']['audience']);
+        // a genuine zero rating must survive as 0.0 (not collapse to null)
+        $out = TautulliClient::normalizeMetadata(['rating' => '0', 'audience_rating' => '0']);
+        self::assertSame(0.0, $out['ratings']['critic']);
+        self::assertSame(0.0, $out['ratings']['audience']);
+    }
+
+    public function testNormalizeMetadataHandlesEmptyMediaInfo(): void
+    {
+        $out = TautulliClient::normalizeMetadata(['media_info' => []]);
+        self::assertNull($out['media']['resolution']);
+        self::assertNull($out['media']['videoCodec']);
+        self::assertNull($out['media']['container']);
+        self::assertSame(0, $out['media']['bitrateKbps']);
+    }
 }

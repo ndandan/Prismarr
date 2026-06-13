@@ -11,10 +11,11 @@ use Symfony\Contracts\Service\ResetInterface;
  * Read-only client for the Tautulli API (current Plex activity).
  *
  * Optional service — Prismarr never talks to Plex directly; it consumes an
- * existing Tautulli instance's HTTP API. Only the `get_activity` command is
- * used, and the raw response is reduced to a small, sanitized shape before it
- * ever leaves the server: IP addresses, Plex/server tokens, machine ids, file
- * paths and the raw payload are dropped (allow-list, not deny-list).
+ * existing Tautulli instance's HTTP API. Only read-only commands are used
+ * (`get_activity`, `get_metadata`, `get_history`); nothing mutating. The raw
+ * response is reduced to a small, sanitized shape before it ever leaves the
+ * server: IP addresses, Plex/server tokens, machine ids, file paths and the
+ * raw payload are dropped (allow-list, not deny-list).
  *
  * Endpoint: GET {tautulli_url}/api/v2?apikey={key}&cmd=get_activity
  * Docs: https://github.com/Tautulli/Tautulli/blob/master/API.md
@@ -344,11 +345,14 @@ class TautulliClient implements ResetInterface
      * response isn't valid JSON. Honors + feeds the cross-request circuit
      * breaker so a downed Tautulli doesn't cost an 8 s timeout on every poll.
      *
-     * @param array<string, string> $params Tautulli command + args (apikey added here).
+     * @param array<string, string> $params Tautulli command + args. Must not contain
+     *                                       'apikey' (reserved; added automatically).
      * @return array{ok: bool, data: array<string, mixed>}|null
      */
     private function request(array $params = ['cmd' => 'get_activity']): ?array
     {
+        $cmd = $params['cmd'] ?? 'unknown';
+
         // Circuit breaker: skip the call entirely if Tautulli was just seen
         // down — the 10 s widget poll would otherwise stack connect timeouts.
         if ($this->health?->isDown(self::SERVICE)) {
@@ -359,7 +363,7 @@ class TautulliClient implements ResetInterface
         // schemes + link-local / cloud-metadata IPs) before opening a socket.
         $endpoint = rtrim($this->baseUrl, '/') . '/api/v2';
         if (($reason = HealthService::urlBlockedReason($endpoint)) !== null) {
-            $this->recordError(0, 'blocked: ' . $reason);
+            $this->recordError(0, 'blocked: ' . $reason, $cmd);
             $this->logger->warning('Tautulli URL blocked', ['reason' => $reason]);
             return null;
         }
@@ -389,14 +393,14 @@ class TautulliClient implements ResetInterface
         curl_close($ch);
 
         if ($body === false || $err !== '' || $code === 0) {
-            $this->recordError($code, $err !== '' ? $err : 'connection failed');
+            $this->recordError($code, $err !== '' ? $err : 'connection failed', $cmd);
             $this->health?->markDown(self::SERVICE);
             return null;
         }
 
         $json = json_decode((string) $body, true);
         if (!is_array($json)) {
-            $this->recordError($code, 'invalid JSON response');
+            $this->recordError($code, 'invalid JSON response', $cmd);
             $this->health?->markDown(self::SERVICE);
             return null;
         }
@@ -408,7 +412,7 @@ class TautulliClient implements ResetInterface
         $resp   = is_array($json['response'] ?? null) ? $json['response'] : [];
         $result = $resp['result'] ?? null;
         if ($result !== 'success') {
-            $this->recordError($code, 'tautulli result: ' . (is_string($result) ? $result : 'error'));
+            $this->recordError($code, 'tautulli result: ' . (is_string($result) ? $result : 'error'), $cmd);
             return ['ok' => false, 'data' => []];
         }
 
@@ -576,12 +580,12 @@ class TautulliClient implements ResetInterface
         return max(0.0, min(100.0, round((float) $v, 1)));
     }
 
-    private function recordError(int $code, string $message): void
+    private function recordError(int $code, string $message, string $cmd = 'get_activity'): void
     {
         $this->lastError = [
             'code'    => $code,
             'method'  => 'GET',
-            'path'    => '/api/v2?cmd=get_activity',
+            'path'    => '/api/v2?cmd=' . $cmd,
             'message' => $message,
         ];
     }
