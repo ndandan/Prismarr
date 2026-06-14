@@ -20,8 +20,9 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * always answers 200 with an `error` code in the body for the disabled /
  * unconfigured / unreachable / auth cases, so the widget never breaks the page.
  *
- * Only `get_activity` is exposed — no terminate_session, history, notifications
- * or any other mutating Tautulli command.
+ * The page also exposes read-only `get_metadata`, `get_history`,
+ * `get_home_stats`, `get_plays_by_date`, and `get_libraries` — no
+ * terminate_session, notifications or any other mutating Tautulli command.
  */
 #[IsGranted('ROLE_USER')]
 #[Route('/tautulli', name: 'app_tautulli_')]
@@ -111,5 +112,84 @@ class TautulliController extends AbstractController
             'player' => trim((string) $request->query->get('player', '')),
             'device' => trim((string) $request->query->get('device', '')),
         ]);
+    }
+
+    /**
+     * GET /tautulli — the full Plex activity page. Server-renders the cheap
+     * "Now Playing" section; heavier sections hydrate client-side. Guarded by
+     * ServiceRouteGuardSubscriber when Tautulli is unconfigured.
+     */
+    #[Route('', name: 'index', methods: ['GET'])]
+    public function index(): Response
+    {
+        set_time_limit(60);
+        try {
+            $activity = $this->tautulli->getActivity();
+        } catch (\Throwable) {
+            $activity = ['enabled' => true, 'configured' => true, 'connected' => false, 'error' => 'unreachable', 'streamCount' => 0, 'sessions' => []];
+        }
+        return $this->render('tautulli/index.html.twig', ['plex' => $activity]);
+    }
+
+    /** GET /tautulli/api/now-playing — live stream cards fragment (polled). */
+    #[Route('/api/now-playing', name: 'api_now_playing', methods: ['GET'])]
+    public function apiNowPlaying(): Response
+    {
+        try {
+            $activity = $this->tautulli->getActivity();
+        } catch (\Throwable) {
+            $activity = ['connected' => false, 'error' => 'unreachable', 'sessions' => []];
+        }
+        return $this->render('tautulli/_now_playing.html.twig', ['plex' => $activity]);
+    }
+
+    /** GET /tautulli/api/stats?range=30 — watch-stats tiles fragment. */
+    #[Route('/api/stats', name: 'api_stats', methods: ['GET'])]
+    public function apiStats(Request $request): Response
+    {
+        try {
+            $stats = $this->tautulli->getHomeStats((int) $request->query->get('range', 30));
+        } catch (\Throwable) {
+            $stats = ['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []];
+        }
+        return $this->render('tautulli/_stats.html.twig', ['stats' => $stats]);
+    }
+
+    /** GET /tautulli/api/plays?range=30 — plays-per-day series as JSON (Chart.js). */
+    #[Route('/api/plays', name: 'api_plays', methods: ['GET'])]
+    public function apiPlays(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getPlaysByDate((int) $request->query->get('range', 30)));
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/history?length=25&start=0 — history rows fragment. */
+    #[Route('/api/history', name: 'api_history', methods: ['GET'])]
+    public function apiHistory(Request $request): Response
+    {
+        try {
+            $rows = $this->tautulli->getHistory(
+                (int) $request->query->get('length', 25),
+                (int) $request->query->get('start', 0),
+            );
+        } catch (\Throwable) {
+            $rows = [];
+        }
+        return $this->render('tautulli/_history_rows.html.twig', ['plex_history' => $rows]);
+    }
+
+    /** GET /tautulli/api/libraries — library count cards fragment. */
+    #[Route('/api/libraries', name: 'api_libraries', methods: ['GET'])]
+    public function apiLibraries(): Response
+    {
+        try {
+            $libraries = $this->tautulli->getLibraries();
+        } catch (\Throwable) {
+            $libraries = [];
+        }
+        return $this->render('tautulli/_libraries.html.twig', ['libraries' => $libraries]);
     }
 }

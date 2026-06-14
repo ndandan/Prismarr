@@ -1,0 +1,52 @@
+{# Watch-statistics tiles. `stats` = {topMovies, topShows, topUsers, topPlatforms}. #}
+{% import '_icons.html.twig' as ico %}
+{% if stats.topMovies is empty and stats.topShows is empty and stats.topUsers is empty and stats.topPlatforms is empty %}
+  <div class="text-center text-secondary py-4">{{ 'tautulli.stats.empty'|trans }}</div>
+{% else %}
+<div class="row row-cards">
+  {# Most-watched movies + shows: clickable poster tiles #}
+  {% for group in [{title: 'tautulli.stats.top_movie', items: stats.topMovies, type: 'movie'}, {title: 'tautulli.stats.top_show', items: stats.topShows, type: 'episode'}] %}
+    {% if group.items is not empty %}
+    <div class="col-md-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-header"><h3 class="card-title">{{ group.title|trans }}</h3></div>
+        <div class="card-body">
+          {% for it in group.items %}
+            <div class="plex-stat-row {% if it.ratingKey %}plex-clickable{% endif %}"
+                 {% if it.ratingKey %}data-plex-rating-key="{{ it.ratingKey }}" role="button" tabindex="0"{% endif %}>
+              <div class="plex-poster plex-poster-sm">
+                {{ ico.icon(group.type == 'movie' ? 'movie' : 'device-tv', '', 18) }}
+                {% if it.posterPath %}<img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: it.posterPath}) }}" alt="" loading="lazy">{% endif %}
+              </div>
+              <div class="plex-stat-row-main">
+                <div class="text-truncate">{{ it.title }}{% if it.year is defined and it.year %} <span class="plex-session-year">({{ it.year }})</span>{% endif %}</div>
+                <div class="text-secondary small">{{ 'tautulli.stats.plays_count'|trans({count: it.plays}) }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+
+  {# Top users + platforms: simple labelled lists #}
+  {% for group in [{title: 'tautulli.stats.top_user', items: stats.topUsers, key: 'userDisplayName'}, {title: 'tautulli.stats.top_platform', items: stats.topPlatforms, key: 'platform'}] %}
+    {% if group.items is not empty %}
+    <div class="col-md-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-header"><h3 class="card-title">{{ group.title|trans }}</h3></div>
+        <div class="card-body">
+          {% for it in group.items %}
+            <div class="d-flex justify-content-between align-items-center py-1">
+              <span class="text-truncate">{{ attribute(it, group.key) }}</span>
+              <span class="badge bg-secondary-lt ms-2">{{ 'tautulli.stats.plays_count'|trans({count: it.plays}) }}</span>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+</div>
+{% endif %}

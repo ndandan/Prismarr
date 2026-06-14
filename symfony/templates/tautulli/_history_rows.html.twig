@@ -1,0 +1,5 @@
+{# History rows fragment. `plex_history` is a list of normalized rows. Returns
+   nothing when empty so the "Load more" JS can detect the end of the list. #}
+{% for h in plex_history %}
+  {% include 'dashboard/_plex_history_row.html.twig' with {h: h} only %}
+{% endfor %}
