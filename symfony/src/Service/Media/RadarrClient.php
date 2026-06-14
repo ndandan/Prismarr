@@ -214,7 +214,20 @@ class RadarrClient implements ResetInterface
         $data = $this->get('/api/v3/movie');
         if ($data === null) return [];
 
-        return array_map(fn($m) => $this->normalizeMovie($m), $data);
+        return $this->normalizeMovies($data);
+    }
+
+    /**
+     * Normalize a raw `/api/v3/movie` list payload. Public so callers that
+     * obtained the raw list another way (e.g. a concurrent multiGet batch)
+     * can reuse the exact same transform instead of duplicating it.
+     *
+     * @param array<int, array<string, mixed>> $rawMovies
+     * @return list<array<string, mixed>>
+     */
+    public function normalizeMovies(array $rawMovies): array
+    {
+        return array_map(fn($m) => $this->normalizeMovie($m), $rawMovies);
     }
 
     /** Returns raw movies without normalization (for lightweight cache) */
@@ -324,6 +337,18 @@ class RadarrClient implements ResetInterface
         $data = $this->get('/api/v3/queue', ['pageSize' => 50, 'includeMovie' => 'true']);
         if ($data === null || empty($data['records'])) return [];
 
+        return $this->normalizeQueueRecords($data['records']);
+    }
+
+    /**
+     * Normalize raw queue `records` into the shape the films UI expects.
+     * Public so a concurrent multiGet batch can reuse it.
+     *
+     * @param array<int, array<string, mixed>> $records
+     * @return list<array<string, mixed>>
+     */
+    public function normalizeQueueRecords(array $records): array
+    {
         return array_map(fn($r) => [
             'id'             => $r['id'] ?? null,
             'movieId'        => $r['movieId'] ?? null,
@@ -345,7 +370,7 @@ class RadarrClient implements ResetInterface
                 'title' => $m['title'] ?? '',
                 'messages' => $m['messages'] ?? [],
             ], $r['statusMessages'] ?? []),
-        ], $data['records']);
+        ], $records);
     }
 
     public function getRawQueue(): array
