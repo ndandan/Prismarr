@@ -47,6 +47,19 @@ class MediaController extends AbstractController
     ) {}
 
     /**
+     * Drop the cached library list for the currently-bound instance after a
+     * mutating action so the change shows on the next page load. No-op-safe
+     * when no instance is bound (guards/subscribers normally prevent that).
+     */
+    private function invalidateRadarrLibrary(): void
+    {
+        $slug = $this->radarr->getInstance()?->getSlug();
+        if ($slug !== null) {
+            $this->libraryCache->invalidate('radarr', $slug);
+        }
+    }
+
+    /**
      * v1.1.0 Phase C — slug is mandatory, injected via the class-level
      * /medias/{slug} prefix. The autowired RadarrClient is already bound
      * to the right instance by MultiInstanceBinderSubscriber before this
@@ -414,6 +427,9 @@ class MediaController extends AbstractController
     {
         $monitored = (bool) ($request->toArray()['monitored'] ?? true);
         $ok        = $this->radarr->setMonitored($id, $monitored);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $this->json(['ok' => $ok, 'monitored' => $monitored]);
     }
 
@@ -424,6 +440,9 @@ class MediaController extends AbstractController
         $deleteFiles = (bool) ($data['deleteFiles'] ?? false);
         $addExclusion = (bool) ($data['addExclusion'] ?? false);
         $ok          = $this->radarr->deleteMovie($id, $deleteFiles, $addExclusion);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $this->json(['ok' => $ok]);
     }
 
@@ -457,6 +476,9 @@ class MediaController extends AbstractController
             $payload['rootFolderPath'] = $data['rootFolderPath'] ?? '';
         }
         $movie = $this->radarr->addMovie($payload);
+        if ($movie !== null) {
+            $this->invalidateRadarrLibrary();
+        }
         return $this->json(['ok' => $movie !== null, 'movie' => $movie, 'movieId' => $movie['id'] ?? null]);
     }
 
@@ -568,6 +590,9 @@ class MediaController extends AbstractController
     public function filmFileDelete(int $fileId): JsonResponse
     {
         $ok = $this->radarr->deleteMovieFile($fileId);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Radarr', $this->radarr);
     }
 
@@ -698,6 +723,9 @@ class MediaController extends AbstractController
         if (isset($data['tags'])) $changes['tags'] = $data['tags'];
         if (isset($data['applyTags'])) $changes['applyTags'] = $data['applyTags']; // add, remove, replace
         $ok = $this->radarr->bulkUpdateMovies($ids, $changes);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Radarr', $this->radarr);
     }
 
@@ -710,6 +738,9 @@ class MediaController extends AbstractController
         $addExclusion = (bool) ($data['addExclusion'] ?? false);
         if (!$ids) return $this->json(['ok' => false]);
         $ok = $this->radarr->bulkDeleteMovies($ids, $deleteFiles, $addExclusion);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Radarr', $this->radarr);
     }
 
@@ -1204,6 +1235,9 @@ class MediaController extends AbstractController
         }
         $merged = array_merge($fullMovie, $raw);
         $updated = $this->radarr->updateMovie($id, $merged);
+        if ($updated !== null) {
+            $this->invalidateRadarrLibrary();
+        }
 
         return $this->json(['ok' => $updated !== null, 'movie' => $updated]);
     }
