@@ -6,6 +6,7 @@ use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
+use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\MovieLibraryFilter;
 use App\Service\Media\MovieLibraryQuery;
 use App\Service\Media\ProwlarrClient;
@@ -42,6 +43,7 @@ class MediaController extends AbstractController
         private readonly ServiceInstanceProvider $instances,
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
+        private readonly MediaLibraryCache $libraryCache,
     ) {}
 
     /**
@@ -68,41 +70,46 @@ class MediaController extends AbstractController
 
         $indexerCount = 0;
         $warnings = [];
+
+        $instance = $this->radarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_RADARR);
+        if ($instance === null) {
+            throw $this->createNotFoundException('No Radarr instance configured.');
+        }
+        $slug = $instance->getSlug();
+
         try {
-            // Check that Radarr is reachable
-            $status = $this->radarr->getSystemStatus();
-            if ($status === null) {
+            // One concurrent batch for the cheap, volatile endpoints. The
+            // heavy movie list is fetched separately and cached (slow-changing).
+            $batch = $this->radarr->multiGet([
+                'status'   => ['path' => '/api/v3/system/status'],
+                'queue'    => ['path' => '/api/v3/queue', 'params' => ['pageSize' => 50, 'includeMovie' => 'true']],
+                'indexers' => ['path' => '/api/v3/indexer'],
+                'health'   => ['path' => '/api/v3/health'],
+            ]);
+
+            if ($batch['status'] === null) {
                 $error = true;
-            }
+            } else {
+                $movies = $this->libraryCache->movies($slug, fn() => $this->radarr->getMovies());
 
-            if (!$error) {
-            $movies = $this->radarr->getMovies();
-            $queue  = $this->radarr->getQueue();
-            $indexers = $this->radarr->getRadarrIndexers();
-            $activeIndexers = array_filter($indexers, fn($i) => ($i['enableAutomaticSearch'] ?? false) || ($i['enableInteractiveSearch'] ?? false));
-            $indexerCount = count($activeIndexers);
+                $queue = $this->radarr->normalizeQueueRecords($batch['queue']['records'] ?? []);
 
-            // Check indexer status
-            if ($indexerCount === 0) {
-                $warnings[] = $this->translator->trans('media.api.no_indexer');
-            }
+                $indexers = $batch['indexers'] ?? [];
+                $activeIndexers = array_filter($indexers, fn($i) => ($i['enableAutomaticSearch'] ?? false) || ($i['enableInteractiveSearch'] ?? false));
+                $indexerCount = count($activeIndexers);
+                if ($indexerCount === 0) {
+                    $warnings[] = $this->translator->trans('media.api.no_indexer');
+                }
 
-            // Check Radarr health
-            try {
-                $health = $this->radarr->getSystemHealth();
-                foreach ($health as $h) {
+                foreach ($batch['health'] ?? [] as $h) {
                     $warnings[] = $this->translator->trans('media.api.warning_format', ['source' => $h['source'] ?? 'Radarr', 'message' => $h['message'] ?? '?']);
                 }
-            } catch (\Throwable $e) {
-                $this->logger->warning('Media films failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
-            }
 
-            // Check for blocked items in the queue
-            $blocked = array_filter($queue, fn($q) => ($q['trackedState'] ?? '') === 'importBlocked');
-            if (count($blocked) > 0) {
-                $warnings[] = $this->translator->trans('media.import.blocked_warning', ['count' => count($blocked)]);
+                $blocked = array_filter($queue, fn($q) => ($q['trackedState'] ?? '') === 'importBlocked');
+                if (count($blocked) > 0) {
+                    $warnings[] = $this->translator->trans('media.import.blocked_warning', ['count' => count($blocked)]);
+                }
             }
-            } // end if (!$error)
         } catch (\Throwable $e) {
             $this->logger->warning('Media films failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
             $error = true;
@@ -147,14 +154,7 @@ class MediaController extends AbstractController
 
         $library = $filter->apply($movies, $query);
 
-        $current = $this->radarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_RADARR);
-        // Defensive guard. ServiceRouteGuardSubscriber should redirect long
-        // before we reach this point when no Radarr instance is configured,
-        // but if a worker keeps a stale binding around we'd otherwise render
-        // a template that calls path() with a null slug → 500.
-        if ($current === null) {
-            throw $this->createNotFoundException('No Radarr instance configured.');
-        }
+        $current = $instance;
         return $this->render('media/films.html.twig', [
             'movies'  => $library->items,
             'library' => $library,
