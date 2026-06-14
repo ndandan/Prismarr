@@ -1,7 +1,10 @@
 {# Shared Plex info modal: shell + hidden data-API trigger + the delegated
    open/keydown handler. Included by the dashboard and the Tautulli page.
    Tabler doesn't expose window.bootstrap, so we click a hidden data-bs-toggle
-   trigger (same pattern as the usenet/qBit detail modals). #}
+   trigger (same pattern as the usenet/qBit detail modals).
+   Include exactly ONCE per rendered document (the dashboard and the Tautulli
+   page are separate pages, so this holds); the window._plexModalDelegated guard
+   only de-dupes the JS listener, not the modal DOM itself. #}
 <button type="button" class="d-none" data-plex-modal-trigger data-bs-toggle="modal" data-bs-target="#plex-info-modal"></button>
 <div class="modal modal-blur fade" id="plex-info-modal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-centered">

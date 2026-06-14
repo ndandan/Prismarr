@@ -1,4 +1,5 @@
-{# One watch-history row. Expects `h` (a normalized history row). #}
+{# One watch-history row. Expects `h` (a normalized history row) with an integer
+   `watchedAt` (Unix epoch seconds; 0/absent = unknown → time label omitted). #}
 {% import '_icons.html.twig' as ico %}
 <div class="plex-session {% if h.ratingKey %}plex-clickable{% endif %}"
      {% if h.ratingKey %}data-plex-rating-key="{{ h.ratingKey }}" role="button" tabindex="0"{% endif %}>
