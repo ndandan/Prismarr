@@ -1627,6 +1627,97 @@ class RadarrClient implements ResetInterface
         return json_decode($body, true);
     }
 
+    /**
+     * Concurrent GET of several endpoints in a single curl_multi batch.
+     *
+     * Same per-handle semantics as get(): SSRF protocol guard, 4 s connect /
+     * 8 s total timeout, NOSIGNAL, X-Api-Key + Accept headers. Returns a map
+     * name => decoded array, or null for any handle that errored / returned
+     * non-200. The whole batch short-circuits to nulls instantly when the
+     * instance's circuit breaker is open, so a down service costs one timeout
+     * window across the page instead of one per call (the old sequential
+     * get() calls stacked N × 8 s).
+     *
+     * @param array<string, array{path: string, params?: array}> $requests
+     * @return array<string, ?array>
+     */
+    public function multiGet(array $requests): array
+    {
+        $out = array_fill_keys(array_keys($requests), null);
+        if ($requests === []) {
+            return $out;
+        }
+        if ($this->health->isDown(self::SERVICE_KEY, $this->instance?->getSlug()) || $this->serviceUnavailable) {
+            $this->serviceUnavailable = true;
+            return $out;
+        }
+        $this->lastError = null;
+        $this->ensureConfig();
+
+        $mh      = curl_multi_init();
+        $handles = [];
+        foreach ($requests as $name => $spec) {
+            $url = rtrim($this->baseUrl, '/') . $spec['path'];
+            if (!empty($spec['params'])) {
+                $url .= '?' . http_build_query($spec['params']);
+            }
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL            => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS, // SSRF guard
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_TIMEOUT        => 8,
+                CURLOPT_CONNECTTIMEOUT => 4,
+                CURLOPT_NOSIGNAL       => 1,
+                CURLOPT_HTTPHEADER     => ["X-Api-Key: {$this->apiKey}", 'Accept: application/json'],
+            ]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$name] = $ch;
+        }
+
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
+
+        $networkError = false;
+        foreach ($handles as $name => $ch) {
+            $body = curl_multi_getcontent($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err  = curl_error($ch);
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+
+            if ($err !== '' || (int) $code === 0) {
+                $networkError = true;
+                $this->logger->warning("RadarrClient multiGet {$name} → HTTP {$code} {$err}");
+                continue; // leave null
+            }
+            if ((int) $code !== 200) {
+                $this->logger->warning("RadarrClient multiGet {$name} → HTTP {$code}");
+                continue; // leave null
+            }
+            $decoded = json_decode((string) $body, true);
+            $out[$name] = is_array($decoded) ? $decoded : null;
+        }
+        curl_multi_close($mh);
+
+        // Mirror get(): a transport-level failure trips the breaker for the
+        // rest of the request + the cross-request window; a clean batch clears
+        // any stale down-marker.
+        if ($networkError) {
+            $this->serviceUnavailable = true;
+            $this->health->markDown(self::SERVICE_KEY, $this->instance?->getSlug());
+        } else {
+            $this->health->clear(self::SERVICE_KEY, $this->instance?->getSlug());
+        }
+
+        return $out;
+    }
+
     private function put(string $path, array $body): bool
     {
         return $this->request('PUT', $path, [], $body) !== null;
