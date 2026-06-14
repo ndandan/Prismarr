@@ -968,6 +968,22 @@
             </li>
             {% endif %}
 
+            {% if service_visible_in_sidebar('tautulli') %}
+            <li class="nav-item">
+              <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_tautulli_' ? 'active' }}"
+                 href="{{ path('app_tautulli_index') }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
+                       fill="none" stroke="#e5a00d" stroke-width="2"
+                       stroke-linecap="round" stroke-linejoin="round" class="icon">
+                    <path d="M3 12h4l3 8l4 -16l3 8h4"/>
+                  </svg>
+                </span>
+                <span class="nav-link-title">Tautulli</span>
+              </a>
+            </li>
+            {% endif %}
+
           </ul>
 
           {# ── Sidebar footer: admin settings + logout (mobile included) ── #}
