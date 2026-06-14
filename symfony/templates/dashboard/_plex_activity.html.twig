@@ -41,54 +41,7 @@
   {# ── One card per active session ─────────────────────────────────── #}
   <div class="plex-sessions">
     {% for s in plex.sessions %}
-      {% set state = (s.state|default('') )|lower %}
-      {% set state_known = state in ['playing', 'paused', 'buffering'] %}
-      {% set state_cls = {playing: 'bg-green-lt text-green', paused: 'bg-yellow-lt text-yellow', buffering: 'bg-azure-lt text-azure'} %}
-      {# transcode_decision is the overall stream verdict: direct play / copy
-         (= direct stream) / transcode. Map it to a labelled, coloured badge. #}
-      {% set dec = (s.transcodeDecision|default(''))|lower %}
-      {% set dec_label = {'direct play': 'dashboard.plex.decision.direct_play', 'copy': 'dashboard.plex.decision.direct_stream', 'transcode': 'dashboard.plex.decision.transcode'} %}
-      {% set dec_cls = {'direct play': 'bg-green-lt text-green', 'copy': 'bg-azure-lt text-azure', 'transcode': 'bg-orange-lt text-orange'} %}
-      <div class="plex-session">
-        <div class="plex-poster {% if s.ratingKey %}plex-clickable{% endif %}"
-             {% if s.ratingKey %}data-plex-rating-key="{{ s.ratingKey }}" data-plex-player="{{ s.player }}" data-plex-device="{{ s.device }}" role="button" tabindex="0"{% endif %}>
-          {{ ico.icon(s.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}
-          {% if s.posterPath %}
-            {# Poster streamed server-side via the Tautulli image proxy (no API
-               key in the browser). Sits over the icon; a miss returns 404 and
-               the icon shows through. #}
-            <img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: s.posterPath}) }}" alt="" loading="lazy">
-          {% endif %}
-        </div>
-        <div class="plex-session-main">
-          <div class="plex-session-title text-truncate {% if s.ratingKey %}plex-clickable{% endif %}"
-               {% if s.ratingKey %}data-plex-rating-key="{{ s.ratingKey }}" data-plex-player="{{ s.player }}" data-plex-device="{{ s.device }}" role="button" tabindex="0"{% endif %}>
-            {{ s.title ?? 'dashboard.plex.unknown_title'|trans }}{% if s.year %} <span class="plex-session-year">({{ s.year }})</span>{% endif %}
-          </div>
-          <div class="plex-session-meta text-truncate">
-            {%- set meta = [s.userDisplayName, s.product, s.player, s.device]|filter(v => v is not null) -%}
-            {{ meta|join(' · ') }}
-          </div>
-          <div class="plex-badges">
-            {% if state %}<span class="badge {{ state_cls[state]|default('bg-secondary-lt') }}">{{ state_known ? ('dashboard.plex.state.' ~ state)|trans : state|capitalize }}</span>{% endif %}
-            {% if dec %}<span class="badge {{ dec_cls[dec]|default('bg-secondary-lt') }}">{{ dec_label[dec] is defined ? dec_label[dec]|trans : dec|capitalize }}</span>{% endif %}
-            {% if s.location %}<span class="badge bg-secondary-lt text-uppercase">{{ s.location }}</span>{% endif %}
-            {% if s.quality %}<span class="badge bg-secondary-lt">{{ s.quality }}</span>{% endif %}
-            {% if s.bandwidthMbps > 0 %}<span class="badge bg-secondary-lt">{{ s.bandwidthMbps }} {{ 'dashboard.plex.mbps'|trans }}</span>{% endif %}
-          </div>
-          {% if dec == 'transcode' %}
-            <div class="plex-decisions text-secondary">
-              {{ 'dashboard.plex.track.video'|trans }} {{ s.videoDecision ?? '—' }} ·
-              {{ 'dashboard.plex.track.audio'|trans }} {{ s.audioDecision ?? '—' }} ·
-              {{ 'dashboard.plex.track.subtitle'|trans }} {{ s.subtitleDecision ?? '—' }}
-            </div>
-          {% endif %}
-          <div class="progress plex-progress">
-            <div class="progress-bar" style="width: {{ s.progressPercent }}%" role="progressbar"
-                 aria-valuenow="{{ s.progressPercent }}" aria-valuemin="0" aria-valuemax="100"></div>
-          </div>
-        </div>
-      </div>
+      {% include 'dashboard/_plex_session_card.html.twig' with {s: s} only %}
     {% endfor %}
   </div>
 {% endif %}
@@ -100,25 +53,7 @@
   {% else %}
     <div class="plex-sessions">
       {% for h in plex_history %}
-        <div class="plex-session {% if h.ratingKey %}plex-clickable{% endif %}"
-             {% if h.ratingKey %}data-plex-rating-key="{{ h.ratingKey }}" role="button" tabindex="0"{% endif %}>
-          <div class="plex-poster">
-            {{ ico.icon(h.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}
-            {% if h.posterPath %}<img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: h.posterPath}) }}" alt="" loading="lazy">{% endif %}
-          </div>
-          <div class="plex-session-main">
-            <div class="plex-session-title text-truncate">
-              {% if h.mediaType == 'episode' and h.grandparentTitle %}{{ h.grandparentTitle }}{% else %}{{ h.title }}{% endif %}
-              {% if h.year %}<span class="plex-session-year">({{ h.year }})</span>{% endif %}
-            </div>
-            <div class="plex-session-meta text-truncate">
-              {{ [h.userDisplayName, h.when]|filter(v => v is not null)|join(' · ') }}
-            </div>
-            {% if h.percentComplete > 0 %}
-              <div class="progress plex-progress"><div class="progress-bar" style="width: {{ h.percentComplete }}%"></div></div>
-            {% endif %}
-          </div>
-        </div>
+        {% include 'dashboard/_plex_history_row.html.twig' with {h: h} only %}
       {% endfor %}
     </div>
   {% endif %}

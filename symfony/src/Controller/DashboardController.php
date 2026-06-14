@@ -272,15 +272,9 @@ class DashboardController extends AbstractController
         $activity = $this->tautulli->getActivity();
 
         // History changes slowly; cache it ~60s so the 10s now-playing poll
-        // doesn't hit get_history every time. Map each row's epoch to the same
-        // friendly relative label used by the recent-additions widget.
-        $now = new \DateTimeImmutable();
-        $history = array_map(function (array $row) use ($now) {
-            $row['when'] = $row['watchedAt'] > 0
-                ? $this->relativeDate((new \DateTimeImmutable())->setTimestamp($row['watchedAt']), $now)
-                : null;
-            return $row;
-        }, $this->cached('plex_history', fn() => $this->tautulli->getHistory(8)));
+        // doesn't hit get_history every time. The relative time label is now
+        // formatted in the template via the relative_date Twig filter.
+        $history = $this->cached('plex_history', fn() => $this->tautulli->getHistory(8));
 
         $streaming = ($activity['streamCount'] ?? 0) > 0;
 

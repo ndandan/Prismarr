@@ -1,0 +1,21 @@
+{# One watch-history row. Expects `h` (a normalized history row). #}
+{% import '_icons.html.twig' as ico %}
+<div class="plex-session {% if h.ratingKey %}plex-clickable{% endif %}"
+     {% if h.ratingKey %}data-plex-rating-key="{{ h.ratingKey }}" role="button" tabindex="0"{% endif %}>
+  <div class="plex-poster">
+    {{ ico.icon(h.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}
+    {% if h.posterPath %}<img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: h.posterPath}) }}" alt="" loading="lazy">{% endif %}
+  </div>
+  <div class="plex-session-main">
+    <div class="plex-session-title text-truncate">
+      {% if h.mediaType == 'episode' and h.grandparentTitle %}{{ h.grandparentTitle }}{% else %}{{ h.title }}{% endif %}
+      {% if h.year %}<span class="plex-session-year">({{ h.year }})</span>{% endif %}
+    </div>
+    <div class="plex-session-meta text-truncate">
+      {{ [h.userDisplayName, h.watchedAt|relative_date]|filter(v => v is not null)|join(' · ') }}
+    </div>
+    {% if h.percentComplete > 0 %}
+      <div class="progress plex-progress"><div class="progress-bar" style="width: {{ h.percentComplete }}%"></div></div>
+    {% endif %}
+  </div>
+</div>
