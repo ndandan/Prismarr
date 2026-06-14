@@ -329,6 +329,48 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Library sections with item counts, normalized + sanitized.
+     *
+     * @return list<array{name:?string,type:?string,count:int,childCount:?int}>
+     */
+    public function getLibraries(): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return [];
+        }
+        $resp = $this->request(['cmd' => 'get_libraries']);
+        if ($resp === null || $resp['ok'] !== true) {
+            return [];
+        }
+        return self::normalizeLibraries(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Pure transform: get_libraries `data` → sanitized rows. Names + counts
+     * only; section ids, thumbs and paths are dropped.
+     *
+     * @param array<int, mixed> $data
+     * @return list<array{name:?string,type:?string,count:int,childCount:?int}>
+     */
+    public static function normalizeLibraries(array $data): array
+    {
+        $out = [];
+        foreach ($data as $lib) {
+            if (!is_array($lib)) {
+                continue;
+            }
+            $out[] = [
+                'name'       => self::str($lib['section_name'] ?? null),
+                'type'       => self::str($lib['section_type'] ?? null),
+                'count'      => (int) ($lib['count'] ?? 0),
+                'childCount' => isset($lib['child_count']) ? (int) $lib['child_count'] : null,
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Pure transform: get_history `data` envelope -> sanitized rows. Allow-list
      * only; usernames/emails/IPs/file paths are never copied out.
      *

@@ -503,4 +503,39 @@ class TautulliClientTest extends TestCase
         self::assertCount(1, $out['series']);
         self::assertSame('TV', $out['series'][0]['name']);
     }
+
+    /** A representative get_libraries `data` list. */
+    private function librariesFixture(): array
+    {
+        return [
+            ['section_id' => '1', 'section_name' => 'Movies', 'section_type' => 'movie',
+             'count' => '1204', 'thumb' => '/library/sections/1/thumb'],
+            ['section_id' => '2', 'section_name' => 'TV Shows', 'section_type' => 'show',
+             'count' => '312', 'parent_count' => '900', 'child_count' => '8800'],
+        ];
+    }
+
+    public function testNormalizeLibrariesMapsRows(): void
+    {
+        $out = TautulliClient::normalizeLibraries($this->librariesFixture());
+        self::assertCount(2, $out);
+        self::assertSame('Movies', $out[0]['name']);
+        self::assertSame('movie', $out[0]['type']);
+        self::assertSame(1204, $out[0]['count']);
+        self::assertNull($out[0]['childCount']);
+        self::assertSame('show', $out[1]['type']);
+        self::assertSame(312, $out[1]['count']);
+        self::assertSame(8800, $out[1]['childCount']);
+    }
+
+    public function testNormalizeLibrariesDropsPrivateFields(): void
+    {
+        $flat = json_encode(TautulliClient::normalizeLibraries($this->librariesFixture()));
+        self::assertStringNotContainsString('section_id', $flat);
+        self::assertStringNotContainsString('/library/sections', $flat);
+        foreach (TautulliClient::normalizeLibraries($this->librariesFixture()) as $lib) {
+            self::assertArrayNotHasKey('section_id', $lib);
+            self::assertArrayNotHasKey('thumb', $lib);
+        }
+    }
 }
