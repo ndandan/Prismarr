@@ -59,6 +59,15 @@ class MediaController extends AbstractController
         }
     }
 
+    /** Drop the cached series list for the bound Sonarr instance. */
+    private function invalidateSonarrLibrary(): void
+    {
+        $slug = $this->sonarr->getInstance()?->getSlug();
+        if ($slug !== null) {
+            $this->libraryCache->invalidate('sonarr', $slug);
+        }
+    }
+
     /**
      * v1.1.0 Phase C — slug is mandatory, injected via the class-level
      * /medias/{slug} prefix. The autowired RadarrClient is already bound
@@ -920,6 +929,9 @@ class MediaController extends AbstractController
         ];
 
         $result = $this->sonarr->addSeries($raw);
+        if ($result !== null) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json(['ok' => $result !== null, 'series' => $result]);
     }
 
@@ -985,6 +997,9 @@ class MediaController extends AbstractController
         if (isset($data['applyTags'])) $payload['applyTags'] = $data['applyTags'];
 
         $result = $this->sonarr->bulkEditSeries($payload);
+        if ($result['ok'] ?? false) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json($result);
     }
 
@@ -997,6 +1012,9 @@ class MediaController extends AbstractController
         $deleteFiles = (bool) ($data['deleteFiles'] ?? false);
         $addExclusion = (bool) ($data['addImportExclusion'] ?? false);
         $ok = $this->sonarr->bulkDeleteSeries($ids, $deleteFiles, $addExclusion);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
@@ -1005,7 +1023,11 @@ class MediaController extends AbstractController
     {
         $series = $request->toArray();
         if (empty($series)) return $this->json(['ok' => false, 'error' => $this->translator->trans('media.api.no_series')]);
-        return $this->json($this->sonarr->importSeries($series));
+        $result = $this->sonarr->importSeries($series);
+        if ($result['ok'] ?? false) {
+            $this->invalidateSonarrLibrary();
+        }
+        return $this->json($result);
     }
 
     #[Route('/series/{id}/refresh', name: 'series_refresh', methods: ['POST'], requirements: ['id' => '\d+'])]
@@ -1521,6 +1543,9 @@ class MediaController extends AbstractController
     public function seriesFileDelete(int $id): JsonResponse
     {
         $ok = $this->sonarr->deleteEpisodeFile($id);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
@@ -1538,6 +1563,9 @@ class MediaController extends AbstractController
         $seasonNum = (int) ($data['seasonNumber'] ?? 0);
         $monitored = (bool) ($data['monitored'] ?? true);
         $ok = $this->sonarr->setSeasonMonitored($seriesId, $seasonNum, $monitored);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
@@ -1813,6 +1841,9 @@ class MediaController extends AbstractController
         if (isset($data['path'])) $series['path'] = $data['path'];
 
         $result = $this->sonarr->updateSeries($id, $series);
+        if ($result !== null) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json(['ok' => $result !== null]);
     }
 
@@ -1915,6 +1946,9 @@ class MediaController extends AbstractController
     {
         $monitored = (bool) ($request->toArray()['monitored'] ?? true);
         $ok = $this->sonarr->setMonitored($id, $monitored);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json(['ok' => $ok, 'monitored' => $monitored]);
     }
 
@@ -1923,6 +1957,9 @@ class MediaController extends AbstractController
     {
         $deleteFiles = (bool) ($request->toArray()['deleteFiles'] ?? false);
         $ok = $this->sonarr->deleteSeries($id, $deleteFiles);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
