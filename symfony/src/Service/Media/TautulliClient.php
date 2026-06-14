@@ -284,6 +284,51 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Plays-per-day series for the activity graph, ready for Chart.js.
+     *
+     * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
+     */
+    public function getPlaysByDate(int $days): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return ['categories' => [], 'series' => []];
+        }
+        $resp = $this->request([
+            'cmd'        => 'get_plays_by_date',
+            'time_range' => (string) self::clampRange($days),
+        ]);
+        if ($resp === null || $resp['ok'] !== true) {
+            return ['categories' => [], 'series' => []];
+        }
+        return self::normalizePlaysByDate(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Pure transform: get_plays_by_date `data` → {categories, series}. Series
+     * data is coerced to ints; only name + data survive.
+     *
+     * @param array<string, mixed> $data
+     * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
+     */
+    public static function normalizePlaysByDate(array $data): array
+    {
+        $series = [];
+        $rawSeries = is_array($data['series'] ?? null) ? $data['series'] : [];
+        foreach ($rawSeries as $s) {
+            if (!is_array($s)) {
+                continue;
+            }
+            $vals = is_array($s['data'] ?? null) ? $s['data'] : [];
+            $series[] = [
+                'name' => self::str($s['name'] ?? null) ?? '',
+                'data' => array_map(static fn ($v) => (int) $v, array_values($vals)),
+            ];
+        }
+        return ['categories' => self::strList($data['categories'] ?? []), 'series' => $series];
+    }
+
+    /**
      * Pure transform: get_history `data` envelope -> sanitized rows. Allow-list
      * only; usernames/emails/IPs/file paths are never copied out.
      *

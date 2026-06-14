@@ -458,4 +458,39 @@ class TautulliClientTest extends TestCase
         $out = TautulliClient::normalizeHomeStats([]);
         self::assertSame(['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []], $out);
     }
+
+    /** A representative get_plays_by_date `data` envelope. */
+    private function playsByDateFixture(): array
+    {
+        return [
+            'categories' => ['2026-06-01', '2026-06-02', '2026-06-03'],
+            'series'     => [
+                ['name' => 'TV',     'data' => [3, 0, 5]],
+                ['name' => 'Movies', 'data' => [1, 2, 0]],
+            ],
+        ];
+    }
+
+    public function testNormalizePlaysByDateMapsSeries(): void
+    {
+        $out = TautulliClient::normalizePlaysByDate($this->playsByDateFixture());
+        self::assertSame(['2026-06-01', '2026-06-02', '2026-06-03'], $out['categories']);
+        self::assertCount(2, $out['series']);
+        self::assertSame('TV', $out['series'][0]['name']);
+        self::assertSame([3, 0, 5], $out['series'][0]['data']);
+        self::assertSame([1, 2, 0], $out['series'][1]['data']);
+    }
+
+    public function testNormalizePlaysByDateCoercesAndDefaults(): void
+    {
+        $out = TautulliClient::normalizePlaysByDate(['series' => [['data' => ['2', '4']]]]);
+        self::assertSame([], $out['categories']);
+        self::assertSame('', $out['series'][0]['name']);
+        self::assertSame([2, 4], $out['series'][0]['data']); // string → int
+    }
+
+    public function testNormalizePlaysByDateEmpty(): void
+    {
+        self::assertSame(['categories' => [], 'series' => []], TautulliClient::normalizePlaysByDate([]));
+    }
 }
