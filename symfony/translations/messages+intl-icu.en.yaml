@@ -466,6 +466,34 @@ dashboard:
     cta_view: '▶ View details'
     cta_discover: '▶ Discover'
 
+tautulli:
+  title: Plex Activity
+  range:
+    7d: 7 days
+    30d: 30 days
+    90d: 90 days
+  section:
+    now_playing: Now playing
+    stats: Statistics
+    plays: Plays over time
+    history: History
+    libraries: Libraries
+  stats:
+    top_movie: Most watched movies
+    top_show: Most watched shows
+    top_user: Most active users
+    top_platform: Top platforms
+    plays_count: '{count, plural, one {# play} other {# plays}}'
+    empty: No statistics for this period
+  plays:
+    empty: No play data for this period
+  history:
+    load_more: Load more
+  libraries:
+    empty: No libraries
+    items: '{count, plural, one {# item} other {# items}}'
+    episodes: '{count, plural, one {# episode} other {# episodes}}'
+
 profile:
   title: My profile
   identity:
