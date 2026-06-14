@@ -19,9 +19,9 @@
     <div class="col"><h2 class="page-title">{{ 'tautulli.title'|trans }}</h2></div>
     <div class="col-auto">
       <div class="btn-group plex-range" role="group" data-tautulli-range>
-        <button type="button" class="btn btn-sm" data-range="7">{{ 'tautulli.range.7d'|trans }}</button>
-        <button type="button" class="btn btn-sm active" data-range="30">{{ 'tautulli.range.30d'|trans }}</button>
-        <button type="button" class="btn btn-sm" data-range="90">{{ 'tautulli.range.90d'|trans }}</button>
+        <button type="button" class="btn btn-sm" data-range="7" aria-pressed="false">{{ 'tautulli.range.7d'|trans }}</button>
+        <button type="button" class="btn btn-sm active" data-range="30" aria-pressed="true">{{ 'tautulli.range.30d'|trans }}</button>
+        <button type="button" class="btn btn-sm" data-range="90" aria-pressed="false">{{ 'tautulli.range.90d'|trans }}</button>
       </div>
     </div>
   </div>
@@ -83,7 +83,7 @@
   </div>
 </div>
 
-{% include 'dashboard/_plex_info_modal.html.twig' %}
+{% include 'dashboard/_plex_info_modal.html.twig' with {} only %}
 {% endblock %}
 
 {% block javascripts %}
@@ -138,7 +138,14 @@
         historyStart += HISTORY_PAGE;
         if (more) more.style.display = rowCount >= HISTORY_PAGE ? '' : 'none';
       })
-      .catch(function () {});
+      .catch(function () {
+        if (!append) {
+          var box = frag('[data-tautulli-history]');
+          var more = frag('[data-tautulli-history-more]');
+          if (box) box.innerHTML = '<div class="text-center text-secondary py-4">—</div>';
+          if (more) more.style.display = 'none';
+        }
+      });
   }
 
   // Plays graph — fetch JSON, (re)draw Chart.js.
@@ -178,7 +185,11 @@
       var btn = e.target.closest('[data-range]');
       if (!btn) return;
       range = parseInt(btn.getAttribute('data-range'), 10) || 30;
-      rangeBar.querySelectorAll('[data-range]').forEach(function (b) { b.classList.toggle('active', b === btn); });
+      rangeBar.querySelectorAll('[data-range]').forEach(function (b) {
+        var on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
       refreshStats();
       refreshPlays();
     });
@@ -195,9 +206,12 @@
   // Now-playing poll (singleton across Turbo re-exec).
   if (window._tautulliNowTimer) clearInterval(window._tautulliNowTimer);
   window._tautulliNowTimer = setInterval(refreshNow, 10000);
-  document.addEventListener('turbo:before-render', function () {
-    if (window._tautulliNowTimer) { clearInterval(window._tautulliNowTimer); window._tautulliNowTimer = null; }
-  });
+  if (!window._tautulliNowCleanupBound) {
+    window._tautulliNowCleanupBound = true;
+    document.addEventListener('turbo:before-render', function () {
+      if (window._tautulliNowTimer) { clearInterval(window._tautulliNowTimer); window._tautulliNowTimer = null; }
+    });
+  }
 })();
 </script>
 {% endblock %}
