@@ -51,6 +51,15 @@ class TautulliControllerTest extends AbstractWebTestCase
         $this->client->request('GET', '/tautulli/api/plays?range=9999');
 
         self::assertResponseIsSuccessful();
+
+        $content = $this->client->getResponse()->getContent();
+        self::assertNotFalse($content);
+        self::assertJson($content);
+
+        /** @var array{categories: mixed, series: mixed} $data */
+        $data = json_decode($content, true);
+        self::assertSame([], $data['categories']);
+        self::assertSame([], $data['series']);
     }
 
     /**
@@ -62,6 +71,6 @@ class TautulliControllerTest extends AbstractWebTestCase
     {
         $this->client->request('GET', '/tautulli');
 
-        self::assertResponseRedirects();
+        self::assertResponseRedirects('/admin/settings');
     }
 }
