@@ -197,13 +197,26 @@ class MediaController extends AbstractController
         $calendar = [];
         $error    = false;
 
+        $instance = $this->sonarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_SONARR);
+        if ($instance === null) {
+            throw $this->createNotFoundException('No Sonarr instance configured.');
+        }
+        $slug = $instance->getSlug();
+
         try {
-            if ($this->sonarr->getSystemStatus() === null) {
+            // getCalendar(14) → now through +14 days; keep the multiGet window in sync.
+            $batch = $this->sonarr->multiGet([
+                'status'   => ['path' => '/api/v3/system/status'],
+                'queue'    => ['path' => '/api/v3/queue', 'params' => ['pageSize' => 50, 'includeSeries' => 'true', 'includeEpisode' => 'true']],
+                'calendar' => ['path' => '/api/v3/calendar', 'params' => ['start' => (new \DateTimeImmutable('now'))->format('Y-m-d'), 'end' => (new \DateTimeImmutable('+14 days'))->format('Y-m-d'), 'includeSeries' => 'true']],
+            ]);
+
+            if ($batch['status'] === null) {
                 $error = true;
             } else {
-                $series   = $this->sonarr->getSeries();
-                $queue    = $this->sonarr->getQueue();
-                $calendar = $this->sonarr->getCalendar(14);
+                $series   = $this->libraryCache->series($slug, fn() => $this->sonarr->getSeries());
+                $queue    = $this->sonarr->normalizeQueueRecords($batch['queue']['records'] ?? []);
+                $calendar = $this->sonarr->normalizeCalendarEntries($batch['calendar'] ?? []);
             }
         } catch (\Throwable $e) {
             $this->logger->warning('Media series failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
@@ -247,10 +260,7 @@ class MediaController extends AbstractController
 
         $library = $filter->apply($series, $query);
 
-        $current = $this->sonarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_SONARR);
-        if ($current === null) {
-            throw $this->createNotFoundException('No Sonarr instance configured.');
-        }
+        $current = $instance;
         return $this->render('media/series.html.twig', [
             'series'   => $library->items,
             'library'  => $library,
