@@ -169,7 +169,7 @@
 
 {% block javascripts %}
 {% if stats.years is defined and stats.years %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="{{ asset('static/chart/chart.umd.min.js') }}"></script>
 <script>
 (function(){
   var _I18N = {

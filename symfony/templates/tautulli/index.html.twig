@@ -88,7 +88,7 @@
 
 {% block javascripts %}
 {{ parent() }}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
+<script src="{{ asset('static/chart/chart.umd.min.js') }}"></script>
 <script>
 (function () {
   var HISTORY_PAGE = 25;
