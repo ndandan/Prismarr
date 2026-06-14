@@ -530,10 +530,12 @@ class TautulliClientTest extends TestCase
 
     public function testNormalizeLibrariesDropsPrivateFields(): void
     {
-        $flat = json_encode(TautulliClient::normalizeLibraries($this->librariesFixture()));
+        $out  = TautulliClient::normalizeLibraries($this->librariesFixture());
+        $flat = json_encode($out);
         self::assertStringNotContainsString('section_id', $flat);
         self::assertStringNotContainsString('/library/sections', $flat);
-        foreach (TautulliClient::normalizeLibraries($this->librariesFixture()) as $lib) {
+        self::assertStringNotContainsString('parent_count', $flat);
+        foreach ($out as $lib) {
             self::assertArrayNotHasKey('section_id', $lib);
             self::assertArrayNotHasKey('thumb', $lib);
         }
