@@ -2,9 +2,12 @@
 
 namespace App\Tests\Service\Media;
 
+use App\Repository\SettingRepository;
+use App\Service\ConfigService;
 use App\Service\Media\TautulliClient;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 
 /**
  * Pure-logic coverage of TautulliClient::normalizeActivity() — the transform
@@ -539,5 +542,19 @@ class TautulliClientTest extends TestCase
             self::assertArrayNotHasKey('section_id', $lib);
             self::assertArrayNotHasKey('thumb', $lib);
         }
+    }
+
+    public function testGetHistoryAcceptsStartOffset(): void
+    {
+        // New signature accepts (length, start). On an unconfigured client it
+        // returns [] without error — proves the 2-arg signature exists.
+        $repo = $this->createMock(SettingRepository::class);
+        $repo->method('getAll')->willReturn([]);
+        $client = new TautulliClient(
+            new ConfigService($repo),
+            new NullLogger(),
+            null,
+        );
+        self::assertSame([], $client->getHistory(25, 25));
     }
 }
