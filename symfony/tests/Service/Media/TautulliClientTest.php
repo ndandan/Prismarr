@@ -493,4 +493,14 @@ class TautulliClientTest extends TestCase
     {
         self::assertSame(['categories' => [], 'series' => []], TautulliClient::normalizePlaysByDate([]));
     }
+
+    public function testNormalizePlaysByDateSkipsNonArraySeriesEntry(): void
+    {
+        $out = TautulliClient::normalizePlaysByDate([
+            'categories' => ['2026-06-01'],
+            'series'     => ['not-an-array', ['name' => 'TV', 'data' => [1]]],
+        ]);
+        self::assertCount(1, $out['series']);
+        self::assertSame('TV', $out['series'][0]['name']);
+    }
 }

@@ -292,14 +292,14 @@ class TautulliClient implements ResetInterface
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
-            return ['categories' => [], 'series' => []];
+            return self::normalizePlaysByDate([]);
         }
         $resp = $this->request([
             'cmd'        => 'get_plays_by_date',
             'time_range' => (string) self::clampRange($days),
         ]);
         if ($resp === null || $resp['ok'] !== true) {
-            return ['categories' => [], 'series' => []];
+            return self::normalizePlaysByDate([]);
         }
         return self::normalizePlaysByDate(is_array($resp['data']) ? $resp['data'] : []);
     }
