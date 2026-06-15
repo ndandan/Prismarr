@@ -5,6 +5,11 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Performance
+- **Radarr/Sonarr library pages no longer stall for 10–15 s.** The movie/series list is now cached per instance for a short window (45 s) instead of being re-fetched and re-normalized on every visit, and the remaining per-page calls (status, queue, indexers, health, calendar) are fetched concurrently in a single `curl_multi` batch instead of one after another. A briefly-unreachable service now costs one timeout window for the whole page instead of stacking one per call. Library mutations (add / delete / monitor / edit / bulk / file-delete) invalidate the cache so changes still show immediately.
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed

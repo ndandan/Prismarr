@@ -6,6 +6,7 @@ use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
+use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\MovieLibraryFilter;
 use App\Service\Media\MovieLibraryQuery;
 use App\Service\Media\ProwlarrClient;
@@ -42,7 +43,30 @@ class MediaController extends AbstractController
         private readonly ServiceInstanceProvider $instances,
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
+        private readonly MediaLibraryCache $libraryCache,
     ) {}
+
+    /**
+     * Drop the cached library list for the currently-bound instance after a
+     * mutating action so the change shows on the next page load. No-op-safe
+     * when no instance is bound (guards/subscribers normally prevent that).
+     */
+    private function invalidateRadarrLibrary(): void
+    {
+        $slug = $this->radarr->getInstance()?->getSlug();
+        if ($slug !== null) {
+            $this->libraryCache->invalidate('radarr', $slug);
+        }
+    }
+
+    /** Drop the cached series list for the bound Sonarr instance. */
+    private function invalidateSonarrLibrary(): void
+    {
+        $slug = $this->sonarr->getInstance()?->getSlug();
+        if ($slug !== null) {
+            $this->libraryCache->invalidate('sonarr', $slug);
+        }
+    }
 
     /**
      * v1.1.0 Phase C — slug is mandatory, injected via the class-level
@@ -68,41 +92,46 @@ class MediaController extends AbstractController
 
         $indexerCount = 0;
         $warnings = [];
+
+        $instance = $this->radarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_RADARR);
+        if ($instance === null) {
+            throw $this->createNotFoundException('No Radarr instance configured.');
+        }
+        $slug = $instance->getSlug();
+
         try {
-            // Check that Radarr is reachable
-            $status = $this->radarr->getSystemStatus();
-            if ($status === null) {
+            // One concurrent batch for the cheap, volatile endpoints. The
+            // heavy movie list is fetched separately and cached (slow-changing).
+            $batch = $this->radarr->multiGet([
+                'status'   => ['path' => '/api/v3/system/status'],
+                'queue'    => ['path' => '/api/v3/queue', 'params' => ['pageSize' => 50, 'includeMovie' => 'true']],
+                'indexers' => ['path' => '/api/v3/indexer'],
+                'health'   => ['path' => '/api/v3/health'],
+            ]);
+
+            if ($batch['status'] === null) {
                 $error = true;
-            }
+            } else {
+                $movies = $this->libraryCache->movies($slug, fn() => $this->radarr->getMovies());
 
-            if (!$error) {
-            $movies = $this->radarr->getMovies();
-            $queue  = $this->radarr->getQueue();
-            $indexers = $this->radarr->getRadarrIndexers();
-            $activeIndexers = array_filter($indexers, fn($i) => ($i['enableAutomaticSearch'] ?? false) || ($i['enableInteractiveSearch'] ?? false));
-            $indexerCount = count($activeIndexers);
+                $queue = $this->radarr->normalizeQueueRecords($batch['queue']['records'] ?? []);
 
-            // Check indexer status
-            if ($indexerCount === 0) {
-                $warnings[] = $this->translator->trans('media.api.no_indexer');
-            }
+                $indexers = $batch['indexers'] ?? [];
+                $activeIndexers = array_filter($indexers, fn($i) => ($i['enableAutomaticSearch'] ?? false) || ($i['enableInteractiveSearch'] ?? false));
+                $indexerCount = count($activeIndexers);
+                if ($indexerCount === 0) {
+                    $warnings[] = $this->translator->trans('media.api.no_indexer');
+                }
 
-            // Check Radarr health
-            try {
-                $health = $this->radarr->getSystemHealth();
-                foreach ($health as $h) {
+                foreach ($batch['health'] ?? [] as $h) {
                     $warnings[] = $this->translator->trans('media.api.warning_format', ['source' => $h['source'] ?? 'Radarr', 'message' => $h['message'] ?? '?']);
                 }
-            } catch (\Throwable $e) {
-                $this->logger->warning('Media films failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
-            }
 
-            // Check for blocked items in the queue
-            $blocked = array_filter($queue, fn($q) => ($q['trackedState'] ?? '') === 'importBlocked');
-            if (count($blocked) > 0) {
-                $warnings[] = $this->translator->trans('media.import.blocked_warning', ['count' => count($blocked)]);
+                $blocked = array_filter($queue, fn($q) => ($q['trackedState'] ?? '') === 'importBlocked');
+                if (count($blocked) > 0) {
+                    $warnings[] = $this->translator->trans('media.import.blocked_warning', ['count' => count($blocked)]);
+                }
             }
-            } // end if (!$error)
         } catch (\Throwable $e) {
             $this->logger->warning('Media films failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
             $error = true;
@@ -147,14 +176,7 @@ class MediaController extends AbstractController
 
         $library = $filter->apply($movies, $query);
 
-        $current = $this->radarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_RADARR);
-        // Defensive guard. ServiceRouteGuardSubscriber should redirect long
-        // before we reach this point when no Radarr instance is configured,
-        // but if a worker keeps a stale binding around we'd otherwise render
-        // a template that calls path() with a null slug → 500.
-        if ($current === null) {
-            throw $this->createNotFoundException('No Radarr instance configured.');
-        }
+        $current = $instance;
         return $this->render('media/films.html.twig', [
             'movies'  => $library->items,
             'library' => $library,
@@ -184,13 +206,26 @@ class MediaController extends AbstractController
         $calendar = [];
         $error    = false;
 
+        $instance = $this->sonarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_SONARR);
+        if ($instance === null) {
+            throw $this->createNotFoundException('No Sonarr instance configured.');
+        }
+        $slug = $instance->getSlug();
+
         try {
-            if ($this->sonarr->getSystemStatus() === null) {
+            // getCalendar(14) → now through +14 days; keep the multiGet window in sync.
+            $batch = $this->sonarr->multiGet([
+                'status'   => ['path' => '/api/v3/system/status'],
+                'queue'    => ['path' => '/api/v3/queue', 'params' => ['pageSize' => 50, 'includeSeries' => 'true', 'includeEpisode' => 'true']],
+                'calendar' => ['path' => '/api/v3/calendar', 'params' => ['start' => (new \DateTimeImmutable('now'))->format('Y-m-d'), 'end' => (new \DateTimeImmutable('+14 days'))->format('Y-m-d'), 'includeSeries' => 'true']],
+            ]);
+
+            if ($batch['status'] === null) {
                 $error = true;
             } else {
-                $series   = $this->sonarr->getSeries();
-                $queue    = $this->sonarr->getQueue();
-                $calendar = $this->sonarr->getCalendar(14);
+                $series   = $this->libraryCache->series($slug, fn() => $this->sonarr->getSeries());
+                $queue    = $this->sonarr->normalizeQueueRecords($batch['queue']['records'] ?? []);
+                $calendar = $this->sonarr->normalizeCalendarEntries($batch['calendar'] ?? []);
             }
         } catch (\Throwable $e) {
             $this->logger->warning('Media series failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
@@ -234,10 +269,7 @@ class MediaController extends AbstractController
 
         $library = $filter->apply($series, $query);
 
-        $current = $this->sonarr->getInstance() ?? $this->instances->getDefault(ServiceInstance::TYPE_SONARR);
-        if ($current === null) {
-            throw $this->createNotFoundException('No Sonarr instance configured.');
-        }
+        $current = $instance;
         return $this->render('media/series.html.twig', [
             'series'   => $library->items,
             'library'  => $library,
@@ -414,6 +446,9 @@ class MediaController extends AbstractController
     {
         $monitored = (bool) ($request->toArray()['monitored'] ?? true);
         $ok        = $this->radarr->setMonitored($id, $monitored);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $this->json(['ok' => $ok, 'monitored' => $monitored]);
     }
 
@@ -424,6 +459,9 @@ class MediaController extends AbstractController
         $deleteFiles = (bool) ($data['deleteFiles'] ?? false);
         $addExclusion = (bool) ($data['addExclusion'] ?? false);
         $ok          = $this->radarr->deleteMovie($id, $deleteFiles, $addExclusion);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $this->json(['ok' => $ok]);
     }
 
@@ -457,6 +495,9 @@ class MediaController extends AbstractController
             $payload['rootFolderPath'] = $data['rootFolderPath'] ?? '';
         }
         $movie = $this->radarr->addMovie($payload);
+        if ($movie !== null) {
+            $this->invalidateRadarrLibrary();
+        }
         return $this->json(['ok' => $movie !== null, 'movie' => $movie, 'movieId' => $movie['id'] ?? null]);
     }
 
@@ -568,6 +609,9 @@ class MediaController extends AbstractController
     public function filmFileDelete(int $fileId): JsonResponse
     {
         $ok = $this->radarr->deleteMovieFile($fileId);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Radarr', $this->radarr);
     }
 
@@ -599,6 +643,11 @@ class MediaController extends AbstractController
 
         // 3. PUT via RadarrClient
         $result = $this->radarr->updateMovieFile($fileId, $current);
+        if ($result !== null) {
+            // quality / languages / releaseGroup feed normalizeMovie's cached
+            // quality + language fields, so the list must refresh.
+            $this->invalidateRadarrLibrary();
+        }
 
         return $this->json(['ok' => $result !== null, 'file' => $result]);
     }
@@ -698,6 +747,9 @@ class MediaController extends AbstractController
         if (isset($data['tags'])) $changes['tags'] = $data['tags'];
         if (isset($data['applyTags'])) $changes['applyTags'] = $data['applyTags']; // add, remove, replace
         $ok = $this->radarr->bulkUpdateMovies($ids, $changes);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Radarr', $this->radarr);
     }
 
@@ -710,6 +762,9 @@ class MediaController extends AbstractController
         $addExclusion = (bool) ($data['addExclusion'] ?? false);
         if (!$ids) return $this->json(['ok' => false]);
         $ok = $this->radarr->bulkDeleteMovies($ids, $deleteFiles, $addExclusion);
+        if ($ok) {
+            $this->invalidateRadarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Radarr', $this->radarr);
     }
 
@@ -879,6 +934,9 @@ class MediaController extends AbstractController
         ];
 
         $result = $this->sonarr->addSeries($raw);
+        if ($result !== null) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json(['ok' => $result !== null, 'series' => $result]);
     }
 
@@ -944,6 +1002,9 @@ class MediaController extends AbstractController
         if (isset($data['applyTags'])) $payload['applyTags'] = $data['applyTags'];
 
         $result = $this->sonarr->bulkEditSeries($payload);
+        if ($result['ok'] ?? false) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json($result);
     }
 
@@ -956,6 +1017,9 @@ class MediaController extends AbstractController
         $deleteFiles = (bool) ($data['deleteFiles'] ?? false);
         $addExclusion = (bool) ($data['addImportExclusion'] ?? false);
         $ok = $this->sonarr->bulkDeleteSeries($ids, $deleteFiles, $addExclusion);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
@@ -964,7 +1028,11 @@ class MediaController extends AbstractController
     {
         $series = $request->toArray();
         if (empty($series)) return $this->json(['ok' => false, 'error' => $this->translator->trans('media.api.no_series')]);
-        return $this->json($this->sonarr->importSeries($series));
+        $result = $this->sonarr->importSeries($series);
+        if ($result['ok'] ?? false) {
+            $this->invalidateSonarrLibrary();
+        }
+        return $this->json($result);
     }
 
     #[Route('/series/{id}/refresh', name: 'series_refresh', methods: ['POST'], requirements: ['id' => '\d+'])]
@@ -1204,6 +1272,9 @@ class MediaController extends AbstractController
         }
         $merged = array_merge($fullMovie, $raw);
         $updated = $this->radarr->updateMovie($id, $merged);
+        if ($updated !== null) {
+            $this->invalidateRadarrLibrary();
+        }
 
         return $this->json(['ok' => $updated !== null, 'movie' => $updated]);
     }
@@ -1477,6 +1548,9 @@ class MediaController extends AbstractController
     public function seriesFileDelete(int $id): JsonResponse
     {
         $ok = $this->sonarr->deleteEpisodeFile($id);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
@@ -1494,6 +1568,9 @@ class MediaController extends AbstractController
         $seasonNum = (int) ($data['seasonNumber'] ?? 0);
         $monitored = (bool) ($data['monitored'] ?? true);
         $ok = $this->sonarr->setSeasonMonitored($seriesId, $seasonNum, $monitored);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
@@ -1769,6 +1846,9 @@ class MediaController extends AbstractController
         if (isset($data['path'])) $series['path'] = $data['path'];
 
         $result = $this->sonarr->updateSeries($id, $series);
+        if ($result !== null) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json(['ok' => $result !== null]);
     }
 
@@ -1871,6 +1951,9 @@ class MediaController extends AbstractController
     {
         $monitored = (bool) ($request->toArray()['monitored'] ?? true);
         $ok = $this->sonarr->setMonitored($id, $monitored);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $this->json(['ok' => $ok, 'monitored' => $monitored]);
     }
 
@@ -1879,6 +1962,9 @@ class MediaController extends AbstractController
     {
         $deleteFiles = (bool) ($request->toArray()['deleteFiles'] ?? false);
         $ok = $this->sonarr->deleteSeries($id, $deleteFiles);
+        if ($ok) {
+            $this->invalidateSonarrLibrary();
+        }
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Sonarr', $this->sonarr);
     }
 
