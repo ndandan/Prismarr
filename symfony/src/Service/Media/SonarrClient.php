@@ -201,7 +201,19 @@ class SonarrClient implements ResetInterface
         $data = $this->get('/api/v3/series');
         if ($data === null) return [];
 
-        return array_map(fn($s) => $this->normalizeSeries($s), $data);
+        return $this->normalizeSeriesList($data);
+    }
+
+    /**
+     * Normalize a raw `/api/v3/series` list. Public so a concurrent multiGet
+     * batch can reuse the exact transform.
+     *
+     * @param array<int, array<string, mixed>> $rawSeries
+     * @return list<array<string, mixed>>
+     */
+    public function normalizeSeriesList(array $rawSeries): array
+    {
+        return array_map(fn($s) => $this->normalizeSeries($s), $rawSeries);
     }
 
     /** Returns raw series without normalization (for lightweight cache) */
@@ -438,6 +450,18 @@ class SonarrClient implements ResetInterface
         $data = $this->get('/api/v3/queue', ['pageSize' => 50, 'includeSeries' => 'true', 'includeEpisode' => 'true']);
         if ($data === null || empty($data['records'])) return [];
 
+        return $this->normalizeQueueRecords($data['records']);
+    }
+
+    /**
+     * Normalize raw queue `records` into the series-UI shape. Public so a
+     * concurrent multiGet batch can reuse it.
+     *
+     * @param array<int, array<string, mixed>> $records
+     * @return list<array<string, mixed>>
+     */
+    public function normalizeQueueRecords(array $records): array
+    {
         return array_map(fn($r) => [
             'id'            => $r['id'] ?? null,
             'seriesId'      => $r['seriesId'] ?? null,
@@ -463,7 +487,7 @@ class SonarrClient implements ResetInterface
                 'title'    => $m['title'] ?? '',
                 'messages' => $m['messages'] ?? [],
             ], $r['statusMessages'] ?? []),
-        ], $data['records']);
+        ], $records);
     }
 
     public function getQueueDetails(): array
@@ -512,6 +536,19 @@ class SonarrClient implements ResetInterface
         $data  = $this->get('/api/v3/calendar', ['start' => $start, 'end' => $end, 'includeSeries' => 'true']);
         if ($data === null) return [];
 
+        return $this->normalizeCalendarEntries($data);
+    }
+
+    /**
+     * Normalize raw `/api/v3/calendar` entries. Public so a concurrent
+     * multiGet batch can reuse the transform. Date handling preserved
+     * exactly (see the airDate vs airDateUtc note, issue #26).
+     *
+     * @param array<int, array<string, mixed>> $entries
+     * @return list<array<string, mixed>>
+     */
+    public function normalizeCalendarEntries(array $entries): array
+    {
         return array_map(fn($e) => [
             'id'            => $e['id'] ?? null,
             'seriesId'      => $e['seriesId'] ?? null,
@@ -543,7 +580,7 @@ class SonarrClient implements ResetInterface
             'runtime'       => $e['runtime'] ?? ($e['series']['runtime'] ?? null),
             'network'       => $e['series']['network'] ?? null,
             'genres'        => $e['series']['genres'] ?? [],
-        ], $data);
+        ], $entries);
     }
 
     // ── Wanted ────────────────────────────────────────────────────────────────
@@ -1732,6 +1769,89 @@ class SonarrClient implements ResetInterface
 
         $this->health->clear(self::SERVICE_KEY, $this->instance?->getSlug());
         return json_decode($body, true);
+    }
+
+    /**
+     * Concurrent GET of several endpoints in one curl_multi batch. Same
+     * per-handle semantics as get(); see RadarrClient::multiGet() for the
+     * full rationale (collapses N sequential calls and N × timeout-stacking
+     * into a single batch).
+     *
+     * @param array<string, array{path: string, params?: array}> $requests
+     * @return array<string, ?array>
+     */
+    public function multiGet(array $requests): array
+    {
+        $out = array_fill_keys(array_keys($requests), null);
+        if ($requests === []) {
+            return $out;
+        }
+        if ($this->health->isDown(self::SERVICE_KEY, $this->instance?->getSlug()) || $this->serviceUnavailable) {
+            $this->serviceUnavailable = true;
+            return $out;
+        }
+        $this->lastError = null;
+        $this->ensureConfig();
+
+        $mh      = curl_multi_init();
+        $handles = [];
+        foreach ($requests as $name => $spec) {
+            $url = rtrim($this->baseUrl, '/') . $spec['path'];
+            if (!empty($spec['params'])) {
+                $url .= '?' . http_build_query($spec['params']);
+            }
+            $ch = curl_init();
+            curl_setopt_array($ch, [
+                CURLOPT_URL            => $url,
+                CURLOPT_RETURNTRANSFER => true,
+                CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS, // SSRF guard
+                CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+                CURLOPT_TIMEOUT        => 8,
+                CURLOPT_CONNECTTIMEOUT => 4,
+                CURLOPT_NOSIGNAL       => 1,
+                CURLOPT_HTTPHEADER     => ["X-Api-Key: {$this->apiKey}", 'Accept: application/json'],
+            ]);
+            curl_multi_add_handle($mh, $ch);
+            $handles[$name] = $ch;
+        }
+
+        do {
+            $status = curl_multi_exec($mh, $running);
+            if ($running) {
+                curl_multi_select($mh, 1.0);
+            }
+        } while ($running && $status === CURLM_OK);
+
+        $networkError = false;
+        foreach ($handles as $name => $ch) {
+            $body = curl_multi_getcontent($ch);
+            $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            $err  = curl_error($ch);
+            curl_multi_remove_handle($mh, $ch);
+            curl_close($ch);
+
+            if ($err !== '' || (int) $code === 0) {
+                $networkError = true;
+                $this->logger->warning("SonarrClient multiGet {$name} → HTTP {$code} {$err}");
+                continue;
+            }
+            if ((int) $code !== 200) {
+                $this->logger->warning("SonarrClient multiGet {$name} → HTTP {$code}");
+                continue;
+            }
+            $decoded = json_decode((string) $body, true);
+            $out[$name] = is_array($decoded) ? $decoded : null;
+        }
+        curl_multi_close($mh);
+
+        if ($networkError) {
+            $this->serviceUnavailable = true;
+            $this->health->markDown(self::SERVICE_KEY, $this->instance?->getSlug());
+        } else {
+            $this->health->clear(self::SERVICE_KEY, $this->instance?->getSlug());
+        }
+
+        return $out;
     }
 
     private function delete(string $path, array $params = []): bool
