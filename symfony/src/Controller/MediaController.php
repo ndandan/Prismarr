@@ -643,6 +643,11 @@ class MediaController extends AbstractController
 
         // 3. PUT via RadarrClient
         $result = $this->radarr->updateMovieFile($fileId, $current);
+        if ($result !== null) {
+            // quality / languages / releaseGroup feed normalizeMovie's cached
+            // quality + language fields, so the list must refresh.
+            $this->invalidateRadarrLibrary();
+        }
 
         return $this->json(['ok' => $result !== null, 'file' => $result]);
     }
