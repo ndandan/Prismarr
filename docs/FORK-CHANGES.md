@@ -1,0 +1,113 @@
+# Fork changes — what differs from the original Prismarr
+
+Summary of the work done on **2026-06-13 → 2026-06-15**, framed as how this
+fork (`ndandan/Prismarr`) now differs from the upstream project. All of it is
+merged to `main` and published to `ghcr.io/ndandan/prismarr:latest`.
+
+**Scope:** 58 files changed, ~7,700 insertions since the `1.1.1` baseline
+(2026-06-10). Three areas: a new Tautulli/Plex activity integration, a
+performance rework of the Radarr/Sonarr library pages, and build/CI hardening.
+
+---
+
+## 1. Tautulli — Plex activity integration (new feature)
+
+A brand-new optional integration that surfaces live Plex activity and watch
+history, consuming an existing Tautulli instance's read-only API. None of this
+exists upstream.
+
+**Dashboard widget**
+- "Current Plex activity" widget: active stream count, Direct Play / Direct
+  Stream / Transcode breakdown, total/LAN/WAN bandwidth (Mbps), and one card
+  per session (title, user, player/device, quality, decision badges, location,
+  progress, play state).
+- Plex poster art per session, served through a server-side image proxy
+  (`pms_image_proxy`) so the API key never reaches the browser and the path is
+  allow-listed to Plex `/library` images.
+- "Now playing / Recently watched" tabs (recently-watched defaults in when
+  nothing is streaming).
+- Live stream-count pill under the sidebar logo, linking to the dashboard.
+- Polls every 10 s and fails open: disabled / unconfigured / unreachable /
+  wrong-key Tautulli shows a clean message instead of breaking the dashboard.
+
+**Full "Plex Activity" page** (own sidebar entry, route-guarded)
+- Live streams, watch statistics (most-watched movies/shows, most-active
+  users, top platforms with a 7/30/90-day toggle), a plays-over-time chart,
+  paginated watch history, and library counts.
+- Every title is clickable into an in-app info modal (synopsis, ratings,
+  cast/crew, stream detail) pulled server-side from `get_metadata`.
+
+**Settings & health**
+- Configured under Settings → Services → Monitoring (URL + API key, enable
+  toggle, Test-connection button) with a dashboard health chip.
+
+**Security / design**
+- Read-only by design — no mutating Tautulli commands. Every call is
+  server-side; the API key never reaches the browser; responses are sanitized
+  to a normalized shape (no IPs, tokens, machine ids, file paths, or raw
+  payload) before leaving Prismarr.
+- Backed by `get_activity`, `get_metadata`, `get_history`, `get_home_stats`,
+  `get_plays_by_date`, `get_libraries`.
+
+**New code:** `TautulliController`, `TautulliClient`, a `relative_date` Twig
+filter (`RelativeDateExtension`), shared Plex partials (session card, history
+row, info modal, metadata, styles), the full `tautulli/` page templates, and
+the Tautulli service icon. Covered by `TautulliClientTest`,
+`TautulliControllerTest`, `RelativeDateExtensionTest`.
+
+---
+
+## 2. Radarr/Sonarr library pages — performance rework
+
+Fixes the 10–15 s library-page loads reported in the project Discord.
+
+- **Short-TTL library cache** (`MediaLibraryCache`): the heavy
+  `getMovies()`/`getSeries()` payload is cached per instance for 45 s instead
+  of being re-fetched and re-normalized on every visit. Empty results are not
+  cached (so a transient failure isn't pinned for the window), and library
+  mutations write-through-invalidate so user changes show immediately.
+- **Concurrent endpoint fetch** (`multiGet()` on both clients): status, queue,
+  indexers, health and calendar are fetched in one `curl_multi` batch instead
+  of sequentially. A briefly-unreachable service now costs one timeout window
+  for the whole page instead of stacking one per call. Same per-handle
+  semantics as the existing `get()` (SSRF protocol guard, 4 s connect / 8 s
+  total timeout, per-instance circuit breaker).
+- Public normalizers extracted (`normalizeMovies` / `normalizeQueueRecords` /
+  `normalizeSeriesList` / `normalizeCalendarEntries`) so the controller reuses
+  the exact transforms on batch payloads (no behavior change).
+- `MediaController::films()` / `series()` rewired to the cache + batch.
+
+**New code:** `MediaLibraryCache` with `MediaLibraryCacheTest`,
+`RadarrClientMultiGetTest`, and a `MediaLibraryPageTest` smoke test (renders
+cleanly when the *arr is unreachable — never 500s, never hangs).
+
+---
+
+## 3. Build & CI hardening
+
+- **Self-hosted Chart.js** — the Plex plays chart (and the existing Radarr
+  stats chart) now load Chart.js from `/static` instead of a CDN, so they
+  render under the app's strict Content-Security-Policy.
+- **GHCR publish workflow** (`ghcr.yml`) — builds the FrankenPHP image and
+  pushes `ghcr.io/<owner>/prismarr:latest` on push to `main` (amd64), using the
+  built-in `GITHUB_TOKEN`. Adds a `workflow_dispatch` trigger for manual runs.
+- **`.gitattributes`** pinning `docker/**` and `*.sh` to `eol=lf`. Without it a
+  Windows checkout (`core.autocrlf=true`) gives the s6-overlay control files
+  CRLF, so a local `docker build` produces an image where `s6-rc-compile`
+  rejects every service and the container never boots.
+- **GitHub Actions bumped to Node 24 runtimes** (GitHub forces Node 20 off on
+  2026-06-16): `checkout` v4→v5, `setup-qemu-action` v3→v4,
+  `setup-buildx-action` v3→v4, `metadata-action` v5→v6, `login-action` v3→v4,
+  `build-push-action` v6→v7, `action-gh-release` v2→v3,
+  `dockerhub-description` v4→v5.
+
+---
+
+## Verification
+
+- Full gate green in CI on `main`: PHP lint, Twig lint (145 files), and the
+  PHPUnit suite (590 tests). GHCR image rebuilt and republished on the new
+  actions with no remaining deprecation warnings.
+- Outstanding: live verification of the perf work against a real, reachable
+  Radarr/Sonarr (only the unreachable-host error path is covered by automated
+  tests).
