@@ -406,6 +406,50 @@ dashboard:
     discover_cta: 'Discover →'
   recent:
     title: Recently added to your library
+  plex:
+    title: Current Plex activity
+    settings_cta: 'Settings →'
+    streams: Streams
+    mbps: Mbps
+    unknown_title: Unknown
+    empty: No active Plex streams
+    summary:
+      direct_play: '{count} Direct Play'
+      direct_stream: '{count} Direct Stream'
+      transcode: '{count} Transcode'
+    bandwidth:
+      total: Total bandwidth
+      lan: LAN
+      wan: WAN
+    state:
+      playing: Playing
+      paused: Paused
+      buffering: Buffering
+    decision:
+      direct_play: Direct Play
+      direct_stream: Direct Stream
+      transcode: Transcode
+    track:
+      video: 'Video:'
+      audio: 'Audio:'
+      subtitle: 'Subs:'
+    error:
+      unconfigured: Tautulli is not configured
+      unreachable: Unable to reach Tautulli
+      auth: Invalid Tautulli API key or unauthorized
+    tab:
+      now: Now playing
+      recent: Recently watched
+    recent:
+      empty: No recent Plex history
+    modal:
+      error: Couldn't load this title
+      critic: Critics
+      directors: 'Director:'
+      writers: 'Writer:'
+      cast: 'Cast:'
+      studio: 'Studio:'
+      tech: Stream
   type:
     film: Movie
     series: TV Show
@@ -421,6 +465,34 @@ dashboard:
     trending: '★ Trending this week'
     cta_view: '▶ View details'
     cta_discover: '▶ Discover'
+
+tautulli:
+  title: Plex Activity
+  range:
+    7d: 7 days
+    30d: 30 days
+    90d: 90 days
+  section:
+    now_playing: Now playing
+    stats: Statistics
+    plays: Plays over time
+    history: History
+    libraries: Libraries
+  stats:
+    top_movie: Most watched movies
+    top_show: Most watched shows
+    top_user: Most active users
+    top_platform: Top platforms
+    plays_count: '{count, plural, one {# play} other {# plays}}'
+    empty: No statistics for this period
+  plays:
+    empty: No play data for this period
+  history:
+    load_more: Load more
+  libraries:
+    empty: No libraries
+    items: '{count, plural, one {# item} other {# items}}'
+    episodes: '{count, plural, one {# episode} other {# episodes}}'
 
 profile:
   title: My profile
@@ -527,6 +599,7 @@ admin:
       managers: Managers
       indexers: Indexers & requests
       downloads: Downloads
+      monitoring: Monitoring
     subtitle:
       tmdb: Movie & TV discovery, watchlist
       radarr: Movie manager
@@ -537,6 +610,7 @@ admin:
       sabnzbd: Usenet downloader
       nzbget: Usenet downloader
       gluetun: 'VPN / port forwarding'
+      tautulli: 'Plex activity (via Tautulli)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Show in sidebar
     status:

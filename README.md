@@ -165,8 +165,11 @@ a request UI (Seerr).
 - Hero spotlight with a random pick from your library
 - Upcoming releases (seven-day mini-calendar)
 - Pending Seerr requests enriched with TMDb metadata
-- Live health of all six services
+- Live health of all configured services
 - Personal watchlist, weekly TMDb trending, latest library additions
+- Optional **Current Plex activity** widget via the Tautulli API: active
+  streams, Direct Play / Direct Stream / Transcode counts, LAN/WAN
+  bandwidth and a per-session card (read-only, refreshes every 10s)
 - Near-instant load: the page paints first, then each widget hydrates on its own
 
 ### Downloads
@@ -206,6 +209,7 @@ a request UI (Seerr).
 - At least one of: qBittorrent, Radarr, Sonarr, Prowlarr, Seerr
 - Optional: Gluetun if qBittorrent runs behind a VPN
 - Optional: a TMDb API key (free) to enable the Discovery page
+- Optional: a Tautulli instance (URL + API key) for the Current Plex activity widget
 
 ### Install
 
