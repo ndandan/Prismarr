@@ -625,4 +625,31 @@ class TautulliClientTest extends TestCase
     {
         self::assertSame(['items' => []], TautulliClient::normalizeRecentlyAdded([]));
     }
+
+    public function testNormalizesDynamicRangeAndTranscodeCodecs(): void
+    {
+        $data = $this->fixtureData();
+        $data['sessions'][0]['transcode_decision']        = 'transcode';
+        $data['sessions'][0]['video_decision']            = 'transcode';
+        $data['sessions'][0]['audio_decision']            = 'transcode';
+        $data['sessions'][0]['video_codec']               = 'hevc';
+        $data['sessions'][0]['stream_video_codec']        = 'h264';
+        $data['sessions'][0]['audio_codec']               = 'truehd';
+        $data['sessions'][0]['stream_audio_codec']        = 'aac';
+        $data['sessions'][0]['video_dynamic_range']       = 'HDR';
+        $data['sessions'][0]['stream_video_dynamic_range']= 'SDR';
+
+        $s = TautulliClient::normalizeActivity($data)['sessions'][0];
+
+        self::assertSame('SDR', $s['dynamicRange']); // stream value preferred
+        self::assertSame('hevc', $s['videoCodec']);
+        self::assertSame('h264', $s['streamVideoCodec']);
+        self::assertSame('truehd', $s['audioCodec']);
+        self::assertSame('aac', $s['streamAudioCodec']);
+
+        // Still no private fields after growing the allow-list.
+        foreach (['ip_address', 'machine_id', 'session_token', 'file', 'email', 'username'] as $forbidden) {
+            self::assertArrayNotHasKey($forbidden, $s);
+        }
+    }
 }

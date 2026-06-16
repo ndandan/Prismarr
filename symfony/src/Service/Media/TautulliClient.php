@@ -795,6 +795,15 @@ class TautulliClient implements ResetInterface
             'videoDecision'    => self::str($s['video_decision'] ?? null),
             'audioDecision'    => self::str($s['audio_decision'] ?? null),
             'subtitleDecision' => self::str($s['subtitle_decision'] ?? null),
+            // Dynamic range badge (HDR/SDR/Dolby Vision). Prefer the actual
+            // stream value over the source so a transcoded-to-SDR stream reads
+            // SDR. Display-only label — no sensitive surface.
+            'dynamicRange'     => self::str($s['stream_video_dynamic_range'] ?? ($s['video_dynamic_range'] ?? null)),
+            // Source vs stream codecs, for the "HEVC → H264" transcode detail.
+            'videoCodec'       => self::str($s['video_codec'] ?? null),
+            'streamVideoCodec' => self::str($s['stream_video_codec'] ?? null),
+            'audioCodec'       => self::str($s['audio_codec'] ?? null),
+            'streamAudioCodec' => self::str($s['stream_audio_codec'] ?? null),
             'transcodeDecision'=> self::str($s['transcode_decision'] ?? null),
             'location'         => self::str($s['location'] ?? null),
             'bandwidthKbps'    => $bw,
