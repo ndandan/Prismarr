@@ -73,4 +73,29 @@ class TautulliControllerTest extends AbstractWebTestCase
 
         self::assertResponseRedirects('/admin/settings');
     }
+
+    /**
+     * The new chart endpoints fail open to the neutral {categories:[],series:[]}
+     * JSON when Tautulli is unconfigured, and the plays endpoint accepts the
+     * stream-type mode without erroring.
+     */
+    public function testChartEndpointsReturnNeutralJsonWhenUnconfigured(): void
+    {
+        foreach ([
+            '/tautulli/api/plays?range=30&mode=stream',
+            '/tautulli/api/activity-hour?range=30',
+            '/tautulli/api/activity-dow?range=30',
+            '/tautulli/api/clients-stream-type?range=30',
+        ] as $url) {
+            $this->client->request('GET', $url);
+            self::assertResponseIsSuccessful();
+            $content = $this->client->getResponse()->getContent();
+            self::assertNotFalse($content);
+            self::assertJson($content);
+            /** @var array{categories: mixed, series: mixed} $data */
+            $data = json_decode($content, true);
+            self::assertSame([], $data['categories'], $url);
+            self::assertSame([], $data['series'], $url);
+        }
+    }
 }

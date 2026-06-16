@@ -21,8 +21,10 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * unconfigured / unreachable / auth cases, so the widget never breaks the page.
  *
  * The page also exposes read-only `get_metadata`, `get_history`,
- * `get_home_stats`, `get_plays_by_date`, and `get_libraries` — no
- * terminate_session, notifications or any other mutating Tautulli command.
+ * `get_home_stats`, `get_plays_by_date`, `get_libraries`,
+ * `get_plays_by_stream_type`, `get_plays_by_hourofday`,
+ * `get_plays_by_dayofweek`, and `get_stream_type_by_top_10_platforms` —
+ * no terminate_session, notifications or any other mutating Tautulli command.
  */
 #[IsGranted('ROLE_USER')]
 #[Route('/tautulli', name: 'app_tautulli_')]
@@ -155,12 +157,50 @@ class TautulliController extends AbstractController
         return $this->render('tautulli/_stats.html.twig', ['stats' => $stats]);
     }
 
-    /** GET /tautulli/api/plays?range=30 — plays-per-day series as JSON (Chart.js). */
+    /** GET /tautulli/api/plays?range=30&mode=media|stream — plays series as JSON (Chart.js). */
     #[Route('/api/plays', name: 'api_plays', methods: ['GET'])]
     public function apiPlays(Request $request): JsonResponse
     {
+        $range = (int) $request->query->get('range', 30);
+        $mode  = $request->query->get('mode', 'media') === 'stream' ? 'stream' : 'media';
         try {
-            return $this->json($this->tautulli->getPlaysByDate((int) $request->query->get('range', 30)));
+            $data = $mode === 'stream'
+                ? $this->tautulli->getPlaysByStreamType($range)
+                : $this->tautulli->getPlaysByDate($range);
+            return $this->json($data);
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/activity-hour?range=30 — plays by hour of day as JSON. */
+    #[Route('/api/activity-hour', name: 'api_activity_hour', methods: ['GET'])]
+    public function apiActivityHour(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getPlaysByHourOfDay((int) $request->query->get('range', 30)));
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/activity-dow?range=30 — plays by day of week as JSON. */
+    #[Route('/api/activity-dow', name: 'api_activity_dow', methods: ['GET'])]
+    public function apiActivityDow(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getPlaysByDayOfWeek((int) $request->query->get('range', 30)));
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/clients-stream-type?range=30 — plays by platform × stream type as JSON. */
+    #[Route('/api/clients-stream-type', name: 'api_clients_stream_type', methods: ['GET'])]
+    public function apiClientsStreamType(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getStreamTypeByPlatform((int) $request->query->get('range', 30)));
         } catch (\Throwable) {
             return $this->json(['categories' => [], 'series' => []]);
         }
