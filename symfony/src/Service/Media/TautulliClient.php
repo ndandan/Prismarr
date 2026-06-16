@@ -291,14 +291,47 @@ class TautulliClient implements ResetInterface
      */
     public function getPlaysByDate(int $days): array
     {
+        return $this->playsChart('get_plays_by_date', $days);
+    }
+
+    /** Plays per day by transcode decision (Direct Play / Direct Stream / Transcode). */
+    public function getPlaysByStreamType(int $days): array
+    {
+        return $this->playsChart('get_plays_by_stream_type', $days);
+    }
+
+    /** Plays aggregated by hour of day (0-23). */
+    public function getPlaysByHourOfDay(int $days): array
+    {
+        return $this->playsChart('get_plays_by_hourofday', $days);
+    }
+
+    /** Plays aggregated by day of week. */
+    public function getPlaysByDayOfWeek(int $days): array
+    {
+        return $this->playsChart('get_plays_by_dayofweek', $days);
+    }
+
+    /** Plays by top-10 platform, split by transcode decision (problem clients). */
+    public function getStreamTypeByPlatform(int $days): array
+    {
+        return $this->playsChart('get_stream_type_by_top_10_platforms', $days);
+    }
+
+    /**
+     * Shared fetch for the read-only Tautulli chart commands that all return the
+     * `{categories, series}` envelope. Clamps the range and fails open to the
+     * neutral shape (disabled/unconfigured/unreachable).
+     *
+     * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
+     */
+    private function playsChart(string $cmd, int $days): array
+    {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return self::normalizePlaysByDate([]);
         }
-        $resp = $this->request([
-            'cmd'        => 'get_plays_by_date',
-            'time_range' => (string) self::clampRange($days),
-        ]);
+        $resp = $this->request(['cmd' => $cmd, 'time_range' => (string) self::clampRange($days)]);
         if ($resp === null || $resp['ok'] !== true) {
             return self::normalizePlaysByDate([]);
         }
@@ -320,9 +353,13 @@ class TautulliClient implements ResetInterface
             if (!is_array($s)) {
                 continue;
             }
+            $sname = self::str($s['name'] ?? null) ?? '';
+            if (strtolower($sname) === 'total') {
+                continue; // aggregate line — charts show the per-type breakdown only
+            }
             $vals = is_array($s['data'] ?? null) ? $s['data'] : [];
             $series[] = [
-                'name' => self::str($s['name'] ?? null) ?? '',
+                'name' => $sname,
                 'data' => array_map(static fn ($v) => (int) $v, array_values($vals)),
             ];
         }

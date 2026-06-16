@@ -507,6 +507,34 @@ class TautulliClientTest extends TestCase
         self::assertSame('TV', $out['series'][0]['name']);
     }
 
+    public function testNormalizePlaysByDateDropsTotalSeries(): void
+    {
+        $out = TautulliClient::normalizePlaysByDate([
+            'categories' => ['2026-06-01', '2026-06-02'],
+            'series'     => [
+                ['name' => 'TV',     'data' => [3, 1]],
+                ['name' => 'Total',  'data' => [4, 3]],
+                ['name' => 'Movies', 'data' => [1, 2]],
+            ],
+        ]);
+        // The aggregate "Total" series is dropped (case-insensitive); per-type stays.
+        self::assertCount(2, $out['series']);
+        self::assertSame(['TV', 'Movies'], array_map(static fn ($s) => $s['name'], $out['series']));
+    }
+
+    public function testChartMethodsFailOpenWhenUnconfigured(): void
+    {
+        $repo = $this->createMock(SettingRepository::class);
+        $repo->method('getAll')->willReturn([]);
+        $client = new TautulliClient(new ConfigService($repo), new NullLogger(), null);
+
+        $neutral = ['categories' => [], 'series' => []];
+        self::assertSame($neutral, $client->getPlaysByStreamType(30));
+        self::assertSame($neutral, $client->getPlaysByHourOfDay(30));
+        self::assertSame($neutral, $client->getPlaysByDayOfWeek(30));
+        self::assertSame($neutral, $client->getStreamTypeByPlatform(30));
+    }
+
     /** A representative get_libraries `data` list. */
     private function librariesFixture(): array
     {
