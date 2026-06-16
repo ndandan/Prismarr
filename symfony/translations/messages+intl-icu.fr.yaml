@@ -396,6 +396,11 @@ dashboard:
     status_ok: Opérationnel
     status_ko: Injoignable
     status_unk: Non configuré
+    status_up: Opérationnel
+    status_slow: Lent
+    status_very_slow: Très lent
+    status_degraded: Dégradé
+    status_down: Injoignable
     none_configured: 'Aucun service configuré pour l''instant — choisissez ceux que vous utilisez dans Paramètres.'
   watchlist:
     title: Ma liste à voir
