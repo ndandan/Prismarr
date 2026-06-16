@@ -80,13 +80,6 @@
       </div>
     </div>
 
-    {# 5. Recently Added #}
-    <div class="card mb-3">
-      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.recently_added'|trans }}</h3></div>
-      <div class="card-body" data-tautulli-recently-added>
-        <div class="text-center text-secondary py-4"><span class="spinner-border"></span></div>
-      </div>
-    </div>
 
   </div>
 </div>
@@ -129,10 +122,6 @@
     loadFragment('/tautulli/api/libraries', frag('[data-tautulli-libraries]'));
   }
 
-  // Recently Added — once.
-  function refreshRecentlyAdded() {
-    loadFragment('/tautulli/api/recently-added', frag('[data-tautulli-recently-added]'));
-  }
 
   // History — replace on (re)load, append on "Load more".
   function loadHistory(append) {
@@ -212,7 +201,6 @@
   refreshStats();
   refreshPlays();
   refreshLibraries();
-  refreshRecentlyAdded();
   loadHistory(false);
   var moreBtn = frag('[data-tautulli-history-more]');
   if (moreBtn) moreBtn.addEventListener('click', function () { loadHistory(true); });

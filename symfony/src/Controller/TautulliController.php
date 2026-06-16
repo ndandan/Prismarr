@@ -21,9 +21,8 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
  * unconfigured / unreachable / auth cases, so the widget never breaks the page.
  *
  * The page also exposes read-only `get_metadata`, `get_history`,
- * `get_home_stats`, `get_plays_by_date`, `get_libraries`, and
- * `get_recently_added` — no terminate_session, notifications or any other
- * mutating Tautulli command.
+ * `get_home_stats`, `get_plays_by_date`, and `get_libraries` — no
+ * terminate_session, notifications or any other mutating Tautulli command.
  */
 #[IsGranted('ROLE_USER')]
 #[Route('/tautulli', name: 'app_tautulli_')]
@@ -194,15 +193,4 @@ class TautulliController extends AbstractController
         return $this->render('tautulli/_libraries.html.twig', ['libraries' => $libraries]);
     }
 
-    /** GET /tautulli/api/recently-added — recently added items fragment. */
-    #[Route('/api/recently-added', name: 'api_recently_added', methods: ['GET'])]
-    public function apiRecentlyAdded(): Response
-    {
-        try {
-            $recent = $this->tautulli->getRecentlyAdded(10);
-        } catch (\Throwable) {
-            $recent = ['items' => []];
-        }
-        return $this->render('tautulli/_recently_added.html.twig', ['recent' => $recent]);
-    }
 }

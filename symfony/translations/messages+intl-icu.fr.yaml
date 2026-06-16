@@ -482,7 +482,6 @@ tautulli:
     plays: Lectures dans le temps
     history: Historique
     libraries: Bibliothèques
-    recently_added: Ajouts récents
   stats:
     top_movie: Films les plus regardés
     top_show: Séries les plus regardées
@@ -498,8 +497,6 @@ tautulli:
     empty: Aucune bibliothèque
     items: '{count, plural, one {# élément} other {# éléments}}'
     episodes: '{count, plural, one {# épisode} other {# épisodes}}'
-  recently_added:
-    empty: Aucun ajout récent
 
 profile:
   title: Mon profil
