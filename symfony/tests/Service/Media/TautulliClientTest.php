@@ -573,6 +573,7 @@ class TautulliClientTest extends TestCase
                     'section_id'        => '1',
                     'guid'              => 'plex://movie/wildrobot',
                     'file'              => '/data/media/movies/WildRobot.mkv',
+                    'added_at'          => '1700000000',
                 ],
                 [
                     'rating_key'        => '67890',
@@ -611,7 +612,7 @@ class TautulliClientTest extends TestCase
     {
         $out = TautulliClient::normalizeRecentlyAdded($this->recentlyAddedFixture());
         foreach ($out['items'] as $item) {
-            foreach (['section_id', 'guid', 'file'] as $forbidden) {
+            foreach (['section_id', 'guid', 'file', 'added_at'] as $forbidden) {
                 self::assertArrayNotHasKey($forbidden, $item, "private field {$forbidden} leaked");
             }
             $flat = implode('|', array_map(static fn ($v) => is_scalar($v) ? (string) $v : '', $item));
