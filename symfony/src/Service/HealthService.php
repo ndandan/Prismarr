@@ -30,8 +30,8 @@ class HealthService
 {
     private const CACHE_TTL = 10;
 
-    /** @var array<string, array{ok: ?bool, at: int}> */
-    private array $cache = [];
+    /** @var array<string, array{status: array{status: ?string, latencyMs: ?int}, at: int}> */
+    private array $statusCache = [];
 
     public function __construct(
         private readonly RadarrClient      $radarr,
@@ -83,26 +83,78 @@ class HealthService
      */
     public function isHealthy(string $service, ?string $instanceSlug = null): ?bool
     {
+        return match ($this->statusFor($service, $instanceSlug)['status']) {
+            'up', 'slow', 'very_slow' => true,
+            'down', 'degraded'        => false,
+            default                   => null, // not configured / unknown
+        };
+    }
+
+    /**
+     * Richer health probe for the dashboard widget: returns a status word plus
+     * a latency reading. Cached CACHE_TTL seconds in-process, same as the
+     * legacy bool path (which now delegates here).
+     *
+     *  - not configured        → ['status' => null, ...]  (caller drops the chip)
+     *  - circuit breaker open   → 'degraded' (stale cached verdict, no live probe)
+     *  - live ping fails        → 'down' (timeout / refused / auth all surface here)
+     *  - live ping succeeds     → up / slow / very_slow by round-trip latency
+     *
+     * @return array{status: ?string, latencyMs: ?int}
+     */
+    public function statusFor(string $service, ?string $instanceSlug = null): array
+    {
         $key = $instanceSlug !== null ? $service . ':' . $instanceSlug : $service;
         $now = time();
-        if (isset($this->cache[$key]) && ($now - $this->cache[$key]['at']) < self::CACHE_TTL) {
-            return $this->cache[$key]['ok'];
+        if (isset($this->statusCache[$key]) && ($now - $this->statusCache[$key]['at']) < self::CACHE_TTL) {
+            return $this->statusCache[$key]['status'];
         }
 
-        // Short-circuit on unconfigured services: don't ping, don't log.
-        // Skipped when no ConfigService is wired (legacy test paths).
+        // Unconfigured services are never pinged (issue #9). Skipped when no
+        // ConfigService is wired (legacy test paths).
         if ($this->config !== null && !$this->isConfigured($service)) {
-            $this->cache[$key] = ['ok' => null, 'at' => $now];
-            return null;
+            return $this->remember($key, ['status' => null, 'latencyMs' => null], $now);
         }
 
-        // For radarr/sonarr with an explicit slug, bind the instance for
-        // this single ping. The client mutates back automatically on the
-        // next reset() (worker mode) or after this call when slug is null.
-        $ok = $this->pingFor($service, $instanceSlug);
+        // Circuit breaker open → we'd serve a stale cached-down verdict without
+        // a live probe. That's "cached stale data", not a freshly confirmed
+        // outage → degraded. radarr/sonarr mark the breaker WITH the instance
+        // slug, so per-instance degraded detection lines up here.
+        if ($this->serviceHealthCache?->isDown($service, $instanceSlug)) {
+            return $this->remember($key, ['status' => 'degraded', 'latencyMs' => null], $now);
+        }
 
-        $this->cache[$key] = ['ok' => $ok, 'at' => $now];
-        return $ok;
+        // Live probe — time it with a monotonic clock.
+        $start = hrtime(true);
+        try {
+            $ok = $this->pingFor($service, $instanceSlug);
+        } catch (\Throwable) {
+            $ok = false;
+        }
+        $latencyMs = (int) round((hrtime(true) - $start) / 1e6);
+
+        if ($ok === null) {
+            return $this->remember($key, ['status' => null, 'latencyMs' => null], $now);
+        }
+        if ($ok === false) {
+            return $this->remember($key, ['status' => 'down', 'latencyMs' => null], $now);
+        }
+
+        return $this->remember(
+            $key,
+            ['status' => self::classifyLatency($latencyMs), 'latencyMs' => $latencyMs],
+            $now,
+        );
+    }
+
+    /**
+     * @param array{status: ?string, latencyMs: ?int} $status
+     * @return array{status: ?string, latencyMs: ?int}
+     */
+    private function remember(string $key, array $status, int $now): array
+    {
+        $this->statusCache[$key] = ['status' => $status, 'at' => $now];
+        return $status;
     }
 
     private function pingFor(string $service, ?string $instanceSlug): ?bool
@@ -213,14 +265,14 @@ class HealthService
     public function invalidate(?string $service = null): void
     {
         if ($service === null) {
-            $this->cache = [];
+            $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
                 foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
         } else {
-            unset($this->cache[$service]);
+            unset($this->statusCache[$service]);
             $this->serviceHealthCache?->clear($service);
         }
     }
