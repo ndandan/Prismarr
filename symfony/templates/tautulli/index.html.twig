@@ -6,6 +6,10 @@
 {% include 'dashboard/_plex_styles.html.twig' %}
 <style>
   .plex-poster-sm { width: 34px; height: 51px; }
+  .plex-hist-cell { display: flex; gap: .5rem; align-items: center; min-width: 0; }
+  .plex-hist-cell-main { min-width: 0; }
+  .plex-hist-cell-title { font-size: .8rem; }
+  .plex-hist-cell-meta { font-size: .72rem; }
   .plex-stat-row { display: flex; gap: .55rem; align-items: center; padding: .25rem 0; }
   .plex-stat-row-main { min-width: 0; }
   .plex-range .btn.active { background: var(--tblr-primary); color: #fff; }
@@ -55,28 +59,24 @@
       </div>
     </div>
 
-    {# 4. History + Libraries #}
-    <div class="row row-cards mb-3">
-      <div class="col-lg-7">
-        <div class="card h-100">
-          <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.history'|trans }}</h3></div>
-          <div class="card-body">
-            <div class="plex-sessions" data-tautulli-history>
-              <div class="text-center text-secondary py-4"><span class="spinner-border"></span></div>
-            </div>
-            <div class="text-center mt-3">
-              <button type="button" class="btn btn-sm btn-outline-secondary" data-tautulli-history-more style="display:none;">{{ 'tautulli.history.load_more'|trans }}</button>
-            </div>
-          </div>
+    {# 6. History — full-width dense grid #}
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.history'|trans }}</h3></div>
+      <div class="card-body">
+        <div class="row row-cards g-2" data-tautulli-history>
+          <div class="col-12 text-center text-secondary py-4"><span class="spinner-border"></span></div>
+        </div>
+        <div class="text-center mt-3">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-tautulli-history-more style="display:none;">{{ 'tautulli.history.load_more'|trans }}</button>
         </div>
       </div>
-      <div class="col-lg-5">
-        <div class="card h-100">
-          <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.libraries'|trans }}</h3></div>
-          <div class="card-body" data-tautulli-libraries>
-            <div class="text-center text-secondary py-4"><span class="spinner-border"></span></div>
-          </div>
-        </div>
+    </div>
+
+    {# 7. Libraries — slim single-column list #}
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.libraries'|trans }}</h3></div>
+      <div class="card-body" data-tautulli-libraries>
+        <div class="text-center text-secondary py-4"><span class="spinner-border"></span></div>
       </div>
     </div>
 
