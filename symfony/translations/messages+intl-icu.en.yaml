@@ -483,6 +483,7 @@ tautulli:
     plays: Plays over time
     history: History
     libraries: Libraries
+    recently_added: Recently added
   stats:
     top_movie: Most watched movies
     top_show: Most watched shows
@@ -498,6 +499,8 @@ tautulli:
     empty: No libraries
     items: '{count, plural, one {# item} other {# items}}'
     episodes: '{count, plural, one {# episode} other {# episodes}}'
+  recently_added:
+    empty: Nothing added recently
 
 profile:
   title: My profile
