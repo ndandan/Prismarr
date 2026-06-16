@@ -483,6 +483,9 @@ tautulli:
     plays: Plays over time
     history: History
     libraries: Libraries
+    activity_hour: Plays by hour of day
+    activity_dow: Plays by day of week
+    clients: Plays by platform & stream type
   stats:
     top_movie: Most watched movies
     top_show: Most watched shows
@@ -492,6 +495,9 @@ tautulli:
     empty: No statistics for this period
   plays:
     empty: No play data for this period
+    mode:
+      media: Media type
+      stream: Stream type
   history:
     load_more: Load more
   libraries:

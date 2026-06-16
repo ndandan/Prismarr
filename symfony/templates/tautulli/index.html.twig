@@ -8,12 +8,12 @@
   .plex-poster-sm { width: 34px; height: 51px; }
   .plex-hist-cell { display: flex; gap: .5rem; align-items: center; min-width: 0; }
   .plex-hist-cell-main { min-width: 0; }
-  .plex-hist-cell-title { font-size: .8rem; }
+  .plex-hist-cell-title { font-size: .8rem; font-weight: 600; }
   .plex-hist-cell-meta { font-size: .72rem; }
   .plex-stat-row { display: flex; gap: .55rem; align-items: center; padding: .25rem 0; }
   .plex-stat-row-main { min-width: 0; }
   .plex-range .btn.active { background: var(--tblr-primary); color: #fff; }
-  #tautulli-plays-wrap { position: relative; height: 240px; }
+  .tautulli-chart-wrap { position: relative; height: 240px; }
 </style>
 {% endblock %}
 
@@ -52,10 +52,47 @@
 
     {# 3. Plays over time #}
     <div class="card mb-3">
-      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.plays'|trans }}</h3></div>
+      <div class="card-header d-flex align-items-center justify-content-between">
+        <h3 class="card-title">{{ 'tautulli.section.plays'|trans }}</h3>
+        <div class="btn-group btn-group-sm plex-range" role="group" data-tautulli-plays-mode>
+          <button type="button" class="btn btn-sm active" data-mode="media" aria-pressed="true">{{ 'tautulli.plays.mode.media'|trans }}</button>
+          <button type="button" class="btn btn-sm" data-mode="stream" aria-pressed="false">{{ 'tautulli.plays.mode.stream'|trans }}</button>
+        </div>
+      </div>
       <div class="card-body">
-        <div id="tautulli-plays-wrap"><canvas id="tautulli-plays"></canvas></div>
+        <div id="tautulli-plays-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-plays"></canvas></div>
         <div data-tautulli-plays-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
+      </div>
+    </div>
+
+    {# 4. Activity patterns #}
+    <div class="row row-cards mb-3">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.activity_hour'|trans }}</h3></div>
+          <div class="card-body">
+            <div id="tautulli-activity-hour-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-activity-hour"></canvas></div>
+            <div data-tautulli-activity-hour-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.activity_dow'|trans }}</h3></div>
+          <div class="card-body">
+            <div id="tautulli-activity-dow-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-activity-dow"></canvas></div>
+            <div data-tautulli-activity-dow-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# 5. Problem clients — platform × stream type #}
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.clients'|trans }}</h3></div>
+      <div class="card-body">
+        <div id="tautulli-clients-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-clients-stream-type"></canvas></div>
+        <div data-tautulli-clients-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
       </div>
     </div>
 
@@ -93,8 +130,9 @@
 (function () {
   var HISTORY_PAGE = 25;
   var range = 30;
+  var playsMode = 'media';
   var historyStart = 0;
-  var chart = null;
+  var charts = {};
 
   function frag(sel) { return document.querySelector(sel); }
 
@@ -133,8 +171,8 @@
         var trimmed = (html || '').trim();
         if (!append) box.innerHTML = trimmed || '';
         else if (trimmed) box.insertAdjacentHTML('beforeend', trimmed);
-        var rowCount = (trimmed.match(/class="plex-session/g) || []).length;
-        if (!append && !rowCount) box.innerHTML = '<div class="text-center text-secondary py-4">—</div>';
+        var rowCount = (trimmed.match(/class="[^"]*plex-hist-cell/g) || []).length;
+        if (!append && !rowCount) box.innerHTML = '<div class="col-12 text-center text-secondary py-4">—</div>';
         historyStart += HISTORY_PAGE;
         if (more) more.style.display = rowCount >= HISTORY_PAGE ? '' : 'none';
       })
@@ -142,30 +180,33 @@
         if (!append) {
           var box = frag('[data-tautulli-history]');
           var more = frag('[data-tautulli-history-more]');
-          if (box) box.innerHTML = '<div class="text-center text-secondary py-4">—</div>';
+          if (box) box.innerHTML = '<div class="col-12 text-center text-secondary py-4">—</div>';
           if (more) more.style.display = 'none';
         }
       });
   }
 
-  // Plays graph — fetch JSON, (re)draw Chart.js.
-  var SERIES_COLORS = { 'TV': '#22c55e', 'Movies': '#6366f1', 'Music': '#f59e0b' };
-  function refreshPlays() {
-    fetch('/tautulli/api/plays?range=' + range, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+  // Charts — fetch JSON, (re)draw a stacked bar into the given canvas.
+  var SERIES_COLORS = {
+    'TV': '#22c55e', 'Movies': '#6366f1', 'Music': '#f59e0b',
+    'Direct Play': '#22c55e', 'Direct Stream': '#0ea5e9', 'Transcode': '#f59e0b'
+  };
+  function drawStackedBar(opts) {
+    fetch(opts.url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
-        var wrap = frag('#tautulli-plays-wrap');
-        var empty = frag('[data-tautulli-plays-empty]');
+        var wrap = frag(opts.wrap);
+        var empty = frag(opts.empty);
         var hasData = d && d.series && d.series.length && d.categories && d.categories.length;
         if (wrap) wrap.style.display = hasData ? '' : 'none';
         if (empty) empty.style.display = hasData ? 'none' : '';
-        if (!hasData) { if (chart) { chart.destroy(); chart = null; } return; }
+        if (!hasData) { if (charts[opts.id]) { charts[opts.id].destroy(); charts[opts.id] = null; } return; }
         var datasets = d.series.map(function (s) {
           var c = SERIES_COLORS[s.name] || '#94a3b8';
           return { label: s.name, data: s.data, backgroundColor: c, borderColor: c, borderRadius: 3, borderSkipped: false };
         });
-        if (chart) chart.destroy();
-        chart = new Chart(frag('#tautulli-plays'), {
+        if (charts[opts.id]) charts[opts.id].destroy();
+        charts[opts.id] = new Chart(frag('#' + opts.id), {
           type: 'bar',
           data: { labels: d.categories, datasets: datasets },
           options: {
@@ -177,6 +218,20 @@
       })
       .catch(function () {});
   }
+
+  function refreshPlays() {
+    drawStackedBar({ id: 'tautulli-plays', url: '/tautulli/api/plays?range=' + range + '&mode=' + playsMode, wrap: '#tautulli-plays-wrap', empty: '[data-tautulli-plays-empty]' });
+  }
+  function refreshActivityHour() {
+    drawStackedBar({ id: 'tautulli-activity-hour', url: '/tautulli/api/activity-hour?range=' + range, wrap: '#tautulli-activity-hour-wrap', empty: '[data-tautulli-activity-hour-empty]' });
+  }
+  function refreshActivityDow() {
+    drawStackedBar({ id: 'tautulli-activity-dow', url: '/tautulli/api/activity-dow?range=' + range, wrap: '#tautulli-activity-dow-wrap', empty: '[data-tautulli-activity-dow-empty]' });
+  }
+  function refreshClients() {
+    drawStackedBar({ id: 'tautulli-clients-stream-type', url: '/tautulli/api/clients-stream-type?range=' + range, wrap: '#tautulli-clients-wrap', empty: '[data-tautulli-clients-empty]' });
+  }
+  function refreshCharts() { refreshPlays(); refreshActivityHour(); refreshActivityDow(); refreshClients(); }
 
   // Range toggle.
   var rangeBar = frag('[data-tautulli-range]');
@@ -191,13 +246,29 @@
         b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
       refreshStats();
+      refreshCharts();
+    });
+  }
+
+  // Plays mode toggle (Media Type / Stream Type).
+  var modeBar = frag('[data-tautulli-plays-mode]');
+  if (modeBar) {
+    modeBar.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-mode]');
+      if (!btn) return;
+      playsMode = btn.getAttribute('data-mode') === 'stream' ? 'stream' : 'media';
+      modeBar.querySelectorAll('[data-mode]').forEach(function (b) {
+        var on = b === btn;
+        b.classList.toggle('active', on);
+        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
       refreshPlays();
     });
   }
 
   // Initial hydration.
   refreshStats();
-  refreshPlays();
+  refreshCharts();
   refreshLibraries();
   loadHistory(false);
   var moreBtn = frag('[data-tautulli-history-more]');

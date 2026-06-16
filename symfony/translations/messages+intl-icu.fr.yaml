@@ -482,6 +482,9 @@ tautulli:
     plays: Lectures dans le temps
     history: Historique
     libraries: Bibliothèques
+    activity_hour: Lectures par heure
+    activity_dow: Lectures par jour de semaine
+    clients: Lectures par plateforme et type de flux
   stats:
     top_movie: Films les plus regardés
     top_show: Séries les plus regardées
@@ -491,6 +494,9 @@ tautulli:
     empty: Aucune statistique pour cette période
   plays:
     empty: Aucune donnée de lecture pour cette période
+    mode:
+      media: Type de média
+      stream: Type de flux
   history:
     load_more: Charger plus
   libraries:
