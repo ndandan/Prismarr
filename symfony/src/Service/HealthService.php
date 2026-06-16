@@ -30,7 +30,7 @@ class HealthService
 {
     private const CACHE_TTL = 10;
 
-    /** @var array<string, array{status: array{status: ?string, latencyMs: ?int}, at: int}> */
+    /** @var array<string, array{result: array{status: ?string, latencyMs: ?int}, at: int}> */
     private array $statusCache = [];
 
     public function __construct(
@@ -107,7 +107,7 @@ class HealthService
         $key = $instanceSlug !== null ? $service . ':' . $instanceSlug : $service;
         $now = time();
         if (isset($this->statusCache[$key]) && ($now - $this->statusCache[$key]['at']) < self::CACHE_TTL) {
-            return $this->statusCache[$key]['status'];
+            return $this->statusCache[$key]['result'];
         }
 
         // Unconfigured services are never pinged (issue #9). Skipped when no
@@ -148,13 +148,13 @@ class HealthService
     }
 
     /**
-     * @param array{status: ?string, latencyMs: ?int} $status
+     * @param array{status: ?string, latencyMs: ?int} $result
      * @return array{status: ?string, latencyMs: ?int}
      */
-    private function remember(string $key, array $status, int $now): array
+    private function remember(string $key, array $result, int $now): array
     {
-        $this->statusCache[$key] = ['status' => $status, 'at' => $now];
-        return $status;
+        $this->statusCache[$key] = ['result' => $result, 'at' => $now];
+        return $result;
     }
 
     private function pingFor(string $service, ?string $instanceSlug): ?bool

@@ -112,4 +112,19 @@ class HealthServiceStatusTest extends TestCase
         $cache->markDown('prowlarr');
         self::assertFalse($this->make(null, $cache)->isHealthy('prowlarr')); // degraded -> false
     }
+
+    public function testStatusCachedWithinTtl(): void
+    {
+        // A second call inside CACHE_TTL must return the remembered result
+        // without re-pinging — that's what keeps the topbar poll cheap.
+        $prowlarr = $this->createMock(ProwlarrClient::class);
+        $prowlarr->expects(self::once())->method('ping')->willReturn(true);
+
+        $sut = $this->make($prowlarr, null);
+        $first  = $sut->statusFor('prowlarr');
+        $second = $sut->statusFor('prowlarr');
+
+        self::assertSame($first, $second);
+        self::assertSame('up', $second['status']);
+    }
 }
