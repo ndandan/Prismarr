@@ -55,13 +55,18 @@ exists upstream.
   count, Direct Play / Direct Stream / Transcode breakdown, total/LAN/WAN
   bandwidth). The dashboard widget's summary block was extracted into a shared
   `dashboard/_plex_summary.html.twig` partial and reused here.
-- "Recently added" section — the latest 10 items added to Plex, each clickable
-  into the same info modal. Backed by a new read-only `get_recently_added`
-  command (strict allow-list normalizer; no ids/guids/paths/timestamps).
 - Richer live stream cards (shared, so the dashboard widget benefits too): an
   HDR/SDR dynamic-range badge, and on transcoding streams the source→target
   codec transition (e.g. `Video: HEVC → H264`) instead of just the decision
   word.
+- Decluttered layout: the History section is now a dense full-width grid
+  (poster + title + user/when, no progress bar), and Libraries is a slim
+  single-column list. The "Recently added" idea was dropped — the *arr apps
+  already surface that.
+- New graphs, all reusing the `{categories, series}` chart contract and the
+  7/30/90-day toggle: a Media Type ⇄ Stream Type toggle on the plays chart,
+  plays by hour of day and day of week, and a platform × stream-type "problem
+  clients" chart. The aggregate "Total" series is dropped from all charts.
 
 **New code:** `TautulliController`, `TautulliClient`, a `relative_date` Twig
 filter (`RelativeDateExtension`), shared Plex partials (session card, history
