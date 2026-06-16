@@ -1,6 +1,6 @@
 # Fork changes — what differs from the original Prismarr
 
-Summary of the work done on **2026-06-13 → 2026-06-15**, framed as how this
+Summary of the work done on **2026-06-13 → 2026-06-16**, framed as how this
 fork (`ndandan/Prismarr`) now differs from the upstream project. All of it is
 merged to `main` and published to `ghcr.io/ndandan/prismarr:latest`.
 
@@ -49,6 +49,19 @@ exists upstream.
   payload) before leaving Prismarr.
 - Backed by `get_activity`, `get_metadata`, `get_history`, `get_home_stats`,
   `get_plays_by_date`, `get_libraries`.
+
+**Activity-page enhancements (2026-06-16)**
+- Stream-summary strip above Now Playing on the Plex Activity page (session
+  count, Direct Play / Direct Stream / Transcode breakdown, total/LAN/WAN
+  bandwidth). The dashboard widget's summary block was extracted into a shared
+  `dashboard/_plex_summary.html.twig` partial and reused here.
+- "Recently added" section — the latest 10 items added to Plex, each clickable
+  into the same info modal. Backed by a new read-only `get_recently_added`
+  command (strict allow-list normalizer; no ids/guids/paths/timestamps).
+- Richer live stream cards (shared, so the dashboard widget benefits too): an
+  HDR/SDR dynamic-range badge, and on transcoding streams the source→target
+  codec transition (e.g. `Video: HEVC → H264`) instead of just the decision
+  word.
 
 **New code:** `TautulliController`, `TautulliClient`, a `relative_date` Twig
 filter (`RelativeDateExtension`), shared Plex partials (session card, history
