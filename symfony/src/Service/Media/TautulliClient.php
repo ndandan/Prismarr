@@ -371,7 +371,6 @@ class TautulliClient implements ResetInterface
         return $out;
     }
 
-
     /**
      * Pure transform: get_history `data` envelope -> sanitized rows. Allow-list
      * only; usernames/emails/IPs/file paths are never copied out.

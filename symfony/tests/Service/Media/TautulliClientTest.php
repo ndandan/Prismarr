@@ -558,7 +558,6 @@ class TautulliClientTest extends TestCase
         self::assertSame([], $client->getHistory(25, 25));
     }
 
-
     public function testNormalizesDynamicRangeAndTranscodeCodecs(): void
     {
         $data = $this->fixtureData();

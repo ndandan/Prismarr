@@ -62,7 +62,6 @@ class TautulliControllerTest extends AbstractWebTestCase
         self::assertSame([], $data['series']);
     }
 
-
     /**
      * The page route /tautulli is guarded by ServiceRouteGuardSubscriber.
      * With no tautulli_url / tautulli_api_key in DB the guard fires
