@@ -63,6 +63,26 @@ class TautulliControllerTest extends AbstractWebTestCase
     }
 
     /**
+     * /tautulli/api/recently-added returns HTTP 200 and renders the empty-state
+     * fragment when Tautulli is not configured.
+     *
+     * TautulliClient::getRecentlyAdded() fails open: missing config rows →
+     * normalizeRecentlyAdded([]) → {items:[]}. The controller catches any
+     * throwable and also falls back to {items:[]}, so the template always
+     * renders the empty-state div rather than a 500.
+     */
+    public function testRecentlyAddedFragmentRendersEmptyStateWhenUnconfigured(): void
+    {
+        $this->client->request('GET', '/tautulli/api/recently-added');
+
+        self::assertResponseIsSuccessful();
+
+        $content = $this->client->getResponse()->getContent();
+        self::assertNotFalse($content);
+        self::assertStringContainsString('Nothing added recently', $content);
+    }
+
+    /**
      * The page route /tautulli is guarded by ServiceRouteGuardSubscriber.
      * With no tautulli_url / tautulli_api_key in DB the guard fires
      * before the controller and redirects to admin_settings_index.

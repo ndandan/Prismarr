@@ -3,7 +3,6 @@
    on a 10s interval (see index.html.twig). `plex` is the sanitized shape from
    TautulliClient::getActivity() — no secrets, no raw payload. Fails open: the
    error/empty states below keep the card intact when Tautulli is down. #}
-{% import '_icons.html.twig' as ico %}
 {% set active_tab = plex_tab|default('now') %}
 <ul class="nav nav-tabs plex-tabs" data-plex-tabs>
   <li class="nav-item"><a href="#" class="nav-link {{ active_tab == 'now' ? 'active' }}" data-plex-tab="now">{{ 'dashboard.plex.tab.now'|trans }}{% if plex.streamCount > 0 %} <span class="badge bg-green-lt text-green ms-1">{{ plex.streamCount }}</span>{% endif %}</a></li>
