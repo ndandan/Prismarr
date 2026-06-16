@@ -4,9 +4,10 @@ Summary of the work done on **2026-06-13 → 2026-06-15**, framed as how this
 fork (`ndandan/Prismarr`) now differs from the upstream project. All of it is
 merged to `main` and published to `ghcr.io/ndandan/prismarr:latest`.
 
-**Scope:** 58 files changed, ~7,700 insertions since the `1.1.1` baseline
-(2026-06-10). Three areas: a new Tautulli/Plex activity integration, a
-performance rework of the Radarr/Sonarr library pages, and build/CI hardening.
+**Scope:** 63 files changed, ~8,900 insertions since the `1.1.1` baseline
+(2026-06-10). Four areas: a new Tautulli/Plex activity integration, a
+performance rework of the Radarr/Sonarr library pages, build/CI hardening, and
+a latency-aware service health widget.
 
 ---
 
@@ -103,11 +104,47 @@ cleanly when the *arr is unreachable — never 500s, never hangs).
 
 ---
 
+## 4. Latency-aware service health widget
+
+The dashboard "Services health" card moves from a binary Up/Down chip to a
+five-state, latency-aware status. None of this exists upstream.
+
+- **Five states with a response-time reading** rendered as `Status · N ms`:
+  `up` (live ping ≤ 750 ms), `slow` (751–2000 ms), `very_slow` (> 2000 ms),
+  `down` (a live ping that times out / is refused / fails auth), and `degraded`
+  (a stale verdict served from the cross-request circuit breaker without a fresh
+  live probe — i.e. "cached stale data"). Latency is shown only for the three
+  reachable states; dots are colour-coded per state (green → amber → orange,
+  slate-gray for degraded, red for down).
+- **New `HealthService::statusFor()`** times a live ping with a monotonic clock
+  (`hrtime`) and classifies it; results are cached in-process for 10 s like the
+  legacy path. The existing `isHealthy()` boolean now delegates to it and
+  projects back to `?bool`, so the topbar indicator and `/api/health/services`
+  JSON keep their exact prior contract (verified live — the API still returns
+  `bool|null` per service with no latency leak).
+- Scope was deliberately limited to the dashboard widget; clients' `ping()` and
+  the circuit breaker are untouched.
+
+**New code:** `HealthService::statusFor()` + `classifyLatency()`, reworked
+`DashboardController::servicesHealth()`, updated `_health.html.twig` + dot-colour
+CSS, and `dashboard.health.status_*` translation keys (en/fr). Covered by
+`HealthServiceStatusTest` (latency buckets, down, degraded, not-configured,
+`isHealthy` projection, cache-hit) and an updated `DashboardControllerTest`.
+
+---
+
 ## Verification
 
 - Full gate green in CI on `main`: PHP lint, Twig lint (145 files), and the
-  PHPUnit suite (590 tests). GHCR image rebuilt and republished on the new
+  PHPUnit suite (599 tests). GHCR image rebuilt and republished on the new
   actions with no remaining deprecation warnings.
+- Service health widget verified live on the Unraid deployment: chips render
+  `Status · N ms`, latency is re-measured each cycle (network-bound TMDb /
+  Tautulli readings drift between samples while local services stay pinned at
+  1–3 ms), and `/api/health/services` still returns the unchanged boolean
+  contract. The non-`up` states (slow / very_slow / degraded / down) are
+  covered by unit tests but not yet exercised against a genuinely slow / downed
+  service.
 - Outstanding: live verification of the perf work against a real, reachable
   Radarr/Sonarr (only the unreachable-host error path is covered by automated
   tests).
