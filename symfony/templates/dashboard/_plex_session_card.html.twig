@@ -29,12 +29,17 @@
       {% if dec %}<span class="badge {{ dec_cls[dec]|default('bg-secondary-lt') }}">{{ dec_label[dec] is defined ? dec_label[dec]|trans : dec|capitalize }}</span>{% endif %}
       {% if s.location %}<span class="badge bg-secondary-lt text-uppercase">{{ s.location }}</span>{% endif %}
       {% if s.quality %}<span class="badge bg-secondary-lt">{{ s.quality }}</span>{% endif %}
+      {% if s.dynamicRange %}<span class="badge bg-secondary-lt text-uppercase">{{ s.dynamicRange }}</span>{% endif %}
       {% if s.bandwidthMbps > 0 %}<span class="badge bg-secondary-lt">{{ s.bandwidthMbps }} {{ 'dashboard.plex.mbps'|trans }}</span>{% endif %}
     </div>
     {% if dec == 'transcode' %}
+      {% set v_trans = (s.videoDecision|default('')|lower == 'transcode') and s.videoCodec and s.streamVideoCodec and (s.videoCodec|lower != s.streamVideoCodec|lower) %}
+      {% set a_trans = (s.audioDecision|default('')|lower == 'transcode') and s.audioCodec and s.streamAudioCodec and (s.audioCodec|lower != s.streamAudioCodec|lower) %}
       <div class="plex-decisions text-secondary">
-        {{ 'dashboard.plex.track.video'|trans }} {{ s.videoDecision ?? '—' }} ·
-        {{ 'dashboard.plex.track.audio'|trans }} {{ s.audioDecision ?? '—' }} ·
+        {{ 'dashboard.plex.track.video'|trans }}
+        {% if v_trans %}{{ s.videoCodec|upper }} → {{ s.streamVideoCodec|upper }}{% else %}{{ s.videoDecision ?? '—' }}{% endif %} ·
+        {{ 'dashboard.plex.track.audio'|trans }}
+        {% if a_trans %}{{ s.audioCodec|upper }} → {{ s.streamAudioCodec|upper }}{% else %}{{ s.audioDecision ?? '—' }}{% endif %} ·
         {{ 'dashboard.plex.track.subtitle'|trans }} {{ s.subtitleDecision ?? '—' }}
       </div>
     {% endif %}
