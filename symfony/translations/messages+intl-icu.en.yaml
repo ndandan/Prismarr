@@ -397,6 +397,11 @@ dashboard:
     status_ok: Up
     status_ko: Unreachable
     status_unk: Not configured
+    status_up: Up
+    status_slow: Slow
+    status_very_slow: Very slow
+    status_degraded: Degraded
+    status_down: Down
     none_configured: No service configured yet — pick the ones you use in Settings.
   watchlist:
     title: My watchlist

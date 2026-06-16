@@ -18,13 +18,20 @@
       tmdb:        '#01B4E4',
       tautulli:    '#e5a00d',
     } %}
+    {% set status_dot = {
+      up:        'is-up',
+      slow:      'is-slow',
+      very_slow: 'is-very-slow',
+      degraded:  'is-degraded',
+      down:      'is-down',
+    } %}
     {% for chip in services_health %}
       <div class="service-chip">
-        <span class="service-chip-dot {{ chip.state ? 'is-ok' : 'is-ko' }}"></span>
+        <span class="service-chip-dot {{ status_dot[chip.status]|default('is-unk') }}"></span>
         <div class="flex-fill">
           <div class="service-chip-name" style="color: {{ service_colors[chip.id]|default('#888') }};">{{ chip.name }}</div>
           <div class="service-chip-state">
-            {{ chip.state ? 'dashboard.health.status_ok'|trans : 'dashboard.health.status_ko'|trans }}
+            {{ ('dashboard.health.status_' ~ chip.status)|trans }}{% if chip.latencyMs is not null %} · {{ chip.latencyMs }} ms{% endif %}
           </div>
         </div>
       </div>
