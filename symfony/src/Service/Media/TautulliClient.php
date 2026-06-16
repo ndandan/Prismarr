@@ -339,7 +339,7 @@ class TautulliClient implements ResetInterface
     }
 
     /**
-     * Pure transform: get_plays_by_date `data` → {categories, series}. Series
+     * Pure transform: a chart command's `data` envelope → {categories, series}. Series
      * data is coerced to ints; only name + data survive.
      *
      * @param array<string, mixed> $data

@@ -533,6 +533,7 @@ class TautulliClientTest extends TestCase
         self::assertSame($neutral, $client->getPlaysByHourOfDay(30));
         self::assertSame($neutral, $client->getPlaysByDayOfWeek(30));
         self::assertSame($neutral, $client->getStreamTypeByPlatform(30));
+        self::assertSame($neutral, $client->getPlaysByDate(30));
     }
 
     /** A representative get_libraries `data` list. */
