@@ -1,0 +1,25 @@
+{# Recently added Plex items. `recent` = {items: [{ratingKey, title, year,
+   posterPath, mediaType, grandparentTitle}]}. Each row opens the info modal via
+   the shared delegated handler (data-plex-rating-key). No timestamps by design. #}
+{% import '_icons.html.twig' as ico %}
+{% if recent.items is empty %}
+  <div class="text-center text-secondary py-4">{{ 'tautulli.recently_added.empty'|trans }}</div>
+{% else %}
+  <div class="plex-sessions">
+    {% for it in recent.items %}
+      <div class="plex-session {% if it.ratingKey %}plex-clickable{% endif %}"
+           {% if it.ratingKey %}data-plex-rating-key="{{ it.ratingKey }}" role="button" tabindex="0"{% endif %}>
+        <div class="plex-poster">
+          {{ ico.icon(it.mediaType == 'movie' ? 'movie' : 'device-tv', '', 22) }}
+          {% if it.posterPath %}<img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: it.posterPath}) }}" alt="" loading="lazy">{% endif %}
+        </div>
+        <div class="plex-session-main">
+          <div class="plex-session-title text-truncate">
+            {% if it.mediaType == 'episode' and it.grandparentTitle %}{{ it.grandparentTitle }}{% else %}{{ it.title }}{% endif %}
+            {% if it.year %}<span class="plex-session-year">({{ it.year }})</span>{% endif %}
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
