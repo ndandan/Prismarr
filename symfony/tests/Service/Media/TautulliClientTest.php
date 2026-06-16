@@ -648,8 +648,17 @@ class TautulliClientTest extends TestCase
         self::assertSame('aac', $s['streamAudioCodec']);
 
         // Still no private fields after growing the allow-list.
-        foreach (['ip_address', 'machine_id', 'session_token', 'file', 'email', 'username'] as $forbidden) {
+        foreach (['ip_address', 'ip_address_public', 'machine_id', 'session_token', 'file', 'email', 'username'] as $forbidden) {
             self::assertArrayNotHasKey($forbidden, $s);
         }
+    }
+
+    public function testDynamicRangeFallsBackToSourceWhenStreamAbsent(): void
+    {
+        $data = $this->fixtureData();
+        $data['sessions'][0]['video_dynamic_range'] = 'HDR10';
+        // no stream_video_dynamic_range key → must fall back to the source value
+        $s = TautulliClient::normalizeActivity($data)['sessions'][0];
+        self::assertSame('HDR10', $s['dynamicRange']);
     }
 }
