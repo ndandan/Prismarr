@@ -536,7 +536,7 @@ class DashboardController extends AbstractController
     }
 
     /**
-     * @return list<array{id: string, name: string, state: bool}>
+     * @return list<array{id: string, name: string, status: string, latencyMs: ?int}>
      *
      * v1.1.0 — radarr/sonarr expand to one chip PER enabled instance, named
      * after the instance (Radarr 1080p, Radarr 4K…), matching the topbar
@@ -551,24 +551,24 @@ class DashboardController extends AbstractController
         foreach ([ServiceInstance::TYPE_RADARR, ServiceInstance::TYPE_SONARR] as $type) {
             foreach ($this->instances->getEnabled($type) as $inst) {
                 try {
-                    $h = $this->health->isHealthy($type, $inst->getSlug());
+                    $s = $this->health->statusFor($type, $inst->getSlug());
                 } catch (\Throwable) {
-                    $h = false;
+                    $s = ['status' => 'down', 'latencyMs' => null];
                 }
-                if ($h === null) continue; // instance has no credentials yet
-                $chips[] = ['id' => $type, 'name' => $inst->getName(), 'state' => $h];
+                if ($s['status'] === null) continue; // instance has no credentials yet
+                $chips[] = ['id' => $type, 'name' => $inst->getName(), 'status' => $s['status'], 'latencyMs' => $s['latencyMs']];
             }
         }
 
         $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli'];
         foreach ($labels as $service => $label) {
             try {
-                $h = $this->health->isHealthy($service);
+                $s = $this->health->statusFor($service);
             } catch (\Throwable) {
-                $h = null;
+                $s = ['status' => null, 'latencyMs' => null];
             }
-            if ($h === null) continue; // not configured / disabled
-            $chips[] = ['id' => $service, 'name' => $label, 'state' => $h];
+            if ($s['status'] === null) continue; // not configured / disabled
+            $chips[] = ['id' => $service, 'name' => $label, 'status' => $s['status'], 'latencyMs' => $s['latencyMs']];
         }
 
         return $chips;
