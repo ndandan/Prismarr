@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Performance
 - **Radarr/Sonarr library pages no longer stall for 10–15 s.** The movie/series list is now cached per instance for a short window (45 s) instead of being re-fetched and re-normalized on every visit, and the remaining per-page calls (status, queue, indexers, health, calendar) are fetched concurrently in a single `curl_multi` batch instead of one after another. A briefly-unreachable service now costs one timeout window for the whole page instead of stacking one per call. Library mutations (add / delete / monitor / edit / bulk / file-delete) invalidate the cache so changes still show immediately.
 
+### Changed
+- **Dashboard "Services health" chips now show a latency-aware status instead of a binary Up/Down.** Each chip reports one of five states with a response-time reading (e.g. `Up · 142 ms`): `up` (≤750 ms), `slow` (751–2000 ms), `very_slow` (>2000 ms), `down` (a live ping that times out / is refused / fails auth), and `degraded` (a stale verdict served from the cross-request circuit breaker without a fresh live probe). Dots are colour-coded per state. The latency probe lives in a new `HealthService::statusFor()`; the existing `isHealthy()` boolean (topbar + `/api/health/services`) is unchanged.
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed
