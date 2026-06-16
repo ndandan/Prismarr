@@ -2,6 +2,7 @@
 {% if plex.error or not plex.connected or plex.sessions is empty %}
   <div class="text-center text-secondary py-4">{{ 'dashboard.plex.empty'|trans }}</div>
 {% else %}
+  {% include 'dashboard/_plex_summary.html.twig' with {plex: plex} only %}
   <div class="plex-sessions">
     {% for s in plex.sessions %}
       {% include 'dashboard/_plex_session_card.html.twig' with {s: s} only %}
