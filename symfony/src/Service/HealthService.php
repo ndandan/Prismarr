@@ -54,6 +54,20 @@ class HealthService
     ) {}
 
     /**
+     * Bucket a successful ping's round-trip (ms) into a latency status.
+     * Thresholds: <=750 up, <=2000 slow, otherwise very_slow. The 2000 edge
+     * counts as slow so the boundary is unambiguous.
+     */
+    public static function classifyLatency(int $ms): string
+    {
+        return match (true) {
+            $ms <= 750  => 'up',
+            $ms <= 2000 => 'slow',
+            default     => 'very_slow',
+        };
+    }
+
+    /**
      * Returns true (up), false (down), or null (not configured — no URL/key
      * in DB). Cached for CACHE_TTL seconds so the topbar can poll every few
      * seconds without hammering upstreams. Unconfigured services are NOT
