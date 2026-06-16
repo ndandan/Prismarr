@@ -372,6 +372,59 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Most recently added Plex items, normalized + sanitized. Returns a single
+     * `items` list (newest first, as Tautulli returns them); an empty list
+     * covers disabled/unconfigured/unreachable so the section shows its empty
+     * state. `count` is clamped to 1..50 before reaching Tautulli.
+     *
+     * @return array{items:list<array{ratingKey:?string,title:?string,year:?string,posterPath:?string,mediaType:?string,grandparentTitle:?string}>}
+     */
+    public function getRecentlyAdded(int $count = 10): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return self::normalizeRecentlyAdded([]);
+        }
+        $resp = $this->request([
+            'cmd'   => 'get_recently_added',
+            'count' => (string) max(1, min(50, $count)),
+        ]);
+        if ($resp === null || $resp['ok'] !== true) {
+            return self::normalizeRecentlyAdded([]);
+        }
+        return self::normalizeRecentlyAdded(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Pure transform: get_recently_added `data` → sanitized {items}. Allow-list
+     * only — section ids, guids, file paths, added_at host fields are never
+     * copied out (we intentionally omit timestamps).
+     *
+     * @param array<string, mixed> $data
+     * @return array{items:list<array{ratingKey:?string,title:?string,year:?string,posterPath:?string,mediaType:?string,grandparentTitle:?string}>}
+     */
+    public static function normalizeRecentlyAdded(array $data): array
+    {
+        $rows = is_array($data['recently_added'] ?? null) ? $data['recently_added'] : [];
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $mediaType = self::str($r['media_type'] ?? null);
+            $out[] = [
+                'ratingKey'        => self::str($r['rating_key'] ?? null),
+                'title'            => self::str($r['title'] ?? null),
+                'year'             => self::str($r['year'] ?? null),
+                'posterPath'       => self::pickPoster($r, $mediaType),
+                'mediaType'        => $mediaType,
+                'grandparentTitle' => self::str($r['grandparent_title'] ?? null),
+            ];
+        }
+        return ['items' => $out];
+    }
+
+    /**
      * Pure transform: get_history `data` envelope -> sanitized rows. Allow-list
      * only; usernames/emails/IPs/file paths are never copied out.
      *
