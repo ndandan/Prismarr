@@ -5,6 +5,11 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Performance
+- **Faster Radarr / Sonarr library pages.** The heavy `getMovies()` / `getSeries()` payload is now cached per instance for 45 s (`MediaLibraryCache`) instead of being re-fetched and re-normalised on every visit, and the per-page status / queue / indexers / health / calendar calls run in a single `curl_multi` batch (`multiGet()`) rather than sequentially. Cold loads are unchanged, but revisits within the window are roughly 3× faster, and a slow or unreachable instance now costs one timeout window for the whole page instead of stacking one timeout per call. Empty results are not cached and library mutations invalidate the entry, so user changes still show immediately. Same per-handle semantics as the existing `get()` (SSRF protocol guard, connect/total timeouts, per-instance circuit breaker).
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed
