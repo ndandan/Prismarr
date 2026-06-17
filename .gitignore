@@ -39,6 +39,8 @@ PROGRESSION.md
 CLAUDE.md
 AGENTS.md
 REDDIT_POST.md
+# Superpowers brainstorming specs + implementation plans (internal scaffolding)
+docs/superpowers/
 
 # Local screenshots dropped in the repo root (not part of the project)
 /*.png
