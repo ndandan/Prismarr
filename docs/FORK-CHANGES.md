@@ -100,6 +100,15 @@ Fixes the 10–15 s library-page loads reported in the project Discord.
 `RadarrClientMultiGetTest`, and a `MediaLibraryPageTest` smoke test (renders
 cleanly when the *arr is unreachable — never 500s, never hangs).
 
+**Measured** (LAN, single-run, browser Resource Timing): the Radarr library
+page loads in **~5.0 s cold** (cache miss) and **~1.4 s on a warm revisit**
+within the 45 s window — about **3× faster** on the common navigate-away-and-back
+path. Upstream has no cache, so every visit re-fetches (**~4.3 s**, with no warm
+speedup — confirmed by an immediate re-measure). Cold first-load times are
+otherwise comparable to upstream; the rework's wins are warm revisits and
+graceful degradation when a service is slow (the concurrent `multiGet` replaces
+the stacked per-call timeouts behind the original 10–15 s reports).
+
 ---
 
 ## 3. Build & CI hardening
