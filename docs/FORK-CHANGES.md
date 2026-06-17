@@ -4,7 +4,7 @@ Summary of the work done on **2026-06-13 → 2026-06-16**, framed as how this
 fork (`ndandan/Prismarr`) now differs from the upstream project. All of it is
 merged to `main` and published to `ghcr.io/ndandan/prismarr:latest`.
 
-**Scope:** 63 files changed, ~8,900 insertions since the `1.1.1` baseline
+**Scope:** 56 files changed, ~4,250 insertions since the `1.1.1` baseline
 (2026-06-10). Four areas: a new Tautulli/Plex activity integration, a
 performance rework of the Radarr/Sonarr library pages, build/CI hardening, and
 a latency-aware service health widget.
