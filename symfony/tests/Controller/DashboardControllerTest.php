@@ -49,6 +49,7 @@ class DashboardControllerTest extends TestCase
             fn(string $name, array $params = []) => '/' . $name . (isset($params['slug']) ? '/' . $params['slug'] : '')
         );
         $container = $this->createMock(\Psr\Container\ContainerInterface::class);
+        $container->method('has')->willReturn(true);
         $container->method('get')->willReturnCallback(fn(string $id) => $id === 'router' ? $router : null);
         $c->setContainer($container);
     }
@@ -198,5 +199,54 @@ class DashboardControllerTest extends TestCase
         self::assertSame(['id' => 'radarr', 'name' => 'Radarr 4K',    'status' => 'down', 'latencyMs' => null], $chips[1]);
         self::assertSame(['id' => 'sonarr', 'name' => 'Sonarr',       'status' => 'slow', 'latencyMs' => 1500], $chips[2]);
         self::assertSame(['id' => 'qbittorrent', 'name' => 'qBittorrent', 'status' => 'up', 'latencyMs' => 40], $chips[3]);
+    }
+
+    public function testQuickLookTmdbMovieAndTv(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getMovie')->willReturn([
+            'id' => 693134, 'title' => 'Dune: Part Two', 'release_date' => '2024-02-27',
+            'overview' => 'Paul unites with the Fremen.', 'runtime' => 167,
+            'vote_average' => 8.2, 'poster_path' => '/p.jpg', 'backdrop_path' => '/b.jpg',
+            'genres' => [['id' => 1, 'name' => 'Science Fiction'], ['id' => 2, 'name' => 'Adventure']],
+        ]);
+        $tmdb->method('getTv')->willReturn([
+            'id' => 95396, 'name' => 'Severance', 'first_air_date' => '2022-02-18',
+            'overview' => 'Work-life balance.', 'number_of_seasons' => 2,
+            'vote_average' => 8.4, 'poster_path' => '/s.jpg', 'backdrop_path' => null,
+            'genres' => [['id' => 18, 'name' => 'Drama']],
+            'networks' => [['id' => 2552, 'name' => 'Apple TV+']],
+        ]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(
+            fn(string $k, array $p = []) => $k === 'dashboard.quicklook.runtime' ? $p['min'] . ' min'
+                : ($k === 'dashboard.quicklook.seasons' ? $p['count'] . ' saisons' : $k)
+        );
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class),
+        );
+        $this->attachRouter($controller); // quickLookTmdb calls generateUrl('tmdb_index')
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+
+        $movie = $m->invoke($controller, 'movie', 693134);
+        self::assertSame('Dune: Part Two', $movie['title']);
+        self::assertSame(2024, $movie['year']);
+        self::assertSame('https://image.tmdb.org/t/p/w342/p.jpg', $movie['poster']);
+        self::assertSame('167 min', $movie['metaLine']);
+        self::assertNull($movie['statusBadge']);
+        self::assertStringContainsString('detail=movie/693134', $movie['actionUrl']);
+
+        $tv = $m->invoke($controller, 'tv', 95396);
+        self::assertSame('Severance', $tv['title']);
+        self::assertSame(2022, $tv['year']);
+        self::assertNull($tv['backdrop']); // backdrop_path null → null
+        self::assertSame('Apple TV+ · 2 saisons', $tv['metaLine']);
+        self::assertStringContainsString('detail=tv/95396', $tv['actionUrl']);
     }
 }

@@ -718,6 +718,59 @@ class DashboardController extends AbstractController
         ];
     }
 
+    private function tmdbImage(?string $path, string $size): ?string
+    {
+        return $path ? 'https://image.tmdb.org/t/p/' . $size . $path : null;
+    }
+
+    /**
+     * Build the read-only quick-look view-model for a TMDb item (trending /
+     * watchlist). Returns null when TMDb has no record (graceful body upstream).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function quickLookTmdb(string $type, int $id): ?array
+    {
+        $isTv = $type === 'tv';
+        $data = $this->safeFetch(
+            "quicklook.tmdb.{$type}.{$id}",
+            fn() => $isTv ? $this->tmdb->getTv($id) : $this->tmdb->getMovie($id),
+        );
+        if (!$data) {
+            return null;
+        }
+
+        $date = $isTv ? ($data['first_air_date'] ?? '') : ($data['release_date'] ?? '');
+        $year = $date !== '' ? (int) substr((string) $date, 0, 4) : null;
+
+        if ($isTv) {
+            $network  = $data['networks'][0]['name'] ?? null;
+            $seasons  = $data['number_of_seasons'] ?? null;
+            $parts    = array_filter([
+                $network,
+                $seasons ? $this->translator->trans('dashboard.quicklook.seasons', ['count' => $seasons]) : null,
+            ]);
+            $metaLine = $parts === [] ? null : implode(' · ', $parts);
+        } else {
+            $runtime  = $data['runtime'] ?? null;
+            $metaLine = $runtime ? $this->translator->trans('dashboard.quicklook.runtime', ['min' => $runtime]) : null;
+        }
+
+        return [
+            'title'       => $data['title'] ?? $data['name'] ?? '—',
+            'year'        => $year,
+            'poster'      => $this->tmdbImage($data['poster_path'] ?? null, 'w342'),
+            'backdrop'    => $this->tmdbImage($data['backdrop_path'] ?? null, 'w1280'),
+            'overview'    => $data['overview'] ?? null,
+            'genres'      => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
+            'rating'      => $data['vote_average'] ?? null,
+            'metaLine'    => $metaLine,
+            'statusBadge' => null,
+            'actionUrl'   => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
+            'actionLabel' => $this->translator->trans('dashboard.quicklook.discover'),
+        ];
+    }
+
     /**
      * Personal watchlist — up to MAX_WATCHLIST most recently starred items.
      * Read straight from the local DB so it's always fast even when every
