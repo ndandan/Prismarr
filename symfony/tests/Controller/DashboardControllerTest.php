@@ -250,6 +250,35 @@ class DashboardControllerTest extends TestCase
         self::assertStringContainsString('detail=tv/95396', $tv['actionUrl']);
     }
 
+    public function testHeroSpotlightCarriesQuickLookFields(): void
+    {
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturn([]); // no library movies → use TMDb branch
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $this->createMock(TmdbClient::class), $this->createMock(WatchlistItemRepository::class),
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class),
+        );
+        $this->attachRouter($controller); // pickHeroSpotlight calls generateUrl
+        $m = new ReflectionMethod(DashboardController::class, 'pickHeroSpotlight');
+        $m->setAccessible(true);
+        $vm = $m->invoke($controller, [[
+            'id' => 555, 'media_type' => 'tv', 'name' => 'Show', 'backdrop_path' => '/b.jpg',
+            'first_air_date' => '2020-01-01', 'overview' => 'x', 'vote_average' => 7.0,
+        ]]);
+
+        self::assertSame('tmdb', $vm['qlSource']);
+        self::assertSame('tv', $vm['qlType']);
+        self::assertSame(555, $vm['qlId']);
+        self::assertNull($vm['qlSlug']);
+    }
+
     public function testQuickLookTmdbTvZeroSeasonsRenders(): void
     {
         $tmdb = $this->createMock(TmdbClient::class);

@@ -418,6 +418,7 @@ class DashboardController extends AbstractController
                     'badge'    => $next['badge'],
                     'poster'   => $m['poster'] ?? null,
                     'date'     => $next['at'],
+                    'slug'     => $inst->getSlug(),
                 ];
             }
         }
@@ -442,6 +443,7 @@ class DashboardController extends AbstractController
                     'badge'    => $e['network'] ?? null,
                     'poster'   => $e['poster'] ?? null,
                     'date'     => $airDate,
+                    'slug'     => $inst->getSlug(),
                 ];
             }
         }
@@ -659,6 +661,7 @@ class DashboardController extends AbstractController
                 'is_downloaded'=> $downloaded,
                 'addedAt'      => $m['addedAt'] ?? null,
                 'href'         => $this->generateUrl('app_media_films', ['slug' => $slug]) . '?open=' . ($m['id'] ?? ''),
+                'slug'         => $slug,
             ];
         }
         foreach ($series as $s) {
@@ -671,6 +674,7 @@ class DashboardController extends AbstractController
                 'badge'    => $s['network'] ?? null,
                 'addedAt'  => $s['addedAt'] ?? null,
                 'href'     => $this->generateUrl('app_media_series', ['slug' => $slug]) . '?open=' . ($s['id'] ?? ''),
+                'slug'     => $slug,
             ];
         }
 
@@ -876,6 +880,10 @@ class DashboardController extends AbstractController
                     : $this->translator->trans('dashboard.hero_badge.monitored'),
                 'cta'       => $this->translator->trans('dashboard.hero_badge.cta_view'),
                 'detailUrl' => $m['id'] ? $this->generateUrl('app_media_films', ['slug' => $slug]) . '?open=' . $m['id'] : null,
+                'qlSource'  => 'library',
+                'qlType'    => 'movie',
+                'qlSlug'    => $slug,
+                'qlId'      => $m['id'] ?? null,
             ];
         }
 
@@ -897,6 +905,10 @@ class DashboardController extends AbstractController
                     'badge'     => $this->translator->trans('dashboard.hero_badge.trending'),
                     'cta'       => $this->translator->trans('dashboard.hero_badge.cta_discover'),
                     'detailUrl' => $item['id'] ? $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $item['id'] : null,
+                    'qlSource'  => 'tmdb',
+                    'qlType'    => $type,
+                    'qlSlug'    => null,
+                    'qlId'      => $item['id'] ?? null,
                 ];
             }
         }
