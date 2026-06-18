@@ -42,6 +42,17 @@ class DashboardControllerTest extends TestCase
         return $item;
     }
 
+    private function attachRouter(DashboardController $c): void
+    {
+        $router = $this->createMock(\Symfony\Component\Routing\Generator\UrlGeneratorInterface::class);
+        $router->method('generate')->willReturnCallback(
+            fn(string $name, array $params = []) => '/' . $name . (isset($params['slug']) ? '/' . $params['slug'] : '')
+        );
+        $container = $this->createMock(\Psr\Container\ContainerInterface::class);
+        $container->method('get')->willReturnCallback(fn(string $id) => $id === 'router' ? $router : null);
+        $c->setContainer($container);
+    }
+
     public function testQuickLookLibraryBuildsMovieViewModel(): void
     {
         $movieRow = [
@@ -69,7 +80,9 @@ class DashboardControllerTest extends TestCase
         $radarr->method('getMovies')->willReturn([$movieRow]);
 
         $translator = $this->createMock(TranslatorInterface::class);
-        $translator->method('trans')->willReturnCallback(fn(string $k) => $k);
+        $translator->method('trans')->willReturnCallback(
+            fn(string $k, array $p = []) => $k === 'dashboard.quicklook.runtime' ? $p['min'] . ' min' : $k
+        );
 
         $controller = new DashboardController(
             $this->createMock(HealthService::class), $radarr,
@@ -77,6 +90,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(TmdbClient::class), $this->createMock(WatchlistItemRepository::class),
             $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class),
         );
+        $this->attachRouter($controller);
 
         $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
         $m->setAccessible(true);
@@ -121,6 +135,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(WatchlistItemRepository::class), $instances, new NullLogger(),
             $translator, $cache, $this->createMock(TautulliClient::class),
         );
+        $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
         $m->setAccessible(true);
 

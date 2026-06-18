@@ -699,7 +699,7 @@ class DashboardController extends AbstractController
             $actionUrl = $this->generateUrl('app_media_series', ['slug' => $slug]) . '?open=' . $id;
         } else {
             $runtime   = $row['runtime'] ?? null;
-            $metaLine  = $runtime ? ($runtime . ' min') : null;
+            $metaLine  = $runtime ? $this->translator->trans('dashboard.quicklook.runtime', ['min' => $runtime]) : null;
             $actionUrl = $this->generateUrl('app_media_films', ['slug' => $slug]) . '?open=' . $id;
         }
 
