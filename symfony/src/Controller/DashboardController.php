@@ -307,7 +307,7 @@ class DashboardController extends AbstractController
     }
 
     /**
-     * Quick-look fragment for a Radarr/Sonarr library item (movie|series).
+     * Quick-look fragment for a TMDb item (trending / watchlist, movie|tv).
      * Read-only; the modal on the dashboard fetches this and swaps it in.
      * Fails open to a small graceful body.
      */
