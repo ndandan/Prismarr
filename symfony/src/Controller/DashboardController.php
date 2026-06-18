@@ -654,6 +654,7 @@ class DashboardController extends AbstractController
             $slug = $m['_instanceSlug'] ?? $this->defaultSlug(ServiceInstance::TYPE_RADARR);
             $items[] = [
                 'type'         => 'movie',
+                'id'           => $m['id'] ?? null,
                 'title'        => $m['title'] ?? '—',
                 'subtitle'     => $this->relativeDate($m['addedAt'] ?? null, $now),
                 'poster'       => $m['poster'] ?? null,
@@ -668,6 +669,7 @@ class DashboardController extends AbstractController
             $slug = $s['_instanceSlug'] ?? $this->defaultSlug(ServiceInstance::TYPE_SONARR);
             $items[] = [
                 'type'     => 'series',
+                'id'       => $s['id'] ?? null,
                 'title'    => $s['title'] ?? '—',
                 'subtitle' => $this->relativeDate($s['addedAt'] ?? null, $now),
                 'poster'   => $s['poster'] ?? null,

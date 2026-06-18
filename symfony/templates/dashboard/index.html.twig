@@ -619,7 +619,11 @@
       </div>
       <div class="poster-row">
         {% for w in watchlist %}
-          <a href="{{ path('tmdb_index') }}?detail={{ w.mediaType }}/{{ w.tmdbId }}" class="poster-tile">
+          <a href="{{ path('tmdb_index') }}?detail={{ w.mediaType }}/{{ w.tmdbId }}" class="poster-tile"
+             data-ql-trigger
+             data-ql-source="tmdb"
+             data-ql-type="{{ w.mediaType == 'tv' ? 'tv' : 'movie' }}"
+             data-ql-id="{{ w.tmdbId }}">
             <div class="poster-tile-wrap">
               {% if w.poster %}
                 <img src="https://image.tmdb.org/t/p/w342{{ w.poster }}" alt="{{ w.title }}" loading="lazy" class="poster-tile-img">
