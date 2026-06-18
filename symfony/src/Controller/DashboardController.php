@@ -638,6 +638,87 @@ class DashboardController extends AbstractController
     }
 
     /**
+     * Find a single library row for the quick-look. Prefers the already-cached
+     * movies()/series() aggregate (zero upstream calls on a warm dashboard);
+     * falls back to a direct client fetch for the given instance on a miss.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findLibraryRow(string $type, string $slug, int $id): ?array
+    {
+        $rows = $type === 'series' ? $this->series() : $this->movies();
+        $match = null;
+        foreach ($rows as $row) {
+            if ((int) ($row['id'] ?? 0) !== $id) {
+                continue;
+            }
+            // Prefer the row from the requested instance; otherwise keep the first hit.
+            if (($row['_instanceSlug'] ?? null) === $slug) {
+                return $row;
+            }
+            $match ??= $row;
+        }
+        if ($match !== null) {
+            return $match;
+        }
+
+        // Cache miss / not loaded — fetch directly from the requested instance.
+        $svcType = $type === 'series' ? ServiceInstance::TYPE_SONARR : ServiceInstance::TYPE_RADARR;
+        $inst = $this->instances->getBySlug($svcType, $slug);
+        if ($inst === null) {
+            return null;
+        }
+        return $this->safeFetch(
+            "quicklook.{$type}.{$slug}.{$id}",
+            fn() => $type === 'series'
+                ? $this->sonarr->withInstance($inst)->getSerie($id)
+                : $this->radarr->withInstance($inst)->getMovie($id),
+        );
+    }
+
+    /**
+     * Build the read-only quick-look view-model for a Radarr/Sonarr library item.
+     * Returns null when the item can't be resolved (caller renders a graceful body).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function quickLookLibrary(string $type, string $slug, int $id): ?array
+    {
+        $row = $this->findLibraryRow($type, $slug, $id);
+        if ($row === null) {
+            return null;
+        }
+
+        $hasFile   = ($row['hasFile'] ?? false) === true;
+        $monitored = ($row['monitored'] ?? false) === true;
+        $badgeKind = $hasFile ? 'downloaded' : ($monitored ? 'monitored' : 'missing');
+        $badgeKey  = 'dashboard.quicklook.status.' . $badgeKind;
+
+        if ($type === 'series') {
+            $metaLine  = $row['network'] ?? null;
+            $actionUrl = $this->generateUrl('app_media_series', ['slug' => $slug]) . '?open=' . $id;
+        } else {
+            $runtime   = $row['runtime'] ?? null;
+            $metaLine  = $runtime ? ($runtime . ' min') : null;
+            $actionUrl = $this->generateUrl('app_media_films', ['slug' => $slug]) . '?open=' . $id;
+        }
+
+        return [
+            'title'       => $row['title'] ?? '—',
+            'year'        => $row['year'] ?? null,
+            'poster'      => $row['poster'] ?? null,
+            'backdrop'    => $row['fanart'] ?? null,
+            'overview'    => $row['overview'] ?? null,
+            'genres'      => array_slice($row['genres'] ?? [], 0, 4),
+            'rating'      => $row['ratings'] ?? null,
+            'metaLine'    => $metaLine,
+            'statusBadge' => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
+            'actionUrl'   => $actionUrl,
+            'actionLabel' => $this->translator->trans('dashboard.quicklook.manage'),
+        ];
+    }
+
+    /**
      * Personal watchlist — up to MAX_WATCHLIST most recently starred items.
      * Read straight from the local DB so it's always fast even when every
      * remote service is down. Each item carries tmdbId + mediaType so the
