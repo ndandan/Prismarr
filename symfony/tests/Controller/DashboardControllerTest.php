@@ -249,4 +249,34 @@ class DashboardControllerTest extends TestCase
         self::assertSame('Apple TV+ · 2 saisons', $tv['metaLine']);
         self::assertStringContainsString('detail=tv/95396', $tv['actionUrl']);
     }
+
+    public function testQuickLookTmdbTvZeroSeasonsRenders(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getTv')->willReturn([
+            'id' => 12345, 'name' => 'Announced Show', 'first_air_date' => '2025-01-01',
+            'overview' => 'Not yet aired.', 'number_of_seasons' => 0,
+            'vote_average' => 0.0, 'poster_path' => '/ap.jpg', 'backdrop_path' => '/ab.jpg',
+            'genres' => [['id' => 10, 'name' => 'Drama']],
+            'networks' => [['id' => 9, 'name' => 'Net']],
+        ]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(
+            fn(string $k, array $p = []) => $k === 'dashboard.quicklook.seasons' ? $p['count'] . ' saisons' : $k
+        );
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+
+        $tv = $m->invoke($controller, 'tv', 12345);
+        self::assertStringContainsString('0 saisons', $tv['metaLine']);
+    }
 }

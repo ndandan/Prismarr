@@ -748,7 +748,9 @@ class DashboardController extends AbstractController
             $seasons  = $data['number_of_seasons'] ?? null;
             $parts    = array_filter([
                 $network,
-                $seasons ? $this->translator->trans('dashboard.quicklook.seasons', ['count' => $seasons]) : null,
+                $seasons !== null
+                    ? $this->translator->trans('dashboard.quicklook.seasons', ['count' => $seasons])
+                    : null,
             ]);
             $metaLine = $parts === [] ? null : implode(' · ', $parts);
         } else {
