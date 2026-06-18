@@ -307,6 +307,48 @@ class DashboardController extends AbstractController
     }
 
     /**
+     * Quick-look fragment for a Radarr/Sonarr library item (movie|series).
+     * Read-only; the modal on the dashboard fetches this and swaps it in.
+     * Fails open to a small graceful body.
+     */
+    #[Route('/tableau-de-bord/quicklook/tmdb/{type}/{id}', name: 'app_dashboard_quicklook_tmdb', requirements: ['type' => 'movie|tv', 'id' => '\d+'])]
+    public function quickLookTmdbAction(string $type, int $id): Response
+    {
+        set_time_limit(30);
+        try {
+            $ql = $this->quickLookTmdb($type, $id);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Quick-look TMDb failed [{t}/{i}]: {m}', ['t' => $type, 'i' => $id, 'm' => $e->getMessage()]);
+            $ql = null;
+        }
+        if ($ql === null) {
+            return new Response('<div class="ql-error">' . htmlspecialchars($this->translator->trans('dashboard.quicklook.error')) . '</div>');
+        }
+        return $this->render('dashboard/_quicklook_body.html.twig', ['ql' => $ql]);
+    }
+
+    /**
+     * Quick-look fragment for a Radarr/Sonarr library item (movie|series).
+     * Read-only; the modal on the dashboard fetches this and swaps it in.
+     * Fails open to a small graceful body.
+     */
+    #[Route('/tableau-de-bord/quicklook/{type}/{slug}/{id}', name: 'app_dashboard_quicklook', requirements: ['type' => 'movie|series', 'id' => '\d+'])]
+    public function quickLook(string $type, string $slug, int $id): Response
+    {
+        set_time_limit(30);
+        try {
+            $ql = $this->quickLookLibrary($type, $slug, $id);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Quick-look failed [{t}/{s}/{i}]: {m}', ['t' => $type, 's' => $slug, 'i' => $id, 'm' => $e->getMessage()]);
+            $ql = null;
+        }
+        if ($ql === null) {
+            return new Response('<div class="ql-error">' . htmlspecialchars($this->translator->trans('dashboard.quicklook.error')) . '</div>');
+        }
+        return $this->render('dashboard/_quicklook_body.html.twig', ['ql' => $ql]);
+    }
+
+    /**
      * @return array{films: ?int, series: ?int}
      */
     private function stats(): array

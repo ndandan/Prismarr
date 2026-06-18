@@ -469,6 +469,17 @@ dashboard:
     trending: '★ Tendance de la semaine'
     cta_view: '▶ Voir la fiche'
     cta_discover: '▶ Découvrir'
+  quicklook:
+    manage: 'Gérer'
+    discover: 'Voir dans Découverte'
+    close: 'Fermer'
+    runtime: '{min} min'
+    seasons: '{count} saisons'
+    error: "Impossible de charger l'aperçu"
+    status:
+      downloaded: 'Téléchargé'
+      monitored: 'Suivi'
+      missing: 'Manquant'
 
 tautulli:
   title: Activité Plex
