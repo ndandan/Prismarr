@@ -441,6 +441,11 @@
   .service-chip-dot.is-ok { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.55); }
   .service-chip-dot.is-ko { background: #ef4444; }
   .service-chip-dot.is-unk { background: #6b7280; }
+  .service-chip-dot.is-up { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.55); }
+  .service-chip-dot.is-slow { background: #f59e0b; box-shadow: 0 0 8px rgba(245,158,11,.5); }
+  .service-chip-dot.is-very-slow { background: #f97316; box-shadow: 0 0 8px rgba(249,115,22,.5); }
+  .service-chip-dot.is-degraded { background: #94a3b8; }
+  .service-chip-dot.is-down { background: #ef4444; }
   .service-chip-name { font-size: .82rem; font-weight: 500; line-height: 1; }
   .service-chip-state { font-size: .68rem; color: var(--tblr-secondary); margin-top: .15rem; }
   /* Async widget hydration skeletons (#27) */
@@ -456,6 +461,7 @@
   .dash-skel-line { height: .7rem; width: 80%; margin-top: .45rem; border-radius: .25rem; }
   @keyframes dash-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 </style>
+{% include 'dashboard/_plex_styles.html.twig' %}
 {% endblock %}
 
 {% block body %}
@@ -571,6 +577,34 @@
       </div>
     </div>
 
+    {# ── Current Plex activity (Tautulli, async-hydrated) ────────────
+       Hidden entirely when Tautulli isn't configured/enabled (issue #9
+       pattern). The body loads from app_dashboard_widget_plex after first
+       paint and refreshes every 10s (see the javascripts block); an empty
+       fragment hides the whole card client-side. #}
+    {% if services_configured.tautulli %}
+    <div class="row row-cards mb-3">
+      <div class="col-12" id="plex-activity" data-dash-widget="plex" data-dash-url="{{ path('app_dashboard_widget_plex') }}">
+        <div class="card h-100">
+          <div class="card-header">
+            <h3 class="card-title">
+              <span class="card-title-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h4l3 8l4 -16l3 8h4"/></svg>
+              </span>
+              {{ 'dashboard.plex.title'|trans }}
+            </h3>
+            <div class="card-actions">
+              <a href="{{ path('admin_settings_index') }}" class="dash-action-btn">{{ 'dashboard.plex.settings_cta'|trans }}</a>
+            </div>
+          </div>
+          <div class="card-body" data-dash-body>
+            <div class="text-center text-secondary py-4"><span class="spinner-border spinner-border-sm"></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
     {# ── Ma watchlist (perso, DB locale) ────────────────────────────── #}
     {% if watchlist is not empty %}
     <div class="row-section">
@@ -653,6 +687,8 @@
 
   </div>
 </div>
+
+{% include 'dashboard/_plex_info_modal.html.twig' with {} only %}
 {% endblock %}
 
 {% block javascripts %}
@@ -708,8 +744,52 @@
     }
     if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); }
     window._dashHealthTimer = setInterval(refreshHealth, 30000);
+
+    // Same live-refresh pattern for the Plex activity widget, but on a tighter
+    // 10s cadence (stream progress/state move fast). Cheap server-side:
+    // TautulliClient is 10s-circuit-breaker-cached and the call is read-only.
+    // Skipped while the tab is hidden; re-fetched fragment fails open so a
+    // down Tautulli can't break the loop.
+    function refreshPlex() {
+      if (document.hidden) return;
+      var node = document.querySelector('[data-dash-widget="plex"][data-dash-url]');
+      if (!node) return;
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { if ((html || '').trim()) { applyFragment(node, html); applyPlexTab(node.querySelector('[data-dash-body]') || node); } })
+        .catch(function () {});
+    }
+    if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); }
+    window._dashPlexTimer = setInterval(refreshPlex, 10000);
+
+    // Plex widget tabs: client-side pane toggle, remembers the active tab so the
+    // 10s fragment refresh doesn't snap the user back to "Now playing".
+    function applyPlexTab(scope) {
+      if (!scope) return;
+      var want = window._plexActiveTab;
+      if (!want) return;
+      scope.querySelectorAll('[data-plex-tab]').forEach(function (a) {
+        a.classList.toggle('active', a.getAttribute('data-plex-tab') === want);
+      });
+      scope.querySelectorAll('[data-plex-pane]').forEach(function (p) {
+        p.style.display = (p.getAttribute('data-plex-pane') === want) ? '' : 'none';
+      });
+    }
+    if (!window._plexTabsDelegated) {
+      window._plexTabsDelegated = true;
+      document.addEventListener('click', function (e) {
+        var tab = e.target.closest('[data-plex-tab]');
+        if (!tab) return;
+        e.preventDefault();
+        window._plexActiveTab = tab.getAttribute('data-plex-tab');
+        var widget = tab.closest('[data-dash-widget="plex"]');
+        applyPlexTab(widget ? (widget.querySelector('[data-dash-body]') || widget) : document);
+      });
+    }
+
     document.addEventListener('turbo:before-render', function () {
       if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
+      if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); window._dashPlexTimer = null; }
     });
   })();
 </script>

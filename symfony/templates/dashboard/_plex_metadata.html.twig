@@ -1,0 +1,51 @@
+{# Modal body for the Plex info modal. `plex` is the getMetadata() envelope.
+   player/device are display-only live-session strings (empty when opened from
+   a recently-watched row). Server-rendered + sanitized — no secrets. #}
+{% set m = plex.metadata %}
+{% if plex.error or m is empty %}
+  <div class="modal-body text-center text-secondary py-5">{{ 'dashboard.plex.modal.error'|trans }}</div>
+{% else %}
+  <div class="modal-header">
+    <h3 class="modal-title">
+      {% if m.mediaType == 'episode' and m.grandparentTitle %}{{ m.grandparentTitle }}{% else %}{{ m.title }}{% endif %}
+      {% if m.year %}<span class="text-secondary fw-normal">({{ m.year }})</span>{% endif %}
+    </h3>
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+  </div>
+  <div class="modal-body">
+    {% if m.mediaType == 'episode' and (m.season or m.episode) %}
+      <div class="text-secondary mb-2">{{ 'S%02dE%02d'|format(m.season ?? 0, m.episode ?? 0) }}{% if m.title %} · {{ m.title }}{% endif %}</div>
+    {% endif %}
+
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      {% if m.contentRating %}<span class="badge bg-secondary-lt">{{ m.contentRating }}</span>{% endif %}
+      {% if m.durationLabel %}<span class="badge bg-secondary-lt">{{ m.durationLabel }}</span>{% endif %}
+      {% if m.ratings.audience %}<span class="badge bg-yellow-lt text-yellow">★ {{ m.ratings.audience }}</span>{% endif %}
+      {% if m.ratings.critic %}<span class="badge bg-azure-lt text-azure">{{ 'dashboard.plex.modal.critic'|trans }} {{ m.ratings.critic }}</span>{% endif %}
+      {% for g in m.genres %}<span class="badge bg-secondary-lt">{{ g }}</span>{% endfor %}
+    </div>
+
+    {% if m.tagline %}<p class="fst-italic text-secondary">{{ m.tagline }}</p>{% endif %}
+    {% if m.summary %}<p>{{ m.summary }}</p>{% endif %}
+
+    {% if m.directors is not empty %}<p class="mb-1"><strong>{{ 'dashboard.plex.modal.directors'|trans }}</strong> {{ m.directors|join(', ') }}</p>{% endif %}
+    {% if m.writers is not empty %}<p class="mb-1"><strong>{{ 'dashboard.plex.modal.writers'|trans }}</strong> {{ m.writers|join(', ') }}</p>{% endif %}
+    {% if m.cast is not empty %}<p class="mb-1"><strong>{{ 'dashboard.plex.modal.cast'|trans }}</strong> {{ m.cast|join(', ') }}</p>{% endif %}
+    {% if m.studio %}<p class="mb-1"><strong>{{ 'dashboard.plex.modal.studio'|trans }}</strong> {{ m.studio }}</p>{% endif %}
+
+    {% set tech = [] %}
+    {% if m.media.resolution %}{% set tech = tech|merge([m.media.resolution]) %}{% endif %}
+    {% if m.media.videoCodec %}{% set tech = tech|merge([m.media.videoCodec|upper]) %}{% endif %}
+    {% if m.media.audioCodec %}{% set tech = tech|merge([m.media.audioCodec|upper]) %}{% endif %}
+    {% if m.media.container %}{% set tech = tech|merge([m.media.container|upper]) %}{% endif %}
+    {% if m.media.bitrateKbps > 0 %}{% set tech = tech|merge([(m.media.bitrateKbps / 1000)|round(1) ~ ' ' ~ ('dashboard.plex.mbps'|trans)]) %}{% endif %}
+    {% if tech is not empty or player or device %}
+      <hr>
+      <div class="text-secondary small">
+        <div class="fw-bold text-uppercase mb-1">{{ 'dashboard.plex.modal.tech'|trans }}</div>
+        {% if tech is not empty %}<div>{{ tech|join(' · ') }}</div>{% endif %}
+        {% if player or device %}<div>{{ [player, device]|filter(v => v)|join(' · ') }}</div>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+{% endif %}

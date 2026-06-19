@@ -9,6 +9,7 @@ use App\Service\HealthService;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
+use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -37,13 +38,13 @@ class DashboardControllerTest extends TestCase
     public function testServicesHealthExpandsOneChipPerInstance(): void
     {
         $health = $this->createMock(HealthService::class);
-        $health->method('isHealthy')->willReturnCallback(
-            fn(string $service, ?string $slug = null): ?bool => match (true) {
-                $service === 'radarr' && $slug === 'radarr-1'  => true,
-                $service === 'radarr' && $slug === 'radarr-4k' => false,
-                $service === 'sonarr' && $slug === 'sonarr-1'  => true,
-                $service === 'qbittorrent'                     => true,
-                default                                        => null, // prowlarr/jellyseerr/tmdb not configured
+        $health->method('statusFor')->willReturnCallback(
+            fn(string $service, ?string $slug = null): array => match (true) {
+                $service === 'radarr' && $slug === 'radarr-1'  => ['status' => 'up',   'latencyMs' => 120],
+                $service === 'radarr' && $slug === 'radarr-4k' => ['status' => 'down', 'latencyMs' => null],
+                $service === 'sonarr' && $slug === 'sonarr-1'  => ['status' => 'slow', 'latencyMs' => 1500],
+                $service === 'qbittorrent'                     => ['status' => 'up',   'latencyMs' => 40],
+                default                                        => ['status' => null,   'latencyMs' => null], // prowlarr/jellyseerr/tmdb not configured
             }
         );
 
@@ -67,19 +68,20 @@ class DashboardControllerTest extends TestCase
             new NullLogger(),
             $this->createMock(TranslatorInterface::class),
             $this->createMock(CacheInterface::class),
+            $this->createMock(TautulliClient::class),
         );
 
         $m = new ReflectionMethod(DashboardController::class, 'servicesHealth');
         $m->setAccessible(true);
-        /** @var list<array{id: string, name: string, state: bool}> $chips */
+        /** @var list<array{id: string, name: string, status: string, latencyMs: ?int}> $chips */
         $chips = $m->invoke($controller);
 
         // Two Radarr instances + one Sonarr + qBittorrent = 4 chips; the
         // unconfigured single services (prowlarr/jellyseerr/tmdb) drop out.
         self::assertCount(4, $chips);
-        self::assertSame(['id' => 'radarr', 'name' => 'Radarr 1080p', 'state' => true], $chips[0]);
-        self::assertSame(['id' => 'radarr', 'name' => 'Radarr 4K', 'state' => false], $chips[1]);
-        self::assertSame(['id' => 'sonarr', 'name' => 'Sonarr', 'state' => true], $chips[2]);
-        self::assertSame(['id' => 'qbittorrent', 'name' => 'qBittorrent', 'state' => true], $chips[3]);
+        self::assertSame(['id' => 'radarr', 'name' => 'Radarr 1080p', 'status' => 'up',   'latencyMs' => 120],  $chips[0]);
+        self::assertSame(['id' => 'radarr', 'name' => 'Radarr 4K',    'status' => 'down', 'latencyMs' => null], $chips[1]);
+        self::assertSame(['id' => 'sonarr', 'name' => 'Sonarr',       'status' => 'slow', 'latencyMs' => 1500], $chips[2]);
+        self::assertSame(['id' => 'qbittorrent', 'name' => 'qBittorrent', 'status' => 'up', 'latencyMs' => 40], $chips[3]);
     }
 }

@@ -5,6 +5,14 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Plex activity via Tautulli (optional).** A new read-only Tautulli integration (URL + API key in `/admin/settings`, behind the per-service health circuit breaker) surfaces current Plex activity. The dashboard gets a "Current Plex activity" widget — active streams, Direct Play / Direct Stream / Transcode counts, total / LAN / WAN bandwidth and a per-session card (quality, HDR/SDR badge, source→target codec when transcoding) — that hydrates on its own and refreshes every 10 s. A dedicated **Plex Activity** page (own sidebar entry) adds a now-playing strip, watch statistics with a 7 / 30 / 90-day toggle (top movies / shows / users / platforms), plays-over-time graphs with a Media-type ⇄ Stream-type toggle plus by-hour and by-day-of-week breakdowns and a platform × stream-type "problem clients" chart, a dense watch-history grid, and per-library item counts. Each title opens an in-app info modal (synopsis, ratings, cast/crew). The API key never leaves the server, every response is sanitised before it reaches the browser, and each section fails open independently so a down/misconfigured Tautulli never breaks the dashboard or page. Chart.js is self-hosted (`public/static/chart/`) for CSP compliance and reused by the existing Radarr stats chart.
+
+### Changed
+- **Dashboard service-health chips show latency.** `HealthService::statusFor()` returns a status word plus a round-trip reading (cached 10 s like the existing bool path, which now delegates to it); the dashboard chips render five states — up / slow / very_slow / down / degraded — with a coloured dot, so a reachable-but-slow service is visibly distinct from a healthy one. `isHealthy()` keeps its old contract for every existing caller.
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed

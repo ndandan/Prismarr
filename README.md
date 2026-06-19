@@ -165,9 +165,29 @@ a request UI (Seerr).
 - Hero spotlight with a random pick from your library
 - Upcoming releases (seven-day mini-calendar)
 - Pending Seerr requests enriched with TMDb metadata
-- Live health of all six services
+- Live health of all configured services
 - Personal watchlist, weekly TMDb trending, latest library additions
+- Optional **Current Plex activity** widget via the Tautulli API: active
+  streams, Direct Play / Direct Stream / Transcode counts, LAN/WAN
+  bandwidth and a per-session card (read-only, refreshes every 10s)
 - Near-instant load: the page paints first, then each widget hydrates on its own
+
+### Plex activity (Tautulli)
+- Dedicated **Plex Activity** page (its own sidebar entry) backed by a
+  read-only Tautulli connection — the API key never leaves the server and
+  every response is sanitised before it reaches the browser
+- Live "Now playing": a stream-summary strip (session count, Direct Play /
+  Direct Stream / Transcode breakdown, total / LAN / WAN bandwidth) plus a card
+  per session showing quality, an HDR/SDR badge and, when transcoding, the
+  source→target codec
+- Watch statistics with a 7 / 30 / 90-day toggle: most-watched movies and
+  shows, most-active users, top platforms
+- Graphs: plays over time with a Media-type ⇄ Stream-type toggle, plays by hour
+  of day and by day of week, and a platform × stream-type "problem clients"
+  chart
+- A dense watch-history grid and a per-library item / episode count
+- Every title opens the in-app info modal (synopsis, ratings, cast/crew); each
+  section fails open independently, so a down Tautulli never breaks the page
 
 ### Downloads
 - Full qBittorrent dashboard: server-side pagination, sorting and filters
@@ -206,6 +226,7 @@ a request UI (Seerr).
 - At least one of: qBittorrent, Radarr, Sonarr, Prowlarr, Seerr
 - Optional: Gluetun if qBittorrent runs behind a VPN
 - Optional: a TMDb API key (free) to enable the Discovery page
+- Optional: a Tautulli instance (URL + API key) for the Current Plex activity widget
 
 ### Install
 

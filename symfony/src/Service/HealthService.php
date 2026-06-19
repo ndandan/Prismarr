@@ -9,6 +9,7 @@ use App\Service\Media\QBittorrentClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
+use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
@@ -29,8 +30,8 @@ class HealthService
 {
     private const CACHE_TTL = 10;
 
-    /** @var array<string, array{ok: ?bool, at: int}> */
-    private array $cache = [];
+    /** @var array<string, array{result: array{status: ?string, latencyMs: ?int}, at: int}> */
+    private array $statusCache = [];
 
     public function __construct(
         private readonly RadarrClient      $radarr,
@@ -47,7 +48,24 @@ class HealthService
         // working without each having to provide a fake SAB/NZBGet.
         private readonly ?SabnzbdClient    $sabnzbd = null,
         private readonly ?NzbgetClient     $nzbget = null,
+        // Tautulli (current Plex activity) — nullable + last for the same
+        // legacy-test-constructor reason as the Usenet clients above.
+        private readonly ?TautulliClient   $tautulli = null,
     ) {}
+
+    /**
+     * Bucket a successful ping's round-trip (ms) into a latency status.
+     * Thresholds: <=750 up, <=2000 slow, otherwise very_slow. The 2000 edge
+     * counts as slow so the boundary is unambiguous.
+     */
+    public static function classifyLatency(int $ms): string
+    {
+        return match (true) {
+            $ms <= 750  => 'up',
+            $ms <= 2000 => 'slow',
+            default     => 'very_slow',
+        };
+    }
 
     /**
      * Returns true (up), false (down), or null (not configured — no URL/key
@@ -65,26 +83,78 @@ class HealthService
      */
     public function isHealthy(string $service, ?string $instanceSlug = null): ?bool
     {
+        return match ($this->statusFor($service, $instanceSlug)['status']) {
+            'up', 'slow', 'very_slow' => true,
+            'down', 'degraded'        => false,
+            default                   => null, // not configured / unknown
+        };
+    }
+
+    /**
+     * Richer health probe for the dashboard widget: returns a status word plus
+     * a latency reading. Cached CACHE_TTL seconds in-process, same as the
+     * legacy bool path (which now delegates here).
+     *
+     *  - not configured        → ['status' => null, ...]  (caller drops the chip)
+     *  - circuit breaker open   → 'degraded' (stale cached verdict, no live probe)
+     *  - live ping fails        → 'down' (timeout / refused / auth all surface here)
+     *  - live ping succeeds     → up / slow / very_slow by round-trip latency
+     *
+     * @return array{status: ?string, latencyMs: ?int}
+     */
+    public function statusFor(string $service, ?string $instanceSlug = null): array
+    {
         $key = $instanceSlug !== null ? $service . ':' . $instanceSlug : $service;
         $now = time();
-        if (isset($this->cache[$key]) && ($now - $this->cache[$key]['at']) < self::CACHE_TTL) {
-            return $this->cache[$key]['ok'];
+        if (isset($this->statusCache[$key]) && ($now - $this->statusCache[$key]['at']) < self::CACHE_TTL) {
+            return $this->statusCache[$key]['result'];
         }
 
-        // Short-circuit on unconfigured services: don't ping, don't log.
-        // Skipped when no ConfigService is wired (legacy test paths).
+        // Unconfigured services are never pinged (issue #9). Skipped when no
+        // ConfigService is wired (legacy test paths).
         if ($this->config !== null && !$this->isConfigured($service)) {
-            $this->cache[$key] = ['ok' => null, 'at' => $now];
-            return null;
+            return $this->remember($key, ['status' => null, 'latencyMs' => null], $now);
         }
 
-        // For radarr/sonarr with an explicit slug, bind the instance for
-        // this single ping. The client mutates back automatically on the
-        // next reset() (worker mode) or after this call when slug is null.
-        $ok = $this->pingFor($service, $instanceSlug);
+        // Circuit breaker open → we'd serve a stale cached-down verdict without
+        // a live probe. That's "cached stale data", not a freshly confirmed
+        // outage → degraded. radarr/sonarr mark the breaker WITH the instance
+        // slug, so per-instance degraded detection lines up here.
+        if ($this->serviceHealthCache?->isDown($service, $instanceSlug)) {
+            return $this->remember($key, ['status' => 'degraded', 'latencyMs' => null], $now);
+        }
 
-        $this->cache[$key] = ['ok' => $ok, 'at' => $now];
-        return $ok;
+        // Live probe — time it with a monotonic clock.
+        $start = hrtime(true);
+        try {
+            $ok = $this->pingFor($service, $instanceSlug);
+        } catch (\Throwable) {
+            $ok = false;
+        }
+        $latencyMs = (int) round((hrtime(true) - $start) / 1e6);
+
+        if ($ok === null) {
+            return $this->remember($key, ['status' => null, 'latencyMs' => null], $now);
+        }
+        if ($ok === false) {
+            return $this->remember($key, ['status' => 'down', 'latencyMs' => null], $now);
+        }
+
+        return $this->remember(
+            $key,
+            ['status' => self::classifyLatency($latencyMs), 'latencyMs' => $latencyMs],
+            $now,
+        );
+    }
+
+    /**
+     * @param array{status: ?string, latencyMs: ?int} $result
+     * @return array{status: ?string, latencyMs: ?int}
+     */
+    private function remember(string $key, array $result, int $now): array
+    {
+        $this->statusCache[$key] = ['result' => $result, 'at' => $now];
+        return $result;
     }
 
     private function pingFor(string $service, ?string $instanceSlug): ?bool
@@ -119,6 +189,7 @@ class HealthService
             // banner still uses diagnose() to tell auth vs host_whitelist apart.
             'sabnzbd'     => $this->sabnzbd?->ping() ?? false,
             'nzbget'      => $this->nzbget?->ping() ?? false,
+            'tautulli'    => $this->tautulli?->ping() ?? false,
             default       => true,
         };
     }
@@ -135,7 +206,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
 
     public function isConfigured(string $service): bool
     {
@@ -176,6 +247,10 @@ class HealthService
                 $this->config->has('sabnzbd_url') && $this->config->has('sabnzbd_api_key'),
             'nzbget' =>
                 $this->config->has('nzbget_url'),
+            // Tautulli needs both the URL and the API key (every command,
+            // including get_activity, is apikey-authenticated).
+            'tautulli' =>
+                $this->config->has('tautulli_url') && $this->config->has('tautulli_api_key'),
             default => true,
         };
     }
@@ -190,14 +265,14 @@ class HealthService
     public function invalidate(?string $service = null): void
     {
         if ($service === null) {
-            $this->cache = [];
+            $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
         } else {
-            unset($this->cache[$service]);
+            unset($this->statusCache[$service]);
             $this->serviceHealthCache?->clear($service);
         }
     }
@@ -277,6 +352,21 @@ class HealthService
             if (stripos($body, 'api key') !== false) {
                 return ['ok' => false, 'category' => 'auth', 'http' => $http];
             }
+        }
+        // Tautulli always answers HTTP 200, even on a bad apikey — the real
+        // status lives in the JSON envelope ({"response":{"result":"error",
+        // "message":"Invalid apikey"}}). Treat any non-"success" result as an
+        // auth failure so the admin gets an actionable hint instead of a
+        // misleading green check.
+        if ($service === 'tautulli' && $http === 200 && is_string($body)) {
+            $decoded = json_decode($body, true);
+            $result  = is_array($decoded) && is_array($decoded['response'] ?? null)
+                ? ($decoded['response']['result'] ?? null)
+                : null;
+            if ($result !== 'success') {
+                return ['ok' => false, 'category' => 'auth', 'http' => $http];
+            }
+            return ['ok' => true, 'category' => 'ok', 'http' => $http];
         }
         if ($http !== null && $http >= 200 && $http < 300) {
             return ['ok' => true, 'category' => 'ok', 'http' => $http];
@@ -407,6 +497,18 @@ class HealthService
                 // diagnoseFromResponse() tells those two 403s apart by body.
                 return [
                     'url' => rtrim($url, '/') . '/api?mode=queue&output=json&apikey=' . urlencode($key),
+                ];
+            }
+            case 'tautulli': {
+                $url = $get('tautulli_url');
+                $key = $get('tautulli_api_key');
+                if ($url === '' || $key === '') return null;
+                // get_activity is the same read-only command the widget uses.
+                // It also validates the key: a bad apikey returns HTTP 200 with
+                // result:"error", which diagnoseFromResponse() maps to `auth`.
+                return [
+                    'url'     => rtrim($url, '/') . '/api/v2?' . http_build_query(['apikey' => $key, 'cmd' => 'get_activity']),
+                    'headers' => ['Accept: application/json'],
                 ];
             }
             case 'nzbget': {
