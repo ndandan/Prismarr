@@ -17,6 +17,10 @@ on:
 jobs:
   sync:
     name: Push README to Docker Hub
+    # Only the canonical upstream repo holds the Docker Hub secrets. Forks
+    # (e.g. ndandan/Prismarr, which publishes to GHCR instead) skip this job
+    # so a README change doesn't leave a red ✗ on a missing-secret failure.
+    if: github.repository == 'Shoshuo/Prismarr'
     runs-on: ubuntu-latest
     timeout-minutes: 5
 
@@ -36,7 +40,7 @@ jobs:
             README.md
 
       - name: Push to Docker Hub
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}

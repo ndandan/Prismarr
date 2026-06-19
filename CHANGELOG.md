@@ -5,6 +5,11 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Contributor
+- **CI / release workflows modernised.** Bumped the pinned GitHub Actions to current majors (`checkout@v5`, `setup-qemu@v4`, `setup-buildx@v4`, `login@v4`, `metadata@v6`, `build-push@v7`, `dockerhub-description@v5`, `action-gh-release@v3`) across `ci`, `beta`, `release` and `dockerhub-readme`, added a `workflow_dispatch` trigger to `ci` so the suite can be run on demand, and guarded the Docker Hub README sync with `if: github.repository == 'Shoshuo/Prismarr'` so forks don't fail the job on missing secrets.
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed
