@@ -307,6 +307,48 @@ class DashboardController extends AbstractController
     }
 
     /**
+     * Quick-look fragment for a TMDb item (trending / watchlist, movie|tv).
+     * Read-only; the modal on the dashboard fetches this and swaps it in.
+     * Fails open to a small graceful body.
+     */
+    #[Route('/tableau-de-bord/quicklook/tmdb/{type}/{id}', name: 'app_dashboard_quicklook_tmdb', requirements: ['type' => 'movie|tv', 'id' => '\d+'])]
+    public function quickLookTmdbAction(string $type, int $id): Response
+    {
+        set_time_limit(30);
+        try {
+            $ql = $this->quickLookTmdb($type, $id);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Quick-look TMDb failed [{t}/{i}]: {m}', ['t' => $type, 'i' => $id, 'm' => $e->getMessage()]);
+            $ql = null;
+        }
+        if ($ql === null) {
+            return new Response('<div class="ql-error">' . htmlspecialchars($this->translator->trans('dashboard.quicklook.error')) . '</div>');
+        }
+        return $this->render('dashboard/_quicklook_body.html.twig', ['ql' => $ql]);
+    }
+
+    /**
+     * Quick-look fragment for a Radarr/Sonarr library item (movie|series).
+     * Read-only; the modal on the dashboard fetches this and swaps it in.
+     * Fails open to a small graceful body.
+     */
+    #[Route('/tableau-de-bord/quicklook/{type}/{slug}/{id}', name: 'app_dashboard_quicklook', requirements: ['type' => 'movie|series', 'id' => '\d+'])]
+    public function quickLook(string $type, string $slug, int $id): Response
+    {
+        set_time_limit(30);
+        try {
+            $ql = $this->quickLookLibrary($type, $slug, $id);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Quick-look failed [{t}/{s}/{i}]: {m}', ['t' => $type, 's' => $slug, 'i' => $id, 'm' => $e->getMessage()]);
+            $ql = null;
+        }
+        if ($ql === null) {
+            return new Response('<div class="ql-error">' . htmlspecialchars($this->translator->trans('dashboard.quicklook.error')) . '</div>');
+        }
+        return $this->render('dashboard/_quicklook_body.html.twig', ['ql' => $ql]);
+    }
+
+    /**
      * @return array{films: ?int, series: ?int}
      */
     private function stats(): array
@@ -376,6 +418,7 @@ class DashboardController extends AbstractController
                     'badge'    => $next['badge'],
                     'poster'   => $m['poster'] ?? null,
                     'date'     => $next['at'],
+                    'slug'     => $inst->getSlug(),
                 ];
             }
         }
@@ -400,6 +443,7 @@ class DashboardController extends AbstractController
                     'badge'    => $e['network'] ?? null,
                     'poster'   => $e['poster'] ?? null,
                     'date'     => $airDate,
+                    'slug'     => $inst->getSlug(),
                 ];
             }
         }
@@ -610,6 +654,7 @@ class DashboardController extends AbstractController
             $slug = $m['_instanceSlug'] ?? $this->defaultSlug(ServiceInstance::TYPE_RADARR);
             $items[] = [
                 'type'         => 'movie',
+                'id'           => $m['id'] ?? null,
                 'title'        => $m['title'] ?? '—',
                 'subtitle'     => $this->relativeDate($m['addedAt'] ?? null, $now),
                 'poster'       => $m['poster'] ?? null,
@@ -617,24 +662,163 @@ class DashboardController extends AbstractController
                 'is_downloaded'=> $downloaded,
                 'addedAt'      => $m['addedAt'] ?? null,
                 'href'         => $this->generateUrl('app_media_films', ['slug' => $slug]) . '?open=' . ($m['id'] ?? ''),
+                'slug'         => $slug,
             ];
         }
         foreach ($series as $s) {
             $slug = $s['_instanceSlug'] ?? $this->defaultSlug(ServiceInstance::TYPE_SONARR);
             $items[] = [
                 'type'     => 'series',
+                'id'       => $s['id'] ?? null,
                 'title'    => $s['title'] ?? '—',
                 'subtitle' => $this->relativeDate($s['addedAt'] ?? null, $now),
                 'poster'   => $s['poster'] ?? null,
                 'badge'    => $s['network'] ?? null,
                 'addedAt'  => $s['addedAt'] ?? null,
                 'href'     => $this->generateUrl('app_media_series', ['slug' => $slug]) . '?open=' . ($s['id'] ?? ''),
+                'slug'     => $slug,
             ];
         }
 
         usort($items, fn($a, $b) => ($b['addedAt'] ?? $epoch) <=> ($a['addedAt'] ?? $epoch));
 
         return array_slice($items, 0, self::MAX_RECENT);
+    }
+
+    /**
+     * Find a single library row for the quick-look. Prefers the already-cached
+     * movies()/series() aggregate (zero upstream calls on a warm dashboard);
+     * falls back to a direct client fetch for the given instance on a miss.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findLibraryRow(string $type, string $slug, int $id): ?array
+    {
+        $rows = $type === 'series' ? $this->series() : $this->movies();
+        $match = null;
+        foreach ($rows as $row) {
+            if ((int) ($row['id'] ?? 0) !== $id) {
+                continue;
+            }
+            // Prefer the row from the requested instance; otherwise keep the first hit.
+            if (($row['_instanceSlug'] ?? null) === $slug) {
+                return $row;
+            }
+            $match ??= $row;
+        }
+        if ($match !== null) {
+            return $match;
+        }
+
+        // Cache miss / not loaded — fetch directly from the requested instance.
+        $svcType = $type === 'series' ? ServiceInstance::TYPE_SONARR : ServiceInstance::TYPE_RADARR;
+        $inst = $this->instances->getBySlug($svcType, $slug);
+        if ($inst === null) {
+            return null;
+        }
+        return $this->safeFetch(
+            "quicklook.{$type}.{$slug}.{$id}",
+            fn() => $type === 'series'
+                ? $this->sonarr->withInstance($inst)->getSerie($id)
+                : $this->radarr->withInstance($inst)->getMovie($id),
+        );
+    }
+
+    /**
+     * Build the read-only quick-look view-model for a Radarr/Sonarr library item.
+     * Returns null when the item can't be resolved (caller renders a graceful body).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function quickLookLibrary(string $type, string $slug, int $id): ?array
+    {
+        $row = $this->findLibraryRow($type, $slug, $id);
+        if ($row === null) {
+            return null;
+        }
+
+        $hasFile   = ($row['hasFile'] ?? false) === true;
+        $monitored = ($row['monitored'] ?? false) === true;
+        $badgeKind = $hasFile ? 'downloaded' : ($monitored ? 'monitored' : 'missing');
+        $badgeKey  = 'dashboard.quicklook.status.' . $badgeKind;
+
+        if ($type === 'series') {
+            $metaLine  = $row['network'] ?? null;
+            $actionUrl = $this->generateUrl('app_media_series', ['slug' => $slug]) . '?open=' . $id;
+        } else {
+            $runtime   = $row['runtime'] ?? null;
+            $metaLine  = $runtime ? $this->translator->trans('dashboard.quicklook.runtime', ['min' => $runtime]) : null;
+            $actionUrl = $this->generateUrl('app_media_films', ['slug' => $slug]) . '?open=' . $id;
+        }
+
+        return [
+            'title'       => $row['title'] ?? '—',
+            'year'        => $row['year'] ?? null,
+            'poster'      => $row['poster'] ?? null,
+            'backdrop'    => $row['fanart'] ?? null,
+            'overview'    => $row['overview'] ?? null,
+            'genres'      => array_slice($row['genres'] ?? [], 0, 4),
+            'rating'      => $row['ratings'] ?? null,
+            'metaLine'    => $metaLine,
+            'statusBadge' => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
+            'actionUrl'   => $actionUrl,
+            'actionLabel' => $this->translator->trans('dashboard.quicklook.manage'),
+        ];
+    }
+
+    private function tmdbImage(?string $path, string $size): ?string
+    {
+        return $path ? 'https://image.tmdb.org/t/p/' . $size . $path : null;
+    }
+
+    /**
+     * Build the read-only quick-look view-model for a TMDb item (trending /
+     * watchlist). Returns null when TMDb has no record (graceful body upstream).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function quickLookTmdb(string $type, int $id): ?array
+    {
+        $isTv = $type === 'tv';
+        $data = $this->safeFetch(
+            "quicklook.tmdb.{$type}.{$id}",
+            fn() => $isTv ? $this->tmdb->getTv($id) : $this->tmdb->getMovie($id),
+        );
+        if (!$data) {
+            return null;
+        }
+
+        $date = $isTv ? ($data['first_air_date'] ?? '') : ($data['release_date'] ?? '');
+        $year = $date !== '' ? (int) substr((string) $date, 0, 4) : null;
+
+        if ($isTv) {
+            $network  = $data['networks'][0]['name'] ?? null;
+            $seasons  = $data['number_of_seasons'] ?? null;
+            $parts    = array_filter([
+                $network,
+                $seasons !== null
+                    ? $this->translator->trans('dashboard.quicklook.seasons', ['count' => $seasons])
+                    : null,
+            ]);
+            $metaLine = $parts === [] ? null : implode(' · ', $parts);
+        } else {
+            $runtime  = $data['runtime'] ?? null;
+            $metaLine = $runtime ? $this->translator->trans('dashboard.quicklook.runtime', ['min' => $runtime]) : null;
+        }
+
+        return [
+            'title'       => $data['title'] ?? $data['name'] ?? '—',
+            'year'        => $year,
+            'poster'      => $this->tmdbImage($data['poster_path'] ?? null, 'w342'),
+            'backdrop'    => $this->tmdbImage($data['backdrop_path'] ?? null, 'w1280'),
+            'overview'    => $data['overview'] ?? null,
+            'genres'      => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
+            'rating'      => $data['vote_average'] ?? null,
+            'metaLine'    => $metaLine,
+            'statusBadge' => null,
+            'actionUrl'   => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
+            'actionLabel' => $this->translator->trans('dashboard.quicklook.discover'),
+        ];
     }
 
     /**
@@ -698,6 +882,10 @@ class DashboardController extends AbstractController
                     : $this->translator->trans('dashboard.hero_badge.monitored'),
                 'cta'       => $this->translator->trans('dashboard.hero_badge.cta_view'),
                 'detailUrl' => $m['id'] ? $this->generateUrl('app_media_films', ['slug' => $slug]) . '?open=' . $m['id'] : null,
+                'qlSource'  => 'library',
+                'qlType'    => 'movie',
+                'qlSlug'    => $slug,
+                'qlId'      => $m['id'] ?? null,
             ];
         }
 
@@ -719,6 +907,10 @@ class DashboardController extends AbstractController
                     'badge'     => $this->translator->trans('dashboard.hero_badge.trending'),
                     'cta'       => $this->translator->trans('dashboard.hero_badge.cta_discover'),
                     'detailUrl' => $item['id'] ? $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $item['id'] : null,
+                    'qlSource'  => 'tmdb',
+                    'qlType'    => $type,
+                    'qlSlug'    => null,
+                    'qlId'      => $item['id'] ?? null,
                 ];
             }
         }

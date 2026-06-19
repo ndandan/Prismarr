@@ -3,7 +3,12 @@
    poster tiles; an empty render hides the section client-side. #}
 {% import '_icons.html.twig' as ico %}
 {% for item in recent_additions %}
-  <a href="{{ item.href }}" class="poster-tile">
+  <a href="{{ item.href }}" class="poster-tile"
+     data-ql-trigger
+     data-ql-source="library"
+     data-ql-type="{{ item.type == 'series' ? 'series' : 'movie' }}"
+     data-ql-slug="{{ item.slug }}"
+     data-ql-id="{{ item.id|default('') }}">
     <div class="poster-tile-wrap">
       {% if item.poster %}
         <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy" class="poster-tile-img">

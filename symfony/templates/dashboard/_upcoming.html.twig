@@ -24,6 +24,11 @@
                   ? instance_path('app_media_films')  ~ '?open=' ~ item.id
                   : instance_path('app_media_series') ~ '?open=' ~ item.id) : '#' %}
               <a href="{{ item_href }}" class="mini-cal-item"
+                 data-ql-trigger
+                 data-ql-source="library"
+                 data-ql-type="{{ item.type == 'movie' ? 'movie' : 'series' }}"
+                 data-ql-slug="{{ item.slug|default('') }}"
+                 data-ql-id="{{ item.id|default('') }}"
                  title="{{ item.title }}{% if item.subtitle %} — {{ item.subtitle }}{% endif %} · {{ item.date|prismarr_time }}{% if item.badge %} · {{ item.badge }}{% endif %}">
                 {% if item.poster %}
                   <div class="mini-cal-item-thumb" style="background-image: url('{{ item.poster }}');"></div>

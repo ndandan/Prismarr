@@ -25,7 +25,12 @@
     {% endif %}
 
     {% if hero_spotlight.detailUrl %}
-      <a href="{{ hero_spotlight.detailUrl }}" class="hero-spotlight-cta">
+      <a href="{{ hero_spotlight.detailUrl }}" class="hero-spotlight-cta"
+         data-ql-trigger
+         data-ql-source="{{ hero_spotlight.qlSource }}"
+         data-ql-type="{{ hero_spotlight.qlType }}"
+         {% if hero_spotlight.qlSlug %}data-ql-slug="{{ hero_spotlight.qlSlug }}"{% endif %}
+         data-ql-id="{{ hero_spotlight.qlId }}">
         {{ hero_spotlight.cta }}
       </a>
     {% endif %}

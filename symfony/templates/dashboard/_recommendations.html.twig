@@ -5,7 +5,11 @@
   {% set tmdb_title = item.title|default(item.name|default('—')) %}
   {% set tmdb_date = item.release_date|default(item.first_air_date|default('')) %}
   {% set tmdb_type = item.media_type == 'tv' ? 'tv' : 'movie' %}
-  <a href="{{ path('tmdb_index') }}?detail={{ tmdb_type }}/{{ item.id }}" class="poster-tile">
+  <a href="{{ path('tmdb_index') }}?detail={{ tmdb_type }}/{{ item.id }}" class="poster-tile"
+     data-ql-trigger
+     data-ql-source="tmdb"
+     data-ql-type="{{ tmdb_type }}"
+     data-ql-id="{{ item.id }}">
     <div class="poster-tile-wrap">
       {% if item.poster_path %}
         <img src="https://image.tmdb.org/t/p/w342{{ item.poster_path }}" alt="{{ tmdb_title }}" loading="lazy" class="poster-tile-img">

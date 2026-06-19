@@ -1,0 +1,29 @@
+{# Read-only quick-look body, rendered by DashboardController quick-look endpoints
+   into the modal's [data-ql-body]. Expects `ql` = the view-model array. #}
+{% import '_icons.html.twig' as ico %}
+<div class="ql-detail">
+  <div class="ql-backdrop"{% if ql.backdrop %} style="background-image:url('{{ ql.backdrop }}')"{% endif %}>
+    <div class="ql-backdrop-fade"></div>
+    <button type="button" class="btn-close btn-close-white ql-close" data-ql-dismiss aria-label="{{ 'dashboard.quicklook.close'|trans }}"></button>
+  </div>
+  <div class="ql-body">
+    <div class="ql-poster-col">
+      {% if ql.poster %}
+        <img src="{{ ql.poster }}" alt="{{ ql.title }}" class="ql-poster">
+      {% else %}
+        <div class="ql-poster ql-poster-empty">{{ ico.icon('movie', '', 32) }}</div>
+      {% endif %}
+    </div>
+    <div class="ql-main">
+      <h2 class="ql-title">{{ ql.title }}{% if ql.year %} <span class="ql-year">({{ ql.year }})</span>{% endif %}</h2>
+      <div class="ql-meta">
+        {% if ql.statusBadge %}<span class="ql-badge is-{{ ql.statusBadge.kind }}">{{ ql.statusBadge.label }}</span>{% endif %}
+        {% if ql.rating %}<span class="ql-rating">{{ ico.icon('star-filled', '', 14) }} {{ ql.rating|round(1) }}/10</span>{% endif %}
+        {% if ql.metaLine %}<span>{{ ql.metaLine }}</span>{% endif %}
+        {% for g in ql.genres %}<span class="ql-chip">{{ g }}</span>{% endfor %}
+      </div>
+      {% if ql.overview %}<p class="ql-overview">{{ ql.overview }}</p>{% endif %}
+      <a href="{{ ql.actionUrl }}" class="ql-action">{{ ql.actionLabel }} →</a>
+    </div>
+  </div>
+</div>

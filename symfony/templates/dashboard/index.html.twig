@@ -460,6 +460,44 @@
   }
   .dash-skel-line { height: .7rem; width: 80%; margin-top: .45rem; border-radius: .25rem; }
   @keyframes dash-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+  /* ── Quick-look modal ───────────────────────────────────────────── */
+  .ql-modal-content { background: var(--tblr-bg-surface); overflow: hidden; border-radius: 14px; }
+  .ql-loading { padding: 4rem; text-align: center; }
+  .ql-backdrop {
+    position: relative; min-height: 180px;
+    background-size: cover; background-position: center 25%;
+    background-color: var(--tblr-bg-surface-secondary);
+  }
+  .ql-backdrop-fade {
+    position: absolute; inset: 0;
+    background: linear-gradient(to top, var(--tblr-bg-surface) 2%, rgba(0,0,0,.15) 60%, rgba(0,0,0,.35) 100%);
+  }
+  .ql-close { position: absolute; top: .75rem; right: .75rem; z-index: 2; filter: drop-shadow(0 0 2px rgba(0,0,0,.8)); }
+  .ql-body { display: flex; gap: 1.25rem; padding: 0 1.5rem 1.5rem; margin-top: -60px; position: relative; z-index: 1; }
+  @media (max-width: 576px) { .ql-body { flex-direction: column; align-items: center; text-align: center; } }
+  .ql-poster { width: 120px; aspect-ratio: 2/3; object-fit: cover; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.45); flex-shrink: 0; }
+  .ql-poster-empty { display: flex; align-items: center; justify-content: center; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); }
+  .ql-main { flex: 1; min-width: 0; padding-top: 64px; }
+  @media (max-width: 576px) { .ql-main { padding-top: .5rem; } }
+  .ql-title { font-size: 1.4rem; font-weight: 700; margin: 0 0 .5rem; color: var(--tblr-body-color); }
+  .ql-year { font-weight: 400; color: var(--tblr-secondary); }
+  .ql-meta { display: flex; flex-wrap: wrap; gap: .5rem .7rem; align-items: center; margin-bottom: .85rem; font-size: .8rem; color: var(--tblr-secondary); }
+  .ql-meta .ql-rating { color: #f59e0b; font-weight: 600; }
+  .ql-chip { padding: .12rem .5rem; background: rgba(148,163,184,.18); border-radius: 4px; font-size: .7rem; }
+  .ql-badge { padding: .15rem .55rem; border-radius: 999px; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .ql-badge.is-downloaded { background: rgba(34,197,94,.18); color: #22c55e; }
+  .ql-badge.is-monitored { background: rgba(99,102,241,.18); color: #6366f1; }
+  .ql-badge.is-missing { background: rgba(245,158,11,.18); color: #f59e0b; }
+  .ql-overview { font-size: .88rem; line-height: 1.55; color: var(--tblr-body-color); margin-bottom: 1rem; }
+  .ql-action {
+    display: inline-flex; align-items: center; gap: .4rem;
+    padding: .5rem 1rem; border-radius: 8px;
+    background: var(--tblr-primary); color: #fff; font-weight: 600; font-size: .85rem;
+    text-decoration: none !important;
+  }
+  .ql-action:hover { filter: brightness(1.08); color: #fff; }
+  .ql-error { padding: 3rem 1.5rem; text-align: center; color: var(--tblr-secondary); }
 </style>
 {% include 'dashboard/_plex_styles.html.twig' %}
 {% endblock %}
@@ -619,7 +657,11 @@
       </div>
       <div class="poster-row">
         {% for w in watchlist %}
-          <a href="{{ path('tmdb_index') }}?detail={{ w.mediaType }}/{{ w.tmdbId }}" class="poster-tile">
+          <a href="{{ path('tmdb_index') }}?detail={{ w.mediaType }}/{{ w.tmdbId }}" class="poster-tile"
+             data-ql-trigger
+             data-ql-source="tmdb"
+             data-ql-type="{{ w.mediaType == 'tv' ? 'tv' : 'movie' }}"
+             data-ql-id="{{ w.tmdbId }}">
             <div class="poster-tile-wrap">
               {% if w.poster %}
                 <img src="https://image.tmdb.org/t/p/w342{{ w.poster }}" alt="{{ w.title }}" loading="lazy" class="poster-tile-img">
@@ -689,6 +731,7 @@
 </div>
 
 {% include 'dashboard/_plex_info_modal.html.twig' with {} only %}
+{% include 'dashboard/_quicklook_modal.html.twig' with {} only %}
 {% endblock %}
 
 {% block javascripts %}
@@ -791,6 +834,82 @@
       if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
       if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); window._dashPlexTimer = null; }
     });
+
+    // ── Quick-look modal: delegated open + fetch + manual show/hide.
+    // Tiles carry [data-ql-trigger] + data-ql-source/type/slug/id and keep
+    // their href as a no-JS fallback. We intercept the click, open the shell,
+    // fetch the matching fragment, and swap it into [data-ql-body].
+    var qlModal = document.getElementById('ql-modal');
+    function qlBody() { return qlModal ? qlModal.querySelector('[data-ql-body]') : null; }
+
+    function qlOpen() {
+      qlModal.classList.add('show');
+      qlModal.style.display = 'block';
+      qlModal.removeAttribute('aria-hidden');
+      qlModal.setAttribute('aria-modal', 'true');
+      document.body.classList.add('modal-open');
+      if (!document.querySelector('.modal-backdrop.ql-backdrop-el')) {
+        var bd = document.createElement('div');
+        bd.className = 'modal-backdrop fade show ql-backdrop-el';
+        document.body.appendChild(bd);
+      }
+    }
+    function qlClose() {
+      qlModal.classList.remove('show');
+      qlModal.style.display = 'none';
+      qlModal.setAttribute('aria-hidden', 'true');
+      qlModal.removeAttribute('aria-modal');
+      var bd = document.querySelector('.modal-backdrop.ql-backdrop-el');
+      if (bd) bd.remove();
+      if (!document.querySelector('.modal.show')) { document.body.classList.remove('modal-open'); }
+      var b = qlBody();
+      if (b) { b.innerHTML = '<div class="ql-loading"><span class="spinner-border"></span></div>'; }
+    }
+
+    function qlUrl(t) {
+      var src = t.getAttribute('data-ql-source');
+      var type = t.getAttribute('data-ql-type');
+      var id = t.getAttribute('data-ql-id');
+      if (!type || !id) return null;
+      if (src === 'tmdb') { return '/tableau-de-bord/quicklook/tmdb/' + type + '/' + id; }
+      var slug = t.getAttribute('data-ql-slug');
+      if (!slug) return null;
+      return '/tableau-de-bord/quicklook/' + type + '/' + slug + '/' + id;
+    }
+
+    if (qlModal && !window._qlDelegated) {
+      window._qlDelegated = true;
+      document.addEventListener('click', function (e) {
+        var trigger = e.target.closest('[data-ql-trigger]');
+        if (trigger) {
+          var url = qlUrl(trigger);
+          if (!url) return; // missing data → let the href navigate (fallback)
+          e.preventDefault();
+          qlOpen();
+          fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+            .then(function (r) { return r.ok ? r.text() : ''; })
+            .then(function (html) {
+              var b = qlBody();
+              if (!b) return;
+              if ((html || '').trim()) { b.innerHTML = html; }
+              else { window.location.href = trigger.getAttribute('href'); } // empty → fall back to navigation
+            })
+            .catch(function () { window.location.href = trigger.getAttribute('href'); });
+          return;
+        }
+        // Close on backdrop click or [data-ql-dismiss] (the × in the body).
+        if (e.target.closest('[data-ql-dismiss]') || e.target === qlModal) {
+          qlClose();
+        }
+      });
+      document.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape' && qlModal.classList.contains('show')) { qlClose(); }
+      });
+      // Tidy up if Turbo navigates away with the modal open.
+      document.addEventListener('turbo:before-render', function () {
+        if (qlModal.classList.contains('show')) { qlClose(); }
+      });
+    }
   })();
 </script>
 {% endblock %}
