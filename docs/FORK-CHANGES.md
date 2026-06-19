@@ -160,6 +160,45 @@ CSS, and `dashboard.health.status_*` translation keys (en/fr). Covered by
 
 ---
 
+## 5. Dashboard in-place quick-look
+
+Every clickable media tile on the dashboard used to navigate to another page just
+to show its detail modal. They now open a read-only "quick-look" detail modal in
+place on the dashboard. None of this exists upstream.
+
+- **One modal, two sources.** Library tiles (hero spotlight, recently-added,
+  upcoming/calendar) open a Radarr/Sonarr quick-look — poster/backdrop, title +
+  year, a `downloaded` / `monitored` / `missing` status badge, rating, runtime
+  (movies) or network (series), genres, synopsis, and a "Manage on Radarr/Sonarr
+  →" deep-link into the full library editor. TMDb tiles (weekly trending,
+  watchlist) open the same card with a "View in Discover →" link and no library
+  status badge.
+- **Server-rendered, fail-open fragments.** Two endpoints under
+  `/tableau-de-bord/quicklook/*` build a common view-model and render one shared
+  `_quicklook_body.html.twig`. The library builder reuses the dashboard's existing
+  45 s library cache (usually zero extra upstream calls) and falls back to a single
+  `RadarrClient::getMovie` / `SonarrClient::getSerie`; the TMDb builder uses the
+  1 h-cached `TmdbClient`. On a miss or upstream error each endpoint returns a small
+  graceful body, never a 500.
+- **Progressive enhancement.** Every tile keeps its original `href`; a delegated
+  click handler intercepts only when it can build a valid quick-look URL and
+  otherwise (JS off, missing data, failed/empty fetch) lets the link navigate to
+  the relevant tab exactly as before. The modal is a manual (Bootstrap-less) dialog
+  matching the dashboard's other delegated handlers, closing on ×/backdrop/Esc.
+
+**New code:** `DashboardController::quickLookLibrary()` / `quickLookTmdb()` /
+`findLibraryRow()` / `tmdbImage()` and the two `app_dashboard_quicklook*` routes;
+`dashboard/_quicklook_modal.html.twig` + `_quicklook_body.html.twig`; the modal
+CSS + delegated fetch/open/close JS in `dashboard/index.html.twig`; `data-ql-*`
+attributes on the hero, recent-additions, upcoming, recommendations and watchlist
+tiles; `slug` / `ql*` fields added to the dashboard tile data; and
+`dashboard.quicklook.*` translation keys (en/fr ICU). Covered by added
+`DashboardControllerTest` cases (library movie/series view-models, cache-miss
+fallback, unknown id, TMDb movie/tv mapping incl. 0-season, hero quick-look
+fields).
+
+---
+
 ## Verification
 
 - Full gate green in CI on `main`: PHP lint, Twig lint (145 files), and the

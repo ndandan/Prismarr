@@ -167,6 +167,10 @@ a request UI (Seerr).
 - Pending Seerr requests enriched with TMDb metadata
 - Live health of all configured services
 - Personal watchlist, weekly TMDb trending, latest library additions
+- **Quick-look in place:** click any tile (hero, upcoming, trending, watchlist,
+  latest additions) to open a read-only detail modal right on the dashboard —
+  poster, status, rating, genres and synopsis — with a deep-link to manage it in
+  Radarr/Sonarr or open it in Discover, instead of navigating away
 - Optional **Current Plex activity** widget via the Tautulli API: active
   streams, Direct Play / Direct Stream / Transcode counts, LAN/WAN
   bandwidth and a per-session card (read-only, refreshes every 10s)
