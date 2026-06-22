@@ -474,6 +474,52 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Pure transform: get_users_table `data` envelope -> privacy-safe rows.
+     * Allow-list only — ip_address, email, user_id, avatar/thumb never copied out.
+     *
+     * @param array<string, mixed> $data
+     * @return list<array{friendlyName:?string,lastSeen:int,lastPlayed:?string,plays:int,durationSeconds:int}>
+     */
+    public static function normalizeUsersTable(array $data): array
+    {
+        $rows = is_array($data['data'] ?? null) ? $data['data'] : [];
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) { continue; }
+            $out[] = [
+                'friendlyName'    => self::str($r['friendly_name'] ?? ($r['user'] ?? null)),
+                'lastSeen'        => (int) ($r['last_seen'] ?? 0),
+                'lastPlayed'      => self::str($r['last_played'] ?? null),
+                'plays'           => (int) ($r['plays'] ?? 0),
+                'durationSeconds' => (int) ($r['duration'] ?? 0),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Pure transform: get_user_names `data` (bare list) -> {name, id} pairs for the
+     * filter dropdown. `id` is the opaque Tautulli user_id (filter token only).
+     * Rows missing either field are dropped.
+     *
+     * @param array<int, mixed> $data
+     * @return list<array{name:string,id:string}>
+     */
+    public static function normalizeUserNames(array $data): array
+    {
+        $out = [];
+        foreach ($data as $u) {
+            if (!is_array($u)) { continue; }
+            $name = self::str($u['friendly_name'] ?? null);
+            $id   = self::str($u['user_id'] ?? null);
+            if ($name !== null && $id !== null) {
+                $out[] = ['name' => $name, 'id' => $id];
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Pure transform: get_history `data` envelope -> sanitized rows. Allow-list
      * only; usernames/emails/IPs/file paths are never copied out.
      *
