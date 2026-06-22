@@ -75,6 +75,19 @@ class TautulliControllerTest extends AbstractWebTestCase
     }
 
     /**
+     * /tautulli/api/stats accepts metric= and user= params without erroring.
+     * Unconfigured → empty stats → the "no data" copy renders, no 500.
+     */
+    public function testStatsEndpointAcceptsMetricAndUser(): void
+    {
+        $this->client->request('GET', '/tautulli/api/stats?range=30&metric=duration&user=99');
+        self::assertResponseIsSuccessful();
+        // Unconfigured -> empty stats -> the "no data" copy renders, no 500.
+        $html = (string) $this->client->getResponse()->getContent();
+        self::assertStringNotContainsString('Exception', $html);
+    }
+
+    /**
      * The new chart endpoints fail open to the neutral {categories:[],series:[]}
      * JSON when Tautulli is unconfigured, and the plays endpoint accepts the
      * stream-type mode without erroring.

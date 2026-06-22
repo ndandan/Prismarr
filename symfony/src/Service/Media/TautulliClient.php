@@ -197,24 +197,35 @@ class TautulliClient implements ResetInterface
         return in_array($days, [7, 30, 90], true) ? $days : 30;
     }
 
+    /** Clamp the stats metric to the two Tautulli accepts. */
+    private static function clampMetric(string $metric): string
+    {
+        return $metric === 'duration' ? 'duration' : 'plays';
+    }
+
     /**
      * Watch statistics for the home page, normalized + sanitized. Returns the
-     * four lists the activity page renders; an all-empty shape covers
+     * seven lists the activity page renders; an all-empty shape covers
      * disabled/unconfigured/unreachable.
      *
-     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>}
+     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>, popularMovies:list<array<string,mixed>>, popularShows:list<array<string,mixed>>, mostConcurrent:list<array<string,mixed>>}
      */
-    public function getHomeStats(int $days): array
+    public function getHomeStats(int $days, string $metric = 'plays', ?string $userId = null): array
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return self::normalizeHomeStats([]);
         }
-        $resp = $this->request([
+        $params = [
             'cmd'         => 'get_home_stats',
             'time_range'  => (string) self::clampRange($days),
+            'stats_type'  => self::clampMetric($metric),
             'stats_count' => '5',
-        ]);
+        ];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
         if ($resp === null || $resp['ok'] !== true) {
             return self::normalizeHomeStats([]);
         }
