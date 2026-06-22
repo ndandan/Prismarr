@@ -104,6 +104,10 @@ class TautulliControllerTest extends AbstractWebTestCase
             '/tautulli/api/activity-hour?range=30',
             '/tautulli/api/activity-dow?range=30',
             '/tautulli/api/clients-stream-type?range=30',
+            '/tautulli/api/plays-source-res?range=30&metric=duration',
+            '/tautulli/api/plays-stream-res?range=30',
+            '/tautulli/api/users-stream-type?range=30&user=99',
+            '/tautulli/api/concurrent?range=30',
         ] as $url) {
             $this->client->request('GET', $url);
             self::assertResponseIsSuccessful();

@@ -716,4 +716,17 @@ class TautulliClientTest extends TestCase
         ]);
         self::assertSame([['name' => 'nDanDan', 'id' => '99']], $out);
     }
+
+    public function testNewChartMethodsFailOpenWhenUnconfigured(): void
+    {
+        $repo = $this->createMock(SettingRepository::class);
+        $repo->method('getAll')->willReturn([]);
+        $client = new TautulliClient(new ConfigService($repo), new NullLogger(), null);
+
+        $neutral = ['categories' => [], 'series' => []];
+        self::assertSame($neutral, $client->getPlaysBySourceResolution(30, 'duration', '99'));
+        self::assertSame($neutral, $client->getPlaysByStreamResolution(30));
+        self::assertSame($neutral, $client->getStreamTypeByUser(30));
+        self::assertSame($neutral, $client->getConcurrentStreams(30, '99'));
+    }
 }

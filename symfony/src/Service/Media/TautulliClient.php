@@ -354,33 +354,51 @@ class TautulliClient implements ResetInterface
      *
      * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
      */
-    public function getPlaysByDate(int $days): array
+    public function getPlaysByDate(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_date', $days);
+        return $this->playsChart('get_plays_by_date', $days, $metric, $userId);
     }
 
     /** Plays per day by transcode decision (Direct Play / Direct Stream / Transcode). */
-    public function getPlaysByStreamType(int $days): array
+    public function getPlaysByStreamType(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_stream_type', $days);
+        return $this->playsChart('get_plays_by_stream_type', $days, $metric, $userId);
     }
 
     /** Plays aggregated by hour of day (0-23). */
-    public function getPlaysByHourOfDay(int $days): array
+    public function getPlaysByHourOfDay(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_hourofday', $days);
+        return $this->playsChart('get_plays_by_hourofday', $days, $metric, $userId);
     }
 
     /** Plays aggregated by day of week. */
-    public function getPlaysByDayOfWeek(int $days): array
+    public function getPlaysByDayOfWeek(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_dayofweek', $days);
+        return $this->playsChart('get_plays_by_dayofweek', $days, $metric, $userId);
     }
 
     /** Plays by top-10 platform, split by transcode decision (problem clients). */
-    public function getStreamTypeByPlatform(int $days): array
+    public function getStreamTypeByPlatform(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_stream_type_by_top_10_platforms', $days);
+        return $this->playsChart('get_stream_type_by_top_10_platforms', $days, $metric, $userId);
+    }
+
+    /** Plays by source resolution (pre-transcode), split by transcode decision. */
+    public function getPlaysBySourceResolution(int $days, string $metric = 'plays', ?string $userId = null): array
+    {
+        return $this->playsChart('get_plays_by_source_resolution', $days, $metric, $userId);
+    }
+
+    /** Plays by stream resolution (post-transcode), split by transcode decision. */
+    public function getPlaysByStreamResolution(int $days, string $metric = 'plays', ?string $userId = null): array
+    {
+        return $this->playsChart('get_plays_by_stream_resolution', $days, $metric, $userId);
+    }
+
+    /** Plays by top-10 user, split by transcode decision. */
+    public function getStreamTypeByUser(int $days, string $metric = 'plays', ?string $userId = null): array
+    {
+        return $this->playsChart('get_stream_type_by_top_10_users', $days, $metric, $userId);
     }
 
     /**
@@ -390,13 +408,44 @@ class TautulliClient implements ResetInterface
      *
      * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
      */
-    private function playsChart(string $cmd, int $days): array
+    private function playsChart(string $cmd, int $days, string $metric = 'plays', ?string $userId = null): array
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return self::normalizePlaysByDate([]);
         }
-        $resp = $this->request(['cmd' => $cmd, 'time_range' => (string) self::clampRange($days)]);
+        $params = [
+            'cmd'        => $cmd,
+            'time_range' => (string) self::clampRange($days),
+            'y_axis'     => self::clampMetric($metric),
+        ];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
+        if ($resp === null || $resp['ok'] !== true) {
+            return self::normalizePlaysByDate([]);
+        }
+        return self::normalizePlaysByDate(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Concurrent stream count over time by stream type. Unlike the other charts
+     * this command takes no y_axis (it is always a count), only time_range + user.
+     *
+     * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
+     */
+    public function getConcurrentStreams(int $days, ?string $userId = null): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return self::normalizePlaysByDate([]);
+        }
+        $params = ['cmd' => 'get_concurrent_streams_by_stream_type', 'time_range' => (string) self::clampRange($days)];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
         if ($resp === null || $resp['ok'] !== true) {
             return self::normalizePlaysByDate([]);
         }
