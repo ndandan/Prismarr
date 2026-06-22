@@ -663,4 +663,50 @@ class TautulliClientTest extends TestCase
         $s = TautulliClient::normalizeActivity($data)['sessions'][0];
         self::assertSame('HDR10', $s['dynamicRange']);
     }
+
+    private function usersTableFixture(): array
+    {
+        return ['data' => [
+            ['friendly_name' => 'nDanDan', 'user' => 'nDanDan', 'last_seen' => 1781377600,
+             'last_played' => 'See How They Run', 'plays' => 240, 'duration' => 360000,
+             'ip_address' => '192.168.1.5', 'email' => 'user@example.com', 'user_id' => 99,
+             'user_thumb' => 'https://plex.tv/users/abc/avatar'],
+            ['friendly_name' => 'Rob', 'last_seen' => 0, 'last_played' => null, 'plays' => 12, 'duration' => 0],
+        ]];
+    }
+
+    public function testNormalizeUsersTableMapsRows(): void
+    {
+        $out = TautulliClient::normalizeUsersTable($this->usersTableFixture());
+        self::assertCount(2, $out);
+        self::assertSame('nDanDan', $out[0]['friendlyName']);
+        self::assertSame(1781377600, $out[0]['lastSeen']);
+        self::assertSame('See How They Run', $out[0]['lastPlayed']);
+        self::assertSame(240, $out[0]['plays']);
+        self::assertSame(360000, $out[0]['durationSeconds']);
+    }
+
+    public function testNormalizeUsersTableNeverLeaksPrivateFields(): void
+    {
+        $flat = json_encode(TautulliClient::normalizeUsersTable($this->usersTableFixture()));
+        self::assertStringNotContainsString('192.168.1.5', $flat);
+        self::assertStringNotContainsString('user@example.com', $flat);
+        self::assertStringNotContainsString('avatar', $flat);
+        foreach (TautulliClient::normalizeUsersTable($this->usersTableFixture()) as $u) {
+            self::assertArrayNotHasKey('ip_address', $u);
+            self::assertArrayNotHasKey('email', $u);
+            self::assertArrayNotHasKey('user_id', $u);
+        }
+    }
+
+    public function testNormalizeUserNamesMapsAndDropsIncomplete(): void
+    {
+        $out = TautulliClient::normalizeUserNames([
+            ['friendly_name' => 'nDanDan', 'user_id' => 99],
+            ['friendly_name' => 'NoId'],          // dropped — no id
+            ['user_id' => 7],                      // dropped — no name
+            'not-an-array',                        // dropped
+        ]);
+        self::assertSame([['name' => 'nDanDan', 'id' => '99']], $out);
+    }
 }
