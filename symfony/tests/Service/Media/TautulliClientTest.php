@@ -684,6 +684,12 @@ class TautulliClientTest extends TestCase
         self::assertSame('See How They Run', $out[0]['lastPlayed']);
         self::assertSame(240, $out[0]['plays']);
         self::assertSame(360000, $out[0]['durationSeconds']);
+
+        self::assertSame('Rob', $out[1]['friendlyName']);
+        self::assertSame(0, $out[1]['lastSeen']);
+        self::assertNull($out[1]['lastPlayed']);
+        self::assertSame(12, $out[1]['plays']);
+        self::assertSame(0, $out[1]['durationSeconds']);
     }
 
     public function testNormalizeUsersTableNeverLeaksPrivateFields(): void
@@ -696,6 +702,7 @@ class TautulliClientTest extends TestCase
             self::assertArrayNotHasKey('ip_address', $u);
             self::assertArrayNotHasKey('email', $u);
             self::assertArrayNotHasKey('user_id', $u);
+            self::assertArrayNotHasKey('user_thumb', $u);
         }
     }
 
