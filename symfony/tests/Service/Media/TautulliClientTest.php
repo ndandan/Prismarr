@@ -405,7 +405,7 @@ class TautulliClientTest extends TestCase
         return [
             ['stat_id' => 'top_movies', 'rows' => [
                 ['rating_key' => '12345', 'title' => 'See How They Run', 'year' => '2022',
-                 'total_plays' => 7, 'thumb' => '/library/metadata/12345/thumb/1',
+                 'total_plays' => 7, 'total_duration' => 18000, 'thumb' => '/library/metadata/12345/thumb/1',
                  'file' => '/data/media/x.mkv', 'guid' => 'plex://movie/abc'],
             ]],
             ['stat_id' => 'top_tv', 'rows' => [
@@ -414,10 +414,22 @@ class TautulliClientTest extends TestCase
             ]],
             ['stat_id' => 'top_users', 'rows' => [
                 ['user' => 'plexlogin_secret', 'friendly_name' => 'nDanDan', 'user_id' => 99,
-                 'total_plays' => 30, 'user_thumb' => 'https://plex.tv/users/abc/avatar'],
+                 'total_plays' => 30, 'total_duration' => 36000, 'user_thumb' => 'https://plex.tv/users/abc/avatar'],
             ]],
             ['stat_id' => 'top_platforms', 'rows' => [
                 ['platform' => 'Chrome', 'platform_name' => 'Chrome', 'total_plays' => 18],
+            ]],
+            ['stat_id' => 'popular_movies', 'rows' => [
+                ['rating_key' => '555', 'title' => 'Dune', 'year' => '2021', 'users_watched' => 6,
+                 'thumb' => '/library/metadata/555/thumb/1', 'file' => '/data/x.mkv'],
+            ]],
+            ['stat_id' => 'popular_tv', 'rows' => [
+                ['rating_key' => '888', 'title' => 'Severance', 'users_watched' => 9,
+                 'grandparent_thumb' => '/library/metadata/880/thumb/2'],
+            ]],
+            ['stat_id' => 'most_concurrent', 'rows' => [
+                ['title' => 'Concurrent Streams', 'count' => 5],
+                ['title' => 'Concurrent Transcodes', 'count' => 2],
             ]],
             ['stat_id' => 'last_watched', 'rows' => [['title' => 'ignored']]],
         ];
@@ -459,7 +471,35 @@ class TautulliClientTest extends TestCase
     public function testNormalizeHomeStatsEmptyInputYieldsEmptyLists(): void
     {
         $out = TautulliClient::normalizeHomeStats([]);
-        self::assertSame(['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []], $out);
+        self::assertSame([
+            'topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => [],
+            'popularMovies' => [], 'popularShows' => [], 'mostConcurrent' => [],
+        ], $out);
+    }
+
+    public function testNormalizeHomeStatsAddsDurationToWatchedAndUsers(): void
+    {
+        $out = TautulliClient::normalizeHomeStats($this->homeStatsFixture());
+        self::assertSame(18000, $out['topMovies'][0]['duration']);
+        self::assertSame('5h 0m', $out['topMovies'][0]['durationLabel']);
+        self::assertSame(36000, $out['topUsers'][0]['duration']);
+        self::assertSame('10h 0m', $out['topUsers'][0]['durationLabel']);
+    }
+
+    public function testNormalizeHomeStatsMapsPopularAndConcurrent(): void
+    {
+        $out = TautulliClient::normalizeHomeStats($this->homeStatsFixture());
+        self::assertSame('Dune', $out['popularMovies'][0]['title']);
+        self::assertSame('2021', $out['popularMovies'][0]['year']);
+        self::assertSame(6, $out['popularMovies'][0]['usersWatched']);
+        self::assertSame('/library/metadata/555/thumb/1', $out['popularMovies'][0]['posterPath']);
+
+        self::assertSame('Severance', $out['popularShows'][0]['title']);
+        self::assertSame(9, $out['popularShows'][0]['usersWatched']);
+        self::assertSame('/library/metadata/880/thumb/2', $out['popularShows'][0]['posterPath']);
+
+        self::assertSame('Concurrent Streams', $out['mostConcurrent'][0]['title']);
+        self::assertSame(5, $out['mostConcurrent'][0]['count']);
     }
 
     /** A representative get_plays_by_date `data` envelope. */

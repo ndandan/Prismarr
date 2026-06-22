@@ -224,64 +224,118 @@ class TautulliClient implements ResetInterface
     /**
      * Pure transform: get_home_stats `data` (list of stat groups) → sanitized
      * lists. Allow-list only: usernames/emails/ids/avatars/file paths/guids are
-     * never copied out. Only the four groups we render are kept.
+     * never copied out. Only the groups we render are kept.
      *
      * @param array<int, mixed> $data
-     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>}
+     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>, popularMovies:list<array<string,mixed>>, popularShows:list<array<string,mixed>>, mostConcurrent:list<array<string,mixed>>}
      */
     public static function normalizeHomeStats(array $data): array
     {
-        $out = ['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []];
+        $out = [
+            'topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => [],
+            'popularMovies' => [], 'popularShows' => [], 'mostConcurrent' => [],
+        ];
         foreach ($data as $group) {
-            if (!is_array($group)) {
-                continue;
-            }
+            if (!is_array($group)) { continue; }
             $rows = is_array($group['rows'] ?? null) ? $group['rows'] : [];
             switch (self::str($group['stat_id'] ?? null)) {
                 case 'top_movies':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topMovies'][] = [
-                            'ratingKey'  => self::str($r['rating_key'] ?? null),
-                            'title'      => self::str($r['title'] ?? null),
-                            'year'       => self::str($r['year'] ?? null),
-                            'posterPath' => self::str($r['thumb'] ?? ($r['grandparent_thumb'] ?? null)),
-                            'plays'      => (int) ($r['total_plays'] ?? 0),
+                            'ratingKey'     => self::str($r['rating_key'] ?? null),
+                            'title'         => self::str($r['title'] ?? null),
+                            'year'          => self::str($r['year'] ?? null),
+                            'posterPath'    => self::str($r['thumb'] ?? ($r['grandparent_thumb'] ?? null)),
+                            'plays'         => (int) ($r['total_plays'] ?? 0),
+                            'duration'      => $dur,
+                            'durationLabel' => self::secondsLabel($dur),
                         ];
                     }
                     break;
                 case 'top_tv':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topShows'][] = [
-                            'ratingKey'  => self::str($r['rating_key'] ?? null),
-                            'title'      => self::str($r['title'] ?? null),
-                            'posterPath' => self::str($r['grandparent_thumb'] ?? ($r['thumb'] ?? null)),
-                            'plays'      => (int) ($r['total_plays'] ?? 0),
+                            'ratingKey'     => self::str($r['rating_key'] ?? null),
+                            'title'         => self::str($r['title'] ?? null),
+                            'posterPath'    => self::str($r['grandparent_thumb'] ?? ($r['thumb'] ?? null)),
+                            'plays'         => (int) ($r['total_plays'] ?? 0),
+                            'duration'      => $dur,
+                            'durationLabel' => self::secondsLabel($dur),
+                        ];
+                    }
+                    break;
+                case 'popular_movies':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['popularMovies'][] = [
+                            'ratingKey'    => self::str($r['rating_key'] ?? null),
+                            'title'        => self::str($r['title'] ?? null),
+                            'year'         => self::str($r['year'] ?? null),
+                            'posterPath'   => self::str($r['thumb'] ?? ($r['grandparent_thumb'] ?? null)),
+                            'usersWatched' => (int) ($r['users_watched'] ?? 0),
+                        ];
+                    }
+                    break;
+                case 'popular_tv':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['popularShows'][] = [
+                            'ratingKey'    => self::str($r['rating_key'] ?? null),
+                            'title'        => self::str($r['title'] ?? null),
+                            'posterPath'   => self::str($r['grandparent_thumb'] ?? ($r['thumb'] ?? null)),
+                            'usersWatched' => (int) ($r['users_watched'] ?? 0),
                         ];
                     }
                     break;
                 case 'top_users':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topUsers'][] = [
                             'userDisplayName' => self::str($r['friendly_name'] ?? null),
                             'plays'           => (int) ($r['total_plays'] ?? 0),
+                            'duration'        => $dur,
+                            'durationLabel'   => self::secondsLabel($dur),
                         ];
                     }
                     break;
                 case 'top_platforms':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topPlatforms'][] = [
-                            'platform' => self::str($r['platform_name'] ?? ($r['platform'] ?? null)),
-                            'plays'    => (int) ($r['total_plays'] ?? 0),
+                            'platform'      => self::str($r['platform_name'] ?? ($r['platform'] ?? null)),
+                            'plays'         => (int) ($r['total_plays'] ?? 0),
+                            'duration'      => $dur,
+                            'durationLabel' => self::secondsLabel($dur),
+                        ];
+                    }
+                    break;
+                case 'most_concurrent':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['mostConcurrent'][] = [
+                            'title' => self::str($r['title'] ?? null),
+                            'count' => (int) ($r['count'] ?? 0),
                         ];
                     }
                     break;
             }
         }
         return $out;
+    }
+
+    /** Seconds -> "3h 12m" / "45m" / "0m". For watch-duration tile labels. */
+    private static function secondsLabel(int $s): string
+    {
+        if ($s <= 0) { return '0m'; }
+        $h = intdiv($s, 3600);
+        $m = intdiv($s % 3600, 60);
+        return $h > 0 ? sprintf('%dh %dm', $h, $m) : sprintf('%dm', $m);
     }
 
     /**
