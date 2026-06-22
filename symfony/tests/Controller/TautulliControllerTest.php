@@ -108,6 +108,15 @@ class TautulliControllerTest extends AbstractWebTestCase
             '/tautulli/api/plays-stream-res?range=30',
             '/tautulli/api/users-stream-type?range=30&user=99',
             '/tautulli/api/concurrent?range=30',
+            // metric/user param coverage — valid and invalid values must still return 200+neutral
+            '/tautulli/api/plays?range=30&mode=stream&metric=duration&user=99',
+            '/tautulli/api/plays?range=30&metric=garbage&user=abc',
+            '/tautulli/api/activity-hour?range=30&metric=duration&user=99',
+            '/tautulli/api/activity-dow?range=30&metric=garbage&user=notdigits',
+            '/tautulli/api/clients-stream-type?range=30&metric=duration&user=99',
+            '/tautulli/api/users-stream-type?range=30&metric=garbage&user=abc',
+            '/tautulli/api/concurrent?range=30&user=99',
+            '/tautulli/api/concurrent?range=30&user=xyz',
         ] as $url) {
             $this->client->request('GET', $url);
             self::assertResponseIsSuccessful();
