@@ -485,6 +485,17 @@ tautulli:
     activity_hour: Lectures par heure
     activity_dow: Lectures par jour de semaine
     clients: Lectures par plateforme et type de flux
+    source_res: Lectures par résolution source
+    stream_res: Lectures par résolution de flux
+    users_stream_type: Flux par utilisateur
+    concurrent: Flux simultanés
+    users: Utilisateurs
+  metric:
+    plays: Nombre de lectures
+    duration: Durée de lecture
+  filter:
+    user: Filtrer par utilisateur
+    all_users: Tous les utilisateurs
   stats:
     top_movie: Films les plus regardés
     top_show: Séries les plus regardées
@@ -492,6 +503,18 @@ tautulli:
     top_platform: Plateformes principales
     plays_count: '{count, plural, one {# lecture} other {# lectures}}'
     empty: Aucune statistique pour cette période
+    popular_movie: Films les plus populaires
+    popular_show: Séries les plus populaires
+    most_concurrent: Flux simultanés maximum
+    users_count: '{count, plural, one {# utilisateur} other {# utilisateurs}}'
+  users:
+    empty: Aucune activité utilisateur.
+    col:
+      user: Utilisateur
+      last_seen: Vu pour la dernière fois
+      last_played: Dernière lecture
+      plays: Lectures
+      duration: Temps de visionnage
   plays:
     empty: Aucune donnée de lecture pour cette période
     mode:
