@@ -171,50 +171,103 @@ class TautulliController extends AbstractController
         return $this->render('tautulli/_stats.html.twig', ['stats' => $stats, 'metric' => $metric]);
     }
 
-    /** GET /tautulli/api/plays?range=30&mode=media|stream — plays series as JSON (Chart.js). */
+    /** GET /tautulli/api/plays?range=30&mode=media|stream&metric=plays|duration&user= — plays series as JSON (Chart.js). */
     #[Route('/api/plays', name: 'api_plays', methods: ['GET'])]
     public function apiPlays(Request $request): JsonResponse
     {
-        $range = (int) $request->query->get('range', 30);
-        $mode  = $request->query->get('mode', 'media') === 'stream' ? 'stream' : 'media';
+        $range  = (int) $request->query->get('range', 30);
+        $mode   = $request->query->get('mode', 'media') === 'stream' ? 'stream' : 'media';
+        $metric = self::metric($request);
+        $user   = self::userId($request);
         try {
             $data = $mode === 'stream'
-                ? $this->tautulli->getPlaysByStreamType($range)
-                : $this->tautulli->getPlaysByDate($range);
+                ? $this->tautulli->getPlaysByStreamType($range, $metric, $user)
+                : $this->tautulli->getPlaysByDate($range, $metric, $user);
             return $this->json($data);
         } catch (\Throwable) {
             return $this->json(['categories' => [], 'series' => []]);
         }
     }
 
-    /** GET /tautulli/api/activity-hour?range=30 — plays by hour of day as JSON. */
+    /** GET /tautulli/api/activity-hour?range=30&metric=plays|duration&user= — plays by hour of day as JSON. */
     #[Route('/api/activity-hour', name: 'api_activity_hour', methods: ['GET'])]
     public function apiActivityHour(Request $request): JsonResponse
     {
         try {
-            return $this->json($this->tautulli->getPlaysByHourOfDay((int) $request->query->get('range', 30)));
+            return $this->json($this->tautulli->getPlaysByHourOfDay(
+                (int) $request->query->get('range', 30), self::metric($request), self::userId($request)));
         } catch (\Throwable) {
             return $this->json(['categories' => [], 'series' => []]);
         }
     }
 
-    /** GET /tautulli/api/activity-dow?range=30 — plays by day of week as JSON. */
+    /** GET /tautulli/api/activity-dow?range=30&metric=plays|duration&user= — plays by day of week as JSON. */
     #[Route('/api/activity-dow', name: 'api_activity_dow', methods: ['GET'])]
     public function apiActivityDow(Request $request): JsonResponse
     {
         try {
-            return $this->json($this->tautulli->getPlaysByDayOfWeek((int) $request->query->get('range', 30)));
+            return $this->json($this->tautulli->getPlaysByDayOfWeek(
+                (int) $request->query->get('range', 30), self::metric($request), self::userId($request)));
         } catch (\Throwable) {
             return $this->json(['categories' => [], 'series' => []]);
         }
     }
 
-    /** GET /tautulli/api/clients-stream-type?range=30 — plays by platform × stream type as JSON. */
+    /** GET /tautulli/api/clients-stream-type?range=30&metric=plays|duration&user= — plays by platform × stream type as JSON. */
     #[Route('/api/clients-stream-type', name: 'api_clients_stream_type', methods: ['GET'])]
     public function apiClientsStreamType(Request $request): JsonResponse
     {
         try {
-            return $this->json($this->tautulli->getStreamTypeByPlatform((int) $request->query->get('range', 30)));
+            return $this->json($this->tautulli->getStreamTypeByPlatform(
+                (int) $request->query->get('range', 30), self::metric($request), self::userId($request)));
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/plays-source-res?range=&metric=&user= — source-resolution chart JSON. */
+    #[Route('/api/plays-source-res', name: 'api_plays_source_res', methods: ['GET'])]
+    public function apiPlaysSourceRes(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getPlaysBySourceResolution(
+                (int) $request->query->get('range', 30), self::metric($request), self::userId($request)));
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/plays-stream-res?range=&metric=&user= — stream-resolution chart JSON. */
+    #[Route('/api/plays-stream-res', name: 'api_plays_stream_res', methods: ['GET'])]
+    public function apiPlaysStreamRes(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getPlaysByStreamResolution(
+                (int) $request->query->get('range', 30), self::metric($request), self::userId($request)));
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/users-stream-type?range=&metric=&user= — user × stream-type chart JSON. */
+    #[Route('/api/users-stream-type', name: 'api_users_stream_type', methods: ['GET'])]
+    public function apiUsersStreamType(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getStreamTypeByUser(
+                (int) $request->query->get('range', 30), self::metric($request), self::userId($request)));
+        } catch (\Throwable) {
+            return $this->json(['categories' => [], 'series' => []]);
+        }
+    }
+
+    /** GET /tautulli/api/concurrent?range=&user= — concurrent streams over time JSON (count only). */
+    #[Route('/api/concurrent', name: 'api_concurrent', methods: ['GET'])]
+    public function apiConcurrent(Request $request): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getConcurrentStreams(
+                (int) $request->query->get('range', 30), self::userId($request)));
         } catch (\Throwable) {
             return $this->json(['categories' => [], 'series' => []]);
         }
