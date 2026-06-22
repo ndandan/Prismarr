@@ -247,4 +247,27 @@ class TautulliController extends AbstractController
         return $this->render('tautulli/_libraries.html.twig', ['libraries' => $libraries]);
     }
 
+    /** GET /tautulli/api/users — per-user totals table fragment. */
+    #[Route('/api/users', name: 'api_users', methods: ['GET'])]
+    public function apiUsers(): Response
+    {
+        try {
+            $users = $this->tautulli->getUsersTable();
+        } catch (\Throwable) {
+            $users = [];
+        }
+        return $this->render('tautulli/_users.html.twig', ['users' => $users]);
+    }
+
+    /** GET /tautulli/api/user-names — [{name,id}] for the user filter dropdown. */
+    #[Route('/api/user-names', name: 'api_user_names', methods: ['GET'])]
+    public function apiUserNames(): JsonResponse
+    {
+        try {
+            return $this->json($this->tautulli->getUserNames());
+        } catch (\Throwable) {
+            return $this->json([]);
+        }
+    }
+
 }

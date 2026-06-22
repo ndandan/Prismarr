@@ -116,4 +116,30 @@ class TautulliControllerTest extends AbstractWebTestCase
             self::assertSame([], $data['series'], $url);
         }
     }
+
+    /**
+     * /tautulli/api/user-names returns HTTP 200 + an empty JSON array when
+     * Tautulli is not configured. getUserNames() fails open: no config rows →
+     * returns []. The controller also wraps in a try/catch → $this->json([]).
+     */
+    public function testUserNamesEndpointReturnsEmptyJsonWhenUnconfigured(): void
+    {
+        $this->client->request('GET', '/tautulli/api/user-names');
+        self::assertResponseIsSuccessful();
+        $content = (string) $this->client->getResponse()->getContent();
+        self::assertJson($content);
+        self::assertSame([], json_decode($content, true));
+    }
+
+    /**
+     * /tautulli/api/users returns HTTP 200 and renders the users fragment
+     * without errors when Tautulli is not configured. getUsersTable() fails
+     * open → users:[]. The fragment renders the empty-state div, no Exception.
+     */
+    public function testUsersFragmentRendersWhenUnconfigured(): void
+    {
+        $this->client->request('GET', '/tautulli/api/users');
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('Exception', (string) $this->client->getResponse()->getContent());
+    }
 }

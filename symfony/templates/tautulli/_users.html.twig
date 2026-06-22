@@ -1,0 +1,29 @@
+{# Per-user overview. `users` = list of {friendlyName, lastSeen, lastPlayed, plays, durationSeconds}. #}
+{% if users is empty %}
+  <div class="text-center text-secondary py-4">{{ 'tautulli.users.empty'|trans }}</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-vcenter card-table">
+    <thead>
+      <tr>
+        <th>{{ 'tautulli.users.col.user'|trans }}</th>
+        <th>{{ 'tautulli.users.col.last_seen'|trans }}</th>
+        <th>{{ 'tautulli.users.col.last_played'|trans }}</th>
+        <th class="text-end">{{ 'tautulli.users.col.plays'|trans }}</th>
+        <th class="text-end">{{ 'tautulli.users.col.duration'|trans }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td class="text-truncate">{{ u.friendlyName ?? '—' }}</td>
+        <td class="text-secondary">{{ u.lastSeen > 0 ? (u.lastSeen|relative_date) : '—' }}</td>
+        <td class="text-truncate text-secondary">{{ u.lastPlayed ?? '—' }}</td>
+        <td class="text-end">{{ u.plays }}</td>
+        <td class="text-end" data-tautulli-secs="{{ u.durationSeconds }}">{{ u.durationSeconds }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
