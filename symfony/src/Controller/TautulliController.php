@@ -281,6 +281,7 @@ class TautulliController extends AbstractController
             $rows = $this->tautulli->getHistory(
                 (int) $request->query->get('length', 25),
                 (int) $request->query->get('start', 0),
+                self::userId($request),
             );
         } catch (\Throwable) {
             $rows = [];

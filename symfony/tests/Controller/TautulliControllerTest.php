@@ -155,4 +155,19 @@ class TautulliControllerTest extends AbstractWebTestCase
         self::assertResponseIsSuccessful();
         self::assertStringNotContainsString('Exception', (string) $this->client->getResponse()->getContent());
     }
+
+    /**
+     * /tautulli/api/history accepts a ?user= filter without erroring.
+     *
+     * The unconfigured client returns [] for any call to getHistory(), so the
+     * history fragment renders an empty state — no 500, no Exception output.
+     * This guards against regressions where wiring the user param causes a
+     * server error instead of failing open.
+     */
+    public function testHistoryEndpointAcceptsUserFilter(): void
+    {
+        $this->client->request('GET', '/tautulli/api/history?length=25&start=0&user=99');
+        self::assertResponseIsSuccessful();
+        self::assertStringNotContainsString('Exception', (string) $this->client->getResponse()->getContent());
+    }
 }

@@ -172,19 +172,23 @@ class TautulliClient implements ResetInterface
      *
      * @return list<array<string, mixed>>
      */
-    public function getHistory(int $length = 8, int $start = 0): array
+    public function getHistory(int $length = 8, int $start = 0, ?string $userId = null): array
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return [];
         }
-        $resp = $this->request([
+        $params = [
             'cmd'          => 'get_history',
             'length'       => (string) max(1, min(50, $length)),
             'start'        => (string) max(0, $start),
             'order_column' => 'date',
             'order_dir'    => 'desc',
-        ]);
+        ];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
         if ($resp === null || $resp['ok'] !== true) {
             return [];
         }
