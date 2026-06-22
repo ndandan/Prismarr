@@ -34,6 +34,19 @@ class TautulliController extends AbstractController
         private readonly TautulliClient $tautulli,
     ) {}
 
+    /** Request metric, clamped to the two Tautulli accepts. */
+    private static function metric(Request $request): string
+    {
+        return $request->query->get('metric') === 'duration' ? 'duration' : 'plays';
+    }
+
+    /** Opaque Tautulli user_id filter token: digits only, else "" (all users). */
+    private static function userId(Request $request): string
+    {
+        $u = (string) $request->query->get('user', '');
+        return ctype_digit($u) ? $u : '';
+    }
+
     /**
      * GET /tautulli/api/activity — sanitized current Plex activity as JSON.
      * Mirrors the qBittorrent/Jellyseerr poll-endpoint convention
@@ -145,16 +158,17 @@ class TautulliController extends AbstractController
         return $this->render('tautulli/_now_playing.html.twig', ['plex' => $activity]);
     }
 
-    /** GET /tautulli/api/stats?range=30 — watch-stats tiles fragment. */
+    /** GET /tautulli/api/stats?range=30&metric=plays|duration&user={userId} — watch-stats tiles fragment. */
     #[Route('/api/stats', name: 'api_stats', methods: ['GET'])]
     public function apiStats(Request $request): Response
     {
+        $metric = self::metric($request);
         try {
-            $stats = $this->tautulli->getHomeStats((int) $request->query->get('range', 30));
+            $stats = $this->tautulli->getHomeStats((int) $request->query->get('range', 30), $metric, self::userId($request));
         } catch (\Throwable) {
-            $stats = ['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []];
+            $stats = TautulliClient::normalizeHomeStats([]);
         }
-        return $this->render('tautulli/_stats.html.twig', ['stats' => $stats]);
+        return $this->render('tautulli/_stats.html.twig', ['stats' => $stats, 'metric' => $metric]);
     }
 
     /** GET /tautulli/api/plays?range=30&mode=media|stream — plays series as JSON (Chart.js). */

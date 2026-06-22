@@ -1,6 +1,7 @@
-{# Watch-statistics tiles. `stats` = {topMovies, topShows, topUsers, topPlatforms}. #}
+{# Watch-statistics tiles. `stats` = {topMovies, topShows, topUsers, topPlatforms, popularMovies, popularShows, mostConcurrent}. `metric` = 'plays'|'duration'. #}
 {% import '_icons.html.twig' as ico %}
-{% if stats.topMovies is empty and stats.topShows is empty and stats.topUsers is empty and stats.topPlatforms is empty %}
+{% set metric = metric|default('plays') %}
+{% if stats.topMovies is empty and stats.topShows is empty and stats.topUsers is empty and stats.topPlatforms is empty and stats.popularMovies is empty and stats.popularShows is empty and stats.mostConcurrent is empty %}
   <div class="text-center text-secondary py-4">{{ 'tautulli.stats.empty'|trans }}</div>
 {% else %}
 <div class="row row-cards">
@@ -20,7 +21,33 @@
               </div>
               <div class="plex-stat-row-main">
                 <div class="text-truncate">{{ it.title }}{% if it.year is defined and it.year %} <span class="plex-session-year">({{ it.year }})</span>{% endif %}</div>
-                <div class="text-secondary small">{{ 'tautulli.stats.plays_count'|trans({count: it.plays}) }}</div>
+                <div class="text-secondary small">{{ metric == 'duration' ? it.durationLabel : 'tautulli.stats.plays_count'|trans({count: it.plays}) }}</div>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+  {% endfor %}
+
+  {# Most-popular movies + shows: ranked by distinct user count #}
+  {% for group in [{title: 'tautulli.stats.popular_movie', items: stats.popularMovies, type: 'movie'}, {title: 'tautulli.stats.popular_show', items: stats.popularShows, type: 'episode'}] %}
+    {% if group.items is not empty %}
+    <div class="col-md-6 col-xl-3">
+      <div class="card h-100">
+        <div class="card-header"><h3 class="card-title">{{ group.title|trans }}</h3></div>
+        <div class="card-body">
+          {% for it in group.items %}
+            <div class="plex-stat-row {% if it.ratingKey %}plex-clickable{% endif %}"
+                 {% if it.ratingKey %}data-plex-rating-key="{{ it.ratingKey }}" role="button" tabindex="0"{% endif %}>
+              <div class="plex-poster plex-poster-sm">
+                {{ ico.icon(group.type == 'movie' ? 'movie' : 'device-tv', '', 18) }}
+                {% if it.posterPath %}<img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: it.posterPath}) }}" alt="" loading="lazy">{% endif %}
+              </div>
+              <div class="plex-stat-row-main">
+                <div class="text-truncate">{{ it.title }}{% if it.year is defined and it.year %} <span class="plex-session-year">({{ it.year }})</span>{% endif %}</div>
+                <div class="text-secondary small">{{ 'tautulli.stats.users_count'|trans({count: it.usersWatched}) }}</div>
               </div>
             </div>
           {% endfor %}
@@ -40,7 +67,7 @@
           {% for it in group.items %}
             <div class="d-flex justify-content-between align-items-center py-1">
               <span class="text-truncate">{{ attribute(it, group.key) }}</span>
-              <span class="badge bg-secondary-lt ms-2">{{ 'tautulli.stats.plays_count'|trans({count: it.plays}) }}</span>
+              <span class="badge bg-secondary-lt ms-2">{{ metric == 'duration' ? it.durationLabel : 'tautulli.stats.plays_count'|trans({count: it.plays}) }}</span>
             </div>
           {% endfor %}
         </div>
@@ -48,5 +75,22 @@
     </div>
     {% endif %}
   {% endfor %}
+
+  {# Most concurrent streams: peak counts #}
+  {% if stats.mostConcurrent is not empty %}
+  <div class="col-md-6 col-xl-3">
+    <div class="card h-100">
+      <div class="card-header"><h3 class="card-title">{{ 'tautulli.stats.most_concurrent'|trans }}</h3></div>
+      <div class="card-body">
+        {% for it in stats.mostConcurrent %}
+          <div class="d-flex justify-content-between align-items-center py-1">
+            <span class="text-truncate">{{ it.title }}</span>
+            <span class="badge bg-secondary-lt ms-2">{{ it.count }}</span>
+          </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endif %}
