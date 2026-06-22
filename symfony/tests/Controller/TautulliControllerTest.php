@@ -85,6 +85,11 @@ class TautulliControllerTest extends AbstractWebTestCase
         // Unconfigured -> empty stats -> the "no data" copy renders, no 500.
         $html = (string) $this->client->getResponse()->getContent();
         self::assertStringNotContainsString('Exception', $html);
+        // Verify the full normalizer shape was iterated: all 7 stat groups
+        // empty → _stats.html.twig emits the empty-state div.
+        // The tautulli.stats.empty key resolves to "No statistics for this period"
+        // in the test env (translations are already registered).
+        self::assertStringContainsString('No statistics for this period', $html);
     }
 
     /**
