@@ -28,6 +28,17 @@
         <button type="button" class="btn btn-sm" data-range="90" aria-pressed="false">{{ 'tautulli.range.90d'|trans }}</button>
       </div>
     </div>
+      <div class="col-auto">
+        <div class="btn-group btn-group-sm plex-range" role="group" data-tautulli-metric>
+          <button type="button" class="btn btn-sm active" data-metric="plays" aria-pressed="true">{{ 'tautulli.metric.plays'|trans }}</button>
+          <button type="button" class="btn btn-sm" data-metric="duration" aria-pressed="false">{{ 'tautulli.metric.duration'|trans }}</button>
+        </div>
+      </div>
+      <div class="col-auto">
+        <select class="form-select form-select-sm" data-tautulli-user aria-label="{{ 'tautulli.filter.user'|trans }}">
+          <option value="">{{ 'tautulli.filter.all_users'|trans }}</option>
+        </select>
+      </div>
   </div>
 </div>
 
@@ -96,6 +107,46 @@
       </div>
     </div>
 
+    {# 5b. Resolution breakdown — source vs stream #}
+    <div class="row row-cards mb-3">
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.source_res'|trans }}</h3></div>
+          <div class="card-body">
+            <div id="tautulli-source-res-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-source-res"></canvas></div>
+            <div data-tautulli-source-res-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-lg-6">
+        <div class="card h-100">
+          <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.stream_res'|trans }}</h3></div>
+          <div class="card-body">
+            <div id="tautulli-stream-res-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-stream-res"></canvas></div>
+            <div data-tautulli-stream-res-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    {# 5c. Streams by user × stream type #}
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.users_stream_type'|trans }}</h3></div>
+      <div class="card-body">
+        <div id="tautulli-users-stream-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-users-stream-type"></canvas></div>
+        <div data-tautulli-users-stream-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
+      </div>
+    </div>
+
+    {# 5d. Concurrent streams over time #}
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.concurrent'|trans }}</h3></div>
+      <div class="card-body">
+        <div id="tautulli-concurrent-wrap" class="tautulli-chart-wrap"><canvas id="tautulli-concurrent"></canvas></div>
+        <div data-tautulli-concurrent-empty class="text-center text-secondary py-4" style="display:none;">{{ 'tautulli.plays.empty'|trans }}</div>
+      </div>
+    </div>
+
     {# 6. History — full-width dense grid #}
     <div class="card mb-3">
       <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.history'|trans }}</h3></div>
@@ -117,6 +168,14 @@
       </div>
     </div>
 
+    {# 8. Users overview #}
+    <div class="card mb-3">
+      <div class="card-header"><h3 class="card-title">{{ 'tautulli.section.users'|trans }}</h3></div>
+      <div class="card-body" data-tautulli-users>
+        <div class="text-center text-secondary py-4"><span class="spinner-border"></span></div>
+      </div>
+    </div>
+
   </div>
 </div>
 
@@ -129,12 +188,26 @@
 <script>
 (function () {
   var HISTORY_PAGE = 25;
-  var range = 30;
+  var state = { range: 30, metric: 'plays', userId: '' };
   var playsMode = 'media';
   var historyStart = 0;
   var charts = {};
 
   function frag(sel) { return document.querySelector(sel); }
+
+  // Append range/metric/user to an endpoint query string.
+  function qs(extra) {
+    var p = 'range=' + state.range + '&metric=' + state.metric;
+    if (state.userId) p += '&user=' + encodeURIComponent(state.userId);
+    return extra ? p + '&' + extra : p;
+  }
+
+  function fmtDuration(secs) {
+    secs = parseInt(secs, 10) || 0;
+    if (secs <= 0) return '0m';
+    var h = Math.floor(secs / 3600), m = Math.floor((secs % 3600) / 60);
+    return h > 0 ? (h + 'h ' + m + 'm') : (m + 'm');
+  }
 
   function loadFragment(url, target) {
     return fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
@@ -143,26 +216,29 @@
       .catch(function () { return ''; });
   }
 
-  // Now Playing — initial render is server-side; poll every 10s.
   function refreshNow() {
     if (document.hidden) return;
     loadFragment('/tautulli/api/now-playing', frag('[data-tautulli-now]'));
   }
-
-  // Stats — fetch on load + on range change.
   function refreshStats() {
-    loadFragment('/tautulli/api/stats?range=' + range, frag('[data-tautulli-stats]'));
+    loadFragment('/tautulli/api/stats?' + qs(), frag('[data-tautulli-stats]'));
   }
-
-  // Libraries — once.
   function refreshLibraries() {
     loadFragment('/tautulli/api/libraries', frag('[data-tautulli-libraries]'));
   }
+  function refreshUsers() {
+    loadFragment('/tautulli/api/users', frag('[data-tautulli-users]')).then(function () {
+      var box = frag('[data-tautulli-users]');
+      if (!box) return;
+      box.querySelectorAll('[data-tautulli-secs]').forEach(function (el) {
+        el.textContent = fmtDuration(el.getAttribute('data-tautulli-secs'));
+      });
+    });
+  }
 
-  // History — replace on (re)load, append on "Load more".
   function loadHistory(append) {
     if (!append) historyStart = 0;
-    var url = '/tautulli/api/history?length=' + HISTORY_PAGE + '&start=' + historyStart;
+    var url = '/tautulli/api/history?length=' + HISTORY_PAGE + '&start=' + historyStart + (state.userId ? '&user=' + encodeURIComponent(state.userId) : '');
     fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.text() : ''; })
       .then(function (html) {
@@ -186,12 +262,14 @@
       });
   }
 
-  // Charts — fetch JSON, (re)draw a stacked bar into the given canvas.
   var SERIES_COLORS = {
     'TV': '#22c55e', 'Movies': '#6366f1', 'Music': '#f59e0b',
-    'Direct Play': '#22c55e', 'Direct Stream': '#0ea5e9', 'Transcode': '#f59e0b'
+    'Direct Play': '#22c55e', 'Direct Stream': '#0ea5e9', 'Transcode': '#f59e0b',
+    '4k': '#a855f7', '4K': '#a855f7', '1080': '#0ea5e9', '1080p': '#0ea5e9',
+    '720': '#22c55e', '720p': '#22c55e', 'sd': '#94a3b8', 'SD': '#94a3b8'
   };
   function drawStackedBar(opts) {
+    var isDuration = state.metric === 'duration' && opts.metricAware !== false;
     fetch(opts.url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
@@ -211,8 +289,14 @@
           data: { labels: d.categories, datasets: datasets },
           options: {
             responsive: true, maintainAspectRatio: false,
-            plugins: { legend: { display: datasets.length > 1 } },
-            scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { precision: 0 } } }
+            plugins: {
+              legend: { display: datasets.length > 1 },
+              tooltip: isDuration ? { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + fmtDuration(ctx.parsed.y); } } } : {}
+            },
+            scales: {
+              x: { stacked: true },
+              y: { stacked: true, beginAtZero: true, ticks: isDuration ? { callback: function (v) { return fmtDuration(v); } } : { precision: 0 } }
+            }
           }
         });
       })
@@ -220,57 +304,95 @@
   }
 
   function refreshPlays() {
-    drawStackedBar({ id: 'tautulli-plays', url: '/tautulli/api/plays?range=' + range + '&mode=' + playsMode, wrap: '#tautulli-plays-wrap', empty: '[data-tautulli-plays-empty]' });
+    drawStackedBar({ id: 'tautulli-plays', url: '/tautulli/api/plays?' + qs('mode=' + playsMode), wrap: '#tautulli-plays-wrap', empty: '[data-tautulli-plays-empty]' });
   }
   function refreshActivityHour() {
-    drawStackedBar({ id: 'tautulli-activity-hour', url: '/tautulli/api/activity-hour?range=' + range, wrap: '#tautulli-activity-hour-wrap', empty: '[data-tautulli-activity-hour-empty]' });
+    drawStackedBar({ id: 'tautulli-activity-hour', url: '/tautulli/api/activity-hour?' + qs(), wrap: '#tautulli-activity-hour-wrap', empty: '[data-tautulli-activity-hour-empty]' });
   }
   function refreshActivityDow() {
-    drawStackedBar({ id: 'tautulli-activity-dow', url: '/tautulli/api/activity-dow?range=' + range, wrap: '#tautulli-activity-dow-wrap', empty: '[data-tautulli-activity-dow-empty]' });
+    drawStackedBar({ id: 'tautulli-activity-dow', url: '/tautulli/api/activity-dow?' + qs(), wrap: '#tautulli-activity-dow-wrap', empty: '[data-tautulli-activity-dow-empty]' });
   }
   function refreshClients() {
-    drawStackedBar({ id: 'tautulli-clients-stream-type', url: '/tautulli/api/clients-stream-type?range=' + range, wrap: '#tautulli-clients-wrap', empty: '[data-tautulli-clients-empty]' });
+    drawStackedBar({ id: 'tautulli-clients-stream-type', url: '/tautulli/api/clients-stream-type?' + qs(), wrap: '#tautulli-clients-wrap', empty: '[data-tautulli-clients-empty]' });
   }
-  function refreshCharts() { refreshPlays(); refreshActivityHour(); refreshActivityDow(); refreshClients(); }
+  function refreshSourceRes() {
+    drawStackedBar({ id: 'tautulli-source-res', url: '/tautulli/api/plays-source-res?' + qs(), wrap: '#tautulli-source-res-wrap', empty: '[data-tautulli-source-res-empty]' });
+  }
+  function refreshStreamRes() {
+    drawStackedBar({ id: 'tautulli-stream-res', url: '/tautulli/api/plays-stream-res?' + qs(), wrap: '#tautulli-stream-res-wrap', empty: '[data-tautulli-stream-res-empty]' });
+  }
+  function refreshUsersStream() {
+    drawStackedBar({ id: 'tautulli-users-stream-type', url: '/tautulli/api/users-stream-type?' + qs(), wrap: '#tautulli-users-stream-wrap', empty: '[data-tautulli-users-stream-empty]' });
+  }
+  function refreshConcurrent() {
+    // Concurrent is always a count — never reformat as duration.
+    drawStackedBar({ id: 'tautulli-concurrent', url: '/tautulli/api/concurrent?' + qs(), wrap: '#tautulli-concurrent-wrap', empty: '[data-tautulli-concurrent-empty]', metricAware: false });
+  }
+  function refreshCharts() {
+    refreshPlays(); refreshActivityHour(); refreshActivityDow(); refreshClients();
+    refreshSourceRes(); refreshStreamRes(); refreshUsersStream(); refreshConcurrent();
+  }
+
+  // Everything that depends on range/metric/user.
+  function refreshAll() { refreshStats(); refreshCharts(); refreshUsers(); loadHistory(false); }
 
   // Range toggle.
   var rangeBar = frag('[data-tautulli-range]');
   if (rangeBar) {
     rangeBar.addEventListener('click', function (e) {
-      var btn = e.target.closest('[data-range]');
-      if (!btn) return;
-      range = parseInt(btn.getAttribute('data-range'), 10) || 30;
+      var btn = e.target.closest('[data-range]'); if (!btn) return;
+      state.range = parseInt(btn.getAttribute('data-range'), 10) || 30;
       rangeBar.querySelectorAll('[data-range]').forEach(function (b) {
-        var on = b === btn;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        var on = b === btn; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
-      refreshStats();
-      refreshCharts();
+      refreshStats(); refreshCharts();
     });
+  }
+
+  // Metric toggle.
+  var metricBar = frag('[data-tautulli-metric]');
+  if (metricBar) {
+    metricBar.addEventListener('click', function (e) {
+      var btn = e.target.closest('[data-metric]'); if (!btn) return;
+      state.metric = btn.getAttribute('data-metric') === 'duration' ? 'duration' : 'plays';
+      metricBar.querySelectorAll('[data-metric]').forEach(function (b) {
+        var on = b === btn; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
+      refreshStats(); refreshCharts();
+    });
+  }
+
+  // User filter.
+  var userSel = frag('[data-tautulli-user]');
+  if (userSel) {
+    userSel.addEventListener('change', function () { state.userId = userSel.value || ''; refreshAll(); });
+    fetch('/tautulli/api/user-names', { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (list) {
+        (list || []).forEach(function (u) {
+          if (!u || !u.id || !u.name) return;
+          var o = document.createElement('option');
+          o.value = u.id; o.textContent = u.name; userSel.appendChild(o);
+        });
+      })
+      .catch(function () {});
   }
 
   // Plays mode toggle (Media Type / Stream Type).
   var modeBar = frag('[data-tautulli-plays-mode]');
   if (modeBar) {
     modeBar.addEventListener('click', function (e) {
-      var btn = e.target.closest('[data-mode]');
-      if (!btn) return;
+      var btn = e.target.closest('[data-mode]'); if (!btn) return;
       playsMode = btn.getAttribute('data-mode') === 'stream' ? 'stream' : 'media';
       modeBar.querySelectorAll('[data-mode]').forEach(function (b) {
-        var on = b === btn;
-        b.classList.toggle('active', on);
-        b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        var on = b === btn; b.classList.toggle('active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false');
       });
       refreshPlays();
     });
   }
 
   // Initial hydration.
-  refreshStats();
-  refreshCharts();
-  refreshLibraries();
-  loadHistory(false);
+  refreshStats(); refreshCharts(); refreshLibraries(); refreshUsers(); loadHistory(false);
   var moreBtn = frag('[data-tautulli-history-more]');
   if (moreBtn) moreBtn.addEventListener('click', function () { loadHistory(true); });
 
