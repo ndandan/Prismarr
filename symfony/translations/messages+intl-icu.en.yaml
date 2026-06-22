@@ -497,6 +497,17 @@ tautulli:
     activity_hour: Plays by hour of day
     activity_dow: Plays by day of week
     clients: Plays by platform & stream type
+    source_res: Plays by source resolution
+    stream_res: Plays by stream resolution
+    users_stream_type: Streams by user
+    concurrent: Concurrent streams
+    users: Users
+  metric:
+    plays: Play Count
+    duration: Play Duration
+  filter:
+    user: Filter by user
+    all_users: All users
   stats:
     top_movie: Most watched movies
     top_show: Most watched shows
@@ -504,6 +515,18 @@ tautulli:
     top_platform: Top platforms
     plays_count: '{count, plural, one {# play} other {# plays}}'
     empty: No statistics for this period
+    popular_movie: Most Popular Movies
+    popular_show: Most Popular Shows
+    most_concurrent: Most Concurrent Streams
+    users_count: '{count, plural, one {# user} other {# users}}'
+  users:
+    empty: No user activity yet.
+    col:
+      user: User
+      last_seen: Last seen
+      last_played: Last played
+      plays: Plays
+      duration: Watch time
   plays:
     empty: No play data for this period
     mode:
