@@ -450,6 +450,49 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Per-user totals for the Users overview table, normalized + sanitized.
+     * Empty list covers disabled/unconfigured/unreachable.
+     *
+     * @return list<array{friendlyName:?string,lastSeen:int,lastPlayed:?string,plays:int,durationSeconds:int}>
+     */
+    public function getUsersTable(int $length = 25): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return [];
+        }
+        $resp = $this->request([
+            'cmd'          => 'get_users_table',
+            'order_column' => 'plays',
+            'order_dir'    => 'desc',
+            'length'       => (string) max(1, min(100, $length)),
+        ]);
+        if ($resp === null || $resp['ok'] !== true) {
+            return [];
+        }
+        return self::normalizeUsersTable(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Friendly-name + opaque user_id pairs for the page's user filter dropdown.
+     *
+     * @return list<array{name:string,id:string}>
+     */
+    public function getUserNames(): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return [];
+        }
+        $resp = $this->request(['cmd' => 'get_user_names']);
+        if ($resp === null || $resp['ok'] !== true) {
+            return [];
+        }
+        // get_user_names returns a bare list as `data`, not a {data:...} envelope.
+        return self::normalizeUserNames(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
      * Pure transform: get_libraries `data` → sanitized rows. Names + counts
      * only; section ids, thumbs and paths are dropped.
      *
