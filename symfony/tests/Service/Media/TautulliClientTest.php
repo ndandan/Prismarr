@@ -460,6 +460,7 @@ class TautulliClientTest extends TestCase
         $flat = json_encode(TautulliClient::normalizeHomeStats($this->homeStatsFixture()));
         self::assertStringNotContainsString('plexlogin_secret', $flat);
         self::assertStringNotContainsString('/data/media', $flat);
+        self::assertStringNotContainsString('/data/x.mkv', $flat);
         self::assertStringNotContainsString('plex://', $flat);
         self::assertStringNotContainsString('avatar', $flat);
         foreach (TautulliClient::normalizeHomeStats($this->homeStatsFixture())['topUsers'] as $u) {
