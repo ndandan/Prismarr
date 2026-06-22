@@ -616,8 +616,8 @@ class TautulliClientTest extends TestCase
 
     public function testGetHistoryAcceptsStartOffset(): void
     {
-        // New signature accepts (length, start). On an unconfigured client it
-        // returns [] without error — proves the 2-arg signature exists.
+        // Signature accepts (length, start, userId). On an unconfigured client it
+        // returns [] without error — proves the 2-arg and 3-arg signatures exist.
         $repo = $this->createMock(SettingRepository::class);
         $repo->method('getAll')->willReturn([]);
         $client = new TautulliClient(
@@ -626,6 +626,7 @@ class TautulliClientTest extends TestCase
             null,
         );
         self::assertSame([], $client->getHistory(25, 25));
+        self::assertSame([], $client->getHistory(25, 25, '99'));
     }
 
     public function testNormalizesDynamicRangeAndTranscodeCodecs(): void
