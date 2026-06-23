@@ -184,11 +184,18 @@ a request UI (Seerr).
   Direct Stream / Transcode breakdown, total / LAN / WAN bandwidth) plus a card
   per session showing quality, an HDR/SDR badge and, when transcoding, the
   source→target codec
-- Watch statistics with a 7 / 30 / 90-day toggle: most-watched movies and
-  shows, most-active users, top platforms
+- Watch statistics with a 7 / 30 / 90-day toggle and a Play Count ⇄ Play
+  Duration switch: most-watched movies and shows, most-popular movies and shows
+  (ranked by distinct viewers), most-active users, top platforms, and most
+  concurrent streams
 - Graphs: plays over time with a Media-type ⇄ Stream-type toggle, plays by hour
-  of day and by day of week, and a platform × stream-type "problem clients"
-  chart
+  of day and by day of week, a platform × stream-type "problem clients" chart,
+  plays by source and stream resolution, streams by user, and concurrent
+  streams over time
+- A page-wide **per-user filter** that scopes every section — statistics,
+  graphs, the users table and history — to a single user, plus a privacy-safe
+  Users overview table (friendly name, last seen, last played, plays, watch
+  time); the opaque Tautulli user id is a filter token only, never displayed
 - A dense watch-history grid and a per-library item / episode count
 - Every title opens the in-app info modal (synopsis, ratings, cast/crew); each
   section fails open independently, so a down Tautulli never breaks the page
