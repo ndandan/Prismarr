@@ -44,7 +44,7 @@ final class ThemeServiceTest extends TestCase
 
     public function testLightPresetSetsLightFlag(): void
     {
-        $r = $this->serviceFor('clean_light')->resolve();
+        $r = $this->serviceFor('catppuccin_latte')->resolve();
         self::assertTrue($r['light']);
     }
 

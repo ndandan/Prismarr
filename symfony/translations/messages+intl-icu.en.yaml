@@ -778,10 +778,21 @@ admin:
       preset:
         midnight: Midnight
         nord: Nord
+        catppuccin_latte: Catppuccin Latte
+        catppuccin_frappe: Catppuccin Frappé
+        catppuccin_macchiato: Catppuccin Macchiato
         catppuccin_mocha: Catppuccin Mocha
-        gruvbox: Gruvbox
+        dracula: Dracula
+        gruvbox_dark: Gruvbox Dark
+        kanagawa_dark: Kanagawa Dark
+        teal_city: Teal City
+        camouflage: Camouflage
+        tucan: Tucan
+        shades_of_purple: Shades of Purple
+        neon_pink: Neon Pink
         solarized_light: Solarized Light
-        clean_light: Clean Light
+        peachy: Peachy
+        zebra: Zebra
     qbit_refresh:
       label: qBittorrent refresh
       help: Auto-polling frequency on the Downloads page.
