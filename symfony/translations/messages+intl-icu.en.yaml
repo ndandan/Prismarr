@@ -774,6 +774,27 @@ admin:
         '12h': '12h (2:30 PM)'
     theme_color:
       label: Primary colour
+    theme:
+      label: Theme
+      help: Colour scheme for the whole interface.
+      preset:
+        midnight: Midnight
+        nord: Nord
+        catppuccin_latte: Catppuccin Latte
+        catppuccin_frappe: Catppuccin Frappé
+        catppuccin_macchiato: Catppuccin Macchiato
+        catppuccin_mocha: Catppuccin Mocha
+        dracula: Dracula
+        gruvbox_dark: Gruvbox Dark
+        kanagawa_dark: Kanagawa Dark
+        teal_city: Teal City
+        camouflage: Camouflage
+        tucan: Tucan
+        shades_of_purple: Shades of Purple
+        neon_pink: Neon Pink
+        solarized_light: Solarized Light
+        peachy: Peachy
+        zebra: Zebra
     qbit_refresh:
       label: qBittorrent refresh
       help: Auto-polling frequency on the Downloads page.

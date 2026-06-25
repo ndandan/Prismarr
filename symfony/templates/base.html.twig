@@ -1,6 +1,6 @@
 {% import '_icons.html.twig' as ico %}
 <!doctype html>
-<html lang="{{ app.request.locale|default('fr') }}">
+<html lang="{{ app.request.locale|default('fr') }}" data-bs-theme="{{ theme().light ? 'light' : 'dark' }}">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
@@ -161,68 +161,27 @@
     html.sidebar-collapsed aside.navbar-vertical .sidebar-plex-pill span { display: none; }
 
     /* ── Header sticky (recherche + profil) ── */
-    .page-header:has(#topbar-actions) { position: sticky; top: 0; z-index: 40; background: rgba(17,17,17,.95); backdrop-filter: blur(12px); margin: 0; border-bottom: 1px solid rgba(255,255,255,.06); }
+    .page-header:has(#topbar-actions) { position: sticky; top: 0; z-index: 40; background: var(--prismarr-topbar-bg); backdrop-filter: blur(12px); margin: 0; border-bottom: 1px solid var(--prismarr-border); }
     .page-header:has(#topbar-actions) .container-xl { padding-top: .5rem; padding-bottom: .5rem; }
     .page-header:has(#topbar-actions) .page-title { margin: 0; padding: 0; line-height: 1; }
     .page-header:has(#topbar-actions) .row { margin: 0; align-items: center; }
     /* ── Mode clair global — plus de profondeur et contraste ── */
-    [data-bs-theme="light"] .page-header:has(#topbar-actions) { background: rgba(250,250,252,.97); border-bottom: 1px solid rgba(0,0,0,.1); box-shadow: 0 1px 4px rgba(0,0,0,.05); }
+    [data-bs-theme="light"] .page-header:has(#topbar-actions) { border-bottom: 1px solid var(--prismarr-border); box-shadow: 0 1px 4px rgba(0,0,0,.05); }
     :root[data-bs-theme="light"] .card { border-color: rgba(0,0,0,.1); box-shadow: 0 1px 6px rgba(0,0,0,.06); }
     :root[data-bs-theme="light"] .card:hover { box-shadow: 0 2px 12px rgba(0,0,0,.1); }
-    :root[data-bs-theme="light"] .card-header { border-color: rgba(0,0,0,.08); background: rgba(0,0,0,.015); }
-    :root[data-bs-theme="light"] .page-wrapper { background: #f0f2f7; }
+    :root[data-bs-theme="light"] .card-header { border-color: var(--prismarr-border); background: rgba(0,0,0,.015); }
+    :root[data-bs-theme="light"] .page-wrapper { background: var(--tblr-body-bg); }
     :root[data-bs-theme="light"] .page-body { background: transparent; }
     :root[data-bs-theme="light"] .table { --tblr-table-striped-bg: rgba(0,0,0,.02); }
     :root[data-bs-theme="light"] .table thead th { background: rgba(0,0,0,.03); color: #444; font-weight: 600; border-bottom: 2px solid rgba(0,0,0,.1); }
-    :root[data-bs-theme="light"] .navbar-vertical { background: #fff !important; border-right: 1px solid rgba(0,0,0,.08); box-shadow: 2px 0 8px rgba(0,0,0,.04); }
+    :root[data-bs-theme="light"] .navbar-vertical { background: var(--prismarr-surface) !important; border-right: 1px solid var(--prismarr-border); box-shadow: 2px 0 8px rgba(0,0,0,.04); }
     :root[data-bs-theme="light"] .badge.bg-secondary-lt { background: rgba(0,0,0,.06) !important; color: #555 !important; }
     :root[data-bs-theme="light"] .text-secondary { color: #5a5a6e !important; }
     :root[data-bs-theme="light"] .btn-ghost-secondary:hover { background: rgba(0,0,0,.05) !important; }
   </style>
 
-  {# Light/dark theme handling — all in <head> to survive Turbo navigations #}
+  {# Modal and backdrop cleanup — in <head> to survive Turbo navigations #}
   <script>
-    (function () {
-      // 1. Apply the theme immediately (before CSS) to avoid any flash
-      var t = localStorage.getItem('tablerTheme') || 'dark';
-      document.documentElement.setAttribute('data-bs-theme', t);
-
-      // 2. Sync moon/sun icons after each load/navigation
-      var THEME_LABEL_LIGHT = {{ 'topbar.theme.label_light'|trans|json_encode|raw }};
-      var THEME_LABEL_DARK  = {{ 'topbar.theme.label_dark'|trans|json_encode|raw }};
-      function syncIcons() {
-        var theme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
-        var isDark = theme === 'dark';
-        var moon  = document.getElementById('icon-moon');
-        var sun   = document.getElementById('icon-sun');
-        var label = document.getElementById('theme-label');
-        if (moon) moon.style.display = isDark ? '' : 'none';
-        if (sun)  sun.style.display  = isDark ? 'none' : '';
-        if (label) label.textContent = isDark ? THEME_LABEL_LIGHT : THEME_LABEL_DARK;
-        var moonT = document.getElementById('icon-moon-top');
-        var sunT  = document.getElementById('icon-sun-top');
-        if (moonT) moonT.style.display = isDark ? '' : 'none';
-        if (sunT)  sunT.style.display  = isDark ? 'none' : '';
-      }
-
-      // 3. Click handler via event delegation on document
-      //    → survives Turbo navigations, never duplicated since it's in the <head>
-      document.addEventListener('click', function (e) {
-        if (e.target.closest('#theme-toggle') || e.target.closest('#theme-toggle-top')) {
-          e.preventDefault();
-          var next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
-          document.documentElement.setAttribute('data-bs-theme', next);
-          localStorage.setItem('tablerTheme', next);
-          syncIcons();
-        }
-      });
-
-      // 4. Sync icons on first load and after each Turbo navigation
-      document.addEventListener('DOMContentLoaded', syncIcons);
-      document.addEventListener('turbo:load', syncIcons);
-
-    })();
-
     // Backdrop and modal cleanup
     (function() {
       // Before each modal opens: clean up extra backdrops
@@ -260,22 +219,32 @@
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler.min.css') }}"/>
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler-themes.min.css') }}"/>
 
-  {# Override Tabler dark blue background + visual tweaks #}
-  <style>
-    /* User-picked theme color — MUST be set after Tabler's own stylesheet,
-       otherwise its own `:root { --tblr-primary }` rule wins the cascade
-       and every page resets to Tabler's default blue. */
+  {# Theme variables + user-picked accent — MUST be set after Tabler's own
+     stylesheet, otherwise its own `:root { --tblr-primary }` rule wins the
+     cascade and every page resets to Tabler's default blue.
+
+     `data-turbo-track="reload"`: the theme is global, so this block is byte-for-byte
+     identical on every page and normal Turbo visits stay fast. But when the admin
+     changes the theme/accent, the saved page's block differs → Turbo forces a FULL
+     reload, which re-parses `<html data-bs-theme>` AND these vars together. Without
+     it, Turbo keeps the persistent <html> element and the old `data-bs-theme`
+     sticks, leaving text colours unreadable until a manual refresh. #}
+  <style data-turbo-track="reload">
     :root {
+      {% for _name, _value in theme().css %}{{ _name }}: {{ _value }};
+      {% endfor %}
       --tblr-primary: {{ display_pref('theme_color_hex') }};
       --tblr-primary-rgb: {{ display_pref('theme_color_rgb') }};
     }
+  </style>
 
+  {# Override Tabler dark blue background + visual tweaks #}
+  <style>
     [data-bs-theme="dark"] {
-      --tblr-body-bg:       #111111;
-      --tblr-secondary-bg:  #1a1a1a;
-      --tblr-tertiary-bg:   #1a1a1a;
-      --tblr-card-bg:       #1c1c1c;
-      --tblr-border-color:  rgba(255, 255, 255, 0.08);
+      --tblr-secondary-bg:  var(--prismarr-surface);
+      --tblr-tertiary-bg:   var(--prismarr-surface);
+      --tblr-card-bg:       var(--prismarr-surface);
+      --tblr-border-color:  var(--prismarr-border);
     }
 
     /* ── Topbar layout : title left · big search centered · actions right ── */
@@ -468,32 +437,32 @@
     .prismarr-health-row-state { font-size: .7rem; color: var(--tblr-secondary); }
 
     /* Ciblage direct — évite tout conflit de variable */
-    [data-bs-theme="dark"] body          { background-color: #111111 !important; }
-    [data-bs-theme="dark"] .page-wrapper { background-color: #111111 !important; }
-    [data-bs-theme="dark"] .page-body    { background-color: #111111 !important; }
+    [data-bs-theme="dark"] body          { background-color: var(--tblr-body-bg) !important; }
+    [data-bs-theme="dark"] .page-wrapper { background-color: var(--tblr-body-bg) !important; }
+    [data-bs-theme="dark"] .page-body    { background-color: var(--tblr-body-bg) !important; }
 
     /* Sidebar fond neutre */
     [data-bs-theme="dark"] .navbar-vertical {
-      background-color: #0d0d0d !important;
-      border-right: 1px solid rgba(255,255,255,0.07) !important;
+      background-color: var(--prismarr-sidebar) !important;
+      border-right: 1px solid var(--prismarr-border) !important;
     }
-    [data-bs-theme="light"] body          { background-color: #f4f6fb !important; }
-    [data-bs-theme="light"] .page-wrapper { background-color: #f4f6fb !important; }
-    [data-bs-theme="light"] .page-body    { background-color: #f4f6fb !important; }
+    [data-bs-theme="light"] body          { background-color: var(--tblr-body-bg) !important; }
+    [data-bs-theme="light"] .page-wrapper { background-color: var(--tblr-body-bg) !important; }
+    [data-bs-theme="light"] .page-body    { background-color: var(--tblr-body-bg) !important; }
     [data-bs-theme="light"] .navbar-vertical {
-      background-color: #ffffff !important;
-      border-right: 1px solid rgba(0,0,0,0.08) !important;
+      background-color: var(--prismarr-surface) !important;
+      border-right: 1px solid var(--prismarr-border) !important;
     }
 
     /* Cards : fond légèrement surélevé + ombre douce */
     [data-bs-theme="dark"] .card {
-      background-color: #1c1c1c !important;
-      border: 1px solid rgba(255,255,255,0.08) !important;
+      background-color: var(--prismarr-surface) !important;
+      border: 1px solid var(--prismarr-border) !important;
       box-shadow: 0 2px 16px rgba(0,0,0,0.35) !important;
     }
     [data-bs-theme="dark"] .card-footer  {
-      background-color: #161616 !important;
-      border-top: 1px solid rgba(255,255,255,0.06) !important;
+      background-color: var(--prismarr-surface-2) !important;
+      border-top: 1px solid var(--prismarr-border) !important;
     }
     [data-bs-theme="light"] .card {
       box-shadow: 0 1px 8px rgba(0,0,0,0.08);
@@ -514,8 +483,8 @@
     /* Scrollbar discrète */
     ::-webkit-scrollbar { width: 6px; height: 6px; }
     ::-webkit-scrollbar-track { background: transparent; }
-    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 99px; }
-    [data-bs-theme="light"] ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); }
+    ::-webkit-scrollbar-thumb { background: var(--prismarr-border); border-radius: 99px; }
+    [data-bs-theme="light"] ::-webkit-scrollbar-thumb { background: var(--prismarr-border); }
 
     /* Sous-menu Infrastructure — décalé + plus petit */
     #infra-submenu .nav-link {
@@ -1136,19 +1105,6 @@
                   </div>
                 </div>
 
-                {# Theme #}
-                <a href="#" id="theme-toggle-top" class="btn btn-icon btn-ghost-secondary" title="{{ 'topbar.theme.toggle'|trans }}">
-                  <svg id="icon-moon-top" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
-                  </svg>
-                  <svg id="icon-sun-top" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
-                       fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
-                    <circle cx="12" cy="12" r="4"/>
-                    <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
-                  </svg>
-                </a>
-
                 {# Profile #}
                 <div class="dropdown" style="position:relative;">
                   <button type="button" class="btn btn-icon btn-ghost-secondary" data-prismarr-dropdown="profile-menu">
@@ -1389,8 +1345,6 @@
       'search.forget':         'topbar.search.forget'|trans,
       'search.in_library_badge': 'topbar.search.in_library_badge'|trans,
       'search.not_added_badge':  'topbar.search.not_added_badge'|trans,
-      'theme.label_light':     'topbar.theme.label_light'|trans,
-      'theme.label_dark':      'topbar.theme.label_dark'|trans,
       'health.all_ok':         'topbar.health.summary_ok'|trans,
       'health.loading':        'topbar.health.loading'|trans,
       'health.unknown':        'topbar.health.summary_unknown'|trans,
