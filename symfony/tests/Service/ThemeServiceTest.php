@@ -39,6 +39,7 @@ final class ThemeServiceTest extends TestCase
         self::assertSame('hsl(0, 0%, 5%)',   $r['css']['--prismarr-sidebar']);
         self::assertArrayHasKey('--prismarr-surface', $r['css']);
         self::assertArrayHasKey('--tblr-border-color', $r['css']);
+        self::assertSame('hsla(0, 0%, 6.5%, 0.95)', $r['css']['--prismarr-topbar-bg']);
     }
 
     public function testLightPresetSetsLightFlag(): void

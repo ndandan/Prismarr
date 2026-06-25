@@ -90,6 +90,11 @@ final class ThemeService implements ResetInterface
                 '--prismarr-surface'    => $surface,
                 '--prismarr-surface-2'  => $surface2,
                 '--prismarr-sidebar'    => $sidebar,
+                // Sticky topbar: the background tint with slight translucency so
+                // the blur(12px) backdrop still shows content scrolling beneath.
+                // Tracks the theme bg, so it no longer stays stuck near-black on
+                // non-midnight themes.
+                '--prismarr-topbar-bg'  => sprintf('hsla(%d, %s%%, %s%%, 0.95)', $bh, $this->num($bs), $this->num($bl)),
                 '--tblr-border-color'   => $border,
                 '--prismarr-border'     => $border,
                 '--tblr-body-color'     => $bodyColor,
