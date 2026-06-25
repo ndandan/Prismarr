@@ -1,0 +1,23 @@
+{# History grid cells. `plex_history` is a list of normalized rows. Returns
+   nothing when empty so the "Load more" JS can detect the end of the list.
+   Each cell is a grid column carrying the info-modal trigger. #}
+{% import '_icons.html.twig' as ico %}
+{% for h in plex_history %}
+  <div class="col-6 col-md-4">
+    <div class="plex-hist-cell {% if h.ratingKey %}plex-clickable{% endif %}"
+         {% if h.ratingKey %}data-plex-rating-key="{{ h.ratingKey }}" role="button" tabindex="0"{% endif %}>
+      <div class="plex-poster plex-poster-sm">
+        {{ ico.icon(h.mediaType == 'movie' ? 'movie' : 'device-tv', '', 18) }}
+        {% if h.posterPath %}<img class="plex-poster-img" src="{{ path('app_tautulli_api_image', {img: h.posterPath}) }}" alt="" loading="lazy">{% endif %}
+      </div>
+      <div class="plex-hist-cell-main">
+        <div class="plex-hist-cell-title text-truncate">
+          {% if h.mediaType == 'episode' and h.grandparentTitle %}{{ h.grandparentTitle }}{% else %}{{ h.title }}{% endif %}{% if h.year %} <span class="plex-session-year">({{ h.year }})</span>{% endif %}
+        </div>
+        <div class="plex-hist-cell-meta text-secondary text-truncate">
+          {{ [h.userDisplayName, h.watchedAt|relative_date]|filter(v => v is not null)|join(' · ') }}
+        </div>
+      </div>
+    </div>
+  </div>
+{% endfor %}

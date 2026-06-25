@@ -114,6 +114,7 @@ queued for later.
 - **Dashboard:** hero spotlight, upcoming releases, pending Seerr requests, live service health, watchlist, trending and latest additions. Paints instantly, each widget hydrates on its own.
 - **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload) plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
 - **Discovery:** TMDb landing page with recommendations and trending, watchlist, an explorer with filters, and deep-links into your library.
+- **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
 - **Preferences:** theme, UI density, timezone, date format, English / French UI, settings export / import (credentials always stripped).
 - **Security:** Symfony auth with login rate-limiter, non-root container, dynamic CSP, SSRF protection on user-provided URLs, CSRF on every mutation.
 

@@ -82,6 +82,10 @@ class AdminSettingsController extends AbstractController
             ['key' => 'gluetun_url',      'type' => 'text',     'label' => 'admin.field.url'],
             ['key' => 'gluetun_api_key',  'type' => 'password', 'label' => 'admin.field.api_key_if_protected'],
         ],
+        'tautulli' => [
+            ['key' => 'tautulli_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8181'],
+            ['key' => 'tautulli_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
+        ],
     ];
 
     /**
@@ -127,6 +131,7 @@ class AdminSettingsController extends AbstractController
         'sabnzbd'     => 'SABnzbd',
         'nzbget'      => 'NZBGet',
         'gluetun'     => 'Gluetun',
+        'tautulli'    => 'Tautulli',
     ];
 
     /**
@@ -473,6 +478,7 @@ class AdminSettingsController extends AbstractController
             'qbittorrent'                                => ['qbittorrent_url', 'qbittorrent_user', 'qbittorrent_password'],
             'sabnzbd'                                    => ['sabnzbd_url', 'sabnzbd_api_key'],
             'nzbget'                                     => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
+            'tautulli'                                   => ['tautulli_url', 'tautulli_api_key'],
             default                                      => [],
         };
         $overrides = [];
@@ -521,7 +527,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget'];
+        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }
