@@ -46,11 +46,19 @@ final class ThemeService implements ResetInterface
         $light = $p['light'];
 
         [$bh, $bs, $bl] = $p['bg'];
-        // Surfaces: lift away from the background. Dark themes lighten,
-        // light themes darken — keeps cards distinct from the page.
-        $sign = $light ? -1 : 1;
-        $surface  = $this->hsl($bh, $bs, ColorMath::clamp($bl + $sign * 4));
-        $surface2 = $this->hsl($bh, $bs, ColorMath::clamp($bl + $sign * 7));
+        // Surface tiers. Dark themes: cards/footer lift ABOVE the background
+        // while the sidebar sits BELOW it — reproduces the hand-tuned
+        // #1c1c1c / #161616 / #0d0d0d palette for `midnight`. Light themes:
+        // everything trends toward white.
+        if ($light) {
+            $surface  = $this->hsl($bh, $bs, ColorMath::clamp($bl + 3));
+            $surface2 = $this->hsl($bh, $bs, ColorMath::clamp($bl + 1.5));
+            $sidebar  = $this->hsl($bh, $bs, ColorMath::clamp($bl + 3));
+        } else {
+            $surface  = $this->hsl($bh, $bs, ColorMath::clamp($bl + 4.5));
+            $surface2 = $this->hsl($bh, $bs, ColorMath::clamp($bl + 2));
+            $sidebar  = $this->hsl($bh, $bs, ColorMath::clamp($bl - 1.5));
+        }
 
         // Border + text are alpha overlays whose strength scales with the
         // contrast multiplier (glance's `contrast-multiplier`).
@@ -81,6 +89,7 @@ final class ThemeService implements ResetInterface
                 '--tblr-body-bg'        => $this->hsl($bh, $bs, $bl),
                 '--prismarr-surface'    => $surface,
                 '--prismarr-surface-2'  => $surface2,
+                '--prismarr-sidebar'    => $sidebar,
                 '--tblr-border-color'   => $border,
                 '--prismarr-border'     => $border,
                 '--tblr-body-color'     => $bodyColor,
