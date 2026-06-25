@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Controller\AdminSettingsController;
+use App\Service\ThemeService;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
@@ -36,6 +37,7 @@ class DisplayPreferencesService implements ResetInterface
 
     public function __construct(
         private readonly ConfigService $config,
+        private readonly ThemeService $theme,
     ) {}
 
     public function reset(): void
@@ -85,7 +87,13 @@ class DisplayPreferencesService implements ResetInterface
         $spec = AdminSettingsController::DISPLAY_OPTIONS['display_theme_color'];
         $chosen = $this->getThemeColor();
 
-        return $spec['options'][$chosen] ?? $spec['options'][$spec['default']];
+        // 'theme_default' (and any unknown value, which resolves to the
+        // default = theme_default) follows the active theme's primary.
+        if ($chosen === 'theme_default' || !isset($spec['options'][$chosen])) {
+            return $this->theme->resolve()['primary_hex'];
+        }
+
+        return $spec['options'][$chosen];
     }
 
     /**
@@ -95,9 +103,12 @@ class DisplayPreferencesService implements ResetInterface
     public function getThemeColorRgb(): string
     {
         $chosen = $this->getThemeColor();
-        $default = AdminSettingsController::DISPLAY_OPTIONS['display_theme_color']['default'];
 
-        return self::THEME_RGB[$chosen] ?? self::THEME_RGB[$default];
+        if ($chosen === 'theme_default' || !isset(self::THEME_RGB[$chosen])) {
+            return $this->theme->resolve()['primary_rgb'];
+        }
+
+        return self::THEME_RGB[$chosen];
     }
 
     /**

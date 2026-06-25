@@ -773,6 +773,16 @@ admin:
         '12h': '12h (2:30 PM)'
     theme_color:
       label: Couleur principale
+    theme:
+      label: Thème
+      help: "Palette de couleurs de toute l'interface."
+      preset:
+        midnight: Minuit
+        nord: Nord
+        catppuccin_mocha: Catppuccin Mocha
+        gruvbox: Gruvbox
+        solarized_light: Solarized (clair)
+        clean_light: Clair épuré
     qbit_refresh:
       label: Rafraîchissement qBittorrent
       help: Fréquence du polling automatique sur la page Téléchargements.
