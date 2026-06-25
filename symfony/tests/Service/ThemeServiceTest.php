@@ -34,6 +34,9 @@ final class ThemeServiceTest extends TestCase
         self::assertSame('#6366f1', $r['primary_hex']);
         self::assertSame('99, 102, 241', $r['primary_rgb']);
         self::assertSame('hsl(0, 0%, 6.5%)', $r['css']['--tblr-body-bg']);
+        self::assertSame('hsl(0, 0%, 11%)',  $r['css']['--prismarr-surface']);
+        self::assertSame('hsl(0, 0%, 8.5%)', $r['css']['--prismarr-surface-2']);
+        self::assertSame('hsl(0, 0%, 5%)',   $r['css']['--prismarr-sidebar']);
         self::assertArrayHasKey('--prismarr-surface', $r['css']);
         self::assertArrayHasKey('--tblr-border-color', $r['css']);
     }
