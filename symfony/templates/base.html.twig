@@ -219,18 +219,27 @@
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler.min.css') }}"/>
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler-themes.min.css') }}"/>
 
-  {# Override Tabler dark blue background + visual tweaks #}
-  <style>
-    /* Theme variables + user-picked accent — MUST be set after Tabler's own
-       stylesheet, otherwise its own `:root { --tblr-primary }` rule wins the
-       cascade and every page resets to Tabler's default blue. */
+  {# Theme variables + user-picked accent — MUST be set after Tabler's own
+     stylesheet, otherwise its own `:root { --tblr-primary }` rule wins the
+     cascade and every page resets to Tabler's default blue.
+
+     `data-turbo-track="reload"`: the theme is global, so this block is byte-for-byte
+     identical on every page and normal Turbo visits stay fast. But when the admin
+     changes the theme/accent, the saved page's block differs → Turbo forces a FULL
+     reload, which re-parses `<html data-bs-theme>` AND these vars together. Without
+     it, Turbo keeps the persistent <html> element and the old `data-bs-theme`
+     sticks, leaving text colours unreadable until a manual refresh. #}
+  <style data-turbo-track="reload">
     :root {
       {% for _name, _value in theme().css %}{{ _name }}: {{ _value }};
       {% endfor %}
       --tblr-primary: {{ display_pref('theme_color_hex') }};
       --tblr-primary-rgb: {{ display_pref('theme_color_rgb') }};
     }
+  </style>
 
+  {# Override Tabler dark blue background + visual tweaks #}
+  <style>
     [data-bs-theme="dark"] {
       --tblr-secondary-bg:  var(--prismarr-surface);
       --tblr-tertiary-bg:   var(--prismarr-surface);
