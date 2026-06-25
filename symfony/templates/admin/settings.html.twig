@@ -324,6 +324,9 @@
     border-color: currentColor;
     box-shadow: 0 0 0 2px var(--tblr-body-bg) inset, 0 2px 6px rgba(0,0,0,.25);
   }
+  .color-swatch-auto {
+    background: conic-gradient(from 0deg, #ef4444, #f59e0b, #22c55e, #3b82f6, #6366f1, #ec4899, #ef4444);
+  }
 </style>
 {% endblock %}
 
@@ -629,10 +632,11 @@
                       <input type="hidden" id="{{ key }}" name="{{ key }}" value="{{ display_values[key] }}"/>
                       <div class="color-swatches" data-color-target="{{ key }}">
                         {% for color_id, hex in spec.options %}
+                          {% set _is_auto = not (hex starts with '#') %}
                           <button type="button"
-                                  class="color-swatch {% if display_values[key] == color_id %}is-active{% endif %}"
+                                  class="color-swatch {% if _is_auto %}color-swatch-auto{% endif %} {% if display_values[key] == color_id %}is-active{% endif %}"
                                   data-color-value="{{ color_id }}"
-                                  style="background: {{ hex }};"
+                                  style="{% if not _is_auto %}background: {{ hex }};{% endif %}"
                                   aria-label="{{ color_id }}"
                                   title="{{ color_id }}"></button>
                         {% endfor %}
