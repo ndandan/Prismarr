@@ -5,6 +5,11 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+- **Whole-server lockup on Unraid when the data volume sits on a FUSE share (`/mnt/user`)**. PHP's native file session handler holds an exclusive `flock` on the session file for the entire request, and the dashboard fires ~6 widget fragments in parallel, so they all serialised on that one lock while their slow Radarr/Sonarr calls ran. On Unraid the session file lives on the shfs/FUSE share, where `flock` contention is expensive enough to peg every core and freeze the whole machine (mapping the volume to `/mnt/cache` "fixed" it only by bypassing FUSE). A new `SessionLockReleaseSubscriber` now closes the session right after authentication on read-only GET requests, releasing the lock immediately so the parallel fragments stop fighting over it. POSTs, the setup wizard and internal routes keep the session open and write normally. Unraid users should still map the data volume to `/mnt/cache/...` rather than `/mnt/user/...`.
+
 ## [1.1.1] - 2026-06-10
 
 ### Fixed
