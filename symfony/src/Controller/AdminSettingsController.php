@@ -208,8 +208,9 @@ class AdminSettingsController extends AbstractController
         'display_theme_color' => [
             'label'   => 'admin.display.theme_color.label',
             'type'    => 'color',
-            'default' => 'indigo',
+            'default' => 'theme_default',
             'options' => [
+                'theme_default' => 'auto',
                 'indigo' => '#6366f1',
                 'red'    => '#ef4444',
                 'green'  => '#22c55e',
@@ -217,6 +218,20 @@ class AdminSettingsController extends AbstractController
                 'pink'   => '#ec4899',
                 'blue'   => '#3b82f6',
             ],
+        ],
+        'display_theme' => [
+            'label'   => 'admin.display.theme.label',
+            'type'    => 'select',
+            'default' => 'midnight',
+            'options' => [
+                'midnight'         => 'admin.display.theme.preset.midnight',
+                'nord'             => 'admin.display.theme.preset.nord',
+                'catppuccin_mocha' => 'admin.display.theme.preset.catppuccin_mocha',
+                'gruvbox'          => 'admin.display.theme.preset.gruvbox',
+                'solarized_light'  => 'admin.display.theme.preset.solarized_light',
+                'clean_light'      => 'admin.display.theme.preset.clean_light',
+            ],
+            'help' => 'admin.display.theme.help',
         ],
         'display_qbit_refresh' => [
             'label'   => 'admin.display.qbit_refresh.label',
