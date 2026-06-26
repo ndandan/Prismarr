@@ -672,6 +672,7 @@ class AdminSettingsControllerTest extends TestCase
         $settings = $this->createMock(SettingRepository::class);
         $settings->method('setMany')->willReturnCallback(function (array $p) use (&$saved) { $saved = $p; });
         $config = $this->createMock(ConfigService::class);
+        $config->expects(self::once())->method('invalidate');
         $health = $this->createMock(HealthService::class);
         $controller = $this->controller($settings, $config, $health);
 
@@ -688,6 +689,7 @@ class AdminSettingsControllerTest extends TestCase
 
         self::assertInstanceOf(JsonResponse::class, $response);
         self::assertSame(200, $response->getStatusCode());
+        self::assertSame(['ok' => true], json_decode($response->getContent(), true));
         self::assertSame('recent,plex', $saved['dashboard_section_order']);
         self::assertSame('1', $saved['dashboard_hide_health']);
         self::assertSame('1', $saved['dashboard_hide_trending']);
