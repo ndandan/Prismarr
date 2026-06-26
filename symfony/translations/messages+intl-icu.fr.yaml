@@ -478,6 +478,11 @@ dashboard:
       downloaded: 'Téléchargé'
       monitored: 'Suivi'
       missing: 'Manquant'
+  layout:
+    edit: Modifier la disposition
+    save: Enregistrer
+    cancel: Annuler
+    hide: Masquer
 
 tautulli:
   title: Activité Plex

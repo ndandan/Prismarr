@@ -461,6 +461,14 @@
   .dash-skel-line { height: .7rem; width: 80%; margin-top: .45rem; border-radius: .25rem; }
   @keyframes dash-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 
+  /* ── Edit-mode layout toolbar ──────────────────────────────────── */
+  .dash-layout-toolbar { display: flex; gap: .5rem; justify-content: flex-end; margin-bottom: 1rem; }
+  .dashboard-scope.is-editing [data-section-key] { position: relative; outline: 2px dashed rgba(var(--tblr-primary-rgb), .5); outline-offset: 4px; border-radius: 12px; cursor: grab; }
+  .dashboard-scope.is-editing [data-section-key].dragging { opacity: .5; }
+  .section-edit-overlay { position: absolute; top: .5rem; right: .5rem; z-index: 5; display: flex; gap: .35rem; }
+  .section-edit-overlay button { background: rgba(0,0,0,.7); color: #fff; border: 0; border-radius: 6px; padding: .25rem .5rem; font-size: .72rem; cursor: pointer; }
+  .dashboard-scope:not(.is-editing) .section-edit-overlay { display: none; }
+
   /* ── Quick-look modal ───────────────────────────────────────────── */
   .ql-modal-content { background: var(--tblr-bg-surface); overflow: hidden; border-radius: 14px; }
   .ql-loading { padding: 4rem; text-align: center; }
@@ -513,6 +521,17 @@
 
 <div class="page-body dashboard-scope">
   <div class="container-xl">
+
+    {% if is_granted('ROLE_ADMIN') %}
+    <div class="dash-layout-toolbar"
+         data-layout-url="{{ path('admin_settings_dashboard_layout') }}"
+         data-layout-csrf="{{ csrf_token('admin_dashboard_layout') }}"
+         data-hide-label="{{ 'dashboard.layout.hide'|trans }}">
+      <button type="button" class="dash-action-btn" data-layout-edit>{{ 'dashboard.layout.edit'|trans }}</button>
+      <button type="button" class="dash-action-btn" data-layout-save hidden>{{ 'dashboard.layout.save'|trans }}</button>
+      <button type="button" class="dash-action-btn" data-layout-cancel hidden>{{ 'dashboard.layout.cancel'|trans }}</button>
+    </div>
+    {% endif %}
 
     {# ── Hero: welcome + spotlight/stats (async-hydrated, #27) ─────────
        Greeting + clock paint instantly; the spotlight and library stats load
@@ -744,5 +763,81 @@
       });
     }
   })();
+</script>
+<script>
+(function () {
+  function initLayoutEdit() {
+    var toolbar = document.querySelector('.dash-layout-toolbar');
+    var scope = document.querySelector('.dashboard-scope');
+    if (!toolbar || !scope) return;
+    var editBtn = toolbar.querySelector('[data-layout-edit]');
+    var saveBtn = toolbar.querySelector('[data-layout-save]');
+    var cancelBtn = toolbar.querySelector('[data-layout-cancel]');
+    var container = scope.querySelector('.container-xl');
+    var hidden = {};       // key -> true while hidden in this edit session
+    var dragged = null;
+
+    function sections() { return Array.prototype.slice.call(container.querySelectorAll('[data-section-key]')); }
+
+    function addOverlays() {
+      sections().forEach(function (sec) {
+        if (sec.querySelector('.section-edit-overlay')) return;
+        var ov = document.createElement('div');
+        ov.className = 'section-edit-overlay';
+        var btn = document.createElement('button');
+        btn.type = 'button';
+        btn.textContent = toolbar.dataset.hideLabel || '✕';
+        btn.addEventListener('click', function () { hidden[sec.dataset.sectionKey] = true; sec.style.display = 'none'; });
+        ov.appendChild(btn);
+        sec.appendChild(ov);
+        sec.setAttribute('draggable', 'true');
+      });
+    }
+    function removeOverlays() {
+      sections().forEach(function (sec) {
+        var ov = sec.querySelector('.section-edit-overlay'); if (ov) ov.remove();
+        sec.removeAttribute('draggable'); sec.style.display = '';
+      });
+    }
+
+    container.addEventListener('dragstart', function (e) {
+      if (!scope.classList.contains('is-editing')) return;
+      var sec = e.target.closest('[data-section-key]'); if (!sec) return;
+      dragged = sec; sec.classList.add('dragging');
+    });
+    container.addEventListener('dragend', function () { if (dragged) dragged.classList.remove('dragging'); dragged = null; });
+    container.addEventListener('dragover', function (e) {
+      if (!dragged) return; e.preventDefault();
+      var after = null;
+      sections().forEach(function (sec) {
+        if (sec === dragged || sec.style.display === 'none') return;
+        var box = sec.getBoundingClientRect();
+        if (e.clientY < box.top + box.height / 2 && after === null) after = sec;
+      });
+      if (after) container.insertBefore(dragged, after); else container.appendChild(dragged);
+    });
+
+    editBtn.addEventListener('click', function () {
+      hidden = {}; scope.classList.add('is-editing'); addOverlays();
+      editBtn.hidden = true; saveBtn.hidden = false; cancelBtn.hidden = false;
+    });
+    cancelBtn.addEventListener('click', function () { window.location.reload(); });
+    saveBtn.addEventListener('click', function () {
+      var order = sections().filter(function (s) { return !hidden[s.dataset.sectionKey]; })
+                            .map(function (s) { return s.dataset.sectionKey; });
+      var body = new URLSearchParams();
+      body.set('_csrf_token', toolbar.dataset.layoutCsrf);
+      body.set('order', order.join(','));
+      body.set('hidden', Object.keys(hidden).join(','));
+      fetch(toolbar.dataset.layoutUrl, { method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' }, body: body })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function () { window.location.reload(); })
+        .catch(function () { window.location.reload(); });
+    });
+  }
+  document.addEventListener('turbo:load', initLayoutEdit);
+  if (document.readyState !== 'loading') initLayoutEdit();
+})();
 </script>
 {% endblock %}
