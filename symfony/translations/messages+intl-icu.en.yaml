@@ -509,6 +509,11 @@ dashboard:
     airstatus:
       continuing: 'Continuing'
       ended: 'Ended'
+  layout:
+    edit: Edit layout
+    save: Save layout
+    cancel: Cancel
+    hide: Hide
 
 tautulli:
   title: Plex Activity
