@@ -442,6 +442,50 @@ class DashboardControllerTest extends TestCase
         self::assertNotContains('ended', $kinds);
     }
 
+    public function testQuickLookLibrarySeriesEndedShowsEndDate(): void
+    {
+        $seriesRow = [
+            'id' => 99, 'title' => 'The Wire', 'year' => 2002, 'overview' => 'Baltimore crime.',
+            'genres' => [], 'ratings' => 9.3, 'network' => 'HBO',
+            'poster' => 'w', 'fanart' => null, 'monitored' => false, 'hasFile' => false,
+            'status' => 'ended', 'ended' => true,
+            'firstAired'     => new \DateTimeImmutable('-5 years'),
+            'nextAiring'     => null,
+            'previousAiring' => new \DateTimeImmutable('-1 year'),
+            '_instanceSlug' => 'sonarr-1', '_instanceName' => 'Sonarr',
+        ];
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $type): array => $type === ServiceInstance::TYPE_SONARR
+                ? [$this->instance('sonarr-1', 'Sonarr')] : []
+        );
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('withInstance')->willReturnSelf();
+        $sonarr->method('getSeries')->willReturn([$seriesRow]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k, array $p = []) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $sonarr, $this->createMock(JellyseerrClient::class), $this->createMock(TmdbClient::class),
+            $this->createMock(WatchlistItemRepository::class), $instances, new NullLogger(),
+            $translator, $cache, $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
+        $m->setAccessible(true);
+        $vm = $m->invoke($controller, 'series', 'sonarr-1', 99);
+
+        self::assertSame('ended', $vm['airStatus']);
+        $kinds = array_column($vm['releaseDates'], 'kind');
+        self::assertContains('first_aired', $kinds);
+        self::assertContains('ended', $kinds);
+        self::assertNotContains('next_episode', $kinds);
+    }
+
     public function testQuickLookTmdbTvIncludesAirInfo(): void
     {
         $tmdb = $this->createMock(TmdbClient::class);
