@@ -3,8 +3,10 @@ namespace App\Tests\Service;
 
 use App\Service\ConfigService;
 use App\Service\DashboardLayoutService;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 
+#[AllowMockObjectsWithoutExpectations]
 final class DashboardLayoutServiceTest extends TestCase
 {
     /** @param array<string,?string> $stored */
