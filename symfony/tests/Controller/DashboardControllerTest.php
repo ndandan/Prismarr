@@ -279,6 +279,89 @@ class DashboardControllerTest extends TestCase
         self::assertNull($vm['qlSlug']);
     }
 
+    public function testQuickLookLibraryMovieIncludesReleaseChips(): void
+    {
+        $movieRow = [
+            'id' => 42, 'title' => 'Dune', 'year' => 2021, 'overview' => 'x',
+            'genres' => [], 'ratings' => 7.8, 'runtime' => 155,
+            'poster' => 'p', 'fanart' => 'f', 'hasFile' => true, 'monitored' => true,
+            'status' => 'released', '_instanceSlug' => 'radarr-1', '_instanceName' => 'Radarr',
+            'inCinemasAt' => new \DateTimeImmutable('-2 years'),
+            'digitalAt'   => new \DateTimeImmutable('+30 days'),
+            'physicalAt'  => null,
+        ];
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $type): array => $type === ServiceInstance::TYPE_RADARR
+                ? [$this->instance('radarr-1', 'Radarr')] : []
+        );
+        $radarr = $this->createMock(RadarrClient::class);
+        $radarr->method('withInstance')->willReturnSelf();
+        $radarr->method('getMovies')->willReturn([$movieRow]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k, array $p = []) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $radarr,
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $this->createMock(TmdbClient::class), $this->createMock(WatchlistItemRepository::class),
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
+        $m->setAccessible(true);
+        $vm = $m->invoke($controller, 'movie', 'radarr-1', 42);
+
+        $kinds = array_column($vm['releaseDates'], 'kind');
+        self::assertSame(['cinema', 'digital'], $kinds); // physical null → skipped, fixed order
+        self::assertFalse($vm['releaseDates'][0]['upcoming']); // cinema 2y ago
+        self::assertTrue($vm['releaseDates'][1]['upcoming']);  // digital +30d
+    }
+
+    public function testQuickLookTmdbMovieParsesReleaseDates(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getMovie')->willReturn([
+            'id' => 603, 'title' => 'The Matrix', 'release_date' => '1999-03-31',
+            'genres' => [], 'overview' => 'x', 'vote_average' => 8.2,
+            'release_dates' => ['results' => [
+                ['iso_3166_1' => 'US', 'release_dates' => [
+                    ['type' => 3, 'release_date' => '1999-03-31T00:00:00.000Z'],
+                    ['type' => 4, 'release_date' => '2020-01-01T00:00:00.000Z'],
+                ]],
+                ['iso_3166_1' => 'FR', 'release_dates' => [
+                    ['type' => 5, 'release_date' => '2099-01-01T00:00:00.000Z'],
+                ]],
+            ]],
+        ]);
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k, array $p = []) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
+            $translator, $cache, $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+        $vm = $m->invoke($controller, 'movie', 603);
+
+        $kinds = array_column($vm['releaseDates'], 'kind');
+        self::assertSame(['cinema', 'digital', 'physical'], $kinds);
+        self::assertTrue($vm['releaseDates'][2]['upcoming']); // FR physical year 2099
+    }
+
     public function testQuickLookTmdbTvZeroSeasonsRenders(): void
     {
         $tmdb = $this->createMock(TmdbClient::class);

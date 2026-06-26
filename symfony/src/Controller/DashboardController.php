@@ -515,6 +515,63 @@ class DashboardController extends AbstractController
      * @param array<string, mixed> $movie
      * @return array{at: \DateTimeImmutable, badge: string}|null
      */
+    /**
+     * Build the ordered release-date chips for a movie quick-look. Fixed
+     * semantic order cinema→digital→physical; nulls skipped; each chip flags
+     * whether the date is today-or-later (so the template can emphasize the
+     * next upcoming event). @return list<array{kind:string,label:string,date:\DateTimeImmutable,upcoming:bool}>
+     */
+    private function movieReleaseChips(?\DateTimeImmutable $cinema, ?\DateTimeImmutable $digital, ?\DateTimeImmutable $physical, \DateTimeImmutable $today): array
+    {
+        $defs = [
+            ['kind' => 'cinema',   'at' => $cinema,   'key' => 'dashboard.quicklook.date.cinema'],
+            ['kind' => 'digital',  'at' => $digital,  'key' => 'dashboard.quicklook.date.digital'],
+            ['kind' => 'physical', 'at' => $physical, 'key' => 'dashboard.quicklook.date.physical'],
+        ];
+        $chips = [];
+        foreach ($defs as $d) {
+            if (!$d['at'] instanceof \DateTimeImmutable) continue;
+            $chips[] = [
+                'kind'     => $d['kind'],
+                'label'    => $this->translator->trans($d['key']),
+                'date'     => $d['at'],
+                'upcoming' => $d['at']->setTime(0, 0) >= $today,
+            ];
+        }
+        return $chips;
+    }
+
+    /**
+     * Extract cinema/digital/physical dates from TMDb's release_dates append,
+     * preferring FR then US then the first country that has each type. TMDb
+     * type codes: 2/3 = theatrical, 4 = digital, 5 = physical.
+     * @return list<array{kind:string,label:string,date:\DateTimeImmutable,upcoming:bool}>
+     */
+    private function tmdbMovieReleaseDates(array $results, \DateTimeImmutable $today): array
+    {
+        $byCountry = [];
+        foreach ($results as $r) {
+            $cc = $r['iso_3166_1'] ?? '';
+            foreach ($r['release_dates'] ?? [] as $rd) {
+                $byCountry[$cc][(int) ($rd['type'] ?? 0)] = $rd['release_date'] ?? null;
+            }
+        }
+        $order = ['FR', 'US'];
+        foreach (array_keys($byCountry) as $cc) {
+            if (!in_array($cc, $order, true)) $order[] = $cc;
+        }
+        $pick = function (array $types) use ($byCountry, $order): ?\DateTimeImmutable {
+            foreach ($order as $cc) {
+                foreach ($types as $t) {
+                    $raw = $byCountry[$cc][$t] ?? null;
+                    if ($raw) return new \DateTimeImmutable($raw);
+                }
+            }
+            return null;
+        };
+        return $this->movieReleaseChips($pick([3, 2]), $pick([4]), $pick([5]), $today);
+    }
+
     private function pickNextReleaseDate(array $movie, \DateTimeImmutable $today): ?array
     {
         $candidates = array_filter([
@@ -752,17 +809,23 @@ class DashboardController extends AbstractController
         }
 
         return [
-            'title'       => $row['title'] ?? '—',
-            'year'        => $row['year'] ?? null,
-            'poster'      => $row['poster'] ?? null,
-            'backdrop'    => $row['fanart'] ?? null,
-            'overview'    => $row['overview'] ?? null,
-            'genres'      => array_slice($row['genres'] ?? [], 0, 4),
-            'rating'      => $row['ratings'] ?? null,
-            'metaLine'    => $metaLine,
-            'statusBadge' => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
-            'actionUrl'   => $actionUrl,
-            'actionLabel' => $this->translator->trans('dashboard.quicklook.manage'),
+            'title'        => $row['title'] ?? '—',
+            'year'         => $row['year'] ?? null,
+            'poster'       => $row['poster'] ?? null,
+            'backdrop'     => $row['fanart'] ?? null,
+            'overview'     => $row['overview'] ?? null,
+            'genres'       => array_slice($row['genres'] ?? [], 0, 4),
+            'rating'       => $row['ratings'] ?? null,
+            'metaLine'     => $metaLine,
+            'statusBadge'  => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
+            'actionUrl'    => $actionUrl,
+            'actionLabel'  => $this->translator->trans('dashboard.quicklook.manage'),
+            'releaseDates' => $type === 'series' ? [] : $this->movieReleaseChips(
+                $row['inCinemasAt'] ?? null,
+                $row['digitalAt'] ?? null,
+                $row['physicalAt'] ?? null,
+                new \DateTimeImmutable('today'),
+            ),
         ];
     }
 
@@ -807,17 +870,21 @@ class DashboardController extends AbstractController
         }
 
         return [
-            'title'       => $data['title'] ?? $data['name'] ?? '—',
-            'year'        => $year,
-            'poster'      => $this->tmdbImage($data['poster_path'] ?? null, 'w342'),
-            'backdrop'    => $this->tmdbImage($data['backdrop_path'] ?? null, 'w1280'),
-            'overview'    => $data['overview'] ?? null,
-            'genres'      => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
-            'rating'      => $data['vote_average'] ?? null,
-            'metaLine'    => $metaLine,
-            'statusBadge' => null,
-            'actionUrl'   => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
-            'actionLabel' => $this->translator->trans('dashboard.quicklook.discover'),
+            'title'        => $data['title'] ?? $data['name'] ?? '—',
+            'year'         => $year,
+            'poster'       => $this->tmdbImage($data['poster_path'] ?? null, 'w342'),
+            'backdrop'     => $this->tmdbImage($data['backdrop_path'] ?? null, 'w1280'),
+            'overview'     => $data['overview'] ?? null,
+            'genres'       => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
+            'rating'       => $data['vote_average'] ?? null,
+            'metaLine'     => $metaLine,
+            'statusBadge'  => null,
+            'actionUrl'    => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
+            'actionLabel'  => $this->translator->trans('dashboard.quicklook.discover'),
+            'releaseDates' => $isTv ? [] : $this->tmdbMovieReleaseDates(
+                $data['release_dates']['results'] ?? [],
+                new \DateTimeImmutable('today'),
+            ),
         ];
     }
 
