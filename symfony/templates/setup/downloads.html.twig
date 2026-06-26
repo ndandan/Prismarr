@@ -130,19 +130,10 @@
       <div class="wizard-section-title">{{ ico.icon('shield', '', 18) }} {{ 'setup.step.downloads.gluetun.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.gluetun.section_suffix'|trans }}</span></div>
       <div class="wizard-section-subtitle">{{ 'setup.step.downloads.gluetun.subtitle'|trans }}</div>
       <div class="row g-3">
-        <div class="col-md-7">
+        <div class="col-md-12">
           <label class="form-label" for="gluetun_url">{{ 'setup.step.downloads.gluetun.url'|trans }}</label>
           <input type="text" id="gluetun_url" name="gluetun_url" class="form-control"
                  placeholder="http://host.docker.internal:8000" value="{{ values.gluetun_url }}"/>
-        </div>
-        <div class="col-md-5">
-          <label class="form-label" for="gluetun_protocol">{{ 'setup.step.downloads.gluetun.protocol'|trans }}</label>
-          <select id="gluetun_protocol" name="gluetun_protocol" class="form-select">
-            {% set p = values.gluetun_protocol %}
-            <option value=""          {{ p == ''          ? 'selected' }}>{{ 'setup.step.downloads.gluetun.protocol_auto'|trans }}</option>
-            <option value="openvpn"   {{ p == 'openvpn'   ? 'selected' }}>OpenVPN</option>
-            <option value="wireguard" {{ p == 'wireguard' ? 'selected' }}>WireGuard</option>
-          </select>
         </div>
         <div class="col-md-12">
           <label class="form-label" for="gluetun_api_key">{{ 'setup.step.downloads.gluetun.api_key'|trans }} <span class="text-muted">{{ 'setup.step.downloads.gluetun.api_key_optional'|trans }}</span></label>

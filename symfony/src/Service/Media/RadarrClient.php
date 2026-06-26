@@ -1684,6 +1684,7 @@ class RadarrClient implements ResetInterface
         } while ($running && $status === CURLM_OK);
 
         $networkError = false;
+        $anySuccess   = false;
         foreach ($handles as $name => $ch) {
             $body = curl_multi_getcontent($ch);
             $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -1702,17 +1703,19 @@ class RadarrClient implements ResetInterface
             }
             $decoded = json_decode((string) $body, true);
             $out[$name] = is_array($decoded) ? $decoded : null;
+            $anySuccess = true;
         }
         curl_multi_close($mh);
 
-        // Mirror get(): a transport-level failure trips the breaker for the
-        // rest of the request + the cross-request window; a clean batch clears
-        // any stale down-marker.
-        if ($networkError) {
+        // Only trip the breaker when the WHOLE batch failed at transport level
+        // (the instance is genuinely unreachable). If any endpoint answered, the
+        // service is up — a single slow/failing sidecar call (queue, health…)
+        // must not mark it down and blank the whole library.
+        if ($anySuccess) {
+            $this->health->clear(self::SERVICE_KEY, $this->instance?->getSlug());
+        } elseif ($networkError) {
             $this->serviceUnavailable = true;
             $this->health->markDown(self::SERVICE_KEY, $this->instance?->getSlug());
-        } else {
-            $this->health->clear(self::SERVICE_KEY, $this->instance?->getSlug());
         }
 
         return $out;

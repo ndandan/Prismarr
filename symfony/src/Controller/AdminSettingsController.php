@@ -81,7 +81,10 @@ class AdminSettingsController extends AbstractController
         'gluetun' => [
             ['key' => 'gluetun_url',      'type' => 'text',     'label' => 'admin.field.url'],
             ['key' => 'gluetun_api_key',  'type' => 'password', 'label' => 'admin.field.api_key_if_protected'],
-            ['key' => 'gluetun_protocol', 'type' => 'text',     'label' => 'admin.field.protocol'],
+        ],
+        'tautulli' => [
+            ['key' => 'tautulli_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8181'],
+            ['key' => 'tautulli_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
         ],
         'tautulli' => [
             ['key' => 'tautulli_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8181'],

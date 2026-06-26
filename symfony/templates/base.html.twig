@@ -671,11 +671,13 @@
           </a>
         </div>
 
+        {% if service_visible_in_sidebar('tautulli') %}
         {# Live Plex streaming pill — hidden until the poller finds active streams. #}
         <a href="{{ path('app_dashboard') }}#plex-activity" id="sidebar-plex-pill" class="sidebar-plex-pill" style="display:none;">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13 -8z"/></svg>
           <span data-plex-pill-count>0</span>
         </a>
+        {% endif %}
 
         {# Mobile user menu #}
         <div class="navbar-nav flex-row d-lg-none">
@@ -2435,6 +2437,7 @@
      stops itself entirely when Tautulli isn't configured (so it doesn't poke a
      disabled service every 30s).
      ══════════════════════════════════════════════════════════════════════════ #}
+  {% if service_visible_in_sidebar('tautulli') %}
   <script>
   (function () {
     var pill = document.getElementById('sidebar-plex-pill');
@@ -2463,6 +2466,7 @@
     window._plexPillTimer = setInterval(tick, INTERVAL);
   })();
   </script>
+  {% endif %}
 
   {# ══════════════════════════════════════════════════════════════════════════
      Usenet active-downloads badge — one poll per configured client, mirroring

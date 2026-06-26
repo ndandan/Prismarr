@@ -3,9 +3,11 @@
 namespace App\Tests\Twig;
 
 use App\Twig\RelativeDateExtension;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
+#[AllowMockObjectsWithoutExpectations]
 final class RelativeDateExtensionTest extends TestCase
 {
     public function testBucketBoundaries(): void

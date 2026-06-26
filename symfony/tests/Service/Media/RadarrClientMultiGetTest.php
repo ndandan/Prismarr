@@ -5,6 +5,7 @@ namespace App\Tests\Service\Media;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\ServiceInstanceProvider;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
@@ -17,6 +18,7 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
  * batch to nulls without ever touching the network or the instance
  * provider.
  */
+#[AllowMockObjectsWithoutExpectations]
 class RadarrClientMultiGetTest extends TestCase
 {
     public function testOpenCircuitBreakerShortCircuitsWholeBatchToNulls(): void

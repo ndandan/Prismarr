@@ -14,11 +14,11 @@ name: Beta
 
 on:
   workflow_dispatch:
-
-# Bump this when the dev line moves to the next minor (e.g. after 1.1.0
-# ships, set it to 1.2.0). Keep it in sync with App\Service\AppVersion::VERSION.
-env:
-  BETA_VERSION_BASE: "1.1.0"
+    inputs:
+      beta_number:
+        description: "Beta build number (1, 2, 3, …) — reset to 1 for each new version"
+        required: true
+        default: "1"
 
 jobs:
   beta:
@@ -32,6 +32,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # need the full tag history to derive the next version
 
       - name: Set up QEMU (arm64 emulation)
         uses: docker/setup-qemu-action@v4
@@ -45,9 +47,18 @@ jobs:
 
       - name: Compose the beta version string
         id: ver
-        # e.g. "1.1.0-beta.42" — version_compare ranks this below "1.1.0",
-        # so testers get nudged to the stable once it ships.
-        run: echo "version=${BETA_VERSION_BASE}-beta.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+        # Base = the last stable tag (vX.Y.Z) with the patch bumped by one — the
+        # next patch the dev line targets. Tagging a stable release auto-advances
+        # it (after v1.1.2, betas become 1.1.3-beta.N), so this never needs hand
+        # editing. version_compare ranks the beta above the last stable but below
+        # the target, nudging testers to stable once it ships. For a minor/major
+        # bump just tag it directly and the next betas follow from there.
+        run: |
+          last=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 | sed 's/^v//')
+          last=${last:-1.1.1}
+          IFS=. read -r major minor patch <<< "$last"
+          base="${major}.${minor}.$((patch + 1))"
+          echo "version=${base}-beta.${{ inputs.beta_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v4

@@ -30,7 +30,6 @@
   <a href="#quick-start">Quick start</a> ·
   <a href="#configuration">Configuration</a> ·
   <a href="#upgrade">Upgrade</a> ·
-  <a href="#troubleshooting">Troubleshooting</a> ·
   <a href="#whats-next">What's next</a> ·
   <a href="#support-and-community">Support</a> ·
   <a href="#license">License</a> ·
@@ -108,124 +107,16 @@ queued for later.
 
 ---
 
-## Why Prismarr?
-
-The selfhosted dashboard space is crowded. Here's where Prismarr fits and
-where the others might suit you better:
-
-- **[Organizr](https://organizr.app/)** - HTPC-focused, iframes the
-  underlying services into tabs. Excellent if you want each service's
-  full UI inside one page; less so if you want a unified library view
-  rather than six side-by-side dashboards.
-- **[Heimdall](https://heimdall.site/)**, **[Homer](https://github.com/bastienwirtz/homer)**,
-  **[Homepage](https://gethomepage.dev/)** - bookmark-style launchers
-  with widgets. Lightweight and fast; they don't *understand* your
-  library, they just link to other apps.
-- **[Homarr](https://homarr.dev/)** - drag-and-drop launcher with rich
-  widgets. Closer to Prismarr in spirit but still a launcher: Radarr is
-  a tile, not a page.
-- **[Seerr](https://docs.seerr.dev/)** (the unified successor of the
-  archived Overseerr / Seerr) - request frontend. Prismarr embeds
-  Seerr as one component among others; if requests are *all* you need,
-  Seerr alone is enough.
-- **Servarr web UIs themselves** - the most powerful option. Prismarr
-  doesn't replace them; it sits on top and gives you a unified search,
-  calendar, dashboard and download view.
-
-**Pick Prismarr if** you want a single Symfony app that *consumes* the
-APIs of your existing stack, gives you one search box across the local
-library and TMDb, one calendar that merges movie and episode releases,
-one dashboard that surfaces what matters today, and one settings page
-where every API key lives - all in one Docker container with SQLite, no
-external dependencies.
-
-**Pick something else if** you want iframes (Organizr), pure bookmarks
-(Heimdall / Homer / Homepage), drag-and-drop dashboards (Homarr) or just
-a request UI (Seerr).
-
----
-
 ## Features
 
-### Unified media management
-- Movies (Radarr) and Series (Sonarr) with five view modes
-- **Multiple Radarr / Sonarr instances side by side** (e.g. Radarr 1080p
-  + Radarr 4K + Radarr Anime). Each instance is first-class in the UI:
-  per-instance pages, per-instance health badge, per-instance Ctrl+K
-  search results. Add, rename, reorder and toggle instances from
-  `/admin/settings` without leaving Prismarr
-- Global `Ctrl+K` search across every enabled instance + TMDb / TheTVDB
-- Quick-add modal with a per-instance target picker — when a film is
-  already on Radarr 1080p you can still push it to Radarr 4K from one click
-- Unified calendar (movie + episode releases) merged across every
-  instance and deduped by `tmdbId` / `tvdbId`, with month / week / day
-  views and an iCal export
-
-### Dashboard
-- Hero spotlight with a random pick from your library
-- Upcoming releases (seven-day mini-calendar)
-- Pending Seerr requests enriched with TMDb metadata
-- Live health of all configured services
-- Personal watchlist, weekly TMDb trending, latest library additions
-- **Quick-look in place:** click any tile (hero, upcoming, trending, watchlist,
-  latest additions) to open a read-only detail modal right on the dashboard —
-  poster, status, rating, genres and synopsis — with a deep-link to manage it in
-  Radarr/Sonarr or open it in Discover, instead of navigating away
-- Optional **Current Plex activity** widget via the Tautulli API: active
-  streams, Direct Play / Direct Stream / Transcode counts, LAN/WAN
-  bandwidth and a per-session card (read-only, refreshes every 10s)
-- Near-instant load: the page paints first, then each widget hydrates on its own
-
-### Plex activity (Tautulli)
-- Dedicated **Plex Activity** page (its own sidebar entry) backed by a
-  read-only Tautulli connection — the API key never leaves the server and
-  every response is sanitised before it reaches the browser
-- Live "Now playing": a stream-summary strip (session count, Direct Play /
-  Direct Stream / Transcode breakdown, total / LAN / WAN bandwidth) plus a card
-  per session showing quality, an HDR/SDR badge and, when transcoding, the
-  source→target codec
-- Watch statistics with a 7 / 30 / 90-day toggle and a Play Count ⇄ Play
-  Duration switch: most-watched movies and shows, most-popular movies and shows
-  (ranked by distinct viewers), most-active users, top platforms, and most
-  concurrent streams
-- Graphs: plays over time with a Media-type ⇄ Stream-type toggle, plays by hour
-  of day and by day of week, a platform × stream-type "problem clients" chart,
-  plays by source and stream resolution, streams by user, and concurrent
-  streams over time
-- A page-wide **per-user filter** that scopes every section — statistics,
-  graphs, the users table and history — to a single user, plus a privacy-safe
-  Users overview table (friendly name, last seen, last played, plays, watch
-  time); the opaque Tautulli user id is a filter token only, never displayed
-- A dense watch-history grid and a per-library item / episode count
-- Every title opens the in-app info modal (synopsis, ratings, cast/crew); each
-  section fails open independently, so a down Tautulli never breaks the page
-
-### Downloads
-- Full qBittorrent dashboard: server-side pagination, sorting and filters
-- Drag-and-drop `.torrent` upload (multi-file)
-- Pipeline badges: clicking a torrent jumps to its movie / series
-- Cross-tab toasts when a download finishes
-- Optional Gluetun integration: public IP, country, port forwarding sync
-
-### Discovery
-- TMDb landing page with hero, personalised recommendations, trending
-- Personal watchlist, Explorer with filters (genre / decade / cast)
-- Countdown for upcoming releases
-- Deep-links into your existing library
-
-### Profile and preferences
-- `/profil` page: edit display name, password and avatar (JPG / PNG / WebP / GIF, 2 MB max)
-- Display preferences: theme colour, UI density, toasts, timezone,
-  date / time format, qBit auto-refresh, default home page
-- English / French UI (EN-first, FR fully translated, ICU plural support)
-- Settings export / import (credentials are always stripped)
-
-### Security
-- Symfony authentication with login rate-limiter (5 attempts per IP+username / 15 min)
-- Container runs as non-root, dynamic Content-Security-Policy
-- SSRF protection on user-provided URLs (protocol allowlist, cloud-metadata blocklist)
-- CSRF tokens on every mutation, branded error pages that never leak exception data
-- Profiler routes return 403 for non-RFC1918 clients in dev
+- **Movies & Series:** Radarr and Sonarr libraries with five view modes, **multiple instances side by side** (1080p / 4K / Anime, each first-class in the UI), global `Ctrl+K` search and a quick-add modal with a per-instance target picker.
+- **Unified calendar:** movie and episode releases merged across instances, deduped by `tmdbId` / `tvdbId`, with month / week / day views and iCal export.
+- **Dashboard:** hero spotlight, upcoming releases, pending Seerr requests, live service health, watchlist, trending and latest additions. Paints instantly, each widget hydrates on its own.
+- **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload) plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
+- **Discovery:** TMDb landing page with recommendations and trending, watchlist, an explorer with filters, and deep-links into your library.
+- **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
+- **Preferences:** theme, UI density, timezone, date format, English / French UI, settings export / import (credentials always stripped).
+- **Security:** Symfony auth with login rate-limiter, non-root container, dynamic CSP, SSRF protection on user-provided URLs, CSRF on every mutation.
 
 ---
 
@@ -284,6 +175,9 @@ Drop the top-level `volumes:` block from Option A, and create the host folder be
 
 > [!warning]
 > If you write your own compose instead of using a template above, the container target for the data volume must be `/var/www/html/var/data`. Prismarr does not use the Servarr `/config` or `/app/config` convention. A bind-mount on the wrong path silently creates an anonymous volume that resets on every redeploy, with no error in the logs.
+
+> [!warning]
+> **Unraid:** map the data volume to a dedicated subfolder on your **cache pool** (`/mnt/cache/appdata/prismarr`), not to `/mnt/user/...`. The `/mnt/user` share goes through FUSE (shfs), where Prismarr's session and database I/O can saturate the share and, in the worst case, lock up the whole server. Always point it at a dedicated subfolder (never the `appdata` root) so the container's startup `chown` stays scoped to Prismarr's own data.
 
 ---
 
@@ -406,49 +300,6 @@ If you still want to help test it:
   so going back to `:latest` can require restoring that backup.
 - Report problems on the issue tracker with a `[beta]` prefix in the title,
   including the version shown on **Settings → Updates** and `docker logs prismarr`.
-
----
-
-## Troubleshooting
-
-### Forgot the admin password
-
-```bash
-docker exec -it prismarr php bin/console app:user:reset-password <email>
-```
-
-### Setup wizard loops forever
-
-The wizard finishes when the `setup_completed` flag is set. To force it
-back to step 1:
-
-```bash
-docker exec -it prismarr php bin/console doctrine:query:sql \
-  "DELETE FROM setting WHERE key = 'setup_completed'"
-```
-
-### Health check returns 503
-
-`GET /api/health` returns 503 when SQLite is unreachable. Inspect the
-container logs:
-
-```bash
-docker logs prismarr --tail 200
-```
-
-The most common cause is a corrupted volume after a host-level disk full
-event. Restoring the latest backup is the fastest path.
-
-### Container won't start
-
-```bash
-docker logs prismarr
-```
-
-If the error mentions `permission denied` on the volume, your host
-filesystem is preventing the container's `www-data` user (UID 33 by
-default) from writing. Make sure the volume is a Docker-managed volume
-and not a bind mount onto a directory owned by root.
 
 ---
 

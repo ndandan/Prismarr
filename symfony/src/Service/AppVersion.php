@@ -24,7 +24,7 @@ use Symfony\Contracts\Service\ResetInterface;
 class AppVersion implements ResetInterface
 {
     /** Local-dev fallback when PRISMARR_VERSION is unset or `dev`. */
-    public const VERSION = '1.1.0-dev';
+    public const VERSION = '1.1.2-dev';
 
     private const GITHUB_API_URL = 'https://api.github.com/repos/Shoshuo/Prismarr/releases?per_page=15';
     // v2: schema bump (added `body_html` rendered from Markdown). Old v1 cache
