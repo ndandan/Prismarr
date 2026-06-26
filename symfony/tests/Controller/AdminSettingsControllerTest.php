@@ -666,6 +666,34 @@ class AdminSettingsControllerTest extends TestCase
         $this->assertSame(302, $response->getStatusCode(), 'v1 imports must still redirect cleanly');
     }
 
+    public function testDashboardLayoutEndpointPersistsOrderAndHidden(): void
+    {
+        $saved = [];
+        $settings = $this->createMock(SettingRepository::class);
+        $settings->method('setMany')->willReturnCallback(function (array $p) use (&$saved) { $saved = $p; });
+        $config = $this->createMock(ConfigService::class);
+        $health = $this->createMock(HealthService::class);
+        $controller = $this->controller($settings, $config, $health);
+
+        $request = Request::create('/admin/settings/dashboard-layout', 'POST', [
+            '_csrf_token' => 'x',
+            'order'       => 'recent,plex',
+            'hidden'      => 'health,trending',
+        ]);
+        $request->setSession(new \Symfony\Component\HttpFoundation\Session\Session(
+            new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage()
+        ));
+
+        $response = $controller->dashboardLayout($request);
+
+        self::assertInstanceOf(JsonResponse::class, $response);
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame('recent,plex', $saved['dashboard_section_order']);
+        self::assertSame('1', $saved['dashboard_hide_health']);
+        self::assertSame('1', $saved['dashboard_hide_trending']);
+        self::assertNull($saved['dashboard_hide_plex']);
+    }
+
     public function testSavePersistsDashboardOrderAndHiddenFlags(): void
     {
         $saved = [];

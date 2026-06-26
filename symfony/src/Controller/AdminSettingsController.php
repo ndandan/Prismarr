@@ -539,6 +539,47 @@ class AdminSettingsController extends AbstractController
         return new JsonResponse(['ok' => true]);
     }
 
+    /**
+     * Persist the dashboard layout from the on-dashboard edit mode. Accepts
+     * `order` (comma-joined section keys) and `hidden` (comma-joined keys to
+     * hide). Mirrors the settings-form save semantics; returns JSON for the
+     * fetch() caller. Admin-only via the class-level IsGranted.
+     */
+    #[Route('/dashboard-layout', name: 'dashboard_layout', methods: ['POST'])]
+    public function dashboardLayout(Request $request): Response
+    {
+        if (!$this->isCsrfTokenValid('admin_dashboard_layout', (string) $request->request->get('_csrf_token'))) {
+            return new JsonResponse(['ok' => false, 'error' => 'csrf'], 400);
+        }
+
+        $orderKeys = [];
+        foreach (explode(',', (string) $request->request->get('order', '')) as $raw) {
+            $k = trim($raw);
+            if ($k !== '' && DashboardSections::isValid($k) && !in_array($k, $orderKeys, true)) {
+                $orderKeys[] = $k;
+            }
+        }
+
+        $hidden = [];
+        foreach (explode(',', (string) $request->request->get('hidden', '')) as $raw) {
+            $k = trim($raw);
+            if ($k !== '' && DashboardSections::isValid($k)) {
+                $hidden[$k] = true;
+            }
+        }
+
+        $payload = ['dashboard_section_order' => $orderKeys === [] ? null : implode(',', $orderKeys)];
+        foreach (DashboardSections::keys() as $key) {
+            $payload['dashboard_hide_' . $key] = isset($hidden[$key]) ? '1' : null;
+        }
+
+        $this->settings->setMany($payload);
+        $this->config->invalidate();
+        $this->dashboardLayout->reset();
+
+        return new JsonResponse(['ok' => true]);
+    }
+
     #[Route('/languages/save', name: 'languages_save', methods: ['POST'])]
     public function languagesSave(Request $request): Response
     {
