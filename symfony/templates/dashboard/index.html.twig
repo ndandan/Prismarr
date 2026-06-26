@@ -770,6 +770,8 @@
     var toolbar = document.querySelector('.dash-layout-toolbar');
     var scope = document.querySelector('.dashboard-scope');
     if (!toolbar || !scope) return;
+    if (toolbar.dataset.layoutBound) return;
+    toolbar.dataset.layoutBound = '1';
     var editBtn = toolbar.querySelector('[data-layout-edit]');
     var saveBtn = toolbar.querySelector('[data-layout-save]');
     var cancelBtn = toolbar.querySelector('[data-layout-cancel]');
@@ -791,12 +793,6 @@
         ov.appendChild(btn);
         sec.appendChild(ov);
         sec.setAttribute('draggable', 'true');
-      });
-    }
-    function removeOverlays() {
-      sections().forEach(function (sec) {
-        var ov = sec.querySelector('.section-edit-overlay'); if (ov) ov.remove();
-        sec.removeAttribute('draggable'); sec.style.display = '';
       });
     }
 
