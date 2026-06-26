@@ -63,6 +63,7 @@ class DashboardController extends AbstractController
         private readonly TranslatorInterface $translator,
         private readonly CacheInterface $cache,
         private readonly TautulliClient $tautulli,
+        private readonly \App\Service\DashboardLayoutService $layout,
     ) {}
 
     /**
@@ -161,6 +162,7 @@ class DashboardController extends AbstractController
         return $this->render('dashboard/index.html.twig', [
             'watchlist'           => $this->watchlist(),
             'services_configured' => $configured,
+            'dashboard_layout'    => $this->layout->resolve(),
         ]);
     }
 
