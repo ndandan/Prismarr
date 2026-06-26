@@ -468,6 +468,17 @@ dashboard:
     trending: '★ Trending this week'
     cta_view: '▶ View details'
     cta_discover: '▶ Discover'
+  quicklook:
+    manage: 'Manage'
+    discover: 'View in Discover'
+    close: 'Close'
+    runtime: '{min} min'
+    seasons: '{count} seasons'
+    error: "Couldn't load the preview"
+    status:
+      downloaded: 'Downloaded'
+      monitored: 'Monitored'
+      missing: 'Missing'
 
 tautulli:
   title: Plex Activity

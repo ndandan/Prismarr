@@ -1,0 +1,13 @@
+{# Read-only quick-look modal shell for the dashboard. A delegated click handler
+   (see index.html.twig) opens it, fetches the matching quick-look fragment, and
+   swaps the body into [data-ql-body]. Manual (Bootstrap-less) modal, matching the
+   dashboard's other delegated handlers. #}
+<div class="modal modal-blur fade" id="ql-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+    <div class="modal-content ql-modal-content">
+      <div data-ql-body>
+        <div class="ql-loading"><span class="spinner-border"></span></div>
+      </div>
+    </div>
+  </div>
+</div>
