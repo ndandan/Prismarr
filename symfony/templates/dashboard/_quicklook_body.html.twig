@@ -22,6 +22,19 @@
         {% if ql.metaLine %}<span>{{ ql.metaLine }}</span>{% endif %}
         {% for g in ql.genres %}<span class="ql-chip">{{ g }}</span>{% endfor %}
       </div>
+      {% if ql.airStatus|default(null) or ql.releaseDates|default([])|length %}
+      <div class="ql-dates">
+        {% if ql.airStatus|default(null) %}
+          <span class="ql-airstatus is-{{ ql.airStatus }}">{{ ('dashboard.quicklook.airstatus.' ~ ql.airStatus)|trans }}</span>
+        {% endif %}
+        {% for d in ql.releaseDates|default([]) %}
+          <span class="ql-date{% if d.upcoming %} is-upcoming{% endif %}">
+            <span class="ql-date-label">{{ d.label }}</span>
+            <span class="ql-date-val">{{ d.date|date('M j, Y') }}</span>
+          </span>
+        {% endfor %}
+      </div>
+      {% endif %}
       {% if ql.overview %}<p class="ql-overview">{{ ql.overview }}</p>{% endif %}
       <a href="{{ ql.actionUrl }}" class="ql-action">{{ ql.actionLabel }} →</a>
     </div>
