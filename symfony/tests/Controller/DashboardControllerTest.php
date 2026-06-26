@@ -391,4 +391,83 @@ class DashboardControllerTest extends TestCase
         $tv = $m->invoke($controller, 'tv', 12345);
         self::assertStringContainsString('0 saisons', $tv['metaLine']);
     }
+
+    public function testQuickLookLibrarySeriesIncludesAirInfo(): void
+    {
+        $seriesRow = [
+            'id' => 7, 'title' => 'Severance', 'year' => 2022, 'overview' => 'x',
+            'genres' => [], 'ratings' => 8.4, 'network' => 'Apple TV+',
+            'poster' => 's', 'fanart' => null, 'monitored' => true, 'hasFile' => false,
+            'status' => 'continuing', 'ended' => false,
+            'firstAired'     => new \DateTimeImmutable('-3 years'),
+            'nextAiring'     => new \DateTimeImmutable('+10 days'),
+            'previousAiring' => new \DateTimeImmutable('-20 days'),
+            '_instanceSlug' => 'sonarr-1', '_instanceName' => 'Sonarr',
+        ];
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $type): array => $type === ServiceInstance::TYPE_SONARR
+                ? [$this->instance('sonarr-1', 'Sonarr')] : []
+        );
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('withInstance')->willReturnSelf();
+        $sonarr->method('getSeries')->willReturn([$seriesRow]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k, array $p = []) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $sonarr, $this->createMock(JellyseerrClient::class), $this->createMock(TmdbClient::class),
+            $this->createMock(WatchlistItemRepository::class), $instances, new NullLogger(),
+            $translator, $cache, $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
+        $m->setAccessible(true);
+        $vm = $m->invoke($controller, 'series', 'sonarr-1', 7);
+
+        self::assertSame('continuing', $vm['airStatus']);
+        $kinds = array_column($vm['releaseDates'], 'kind');
+        self::assertContains('first_aired', $kinds);
+        self::assertContains('next_episode', $kinds);
+        self::assertNotContains('ended', $kinds);
+    }
+
+    public function testQuickLookTmdbTvIncludesAirInfo(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getTv')->willReturn([
+            'id' => 95396, 'name' => 'Severance', 'first_air_date' => '2022-02-18',
+            'genres' => [], 'overview' => 'x', 'vote_average' => 8.4,
+            'status' => 'Returning Series', 'number_of_seasons' => 2,
+            'networks' => [['name' => 'Apple TV+']],
+            'next_episode_to_air' => ['air_date' => '2099-01-15'],
+            'last_episode_to_air' => ['air_date' => '2022-04-08'],
+        ]);
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k, array $p = []) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
+            $translator, $cache, $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+        $vm = $m->invoke($controller, 'tv', 95396);
+
+        self::assertSame('continuing', $vm['airStatus']);
+        $kinds = array_column($vm['releaseDates'], 'kind');
+        self::assertContains('first_aired', $kinds);
+        self::assertContains('next_episode', $kinds);
+    }
 }

@@ -505,17 +505,6 @@ class DashboardController extends AbstractController
     }
 
     /**
-     * Return the earliest release date that is today or later for a Radarr
-     * movie, together with a human-readable badge identifying which date
-     * it is (digital / cinema / physical). The comparison is done at
-     * calendar-day granularity so a digital release set to 02:00 today
-     * still counts as "today" even at 14:00.
-     * Null if every date is strictly in the past or missing.
-     *
-     * @param array<string, mixed> $movie
-     * @return array{at: \DateTimeImmutable, badge: string}|null
-     */
-    /**
      * Build the ordered release-date chips for a movie quick-look. Fixed
      * semantic order cinema→digital→physical; nulls skipped; each chip flags
      * whether the date is today-or-later (so the template can emphasize the
@@ -572,6 +561,43 @@ class DashboardController extends AbstractController
         return $this->movieReleaseChips($pick([3, 2]), $pick([4]), $pick([5]), $today);
     }
 
+    /**
+     * Air-date chips for a series quick-look: first-aired (if known), then
+     * either the next upcoming episode (continuing) or the last-aired date
+     * (ended). @return list<array{kind:string,label:string,date:\DateTimeImmutable,upcoming:bool}>
+     */
+    private function seriesReleaseChips(?\DateTimeImmutable $firstAired, ?\DateTimeImmutable $nextEpisode, ?\DateTimeImmutable $lastEpisode, bool $ended, \DateTimeImmutable $today): array
+    {
+        $chip = fn(string $kind, string $key, \DateTimeImmutable $d): array => [
+            'kind' => $kind, 'label' => $this->translator->trans($key),
+            'date' => $d, 'upcoming' => $d->setTime(0, 0) >= $today,
+        ];
+        $chips = [];
+        if ($firstAired) $chips[] = $chip('first_aired', 'dashboard.quicklook.date.first_aired', $firstAired);
+        if (!$ended && $nextEpisode) {
+            $chips[] = $chip('next_episode', 'dashboard.quicklook.date.next_episode', $nextEpisode);
+        } elseif ($ended && $lastEpisode) {
+            $chips[] = $chip('ended', 'dashboard.quicklook.date.ended', $lastEpisode);
+        }
+        return $chips;
+    }
+
+    private function parseDate(?string $raw): ?\DateTimeImmutable
+    {
+        return ($raw !== null && $raw !== '') ? new \DateTimeImmutable($raw) : null;
+    }
+
+    /**
+     * Return the earliest release date that is today or later for a Radarr
+     * movie, together with a human-readable badge identifying which date
+     * it is (digital / cinema / physical). The comparison is done at
+     * calendar-day granularity so a digital release set to 02:00 today
+     * still counts as "today" even at 14:00.
+     * Null if every date is strictly in the past or missing.
+     *
+     * @param array<string, mixed> $movie
+     * @return array{at: \DateTimeImmutable, badge: string}|null
+     */
     private function pickNextReleaseDate(array $movie, \DateTimeImmutable $today): ?array
     {
         $candidates = array_filter([
@@ -799,6 +825,9 @@ class DashboardController extends AbstractController
         $badgeKind = $hasFile ? 'downloaded' : ($monitored ? 'monitored' : 'missing');
         $badgeKey  = 'dashboard.quicklook.status.' . $badgeKind;
 
+        $ended     = ($row['ended'] ?? false) === true || ($row['status'] ?? '') === 'ended';
+        $airStatus = $type === 'series' ? ($ended ? 'ended' : 'continuing') : null;
+
         if ($type === 'series') {
             $metaLine  = $row['network'] ?? null;
             $actionUrl = $this->generateUrl('app_media_series', ['slug' => $slug]) . '?open=' . $id;
@@ -820,12 +849,21 @@ class DashboardController extends AbstractController
             'statusBadge'  => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $this->translator->trans('dashboard.quicklook.manage'),
-            'releaseDates' => $type === 'series' ? [] : $this->movieReleaseChips(
-                $row['inCinemasAt'] ?? null,
-                $row['digitalAt'] ?? null,
-                $row['physicalAt'] ?? null,
-                new \DateTimeImmutable('today'),
-            ),
+            'airStatus'    => $airStatus,
+            'releaseDates' => $type === 'series'
+                ? $this->seriesReleaseChips(
+                    $row['firstAired'] ?? null,
+                    $row['nextAiring'] ?? null,
+                    $row['previousAiring'] ?? null,
+                    $ended,
+                    new \DateTimeImmutable('today'),
+                )
+                : $this->movieReleaseChips(
+                    $row['inCinemasAt'] ?? null,
+                    $row['digitalAt'] ?? null,
+                    $row['physicalAt'] ?? null,
+                    new \DateTimeImmutable('today'),
+                ),
         ];
     }
 
@@ -869,6 +907,9 @@ class DashboardController extends AbstractController
             $metaLine = $runtime ? $this->translator->trans('dashboard.quicklook.runtime', ['min' => $runtime]) : null;
         }
 
+        $ended     = $isTv && in_array($data['status'] ?? '', ['Ended', 'Canceled'], true);
+        $airStatus = $isTv ? ($ended ? 'ended' : 'continuing') : null;
+
         return [
             'title'        => $data['title'] ?? $data['name'] ?? '—',
             'year'         => $year,
@@ -881,10 +922,19 @@ class DashboardController extends AbstractController
             'statusBadge'  => null,
             'actionUrl'    => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
             'actionLabel'  => $this->translator->trans('dashboard.quicklook.discover'),
-            'releaseDates' => $isTv ? [] : $this->tmdbMovieReleaseDates(
-                $data['release_dates']['results'] ?? [],
-                new \DateTimeImmutable('today'),
-            ),
+            'airStatus'    => $airStatus,
+            'releaseDates' => $isTv
+                ? $this->seriesReleaseChips(
+                    $this->parseDate($data['first_air_date'] ?? null),
+                    $this->parseDate($data['next_episode_to_air']['air_date'] ?? null),
+                    $this->parseDate($data['last_episode_to_air']['air_date'] ?? null),
+                    $ended,
+                    new \DateTimeImmutable('today'),
+                )
+                : $this->tmdbMovieReleaseDates(
+                    $data['release_dates']['results'] ?? [],
+                    new \DateTimeImmutable('today'),
+                ),
         ];
     }
 
