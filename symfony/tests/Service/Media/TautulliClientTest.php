@@ -5,6 +5,7 @@ namespace App\Tests\Service\Media;
 use App\Repository\SettingRepository;
 use App\Service\ConfigService;
 use App\Service\Media\TautulliClient;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -18,6 +19,7 @@ use Psr\Log\NullLogger;
  * (IPs, tokens, machine id, file paths, Plex username/email) present in the
  * raw session must NOT survive into the normalized output.
  */
+#[AllowMockObjectsWithoutExpectations]
 class TautulliClientTest extends TestCase
 {
     /** A representative single-session get_activity `data` payload. */
