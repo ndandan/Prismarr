@@ -172,19 +172,23 @@ class TautulliClient implements ResetInterface
      *
      * @return list<array<string, mixed>>
      */
-    public function getHistory(int $length = 8, int $start = 0): array
+    public function getHistory(int $length = 8, int $start = 0, ?string $userId = null): array
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return [];
         }
-        $resp = $this->request([
+        $params = [
             'cmd'          => 'get_history',
             'length'       => (string) max(1, min(50, $length)),
             'start'        => (string) max(0, $start),
             'order_column' => 'date',
             'order_dir'    => 'desc',
-        ]);
+        ];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
         if ($resp === null || $resp['ok'] !== true) {
             return [];
         }
@@ -197,24 +201,35 @@ class TautulliClient implements ResetInterface
         return in_array($days, [7, 30, 90], true) ? $days : 30;
     }
 
+    /** Clamp the stats metric to the two Tautulli accepts. */
+    private static function clampMetric(string $metric): string
+    {
+        return $metric === 'duration' ? 'duration' : 'plays';
+    }
+
     /**
      * Watch statistics for the home page, normalized + sanitized. Returns the
-     * four lists the activity page renders; an all-empty shape covers
+     * seven lists the activity page renders; an all-empty shape covers
      * disabled/unconfigured/unreachable.
      *
-     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>}
+     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>, popularMovies:list<array<string,mixed>>, popularShows:list<array<string,mixed>>, mostConcurrent:list<array<string,mixed>>}
      */
-    public function getHomeStats(int $days): array
+    public function getHomeStats(int $days, string $metric = 'plays', ?string $userId = null): array
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return self::normalizeHomeStats([]);
         }
-        $resp = $this->request([
+        $params = [
             'cmd'         => 'get_home_stats',
             'time_range'  => (string) self::clampRange($days),
+            'stats_type'  => self::clampMetric($metric),
             'stats_count' => '5',
-        ]);
+        ];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
         if ($resp === null || $resp['ok'] !== true) {
             return self::normalizeHomeStats([]);
         }
@@ -224,58 +239,103 @@ class TautulliClient implements ResetInterface
     /**
      * Pure transform: get_home_stats `data` (list of stat groups) → sanitized
      * lists. Allow-list only: usernames/emails/ids/avatars/file paths/guids are
-     * never copied out. Only the four groups we render are kept.
+     * never copied out. Only the groups we render are kept.
      *
      * @param array<int, mixed> $data
-     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>}
+     * @return array{topMovies:list<array<string,mixed>>, topShows:list<array<string,mixed>>, topUsers:list<array<string,mixed>>, topPlatforms:list<array<string,mixed>>, popularMovies:list<array<string,mixed>>, popularShows:list<array<string,mixed>>, mostConcurrent:list<array<string,mixed>>}
      */
     public static function normalizeHomeStats(array $data): array
     {
-        $out = ['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []];
+        $out = [
+            'topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => [],
+            'popularMovies' => [], 'popularShows' => [], 'mostConcurrent' => [],
+        ];
         foreach ($data as $group) {
-            if (!is_array($group)) {
-                continue;
-            }
+            if (!is_array($group)) { continue; }
             $rows = is_array($group['rows'] ?? null) ? $group['rows'] : [];
             switch (self::str($group['stat_id'] ?? null)) {
                 case 'top_movies':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topMovies'][] = [
-                            'ratingKey'  => self::str($r['rating_key'] ?? null),
-                            'title'      => self::str($r['title'] ?? null),
-                            'year'       => self::str($r['year'] ?? null),
-                            'posterPath' => self::str($r['thumb'] ?? ($r['grandparent_thumb'] ?? null)),
-                            'plays'      => (int) ($r['total_plays'] ?? 0),
+                            'ratingKey'     => self::str($r['rating_key'] ?? null),
+                            'title'         => self::str($r['title'] ?? null),
+                            'year'          => self::str($r['year'] ?? null),
+                            'posterPath'    => self::str($r['thumb'] ?? ($r['grandparent_thumb'] ?? null)),
+                            'plays'         => (int) ($r['total_plays'] ?? 0),
+                            'duration'      => $dur,
+                            'durationLabel' => self::secondsLabel($dur),
                         ];
                     }
                     break;
                 case 'top_tv':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topShows'][] = [
-                            'ratingKey'  => self::str($r['rating_key'] ?? null),
-                            'title'      => self::str($r['title'] ?? null),
-                            'posterPath' => self::str($r['grandparent_thumb'] ?? ($r['thumb'] ?? null)),
-                            'plays'      => (int) ($r['total_plays'] ?? 0),
+                            'ratingKey'     => self::str($r['rating_key'] ?? null),
+                            'title'         => self::str($r['title'] ?? null),
+                            'posterPath'    => self::str($r['grandparent_thumb'] ?? ($r['thumb'] ?? null)),
+                            'plays'         => (int) ($r['total_plays'] ?? 0),
+                            'duration'      => $dur,
+                            'durationLabel' => self::secondsLabel($dur),
+                        ];
+                    }
+                    break;
+                case 'popular_movies':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['popularMovies'][] = [
+                            'ratingKey'    => self::str($r['rating_key'] ?? null),
+                            'title'        => self::str($r['title'] ?? null),
+                            'year'         => self::str($r['year'] ?? null),
+                            'posterPath'   => self::str($r['thumb'] ?? ($r['grandparent_thumb'] ?? null)),
+                            'usersWatched' => (int) ($r['users_watched'] ?? 0),
+                        ];
+                    }
+                    break;
+                case 'popular_tv':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['popularShows'][] = [
+                            'ratingKey'    => self::str($r['rating_key'] ?? null),
+                            'title'        => self::str($r['title'] ?? null),
+                            'posterPath'   => self::str($r['grandparent_thumb'] ?? ($r['thumb'] ?? null)),
+                            'usersWatched' => (int) ($r['users_watched'] ?? 0),
                         ];
                     }
                     break;
                 case 'top_users':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topUsers'][] = [
                             'userDisplayName' => self::str($r['friendly_name'] ?? null),
                             'plays'           => (int) ($r['total_plays'] ?? 0),
+                            'duration'        => $dur,
+                            'durationLabel'   => self::secondsLabel($dur),
                         ];
                     }
                     break;
                 case 'top_platforms':
                     foreach ($rows as $r) {
                         if (!is_array($r)) { continue; }
+                        $dur = (int) ($r['total_duration'] ?? 0);
                         $out['topPlatforms'][] = [
-                            'platform' => self::str($r['platform_name'] ?? ($r['platform'] ?? null)),
-                            'plays'    => (int) ($r['total_plays'] ?? 0),
+                            'platform'      => self::str($r['platform_name'] ?? ($r['platform'] ?? null)),
+                            'plays'         => (int) ($r['total_plays'] ?? 0),
+                            'duration'      => $dur,
+                            'durationLabel' => self::secondsLabel($dur),
+                        ];
+                    }
+                    break;
+                case 'most_concurrent':
+                    foreach ($rows as $r) {
+                        if (!is_array($r)) { continue; }
+                        $out['mostConcurrent'][] = [
+                            'title' => self::str($r['title'] ?? null),
+                            'count' => (int) ($r['count'] ?? 0),
                         ];
                     }
                     break;
@@ -284,38 +344,65 @@ class TautulliClient implements ResetInterface
         return $out;
     }
 
+    /** Seconds -> "3h 12m" / "45m" / "0m". For watch-duration tile labels. */
+    private static function secondsLabel(int $s): string
+    {
+        if ($s <= 0) { return '0m'; }
+        $h = intdiv($s, 3600);
+        $m = intdiv($s % 3600, 60);
+        return $h > 0 ? sprintf('%dh %dm', $h, $m) : sprintf('%dm', $m);
+    }
+
     /**
      * Plays-per-day series for the activity graph, ready for Chart.js.
      *
      * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
      */
-    public function getPlaysByDate(int $days): array
+    public function getPlaysByDate(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_date', $days);
+        return $this->playsChart('get_plays_by_date', $days, $metric, $userId);
     }
 
     /** Plays per day by transcode decision (Direct Play / Direct Stream / Transcode). */
-    public function getPlaysByStreamType(int $days): array
+    public function getPlaysByStreamType(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_stream_type', $days);
+        return $this->playsChart('get_plays_by_stream_type', $days, $metric, $userId);
     }
 
     /** Plays aggregated by hour of day (0-23). */
-    public function getPlaysByHourOfDay(int $days): array
+    public function getPlaysByHourOfDay(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_hourofday', $days);
+        return $this->playsChart('get_plays_by_hourofday', $days, $metric, $userId);
     }
 
     /** Plays aggregated by day of week. */
-    public function getPlaysByDayOfWeek(int $days): array
+    public function getPlaysByDayOfWeek(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_plays_by_dayofweek', $days);
+        return $this->playsChart('get_plays_by_dayofweek', $days, $metric, $userId);
     }
 
     /** Plays by top-10 platform, split by transcode decision (problem clients). */
-    public function getStreamTypeByPlatform(int $days): array
+    public function getStreamTypeByPlatform(int $days, string $metric = 'plays', ?string $userId = null): array
     {
-        return $this->playsChart('get_stream_type_by_top_10_platforms', $days);
+        return $this->playsChart('get_stream_type_by_top_10_platforms', $days, $metric, $userId);
+    }
+
+    /** Plays by source resolution (pre-transcode), split by transcode decision. */
+    public function getPlaysBySourceResolution(int $days, string $metric = 'plays', ?string $userId = null): array
+    {
+        return $this->playsChart('get_plays_by_source_resolution', $days, $metric, $userId);
+    }
+
+    /** Plays by stream resolution (post-transcode), split by transcode decision. */
+    public function getPlaysByStreamResolution(int $days, string $metric = 'plays', ?string $userId = null): array
+    {
+        return $this->playsChart('get_plays_by_stream_resolution', $days, $metric, $userId);
+    }
+
+    /** Plays by top-10 user, split by transcode decision. */
+    public function getStreamTypeByUser(int $days, string $metric = 'plays', ?string $userId = null): array
+    {
+        return $this->playsChart('get_stream_type_by_top_10_users', $days, $metric, $userId);
     }
 
     /**
@@ -325,13 +412,44 @@ class TautulliClient implements ResetInterface
      *
      * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
      */
-    private function playsChart(string $cmd, int $days): array
+    private function playsChart(string $cmd, int $days, string $metric = 'plays', ?string $userId = null): array
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return self::normalizePlaysByDate([]);
         }
-        $resp = $this->request(['cmd' => $cmd, 'time_range' => (string) self::clampRange($days)]);
+        $params = [
+            'cmd'        => $cmd,
+            'time_range' => (string) self::clampRange($days),
+            'y_axis'     => self::clampMetric($metric),
+        ];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
+        if ($resp === null || $resp['ok'] !== true) {
+            return self::normalizePlaysByDate([]);
+        }
+        return self::normalizePlaysByDate(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Concurrent stream count over time by stream type. Unlike the other charts
+     * this command takes no y_axis (it is always a count), only time_range + user.
+     *
+     * @return array{categories:list<string>, series:list<array{name:string,data:list<int>}>}
+     */
+    public function getConcurrentStreams(int $days, ?string $userId = null): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return self::normalizePlaysByDate([]);
+        }
+        $params = ['cmd' => 'get_concurrent_streams_by_stream_type', 'time_range' => (string) self::clampRange($days)];
+        if ($userId !== null && $userId !== '') {
+            $params['user_id'] = $userId;
+        }
+        $resp = $this->request($params);
         if ($resp === null || $resp['ok'] !== true) {
             return self::normalizePlaysByDate([]);
         }
@@ -385,6 +503,49 @@ class TautulliClient implements ResetInterface
     }
 
     /**
+     * Per-user totals for the Users overview table, normalized + sanitized.
+     * Empty list covers disabled/unconfigured/unreachable.
+     *
+     * @return list<array{friendlyName:?string,lastSeen:int,lastPlayed:?string,plays:int,durationSeconds:int}>
+     */
+    public function getUsersTable(int $length = 25): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return [];
+        }
+        $resp = $this->request([
+            'cmd'          => 'get_users_table',
+            'order_column' => 'plays',
+            'order_dir'    => 'desc',
+            'length'       => (string) max(1, min(100, $length)),
+        ]);
+        if ($resp === null || $resp['ok'] !== true) {
+            return [];
+        }
+        return self::normalizeUsersTable(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
+     * Friendly-name + opaque user_id pairs for the page's user filter dropdown.
+     *
+     * @return list<array{name:string,id:string}>
+     */
+    public function getUserNames(): array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return [];
+        }
+        $resp = $this->request(['cmd' => 'get_user_names']);
+        if ($resp === null || $resp['ok'] !== true) {
+            return [];
+        }
+        // get_user_names returns a bare list as `data`, not a {data:...} envelope.
+        return self::normalizeUserNames(is_array($resp['data']) ? $resp['data'] : []);
+    }
+
+    /**
      * Pure transform: get_libraries `data` → sanitized rows. Names + counts
      * only; section ids, thumbs and paths are dropped.
      *
@@ -404,6 +565,52 @@ class TautulliClient implements ResetInterface
                 'count'      => (int) ($lib['count'] ?? 0),
                 'childCount' => isset($lib['child_count']) ? (int) $lib['child_count'] : null,
             ];
+        }
+        return $out;
+    }
+
+    /**
+     * Pure transform: get_users_table `data` envelope -> privacy-safe rows.
+     * Allow-list only — ip_address, email, user_id, avatar/thumb never copied out.
+     *
+     * @param array<string, mixed> $data
+     * @return list<array{friendlyName:?string,lastSeen:int,lastPlayed:?string,plays:int,durationSeconds:int}>
+     */
+    public static function normalizeUsersTable(array $data): array
+    {
+        $rows = is_array($data['data'] ?? null) ? $data['data'] : [];
+        $out = [];
+        foreach ($rows as $r) {
+            if (!is_array($r)) { continue; }
+            $out[] = [
+                'friendlyName'    => self::str($r['friendly_name'] ?? ($r['user'] ?? null)),
+                'lastSeen'        => (int) ($r['last_seen'] ?? 0),
+                'lastPlayed'      => self::str($r['last_played'] ?? null),
+                'plays'           => (int) ($r['plays'] ?? 0),
+                'durationSeconds' => (int) ($r['duration'] ?? 0),
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Pure transform: get_user_names `data` (bare list) -> {name, id} pairs for the
+     * filter dropdown. `id` is the opaque Tautulli user_id (filter token only).
+     * Rows missing either field are dropped.
+     *
+     * @param array<int, mixed> $data
+     * @return list<array{name:string,id:string}>
+     */
+    public static function normalizeUserNames(array $data): array
+    {
+        $out = [];
+        foreach ($data as $u) {
+            if (!is_array($u)) { continue; }
+            $name = self::str($u['friendly_name'] ?? null);
+            $id   = self::str($u['user_id'] ?? null);
+            if ($name !== null && $id !== null) {
+                $out[] = ['name' => $name, 'id' => $id];
+            }
         }
         return $out;
     }

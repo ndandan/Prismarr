@@ -407,7 +407,7 @@ class TautulliClientTest extends TestCase
         return [
             ['stat_id' => 'top_movies', 'rows' => [
                 ['rating_key' => '12345', 'title' => 'See How They Run', 'year' => '2022',
-                 'total_plays' => 7, 'thumb' => '/library/metadata/12345/thumb/1',
+                 'total_plays' => 7, 'total_duration' => 18000, 'thumb' => '/library/metadata/12345/thumb/1',
                  'file' => '/data/media/x.mkv', 'guid' => 'plex://movie/abc'],
             ]],
             ['stat_id' => 'top_tv', 'rows' => [
@@ -416,10 +416,22 @@ class TautulliClientTest extends TestCase
             ]],
             ['stat_id' => 'top_users', 'rows' => [
                 ['user' => 'plexlogin_secret', 'friendly_name' => 'nDanDan', 'user_id' => 99,
-                 'total_plays' => 30, 'user_thumb' => 'https://plex.tv/users/abc/avatar'],
+                 'total_plays' => 30, 'total_duration' => 36000, 'user_thumb' => 'https://plex.tv/users/abc/avatar'],
             ]],
             ['stat_id' => 'top_platforms', 'rows' => [
                 ['platform' => 'Chrome', 'platform_name' => 'Chrome', 'total_plays' => 18],
+            ]],
+            ['stat_id' => 'popular_movies', 'rows' => [
+                ['rating_key' => '555', 'title' => 'Dune', 'year' => '2021', 'users_watched' => 6,
+                 'thumb' => '/library/metadata/555/thumb/1', 'file' => '/data/x.mkv'],
+            ]],
+            ['stat_id' => 'popular_tv', 'rows' => [
+                ['rating_key' => '888', 'title' => 'Severance', 'users_watched' => 9,
+                 'grandparent_thumb' => '/library/metadata/880/thumb/2'],
+            ]],
+            ['stat_id' => 'most_concurrent', 'rows' => [
+                ['title' => 'Concurrent Streams', 'count' => 5],
+                ['title' => 'Concurrent Transcodes', 'count' => 2],
             ]],
             ['stat_id' => 'last_watched', 'rows' => [['title' => 'ignored']]],
         ];
@@ -450,6 +462,7 @@ class TautulliClientTest extends TestCase
         $flat = json_encode(TautulliClient::normalizeHomeStats($this->homeStatsFixture()));
         self::assertStringNotContainsString('plexlogin_secret', $flat);
         self::assertStringNotContainsString('/data/media', $flat);
+        self::assertStringNotContainsString('/data/x.mkv', $flat);
         self::assertStringNotContainsString('plex://', $flat);
         self::assertStringNotContainsString('avatar', $flat);
         foreach (TautulliClient::normalizeHomeStats($this->homeStatsFixture())['topUsers'] as $u) {
@@ -461,7 +474,35 @@ class TautulliClientTest extends TestCase
     public function testNormalizeHomeStatsEmptyInputYieldsEmptyLists(): void
     {
         $out = TautulliClient::normalizeHomeStats([]);
-        self::assertSame(['topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => []], $out);
+        self::assertSame([
+            'topMovies' => [], 'topShows' => [], 'topUsers' => [], 'topPlatforms' => [],
+            'popularMovies' => [], 'popularShows' => [], 'mostConcurrent' => [],
+        ], $out);
+    }
+
+    public function testNormalizeHomeStatsAddsDurationToWatchedAndUsers(): void
+    {
+        $out = TautulliClient::normalizeHomeStats($this->homeStatsFixture());
+        self::assertSame(18000, $out['topMovies'][0]['duration']);
+        self::assertSame('5h 0m', $out['topMovies'][0]['durationLabel']);
+        self::assertSame(36000, $out['topUsers'][0]['duration']);
+        self::assertSame('10h 0m', $out['topUsers'][0]['durationLabel']);
+    }
+
+    public function testNormalizeHomeStatsMapsPopularAndConcurrent(): void
+    {
+        $out = TautulliClient::normalizeHomeStats($this->homeStatsFixture());
+        self::assertSame('Dune', $out['popularMovies'][0]['title']);
+        self::assertSame('2021', $out['popularMovies'][0]['year']);
+        self::assertSame(6, $out['popularMovies'][0]['usersWatched']);
+        self::assertSame('/library/metadata/555/thumb/1', $out['popularMovies'][0]['posterPath']);
+
+        self::assertSame('Severance', $out['popularShows'][0]['title']);
+        self::assertSame(9, $out['popularShows'][0]['usersWatched']);
+        self::assertSame('/library/metadata/880/thumb/2', $out['popularShows'][0]['posterPath']);
+
+        self::assertSame('Concurrent Streams', $out['mostConcurrent'][0]['title']);
+        self::assertSame(5, $out['mostConcurrent'][0]['count']);
     }
 
     /** A representative get_plays_by_date `data` envelope. */
@@ -577,8 +618,8 @@ class TautulliClientTest extends TestCase
 
     public function testGetHistoryAcceptsStartOffset(): void
     {
-        // New signature accepts (length, start). On an unconfigured client it
-        // returns [] without error — proves the 2-arg signature exists.
+        // Signature accepts (length, start, userId). On an unconfigured client it
+        // returns [] without error — proves the 2-arg and 3-arg signatures exist.
         $repo = $this->createMock(SettingRepository::class);
         $repo->method('getAll')->willReturn([]);
         $client = new TautulliClient(
@@ -587,6 +628,7 @@ class TautulliClientTest extends TestCase
             null,
         );
         self::assertSame([], $client->getHistory(25, 25));
+        self::assertSame([], $client->getHistory(25, 25, '99'));
     }
 
     public function testNormalizesDynamicRangeAndTranscodeCodecs(): void
@@ -623,5 +665,71 @@ class TautulliClientTest extends TestCase
         // no stream_video_dynamic_range key → must fall back to the source value
         $s = TautulliClient::normalizeActivity($data)['sessions'][0];
         self::assertSame('HDR10', $s['dynamicRange']);
+    }
+
+    private function usersTableFixture(): array
+    {
+        return ['data' => [
+            ['friendly_name' => 'nDanDan', 'user' => 'nDanDan', 'last_seen' => 1781377600,
+             'last_played' => 'See How They Run', 'plays' => 240, 'duration' => 360000,
+             'ip_address' => '192.168.1.5', 'email' => 'user@example.com', 'user_id' => 99,
+             'user_thumb' => 'https://plex.tv/users/abc/avatar'],
+            ['friendly_name' => 'Rob', 'last_seen' => 0, 'last_played' => null, 'plays' => 12, 'duration' => 0],
+        ]];
+    }
+
+    public function testNormalizeUsersTableMapsRows(): void
+    {
+        $out = TautulliClient::normalizeUsersTable($this->usersTableFixture());
+        self::assertCount(2, $out);
+        self::assertSame('nDanDan', $out[0]['friendlyName']);
+        self::assertSame(1781377600, $out[0]['lastSeen']);
+        self::assertSame('See How They Run', $out[0]['lastPlayed']);
+        self::assertSame(240, $out[0]['plays']);
+        self::assertSame(360000, $out[0]['durationSeconds']);
+
+        self::assertSame('Rob', $out[1]['friendlyName']);
+        self::assertSame(0, $out[1]['lastSeen']);
+        self::assertNull($out[1]['lastPlayed']);
+        self::assertSame(12, $out[1]['plays']);
+        self::assertSame(0, $out[1]['durationSeconds']);
+    }
+
+    public function testNormalizeUsersTableNeverLeaksPrivateFields(): void
+    {
+        $flat = json_encode(TautulliClient::normalizeUsersTable($this->usersTableFixture()));
+        self::assertStringNotContainsString('192.168.1.5', $flat);
+        self::assertStringNotContainsString('user@example.com', $flat);
+        self::assertStringNotContainsString('avatar', $flat);
+        foreach (TautulliClient::normalizeUsersTable($this->usersTableFixture()) as $u) {
+            self::assertArrayNotHasKey('ip_address', $u);
+            self::assertArrayNotHasKey('email', $u);
+            self::assertArrayNotHasKey('user_id', $u);
+            self::assertArrayNotHasKey('user_thumb', $u);
+        }
+    }
+
+    public function testNormalizeUserNamesMapsAndDropsIncomplete(): void
+    {
+        $out = TautulliClient::normalizeUserNames([
+            ['friendly_name' => 'nDanDan', 'user_id' => 99],
+            ['friendly_name' => 'NoId'],          // dropped — no id
+            ['user_id' => 7],                      // dropped — no name
+            'not-an-array',                        // dropped
+        ]);
+        self::assertSame([['name' => 'nDanDan', 'id' => '99']], $out);
+    }
+
+    public function testNewChartMethodsFailOpenWhenUnconfigured(): void
+    {
+        $repo = $this->createMock(SettingRepository::class);
+        $repo->method('getAll')->willReturn([]);
+        $client = new TautulliClient(new ConfigService($repo), new NullLogger(), null);
+
+        $neutral = ['categories' => [], 'series' => []];
+        self::assertSame($neutral, $client->getPlaysBySourceResolution(30, 'duration', '99'));
+        self::assertSame($neutral, $client->getPlaysByStreamResolution(30));
+        self::assertSame($neutral, $client->getStreamTypeByUser(30));
+        self::assertSame($neutral, $client->getConcurrentStreams(30, '99'));
     }
 }
