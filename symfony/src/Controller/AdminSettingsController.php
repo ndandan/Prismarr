@@ -2,10 +2,12 @@
 
 namespace App\Controller;
 
+use App\Dashboard\DashboardSections;
 use App\Entity\ServiceInstance;
 use App\Repository\SettingRepository;
 use App\Repository\UserRepository;
 use App\Service\ConfigService;
+use App\Service\DashboardLayoutService;
 use App\Service\HealthService;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
@@ -326,6 +328,7 @@ class AdminSettingsController extends AbstractController
         #[Autowire(service: 'cache.app')]
         private readonly AdapterInterface $appCache,
         private readonly \App\Service\AppVersion $appVersion,
+        private readonly DashboardLayoutService $dashboardLayout,
         #[Autowire('%kernel.project_dir%')]
         private readonly string $projectDir = '',
         #[Autowire('%kernel.environment%')]
@@ -373,6 +376,7 @@ class AdminSettingsController extends AbstractController
             'app_latest'         => $this->appVersion->latest(),
             'app_update_available' => $this->appVersion->isUpdateAvailable(),
             'app_releases'       => $this->appVersion->releases(),
+            'dashboard_layout'   => $this->loadDashboardLayout(),
             // v1.1.0 — instance lists for the multi-instance card UI.
             'instances_by_type'  => [
                 ServiceInstance::TYPE_RADARR => $this->instances->getAll(ServiceInstance::TYPE_RADARR),
@@ -891,6 +895,26 @@ class AdminSettingsController extends AbstractController
     /**
      * @return array<string, bool>  id => visible (true by default)
      */
+    /**
+     * Ordered section rows for the settings list: [{key, label, visible}].
+     * Order + visibility come from DashboardLayoutService (single source of
+     * truth shared with the dashboard).
+     *
+     * @return list<array{key: string, label: string, visible: bool}>
+     */
+    private function loadDashboardLayout(): array
+    {
+        $out = [];
+        foreach ($this->dashboardLayout->resolve() as $row) {
+            $out[] = [
+                'key'     => $row['key'],
+                'label'   => DashboardSections::META[$row['key']]['label'],
+                'visible' => $row['visible'],
+            ];
+        }
+        return $out;
+    }
+
     private function loadSidebarVisibility(): array
     {
         $out = [];
@@ -1004,6 +1028,27 @@ class AdminSettingsController extends AbstractController
             $payload['sidebar_hide_' . $id] = $visible ? null : '1';
         }
 
+        // Dashboard layout — ordered keys come from a hidden input maintained
+        // by the drag UI; visibility uses the same unchecked-box-means-hidden
+        // semantics as the sidebar above. Unknown/duplicate keys are dropped;
+        // missing keys are NOT appended here (DashboardLayoutService fills
+        // them in at read time, so the stored value stays a clean subset).
+        $rawOrder = trim((string) $request->request->get('dashboard_section_order', ''));
+        if ($rawOrder !== '') {
+            $orderKeys = [];
+            foreach (explode(',', $rawOrder) as $raw) {
+                $k = trim($raw);
+                if ($k !== '' && DashboardSections::isValid($k) && !in_array($k, $orderKeys, true)) {
+                    $orderKeys[] = $k;
+                }
+            }
+            $payload['dashboard_section_order'] = $orderKeys === [] ? null : implode(',', $orderKeys);
+        }
+        foreach (DashboardSections::keys() as $key) {
+            $visible = $request->request->has('dashboard_visible_' . $key);
+            $payload['dashboard_hide_' . $key] = $visible ? null : '1';
+        }
+
         // Per-service kill switch (issue #15) — same unchecked-box semantics.
         // Enabled → drop the row (falls back to the credential check on read);
         // disabled → store an explicit '0'.
@@ -1063,6 +1108,10 @@ class AdminSettingsController extends AbstractController
         $payload = [];
         foreach (array_keys(self::DISPLAY_OPTIONS) as $key) {
             $payload[$key] = null;
+        }
+        $payload['dashboard_section_order'] = null;
+        foreach (DashboardSections::keys() as $key) {
+            $payload['dashboard_hide_' . $key] = null;
         }
         $this->settings->setMany($payload);
         $this->config->invalidate();
