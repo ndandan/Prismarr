@@ -40,7 +40,7 @@ class AdminSettingsControllerTest extends TestCase
             $this->createMock(LoggerInterface::class),
             $this->createMock(\Symfony\Component\Cache\Adapter\AdapterInterface::class),
             $appVersion,
-            $layout ?? $this->createMock(\App\Service\DashboardLayoutService::class),
+            $layout ?? new \App\Service\DashboardLayoutService($config),
             projectDir: sys_get_temp_dir(),
             environment: 'test',
         );

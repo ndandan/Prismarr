@@ -13,7 +13,7 @@ use Symfony\Contracts\Service\ResetInterface;
  * ResetInterface so an admin's layout change takes effect on the next request
  * without waiting for a FrankenPHP worker recycle.
  */
-class DashboardLayoutService implements ResetInterface
+final class DashboardLayoutService implements ResetInterface
 {
     /** @var list<array{key: string, visible: bool}>|null */
     private ?array $cache = null;
