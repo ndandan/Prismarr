@@ -893,9 +893,6 @@ class AdminSettingsController extends AbstractController
     }
 
     /**
-     * @return array<string, bool>  id => visible (true by default)
-     */
-    /**
      * Ordered section rows for the settings list: [{key, label, visible}].
      * Order + visibility come from DashboardLayoutService (single source of
      * truth shared with the dashboard).
