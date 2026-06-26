@@ -740,6 +740,10 @@ admin:
     sidebar:
       title: Sidebar visibility
       description: Pick which services and features show up in the left sidebar.
+    dashboard_layout:
+      title: Dashboard layout
+      description: Drag to reorder the dashboard sections, and choose which ones to show.
+      reset_hint: 'Use "Reset display preferences" below to restore the default layout.'
     switch:
       on: Enabled
       off: Disabled

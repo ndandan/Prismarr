@@ -739,6 +739,10 @@ admin:
     sidebar:
       title: Visibilité de la sidebar
       description: Choisis quels services et fonctionnalités apparaissent dans la barre latérale gauche.
+    dashboard_layout:
+      title: Disposition du tableau de bord
+      description: Glissez pour réordonner les sections, et choisissez celles à afficher.
+      reset_hint: 'Utilisez « Réinitialiser les préférences d''affichage » ci-dessous pour rétablir la disposition par défaut.'
     switch:
       on: Activées
       off: Désactivées
