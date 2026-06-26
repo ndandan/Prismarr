@@ -14,11 +14,18 @@ name: Beta
 
 on:
   workflow_dispatch:
+    inputs:
+      beta_number:
+        description: "Beta build number (1, 2, 3, …) — reset to 1 for each new version"
+        required: true
+        default: "1"
 
-# Bump this when the dev line moves to the next minor (e.g. after 1.1.0
-# ships, set it to 1.2.0). Keep it in sync with App\Service\AppVersion::VERSION.
+# The next stable version the dev line is heading toward. Bump it right after
+# cutting a release so :beta sorts ABOVE the last stable in semver (e.g. after
+# 1.1.1 ships, set it to 1.1.2), never below it. Keep in sync with
+# App\Service\AppVersion::VERSION.
 env:
-  BETA_VERSION_BASE: "1.1.0"
+  BETA_VERSION_BASE: "1.1.2"
 
 jobs:
   beta:
@@ -45,9 +52,10 @@ jobs:
 
       - name: Compose the beta version string
         id: ver
-        # e.g. "1.1.0-beta.42" — version_compare ranks this below "1.1.0",
-        # so testers get nudged to the stable once it ships.
-        run: echo "version=${BETA_VERSION_BASE}-beta.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+        # e.g. "1.1.2-beta.1" — version_compare ranks this above the last
+        # stable (1.1.1) but below the target base, so testers get nudged to the
+        # stable once it ships. The build number is the manual workflow input.
+        run: echo "version=${BETA_VERSION_BASE}-beta.${{ inputs.beta_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v4
