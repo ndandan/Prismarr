@@ -479,6 +479,11 @@ dashboard:
       downloaded: 'Downloaded'
       monitored: 'Monitored'
       missing: 'Missing'
+  layout:
+    edit: Edit layout
+    save: Save layout
+    cancel: Cancel
+    hide: Hide
 
 tautulli:
   title: Plex Activity
