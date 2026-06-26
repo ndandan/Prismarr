@@ -40,6 +40,22 @@ jobs:
         # GHCR requires the namespace to be lowercase.
         run: echo "name=ghcr.io/$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')/prismarr" >> "$GITHUB_OUTPUT"
 
+      - name: Resolve tags + version
+        id: meta
+        # A manual dispatch from a NON-main branch publishes only the :beta tag
+        # for self-hosted testing (e.g. Unraid), leaving the stable :latest
+        # untouched. Pushes to main (or a dispatch on main) keep publishing
+        # :latest + the commit-sha tag as before.
+        run: |
+          IMG="${{ steps.image.outputs.name }}"
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "tags=${IMG}:latest,${IMG}:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+            echo "version=1.1.0-tautulli" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=${IMG}:beta" >> "$GITHUB_OUTPUT"
+            echo "version=beta-${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Log in to GHCR
         uses: docker/login-action@v4
         with:
@@ -54,11 +70,9 @@ jobs:
           file: docker/frankenphp/Dockerfile
           platforms: linux/amd64
           push: true
-          tags: |
-            ${{ steps.image.outputs.name }}:latest
-            ${{ steps.image.outputs.name }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
           build-args: |
-            PRISMARR_VERSION=1.1.0-tautulli
+            PRISMARR_VERSION=${{ steps.meta.outputs.version }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
           provenance: false
