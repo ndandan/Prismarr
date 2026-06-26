@@ -478,6 +478,16 @@ dashboard:
       downloaded: 'Téléchargé'
       monitored: 'Suivi'
       missing: 'Manquant'
+    date:
+      cinema: 'Au cinéma'
+      digital: 'Numérique'
+      physical: 'Physique'
+      first_aired: 'Première diffusion'
+      next_episode: 'Prochain épisode'
+      ended: 'Terminée'
+    airstatus:
+      continuing: 'En cours'
+      ended: 'Terminée'
   layout:
     edit: Modifier la disposition
     save: Enregistrer

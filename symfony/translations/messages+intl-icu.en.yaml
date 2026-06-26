@@ -479,6 +479,16 @@ dashboard:
       downloaded: 'Downloaded'
       monitored: 'Monitored'
       missing: 'Missing'
+    date:
+      cinema: 'In theaters'
+      digital: 'Digital'
+      physical: 'Physical'
+      first_aired: 'First aired'
+      next_episode: 'Next episode'
+      ended: 'Ended'
+    airstatus:
+      continuing: 'Continuing'
+      ended: 'Ended'
   layout:
     edit: Edit layout
     save: Save layout
