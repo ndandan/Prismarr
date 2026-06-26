@@ -783,6 +783,11 @@
 
     function addOverlays() {
       sections().forEach(function (sec) {
+        // Skip gated-out/empty section wrappers (e.g. an empty watchlist or an
+        // unconfigured service): the partial still emits a zero-height
+        // [data-section-key] div, and it must not get a drag handle or an
+        // orphaned Hide button that floats onto the next section.
+        if (sec.offsetHeight === 0) return;
         if (sec.querySelector('.section-edit-overlay')) return;
         var ov = document.createElement('div');
         ov.className = 'section-edit-overlay';
@@ -806,7 +811,7 @@
       if (!dragged) return; e.preventDefault();
       var after = null;
       sections().forEach(function (sec) {
-        if (sec === dragged || sec.style.display === 'none') return;
+        if (sec === dragged || sec.style.display === 'none' || sec.offsetHeight === 0) return;
         var box = sec.getBoundingClientRect();
         if (e.clientY < box.top + box.height / 2 && after === null) after = sec;
       });
