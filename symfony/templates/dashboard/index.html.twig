@@ -839,14 +839,20 @@
     // Tiles carry [data-ql-trigger] + data-ql-source/type/slug/id and keep
     // their href as a no-JS fallback. We intercept the click, open the shell,
     // fetch the matching fragment, and swap it into [data-ql-body].
-    var qlModal = document.getElementById('ql-modal');
-    function qlBody() { return qlModal ? qlModal.querySelector('[data-ql-body]') : null; }
+    // Re-query the modal on every use: it lives in the content block, so Turbo
+    // replaces the node on each render. Caching it once would leave the
+    // document-level delegated listeners pointing at a detached node after a
+    // navigation, and the quick-look would silently stop opening.
+    function qlEl() { return document.getElementById('ql-modal'); }
+    function qlBody() { var m = qlEl(); return m ? m.querySelector('[data-ql-body]') : null; }
 
     function qlOpen() {
-      qlModal.classList.add('show');
-      qlModal.style.display = 'block';
-      qlModal.removeAttribute('aria-hidden');
-      qlModal.setAttribute('aria-modal', 'true');
+      var m = qlEl();
+      if (!m) return;
+      m.classList.add('show');
+      m.style.display = 'block';
+      m.removeAttribute('aria-hidden');
+      m.setAttribute('aria-modal', 'true');
       document.body.classList.add('modal-open');
       if (!document.querySelector('.modal-backdrop.ql-backdrop-el')) {
         var bd = document.createElement('div');
@@ -855,10 +861,12 @@
       }
     }
     function qlClose() {
-      qlModal.classList.remove('show');
-      qlModal.style.display = 'none';
-      qlModal.setAttribute('aria-hidden', 'true');
-      qlModal.removeAttribute('aria-modal');
+      var m = qlEl();
+      if (!m) return;
+      m.classList.remove('show');
+      m.style.display = 'none';
+      m.setAttribute('aria-hidden', 'true');
+      m.removeAttribute('aria-modal');
       var bd = document.querySelector('.modal-backdrop.ql-backdrop-el');
       if (bd) bd.remove();
       if (!document.querySelector('.modal.show')) { document.body.classList.remove('modal-open'); }
@@ -877,7 +885,7 @@
       return '/tableau-de-bord/quicklook/' + type + '/' + slug + '/' + id;
     }
 
-    if (qlModal && !window._qlDelegated) {
+    if (!window._qlDelegated) {
       window._qlDelegated = true;
       document.addEventListener('click', function (e) {
         var trigger = e.target.closest('[data-ql-trigger]');
@@ -898,16 +906,18 @@
           return;
         }
         // Close on backdrop click or [data-ql-dismiss] (the × in the body).
-        if (e.target.closest('[data-ql-dismiss]') || e.target === qlModal) {
+        if (e.target.closest('[data-ql-dismiss]') || e.target === qlEl()) {
           qlClose();
         }
       });
       document.addEventListener('keydown', function (e) {
-        if (e.key === 'Escape' && qlModal.classList.contains('show')) { qlClose(); }
+        var m = qlEl();
+        if (e.key === 'Escape' && m && m.classList.contains('show')) { qlClose(); }
       });
       // Tidy up if Turbo navigates away with the modal open.
       document.addEventListener('turbo:before-render', function () {
-        if (qlModal.classList.contains('show')) { qlClose(); }
+        var m = qlEl();
+        if (m && m.classList.contains('show')) { qlClose(); }
       });
     }
   })();
