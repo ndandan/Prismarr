@@ -1393,6 +1393,7 @@
       'search.forget':         'topbar.search.forget'|trans,
       'search.in_library_badge': 'topbar.search.in_library_badge'|trans,
       'search.not_added_badge':  'topbar.search.not_added_badge'|trans,
+      'search.add':              'topbar.search.add'|trans,
       'theme.label_light':     'topbar.theme.label_light'|trans,
       'theme.label_dark':      'topbar.theme.label_dark'|trans,
       'health.all_ok':         'topbar.health.summary_ok'|trans,
@@ -1481,7 +1482,7 @@
         var poster = item.poster
           ? '<img src="' + item.poster + '" style="width:30px;height:45px;object-fit:cover;border-radius:4px;" class="flex-shrink-0" loading="lazy">'
           : '<div style="width:30px;height:45px;background:rgba(255,255,255,.05);border-radius:4px;display:flex;align-items:center;justify-content:center;" class="flex-shrink-0">' + typeIcon + '</div>';
-        var dataAttr = ' data-quick-add=\'' + JSON.stringify(item).replace(/'/g, '&#39;') + '\'';
+        var dataAttr = ' data-item=\'' + JSON.stringify(item).replace(/'/g, '&#39;') + '\'';
         // v1.1.0 multi-instance: when the result comes from a non-default
         // instance, surface its name in the meta line so the user knows
         // exactly which Radarr 4K / Sonarr Anime owns the match. Default
@@ -1621,6 +1622,56 @@
       var lastLocal = [];
       var lastOnline = [];
 
+      function openDetailFor(item) {
+        if (!window.prismarrQl) return;
+        var isFilm = item.type === 'film';
+        var url;
+        if (item.inLibrary && item.instance && item.instance.slug && item.id) {
+          // Local library result — authoritative Radarr/Sonarr data + Manage deep-link.
+          url = '/tableau-de-bord/quicklook/' + (isFilm ? 'movie' : 'series')
+              + '/' + item.instance.slug + '/' + item.id;
+        } else {
+          // Online result — TMDb data. Movies key on tmdbId (== id); series need tmdbId.
+          var tmdbId = item.tmdbId || (isFilm ? item.id : null);
+          if (!tmdbId) { return; } // can't resolve TV without a tmdbId — leave dropdown open
+          url = '/tableau-de-bord/quicklook/tmdb/' + (isFilm ? 'movie' : 'tv') + '/' + tmdbId;
+        }
+        closeResults();
+        window.prismarrQl.open();
+        fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.text() : ''; })
+          .then(function (html) {
+            var b = window.prismarrQl.body();
+            if (!b) return;
+            b.innerHTML = (html || '').trim() || '<div class="ql-error"></div>';
+            decorateAction(b, item, isFilm);
+          })
+          .catch(function () { window.prismarrQl.close(); });
+      }
+
+      function decorateAction(body, item, isFilm) {
+        var action = body.querySelector('.ql-action');
+        if (!action) return;
+        if (item.inLibrary) {
+          // Library results already carry a Manage deep-link from the server.
+          // Online in-library results fall back to the default library page.
+          if (!(item.instance && item.instance.slug)) {
+            var slug = isFilm ? DEFAULT_RADARR_SLUG : DEFAULT_SONARR_SLUG;
+            action.setAttribute('href', '/medias/' + slug + '/' + (isFilm ? 'films' : 'series'));
+            action.textContent = (window._i18n && window._i18n['dashboard.quicklook.manage'] || 'Manage') + ' →';
+          }
+          return;
+        }
+        // Not added → replace the action with an Add control that drives the
+        // existing quick-add flow (the document-level [data-quick-add] handler).
+        var add = document.createElement('a');
+        add.href = '#';
+        add.className = 'ql-action';
+        add.setAttribute('data-quick-add', JSON.stringify(item));
+        add.textContent = (window._i18n && window._i18n['search.add'] || 'Add') + ' →';
+        action.replaceWith(add);
+      }
+
       function runSearch(q) {
         showSpinner();
         var ctrl = new AbortController();
@@ -1717,7 +1768,10 @@
         }
         var item = e.target.closest('.prismarr-search-item');
         if (item) {
+          e.preventDefault();
+          e.stopPropagation();
           saveRecent(input.value.trim());
+          try { openDetailFor(JSON.parse(item.dataset.item)); } catch (err) {}
         }
       });
 
@@ -1859,6 +1913,7 @@
         if (!qaModal) return;
         e.preventDefault();
         e.stopPropagation();
+        if (window.prismarrQl) { window.prismarrQl.close(); }
 
         qaItem = JSON.parse(el.dataset.quickAdd);
         var isFilm = qaItem.type === 'film';
