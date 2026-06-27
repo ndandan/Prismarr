@@ -1611,32 +1611,13 @@
             var b = window.prismarrQl.body();
             if (!b) return;
             b.innerHTML = (html || '').trim() || '<div class="ql-error"></div>';
-            decorateAction(b, item, isFilm);
+            // The quick-look body now renders the correct primary action
+            // server-side (Manage deep-link to the exact instance when the
+            // title is in a library, otherwise an Add button wired to the
+            // shared resolve→quick-add flow), so no client-side patching is
+            // needed here.
           })
           .catch(function () { window.prismarrQl.close(); });
-      }
-
-      function decorateAction(body, item, isFilm) {
-        var action = body.querySelector('.ql-action');
-        if (!action) return;
-        if (item.inLibrary) {
-          // Library results already carry a Manage deep-link from the server.
-          // Online in-library results fall back to the default library page.
-          if (!(item.instance && item.instance.slug)) {
-            var slug = isFilm ? DEFAULT_RADARR_SLUG : DEFAULT_SONARR_SLUG;
-            action.setAttribute('href', '/medias/' + slug + '/' + (isFilm ? 'films' : 'series'));
-            action.textContent = (window._i18n && window._i18n['dashboard.quicklook.manage'] || 'Manage') + ' →';
-          }
-          return;
-        }
-        // Not added → replace the action with an Add control that drives the
-        // existing quick-add flow (the document-level [data-quick-add] handler).
-        var add = document.createElement('a');
-        add.href = '#';
-        add.className = 'ql-action';
-        add.setAttribute('data-quick-add', JSON.stringify(item));
-        add.textContent = (window._i18n && window._i18n['search.add'] || 'Add') + ' →';
-        action.replaceWith(add);
       }
 
       function runSearch(q) {

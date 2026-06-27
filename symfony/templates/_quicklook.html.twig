@@ -234,6 +234,37 @@
           qlSetWl(btn, wasIn);
         });
       });
+      // Add-to-Radarr/Sonarr from the modal → resolve the TMDb id to the *arr
+      // payload, then hand off to the shared quick-add picker (the
+      // document-level [data-quick-add] handler). Mirrors the old Explorer
+      // modal's Add button so search, dashboard and Explorer share one path.
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-ql-add]');
+        if (!btn) return;
+        e.preventDefault();
+        var type = btn.getAttribute('data-ql-add-type'); // movie | tv
+        var id = btn.getAttribute('data-ql-add-id');
+        if (!type || !id) return;
+        var orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>';
+        fetch('/decouverte/resolve/' + type + '/' + id, { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (data) {
+            if (!data || data.error) { btn.disabled = false; btn.innerHTML = orig; return; }
+            qlClose();
+            setTimeout(function () {
+              var trigger = document.createElement('a');
+              trigger.href = '#';
+              trigger.setAttribute('data-quick-add', JSON.stringify(data));
+              trigger.style.cssText = 'position:fixed;top:-9999px;left:-9999px;';
+              document.body.appendChild(trigger);
+              trigger.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+              setTimeout(function () { trigger.remove(); }, 100);
+            }, 200);
+          })
+          .catch(function () { btn.disabled = false; btn.innerHTML = orig; });
+      });
       // Tidy up if Turbo navigates away with the modal open.
       document.addEventListener('turbo:before-render', function () {
         var m = qlEl();
