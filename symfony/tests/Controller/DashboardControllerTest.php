@@ -309,6 +309,55 @@ class DashboardControllerTest extends TestCase
         self::assertSame(693134, $movie['tmdbId']);
         self::assertSame('movie', $movie['tmdbType']);
         self::assertSame('/p.jpg', $movie['posterPath']);
+
+        // Library lookup fails open (bare cache mock) → treated as not added,
+        // so the body renders the Add affordance.
+        self::assertFalse($movie['inLibrary']);
+        self::assertNull($movie['statusBadge']);
+    }
+
+    public function testQuickLookTmdbInLibraryShowsManageDeepLink(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getMovie')->willReturn([
+            'id' => 693134, 'title' => 'Dune: Part Two', 'release_date' => '2024-02-27',
+            'overview' => '...', 'runtime' => 167, 'vote_average' => 8.2,
+            'poster_path' => '/p.jpg', 'genres' => [['id' => 1, 'name' => 'Science Fiction']],
+        ]);
+
+        // Populated Radarr library so the tmdbId resolves to a Manage deep-link.
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $type): array => $type === ServiceInstance::TYPE_RADARR
+                ? [$this->instance('radarr-1', 'Radarr')] : []
+        );
+        $radarr = $this->createMock(RadarrClient::class);
+        $radarr->method('withInstance')->willReturnSelf();
+        $radarr->method('getMovies')->willReturn([
+            ['tmdbId' => 693134, 'id' => 42, 'hasFile' => true, 'monitored' => true],
+        ]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $radarr,
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+
+        $movie = $m->invoke($controller, 'movie', 693134);
+
+        self::assertTrue($movie['inLibrary']);
+        self::assertSame('downloaded', $movie['statusBadge']['kind']);
+        self::assertStringContainsString('open=42', $movie['actionUrl']);
+        self::assertStringContainsString('app_media_films', $movie['actionUrl']);
+        self::assertSame('dashboard.quicklook.manage', $movie['actionLabel']);
     }
 
     public function testHeroSpotlightCarriesQuickLookFields(): void

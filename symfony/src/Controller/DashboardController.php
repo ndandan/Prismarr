@@ -849,6 +849,7 @@ class DashboardController extends AbstractController
             'statusBadge'  => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $this->translator->trans('dashboard.quicklook.manage'),
+            'inLibrary'    => true,
             'airStatus'    => $airStatus,
             'releaseDates' => $type === 'series'
                 ? $this->seriesReleaseChips(
@@ -912,6 +913,26 @@ class DashboardController extends AbstractController
 
         $extras = $this->quickLookExtras($data);
 
+        // Unify the action model with the old Explorer modal: a title already
+        // in a Radarr/Sonarr library deep-links to Manage (exact instance);
+        // otherwise the body renders an Add affordance. Reuses the cached
+        // library aggregates — no extra upstream calls.
+        $match = $this->quickLookLibraryMatch($type, $id);
+        if ($match !== null) {
+            $statusBadge = [
+                'label' => $this->translator->trans('dashboard.quicklook.status.' . $match['status']),
+                'kind'  => $match['status'],
+            ];
+            $actionUrl   = $isTv
+                ? $this->generateUrl('app_media_series', ['slug' => $match['slug']]) . '?open=' . $match['id']
+                : $this->generateUrl('app_media_films', ['slug' => $match['slug']]) . '?open=' . $match['id'];
+            $actionLabel = $this->translator->trans('dashboard.quicklook.manage');
+        } else {
+            $statusBadge = null;
+            $actionUrl   = $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id;
+            $actionLabel = $this->translator->trans('dashboard.quicklook.discover');
+        }
+
         return [
             'title'        => $data['title'] ?? $data['name'] ?? '—',
             'year'         => $year,
@@ -922,9 +943,10 @@ class DashboardController extends AbstractController
             'genres'       => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
             'rating'       => $data['vote_average'] ?? null,
             'metaLine'     => $metaLine,
-            'statusBadge'  => null,
-            'actionUrl'    => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
-            'actionLabel'  => $this->translator->trans('dashboard.quicklook.discover'),
+            'statusBadge'  => $statusBadge,
+            'actionUrl'    => $actionUrl,
+            'actionLabel'  => $actionLabel,
+            'inLibrary'    => $match !== null,
             'airStatus'    => $airStatus,
             'cast'         => $extras['cast'],
             'providers'    => $extras['providers'],
@@ -945,6 +967,57 @@ class DashboardController extends AbstractController
                     new \DateTimeImmutable('today'),
                 ),
         ];
+    }
+
+    /**
+     * Locate a TMDb id within the aggregated Radarr/Sonarr libraries so the
+     * quick-look can deep-link to Manage (and badge the status) for titles
+     * already added, and show an Add affordance otherwise. Reuses the
+     * per-request cached movies()/series() aggregates — no extra upstream
+     * calls. $type is the TMDb media type ('movie'|'tv').
+     *
+     * @return array{slug: string, id: int, status: string}|null
+     */
+    private function quickLookLibraryMatch(string $type, int $tmdbId): ?array
+    {
+        // Fail open: if the library can't be read (service down / not
+        // configured), treat the title as not-in-library so the modal still
+        // offers Add rather than erroring — same philosophy as the widgets.
+        try {
+            $rows = $type === 'movie' ? $this->movies() : $this->series();
+        } catch (\Throwable $e) {
+            return null;
+        }
+
+        if ($type === 'movie') {
+            foreach ($rows as $m) {
+                if ((int) ($m['tmdbId'] ?? 0) !== $tmdbId) {
+                    continue;
+                }
+                $slug = $m['_instanceSlug'] ?? null;
+                if ($slug === null) {
+                    continue;
+                }
+                $status = ($m['hasFile'] ?? false) === true
+                    ? 'downloaded'
+                    : (($m['monitored'] ?? false) === true ? 'monitored' : 'missing');
+                return ['slug' => $slug, 'id' => (int) ($m['id'] ?? 0), 'status' => $status];
+            }
+            return null;
+        }
+
+        foreach ($rows as $s) {
+            if ((int) ($s['tmdbId'] ?? 0) !== $tmdbId) {
+                continue;
+            }
+            $slug = $s['_instanceSlug'] ?? null;
+            if ($slug === null) {
+                continue;
+            }
+            $status = ($s['monitored'] ?? false) === true ? 'monitored' : 'missing';
+            return ['slug' => $slug, 'id' => (int) ($s['id'] ?? 0), 'status' => $status];
+        }
+        return null;
     }
 
     /**
