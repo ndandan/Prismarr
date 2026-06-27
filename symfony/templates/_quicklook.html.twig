@@ -36,6 +36,25 @@
   }
   .ql-action:hover { filter: brightness(1.08); color: #fff; }
   .ql-error { padding: 3rem 1.5rem; text-align: center; color: var(--tblr-secondary); }
+  /* ── Release dates + air-status ────────────────────────────────── */
+  .ql-dates { display: flex; flex-wrap: wrap; gap: .4rem .5rem; margin-bottom: .85rem; }
+  .ql-date {
+    display: inline-flex; flex-direction: column; gap: .05rem;
+    padding: .2rem .55rem; border-radius: 6px;
+    background: rgba(148,163,184,.12); border: 1px solid var(--tblr-border-color);
+    font-size: .72rem; line-height: 1.3;
+  }
+  .ql-date-label { color: var(--tblr-secondary); font-size: .65rem; text-transform: uppercase; letter-spacing: .03em; }
+  .ql-date-val { color: var(--tblr-body-color); font-weight: 500; }
+  .ql-date.is-upcoming {
+    background: rgba(var(--tblr-primary-rgb, 32,107,196),.13);
+    border-color: var(--tblr-primary);
+  }
+  .ql-date.is-upcoming .ql-date-label { color: var(--tblr-primary); }
+  .ql-date.is-upcoming .ql-date-val { color: var(--tblr-primary); font-weight: 600; }
+  .ql-airstatus { padding: .15rem .55rem; border-radius: 999px; font-size: .68rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+  .ql-airstatus.is-continuing { background: rgba(34,197,94,.16); color: #22c55e; }
+  .ql-airstatus.is-ended { background: rgba(148,163,184,.18); color: var(--tblr-secondary); }
 </style>
 
 {% include 'dashboard/_quicklook_modal.html.twig' with {} only %}
