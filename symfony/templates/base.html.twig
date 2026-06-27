@@ -1652,6 +1652,49 @@
       var lastLocal = [];
       var lastOnline = [];
 
+      function openDetailFor(item) {
+        if (!window.prismarrQl) return;
+        var isFilm = item.type === 'film';
+        var url;
+        if (item.inLibrary && item.instance && item.instance.slug && item.id) {
+          // Local library result — authoritative Radarr/Sonarr data + Manage deep-link.
+          url = '/tableau-de-bord/quicklook/' + (isFilm ? 'movie' : 'series')
+              + '/' + item.instance.slug + '/' + item.id;
+        } else {
+          // Online result — TMDb data. Movies key on tmdbId (== id); series need tmdbId.
+          var tmdbId = item.tmdbId || (isFilm ? item.id : null);
+          if (!tmdbId) {
+            // No TMDb id (e.g. TVDB-only series) → can't show TMDb detail.
+            // Fall back to the existing quick-add flow so the user can still add it.
+            closeResults();
+            var trigger = document.createElement('a');
+            trigger.href = '#';
+            trigger.setAttribute('data-quick-add', JSON.stringify(item));
+            trigger.style.display = 'none';
+            document.body.appendChild(trigger);
+            trigger.click();           // bubbles to the document-level [data-quick-add] handler
+            trigger.remove();
+            return;
+          }
+          url = '/tableau-de-bord/quicklook/tmdb/' + (isFilm ? 'movie' : 'tv') + '/' + tmdbId;
+        }
+        closeResults();
+        window.prismarrQl.open();
+        fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+          .then(function (r) { return r.ok ? r.text() : ''; })
+          .then(function (html) {
+            var b = window.prismarrQl.body();
+            if (!b) return;
+            b.innerHTML = (html || '').trim() || '<div class="ql-error"></div>';
+            // The quick-look body now renders the correct primary action
+            // server-side (Manage deep-link to the exact instance when the
+            // title is in a library, otherwise an Add button wired to the
+            // shared resolve→quick-add flow), so no client-side patching is
+            // needed here.
+          })
+          .catch(function () { window.prismarrQl.close(); });
+      }
+
       function runSearch(q) {
         showSpinner();
         var ctrl = new AbortController();
