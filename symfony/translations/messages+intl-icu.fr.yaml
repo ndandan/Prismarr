@@ -475,6 +475,12 @@ dashboard:
     runtime: '{min} min'
     seasons: '{count} saisons'
     error: "Impossible de charger l'aperçu"
+    providers: 'Disponible sur'
+    trailer: 'Bande-annonce'
+    watchlist: 'À voir'
+    watchlist_added: 'Dans la liste'
+    watchlist_add_toast: 'Ajouté à votre liste à voir'
+    watchlist_remove_toast: 'Retiré de votre liste à voir'
     status:
       downloaded: 'Téléchargé'
       monitored: 'Suivi'

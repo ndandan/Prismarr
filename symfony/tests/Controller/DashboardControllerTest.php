@@ -254,6 +254,68 @@ class DashboardControllerTest extends TestCase
         self::assertStringContainsString('detail=tv/95396', $tv['actionUrl']);
     }
 
+    public function testQuickLookTmdbIncludesCastProvidersTrailerAndExternalIds(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getMovie')->willReturn([
+            'id' => 693134, 'title' => 'Dune: Part Two', 'release_date' => '2024-02-27',
+            'overview' => 'Paul unites with the Fremen.', 'runtime' => 167,
+            'vote_average' => 8.2, 'poster_path' => '/p.jpg', 'backdrop_path' => '/b.jpg',
+            'genres' => [['id' => 1, 'name' => 'Science Fiction']],
+            'imdb_id' => 'tt15239678',
+            'credits' => ['cast' => [
+                ['name' => 'Timothée Chalamet', 'character' => 'Paul', 'profile_path' => '/tc.jpg'],
+                ['name' => 'Zendaya', 'character' => 'Chani', 'profile_path' => null],
+            ]],
+            'videos' => ['results' => [
+                ['site' => 'YouTube', 'type' => 'Teaser', 'official' => false, 'iso_639_1' => 'en', 'key' => 'TEASER'],
+                ['site' => 'YouTube', 'type' => 'Trailer', 'official' => true, 'iso_639_1' => 'en', 'key' => 'TRAILER'],
+                ['site' => 'Vimeo', 'type' => 'Trailer', 'official' => true, 'iso_639_1' => 'en', 'key' => 'VIMEO'],
+            ]],
+            'watch/providers' => ['results' => [
+                'US' => ['flatrate' => [['provider_name' => 'Max', 'logo_path' => '/max.jpg']]],
+                'FR' => ['flatrate' => [['provider_name' => 'Canal+', 'logo_path' => '/canal.jpg']]],
+            ]],
+        ]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(
+            fn(string $k, array $p = []) => $k === 'dashboard.quicklook.runtime' ? $p['min'] . ' min' : $k
+        );
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+
+        $movie = $m->invoke($controller, 'movie', 693134);
+
+        // Cast: top entries, profile paths expanded to full URLs (null stays null).
+        self::assertCount(2, $movie['cast']);
+        self::assertSame('Timothée Chalamet', $movie['cast'][0]['name']);
+        self::assertSame('https://image.tmdb.org/t/p/w185/tc.jpg', $movie['cast'][0]['profile']);
+        self::assertNull($movie['cast'][1]['profile']);
+
+        // Providers: FR preferred over US (country priority), flatrate only.
+        self::assertSame('Canal+', $movie['providers'][0]['name']);
+        self::assertSame('https://image.tmdb.org/t/p/w92/canal.jpg', $movie['providers'][0]['logo']);
+
+        // Trailer: official YouTube Trailer beats the teaser; Vimeo ignored.
+        self::assertSame('TRAILER', $movie['trailerKey']);
+
+        // External ids + identity for the modal's links/watchlist.
+        self::assertSame('tt15239678', $movie['imdbId']);
+        self::assertSame(693134, $movie['tmdbId']);
+        self::assertSame('movie', $movie['tmdbType']);
+        self::assertSame('/p.jpg', $movie['posterPath']);
+    }
+
     public function testHeroSpotlightCarriesQuickLookFields(): void
     {
         $cache = $this->createMock(CacheInterface::class);

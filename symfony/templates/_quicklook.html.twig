@@ -55,6 +55,25 @@
   .ql-airstatus { display: inline-flex; align-items: center; justify-content: center; padding: .25rem .6rem; border-radius: 999px; font-size: .68rem; font-weight: 600; line-height: 1; text-transform: uppercase; letter-spacing: .04em; }
   .ql-airstatus.is-continuing { background: rgba(34,197,94,.16); color: #22c55e; }
   .ql-airstatus.is-ended { background: rgba(148,163,184,.18); color: var(--tblr-secondary); }
+  /* ── Providers / cast / trailer / actions ──────────────────────── */
+  .ql-providers { display: flex; flex-wrap: wrap; gap: .4rem; margin-bottom: .85rem; }
+  .ql-provider { width: 30px; height: 30px; border-radius: 6px; object-fit: cover; }
+  .ql-cast { display: flex; flex-wrap: wrap; gap: .6rem; margin-bottom: 1rem; }
+  .ql-cast-item { width: 52px; text-align: center; }
+  .ql-cast-photo { width: 46px; height: 46px; border-radius: 50%; object-fit: cover; }
+  .ql-cast-photo-empty { display: flex; align-items: center; justify-content: center; background: var(--tblr-bg-surface-secondary); color: var(--tblr-secondary); font-size: .8rem; }
+  .ql-cast-name { display: block; font-size: .6rem; line-height: 1.15; color: var(--tblr-secondary); margin-top: .2rem; }
+  .ql-trailer { border-radius: 10px; overflow: hidden; margin-bottom: 1rem; }
+  .ql-actions { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; }
+  .ql-action-secondary {
+    display: inline-flex; align-items: center; padding: .5rem .9rem; border-radius: 8px;
+    border: 1px solid var(--tblr-border-color); color: var(--tblr-body-color);
+    font-weight: 600; font-size: .8rem; text-decoration: none !important;
+  }
+  .ql-action-secondary:hover { border-color: var(--tblr-primary); color: var(--tblr-primary); }
+  .ql-wl { cursor: pointer; gap: .35rem; }
+  .ql-wl.is-active { border-color: #f59e0b; color: #f59e0b; }
+  .ql-wl.is-active:hover { border-color: #f59e0b; color: #f59e0b; }
 </style>
 
 {% include 'dashboard/_quicklook_modal.html.twig' with {} only %}
@@ -85,10 +104,18 @@
         bd.className = 'modal-backdrop fade show ql-backdrop-el';
         document.body.appendChild(bd);
       }
+      // Reflect watchlist state onto the ☆ button each time a fragment loads.
+      var body = m.querySelector('[data-ql-body]');
+      if (body && window.MutationObserver) {
+        if (qlWlObserver) { qlWlObserver.disconnect(); }
+        qlWlObserver = new MutationObserver(function () { qlDecorateWl(body); });
+        qlWlObserver.observe(body, { childList: true });
+      }
     }
     function qlClose() {
       var m = qlEl();
       if (!m) return;
+      if (qlWlObserver) { qlWlObserver.disconnect(); qlWlObserver = null; }
       m.classList.remove('show');
       m.style.display = 'none';
       m.setAttribute('aria-hidden', 'true');
@@ -98,6 +125,38 @@
       if (!document.querySelector('.modal.show')) { document.body.classList.remove('modal-open'); }
       var b = qlBody();
       if (b) { b.innerHTML = '<div class="ql-loading"><span class="spinner-border"></span></div>'; }
+    }
+
+    // ── Watchlist: shared global index + modal ☆ toggle ──────────────
+    // Index is fetched once and reused across the dashboard, top-bar search
+    // and the Explorer page. A MutationObserver on the modal body reflects
+    // current state onto the ☆ button whenever a fragment loads, so no
+    // per-open wiring is needed at the call sites.
+    window._prismarrWatchlist = window._prismarrWatchlist || {};
+    if (!window._prismarrWatchlistReady) {
+      window._prismarrWatchlistReady = fetch('/decouverte/watchlist/status', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { window._prismarrWatchlist = d.index || {}; return window._prismarrWatchlist; })
+        .catch(function () { return window._prismarrWatchlist; });
+    }
+    var qlWlObserver = null;
+    function qlWlKey(type, id) { return type + '_' + id; }
+    function qlSetWl(btn, inWl) {
+      btn.classList.toggle('is-active', inWl);
+      var label = btn.querySelector('[data-wl-label]');
+      if (label) { label.textContent = inWl ? (btn.getAttribute('data-wl-on') || '') : (btn.getAttribute('data-wl-add') || ''); }
+      var svg = btn.querySelector('svg');
+      if (svg) { svg.setAttribute('fill', inWl ? 'currentColor' : 'none'); }
+    }
+    function qlDecorateWl(scope) {
+      var root = scope || document;
+      var apply = function () {
+        root.querySelectorAll('[data-ql-wl]').forEach(function (btn) {
+          qlSetWl(btn, !!window._prismarrWatchlist[qlWlKey(btn.getAttribute('data-wl-type'), btn.getAttribute('data-wl-id'))]);
+        });
+      };
+      apply();
+      if (window._prismarrWatchlistReady) { window._prismarrWatchlistReady.then(apply); }
     }
 
     function qlUrl(t) {
@@ -140,6 +199,41 @@
         var m = qlEl();
         if (e.key === 'Escape' && m && m.classList.contains('show')) { qlClose(); }
       });
+      // Watchlist ☆ toggle from inside the modal (optimistic, then reconcile).
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-ql-wl]');
+        if (!btn) return;
+        e.preventDefault();
+        var type = btn.getAttribute('data-wl-type');
+        var id = btn.getAttribute('data-wl-id');
+        var key = qlWlKey(type, id);
+        var wasIn = !!window._prismarrWatchlist[key];
+        var willAdd = !wasIn;
+        if (willAdd) { window._prismarrWatchlist[key] = true; } else { delete window._prismarrWatchlist[key]; }
+        qlSetWl(btn, willAdd);
+        fetch('/decouverte/watchlist/toggle', {
+          method: 'POST', credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tmdb_id: parseInt(id, 10), type: type,
+            title: btn.getAttribute('data-wl-title') || '',
+            poster_path: btn.getAttribute('data-wl-poster-path') || null,
+            vote: btn.getAttribute('data-wl-vote') ? parseFloat(btn.getAttribute('data-wl-vote')) : null,
+            year: btn.getAttribute('data-wl-year') ? parseInt(btn.getAttribute('data-wl-year'), 10) : null
+          })
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var added = d.action === 'added';
+          if (added) { window._prismarrWatchlist[key] = true; } else { delete window._prismarrWatchlist[key]; }
+          if (added !== willAdd) { qlSetWl(btn, added); }
+          if (window._prismarrToast) { window._prismarrToast(added ? (btn.getAttribute('data-wl-toast-add') || '') : (btn.getAttribute('data-wl-toast-rm') || ''), added ? 'success' : 'info'); }
+        })
+        .catch(function () {
+          if (wasIn) { window._prismarrWatchlist[key] = true; } else { delete window._prismarrWatchlist[key]; }
+          qlSetWl(btn, wasIn);
+        });
+      });
       // Tidy up if Turbo navigates away with the modal open.
       document.addEventListener('turbo:before-render', function () {
         var m = qlEl();
@@ -147,6 +241,6 @@
       });
     }
 
-    window.prismarrQl = { open: qlOpen, close: qlClose, body: qlBody };
+    window.prismarrQl = { open: qlOpen, close: qlClose, body: qlBody, decorateWatchlist: qlDecorateWl };
   })();
 </script>

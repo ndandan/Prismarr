@@ -476,6 +476,12 @@ dashboard:
     runtime: '{min} min'
     seasons: '{count} seasons'
     error: "Couldn't load the preview"
+    providers: 'Available on'
+    trailer: 'Trailer'
+    watchlist: 'Watchlist'
+    watchlist_added: 'On watchlist'
+    watchlist_add_toast: 'Added to your watchlist'
+    watchlist_remove_toast: 'Removed from your watchlist'
     status:
       downloaded: 'Downloaded'
       monitored: 'Monitored'

@@ -912,10 +912,13 @@ class DashboardController extends AbstractController
         $ended     = $isTv && in_array($data['status'] ?? '', ['Ended', 'Canceled'], true);
         $airStatus = $isTv ? ($ended ? 'ended' : 'continuing') : null;
 
+        $extras = $this->quickLookExtras($data);
+
         return [
             'title'        => $data['title'] ?? $data['name'] ?? '—',
             'year'         => $year,
             'poster'       => $this->tmdbImage($data['poster_path'] ?? null, 'w342'),
+            'posterPath'   => $data['poster_path'] ?? null,
             'backdrop'     => $this->tmdbImage($data['backdrop_path'] ?? null, 'w1280'),
             'overview'     => $data['overview'] ?? null,
             'genres'       => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
@@ -925,6 +928,12 @@ class DashboardController extends AbstractController
             'actionUrl'    => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
             'actionLabel'  => $this->translator->trans('dashboard.quicklook.discover'),
             'airStatus'    => $airStatus,
+            'cast'         => $extras['cast'],
+            'providers'    => $extras['providers'],
+            'trailerKey'   => $extras['trailerKey'],
+            'imdbId'       => $extras['imdbId'],
+            'tmdbId'       => $id,
+            'tmdbType'     => $type,
             'releaseDates' => $isTv
                 ? $this->seriesReleaseChips(
                     $this->parseDate($data['first_air_date'] ?? null),
@@ -937,6 +946,83 @@ class DashboardController extends AbstractController
                     $data['release_dates']['results'] ?? [],
                     new \DateTimeImmutable('today'),
                 ),
+        ];
+    }
+
+    /**
+     * Extract the richer detail bits (cast, streaming providers, trailer, IMDb
+     * id) from a TMDb detail payload. TmdbClient::getMovie/getTv already pull
+     * credits/videos/watch-providers/external_ids via append_to_response, so
+     * this is pure extraction — no extra API call.
+     *
+     * @param array<string, mixed> $data
+     * @return array{cast: list<array{name: string, profile: ?string}>, providers: list<array{name: string, logo: ?string}>, trailerKey: ?string, imdbId: ?string}
+     */
+    private function quickLookExtras(array $data): array
+    {
+        $cast = [];
+        foreach (array_slice($data['credits']['cast'] ?? [], 0, 6) as $c) {
+            $cast[] = [
+                'name'    => $c['name'] ?? '',
+                'profile' => TmdbClient::posterUrl($c['profile_path'] ?? null, 'w185'),
+            ];
+        }
+
+        // Streaming (flatrate) providers, FR-first then common fallbacks —
+        // mirrors TmdbController::pickProviders' country priority.
+        $providers = [];
+        foreach (['FR', 'BE', 'LU', 'US', 'GB'] as $cc) {
+            $flat = $data['watch/providers']['results'][$cc]['flatrate'] ?? [];
+            if ($flat === []) {
+                continue;
+            }
+            foreach ($flat as $p) {
+                $providers[] = [
+                    'name' => $p['provider_name'] ?? '',
+                    'logo' => TmdbClient::posterUrl($p['logo_path'] ?? null, 'w92'),
+                ];
+            }
+            break;
+        }
+
+        // Best YouTube trailer/teaser — official + EN/FR preferred, mirrors
+        // TmdbController::pickTrailer's scoring (trimmed for the modal).
+        $trailerKey = null;
+        $videos = array_filter(
+            $data['videos']['results'] ?? [],
+            static fn($v) => ($v['site'] ?? '') === 'YouTube',
+        );
+        $score = static function (array $v): int {
+            $s = 0;
+            if (($v['type'] ?? '') === 'Trailer') {
+                $s += 100;
+            } elseif (($v['type'] ?? '') === 'Teaser') {
+                $s += 50;
+            }
+            if (($v['official'] ?? false) === true) {
+                $s += 40;
+            }
+            $lang = strtolower($v['iso_639_1'] ?? '');
+            if ($lang === 'en') {
+                $s += 20;
+            } elseif ($lang === 'fr') {
+                $s += 15;
+            }
+            return $s;
+        };
+        usort($videos, static fn($a, $b) => $score($b) <=> $score($a));
+        $first = reset($videos);
+        if ($first) {
+            $trailerKey = $first['key'] ?? null;
+        }
+
+        $imdbId = $data['imdb_id'] ?? ($data['external_ids']['imdb_id'] ?? null);
+
+        return [
+            'cast'       => $cast,
+            'providers'  => $providers,
+            'trailerKey' => $trailerKey,
+            'imdbId'     => $imdbId,
         ];
     }
 
