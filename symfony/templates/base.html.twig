@@ -1394,6 +1394,7 @@
       'search.in_library_badge': 'topbar.search.in_library_badge'|trans,
       'search.not_added_badge':  'topbar.search.not_added_badge'|trans,
       'search.add':              'topbar.search.add'|trans,
+      'dashboard.quicklook.manage': 'dashboard.quicklook.manage'|trans,
       'theme.label_light':     'topbar.theme.label_light'|trans,
       'theme.label_dark':      'topbar.theme.label_dark'|trans,
       'health.all_ok':         'topbar.health.summary_ok'|trans,
@@ -1633,7 +1634,19 @@
         } else {
           // Online result — TMDb data. Movies key on tmdbId (== id); series need tmdbId.
           var tmdbId = item.tmdbId || (isFilm ? item.id : null);
-          if (!tmdbId) { return; } // can't resolve TV without a tmdbId — leave dropdown open
+          if (!tmdbId) {
+            // No TMDb id (e.g. TVDB-only series) → can't show TMDb detail.
+            // Fall back to the existing quick-add flow so the user can still add it.
+            closeResults();
+            var trigger = document.createElement('a');
+            trigger.href = '#';
+            trigger.setAttribute('data-quick-add', JSON.stringify(item));
+            trigger.style.display = 'none';
+            document.body.appendChild(trigger);
+            trigger.click();           // bubbles to the document-level [data-quick-add] handler
+            trigger.remove();
+            return;
+          }
           url = '/tableau-de-bord/quicklook/tmdb/' + (isFilm ? 'movie' : 'tv') + '/' + tmdbId;
         }
         closeResults();
