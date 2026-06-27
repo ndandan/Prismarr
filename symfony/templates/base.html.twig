@@ -1516,7 +1516,7 @@
         var poster = item.poster
           ? '<img src="' + item.poster + '" style="width:30px;height:45px;object-fit:cover;border-radius:4px;" class="flex-shrink-0" loading="lazy">'
           : '<div style="width:30px;height:45px;background:rgba(255,255,255,.05);border-radius:4px;display:flex;align-items:center;justify-content:center;" class="flex-shrink-0">' + typeIcon + '</div>';
-        var dataAttr = ' data-quick-add=\'' + JSON.stringify(item).replace(/'/g, '&#39;') + '\'';
+        var dataAttr = ' data-item=\'' + JSON.stringify(item).replace(/'/g, '&#39;') + '\'';
         // v1.1.0 multi-instance: when the result comes from a non-default
         // instance, surface its name in the meta line so the user knows
         // exactly which Radarr 4K / Sonarr Anime owns the match. Default
@@ -1795,7 +1795,10 @@
         }
         var item = e.target.closest('.prismarr-search-item');
         if (item) {
+          e.preventDefault();
+          e.stopPropagation();
           saveRecent(input.value.trim());
+          try { openDetailFor(JSON.parse(item.dataset.item)); } catch (err) {}
         }
       });
 
@@ -1937,6 +1940,7 @@
         if (!qaModal) return;
         e.preventDefault();
         e.stopPropagation();
+        if (window.prismarrQl) { window.prismarrQl.close(); }
 
         qaItem = JSON.parse(el.dataset.quickAdd);
         var isFilm = qaItem.type === 'film';

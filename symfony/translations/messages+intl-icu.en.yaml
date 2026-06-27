@@ -100,6 +100,7 @@ topbar:
     loading_online: Loading…
     in_library_badge: In library
     not_added_badge: Not added
+    add: Add
     group_local: In your library
     group_online: On TMDb / TheTVDB
     more_local: See more in your library
