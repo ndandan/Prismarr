@@ -99,6 +99,7 @@ topbar:
     loading_online: Chargement…
     in_library_badge: En bibliothèque
     not_added_badge: Non ajouté
+    add: Ajouter
     group_local: Dans votre bibliothèque
     group_online: Sur TMDb / TheTVDB
     more_local: Voir plus dans votre bibliothèque
@@ -478,6 +479,16 @@ dashboard:
       downloaded: 'Téléchargé'
       monitored: 'Suivi'
       missing: 'Manquant'
+    date:
+      cinema: 'Au cinéma'
+      digital: 'Numérique'
+      physical: 'Physique'
+      first_aired: 'Première diffusion'
+      next_episode: 'Prochain épisode'
+      ended: 'Terminée'
+    airstatus:
+      continuing: 'En cours'
+      ended: 'Terminée'
   layout:
     edit: Modifier la disposition
     save: Enregistrer

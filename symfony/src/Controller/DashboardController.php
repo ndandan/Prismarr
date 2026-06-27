@@ -507,6 +507,89 @@ class DashboardController extends AbstractController
     }
 
     /**
+     * Build the ordered release-date chips for a movie quick-look. Fixed
+     * semantic order cinema→digital→physical; nulls skipped; each chip flags
+     * whether the date is today-or-later (so the template can emphasize the
+     * next upcoming event). @return list<array{kind:string,label:string,date:\DateTimeImmutable,upcoming:bool}>
+     */
+    private function movieReleaseChips(?\DateTimeImmutable $cinema, ?\DateTimeImmutable $digital, ?\DateTimeImmutable $physical, \DateTimeImmutable $today): array
+    {
+        $defs = [
+            ['kind' => 'cinema',   'at' => $cinema,   'key' => 'dashboard.quicklook.date.cinema'],
+            ['kind' => 'digital',  'at' => $digital,  'key' => 'dashboard.quicklook.date.digital'],
+            ['kind' => 'physical', 'at' => $physical, 'key' => 'dashboard.quicklook.date.physical'],
+        ];
+        $chips = [];
+        foreach ($defs as $d) {
+            if (!$d['at'] instanceof \DateTimeImmutable) continue;
+            $chips[] = [
+                'kind'     => $d['kind'],
+                'label'    => $this->translator->trans($d['key']),
+                'date'     => $d['at'],
+                'upcoming' => $d['at']->setTime(0, 0) >= $today,
+            ];
+        }
+        return $chips;
+    }
+
+    /**
+     * Extract cinema/digital/physical dates from TMDb's release_dates append,
+     * preferring FR then US then the first country that has each type. TMDb
+     * type codes: 2/3 = theatrical, 4 = digital, 5 = physical.
+     * @return list<array{kind:string,label:string,date:\DateTimeImmutable,upcoming:bool}>
+     */
+    private function tmdbMovieReleaseDates(array $results, \DateTimeImmutable $today): array
+    {
+        $byCountry = [];
+        foreach ($results as $r) {
+            $cc = $r['iso_3166_1'] ?? '';
+            foreach ($r['release_dates'] ?? [] as $rd) {
+                $byCountry[$cc][(int) ($rd['type'] ?? 0)] = $rd['release_date'] ?? null;
+            }
+        }
+        $order = ['FR', 'US'];
+        foreach (array_keys($byCountry) as $cc) {
+            if (!in_array($cc, $order, true)) $order[] = $cc;
+        }
+        $pick = function (array $types) use ($byCountry, $order): ?\DateTimeImmutable {
+            foreach ($order as $cc) {
+                foreach ($types as $t) {
+                    $raw = $byCountry[$cc][$t] ?? null;
+                    if ($raw) return new \DateTimeImmutable($raw);
+                }
+            }
+            return null;
+        };
+        return $this->movieReleaseChips($pick([3, 2]), $pick([4]), $pick([5]), $today);
+    }
+
+    /**
+     * Air-date chips for a series quick-look: first-aired (if known), then
+     * either the next upcoming episode (continuing) or the last-aired date
+     * (ended). @return list<array{kind:string,label:string,date:\DateTimeImmutable,upcoming:bool}>
+     */
+    private function seriesReleaseChips(?\DateTimeImmutable $firstAired, ?\DateTimeImmutable $nextEpisode, ?\DateTimeImmutable $lastEpisode, bool $ended, \DateTimeImmutable $today): array
+    {
+        $chip = fn(string $kind, string $key, \DateTimeImmutable $d): array => [
+            'kind' => $kind, 'label' => $this->translator->trans($key),
+            'date' => $d, 'upcoming' => $d->setTime(0, 0) >= $today,
+        ];
+        $chips = [];
+        if ($firstAired) $chips[] = $chip('first_aired', 'dashboard.quicklook.date.first_aired', $firstAired);
+        if (!$ended && $nextEpisode) {
+            $chips[] = $chip('next_episode', 'dashboard.quicklook.date.next_episode', $nextEpisode);
+        } elseif ($ended && $lastEpisode) {
+            $chips[] = $chip('ended', 'dashboard.quicklook.date.ended', $lastEpisode);
+        }
+        return $chips;
+    }
+
+    private function parseDate(?string $raw): ?\DateTimeImmutable
+    {
+        return ($raw !== null && $raw !== '') ? new \DateTimeImmutable($raw) : null;
+    }
+
+    /**
      * Return the earliest release date that is today or later for a Radarr
      * movie, together with a human-readable badge identifying which date
      * it is (digital / cinema / physical). The comparison is done at
@@ -744,6 +827,9 @@ class DashboardController extends AbstractController
         $badgeKind = $hasFile ? 'downloaded' : ($monitored ? 'monitored' : 'missing');
         $badgeKey  = 'dashboard.quicklook.status.' . $badgeKind;
 
+        $ended     = ($row['ended'] ?? false) === true || ($row['status'] ?? '') === 'ended';
+        $airStatus = $type === 'series' ? ($ended ? 'ended' : 'continuing') : null;
+
         if ($type === 'series') {
             $metaLine  = $row['network'] ?? null;
             $actionUrl = $this->generateUrl('app_media_series', ['slug' => $slug]) . '?open=' . $id;
@@ -754,17 +840,32 @@ class DashboardController extends AbstractController
         }
 
         return [
-            'title'       => $row['title'] ?? '—',
-            'year'        => $row['year'] ?? null,
-            'poster'      => $row['poster'] ?? null,
-            'backdrop'    => $row['fanart'] ?? null,
-            'overview'    => $row['overview'] ?? null,
-            'genres'      => array_slice($row['genres'] ?? [], 0, 4),
-            'rating'      => $row['ratings'] ?? null,
-            'metaLine'    => $metaLine,
-            'statusBadge' => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
-            'actionUrl'   => $actionUrl,
-            'actionLabel' => $this->translator->trans('dashboard.quicklook.manage'),
+            'title'        => $row['title'] ?? '—',
+            'year'         => $row['year'] ?? null,
+            'poster'       => $row['poster'] ?? null,
+            'backdrop'     => $row['fanart'] ?? null,
+            'overview'     => $row['overview'] ?? null,
+            'genres'       => array_slice($row['genres'] ?? [], 0, 4),
+            'rating'       => $row['ratings'] ?? null,
+            'metaLine'     => $metaLine,
+            'statusBadge'  => ['label' => $this->translator->trans($badgeKey), 'kind' => $badgeKind],
+            'actionUrl'    => $actionUrl,
+            'actionLabel'  => $this->translator->trans('dashboard.quicklook.manage'),
+            'airStatus'    => $airStatus,
+            'releaseDates' => $type === 'series'
+                ? $this->seriesReleaseChips(
+                    $row['firstAired'] ?? null,
+                    $row['nextAiring'] ?? null,
+                    $row['previousAiring'] ?? null,
+                    $ended,
+                    new \DateTimeImmutable('today'),
+                )
+                : $this->movieReleaseChips(
+                    $row['inCinemasAt'] ?? null,
+                    $row['digitalAt'] ?? null,
+                    $row['physicalAt'] ?? null,
+                    new \DateTimeImmutable('today'),
+                ),
         ];
     }
 
@@ -808,18 +909,34 @@ class DashboardController extends AbstractController
             $metaLine = $runtime ? $this->translator->trans('dashboard.quicklook.runtime', ['min' => $runtime]) : null;
         }
 
+        $ended     = $isTv && in_array($data['status'] ?? '', ['Ended', 'Canceled'], true);
+        $airStatus = $isTv ? ($ended ? 'ended' : 'continuing') : null;
+
         return [
-            'title'       => $data['title'] ?? $data['name'] ?? '—',
-            'year'        => $year,
-            'poster'      => $this->tmdbImage($data['poster_path'] ?? null, 'w342'),
-            'backdrop'    => $this->tmdbImage($data['backdrop_path'] ?? null, 'w1280'),
-            'overview'    => $data['overview'] ?? null,
-            'genres'      => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
-            'rating'      => $data['vote_average'] ?? null,
-            'metaLine'    => $metaLine,
-            'statusBadge' => null,
-            'actionUrl'   => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
-            'actionLabel' => $this->translator->trans('dashboard.quicklook.discover'),
+            'title'        => $data['title'] ?? $data['name'] ?? '—',
+            'year'         => $year,
+            'poster'       => $this->tmdbImage($data['poster_path'] ?? null, 'w342'),
+            'backdrop'     => $this->tmdbImage($data['backdrop_path'] ?? null, 'w1280'),
+            'overview'     => $data['overview'] ?? null,
+            'genres'       => array_slice(array_map(fn($g) => $g['name'] ?? '', $data['genres'] ?? []), 0, 4),
+            'rating'       => $data['vote_average'] ?? null,
+            'metaLine'     => $metaLine,
+            'statusBadge'  => null,
+            'actionUrl'    => $this->generateUrl('tmdb_index') . '?detail=' . $type . '/' . $id,
+            'actionLabel'  => $this->translator->trans('dashboard.quicklook.discover'),
+            'airStatus'    => $airStatus,
+            'releaseDates' => $isTv
+                ? $this->seriesReleaseChips(
+                    $this->parseDate($data['first_air_date'] ?? null),
+                    $this->parseDate($data['next_episode_to_air']['air_date'] ?? null),
+                    $this->parseDate($data['last_episode_to_air']['air_date'] ?? null),
+                    $ended,
+                    new \DateTimeImmutable('today'),
+                )
+                : $this->tmdbMovieReleaseDates(
+                    $data['release_dates']['results'] ?? [],
+                    new \DateTimeImmutable('today'),
+                ),
         ];
     }
 
