@@ -10,6 +10,7 @@ use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\UnraidClient;
 use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -64,6 +65,9 @@ class DashboardController extends AbstractController
         private readonly CacheInterface $cache,
         private readonly TautulliClient $tautulli,
         private readonly \App\Service\DashboardLayoutService $layout,
+        // Unraid server widget — nullable + last so legacy positional test
+        // constructors keep working.
+        private readonly ?UnraidClient $unraid = null,
     ) {}
 
     /**
@@ -157,6 +161,7 @@ class DashboardController extends AbstractController
             'jellyseerr' => $this->health->isConfigured('jellyseerr'),
             'tmdb'       => $this->health->isConfigured('tmdb'),
             'tautulli'   => $this->health->isConfigured('tautulli'),
+            'unraid'     => $this->health->isConfigured('unraid'),
         ];
 
         return $this->render('dashboard/index.html.twig', [
@@ -252,7 +257,7 @@ class DashboardController extends AbstractController
         set_time_limit(60);
 
         return $this->render('dashboard/_health.html.twig', [
-            'services_health' => $this->servicesHealth(),
+            'services_health' => $this->servicesHealth($this->isGranted('ROLE_ADMIN')),
         ]);
     }
 
@@ -284,6 +289,29 @@ class DashboardController extends AbstractController
             'plex'        => $activity,
             'plex_history'=> $history,
             'plex_tab'    => $streaming ? 'now' : 'recent',
+        ]);
+    }
+
+    /**
+     * Async fragment — Unraid server monitoring (array, disks, system, Docker,
+     * UPS). Admin-only: server internals aren't for regular users, so both the
+     * fragment and the section partial gate on ROLE_ADMIN, and non-admins never
+     * trigger an Unraid API call. Empty body → hidden client-side. Fails open:
+     * an unreachable Unraid renders the fragment's "unreachable" state.
+     */
+    #[Route('/tableau-de-bord/widget/server', name: 'app_dashboard_widget_server')]
+    public function widgetServer(): Response
+    {
+        if (!$this->isGranted('ROLE_ADMIN')) {
+            return new Response('');
+        }
+        if ($this->unraid === null || !$this->health->isConfigured('unraid')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        return $this->render('dashboard/_server.html.twig', [
+            'server' => $this->unraid->overview(),
         ]);
     }
 
@@ -673,7 +701,7 @@ class DashboardController extends AbstractController
      * aggregate dot. Mono-instance services (prowlarr, jellyseerr, qbit, tmdb)
      * keep one chip each. Unconfigured entries (isHealthy null) are dropped.
      */
-    private function servicesHealth(): array
+    private function servicesHealth(bool $includeUnraid = false): array
     {
         $chips = [];
 
@@ -690,6 +718,9 @@ class DashboardController extends AbstractController
         }
 
         $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli'];
+        if ($includeUnraid) {
+            $labels['unraid'] = 'Unraid';
+        }
         foreach ($labels as $service => $label) {
             try {
                 $s = $this->health->statusFor($service);

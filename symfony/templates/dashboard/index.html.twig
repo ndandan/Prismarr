@@ -448,6 +448,46 @@
   .service-chip-dot.is-down { background: #ef4444; }
   .service-chip-name { font-size: .82rem; font-weight: 500; line-height: 1; }
   .service-chip-state { font-size: .68rem; color: var(--tblr-secondary); margin-top: .15rem; }
+  /* ── Unraid server widget ──────────────────────────────────────── */
+  .server-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: .6rem;
+  }
+  .server-tile {
+    padding: .7rem .8rem; border-radius: 8px;
+    background: var(--tblr-bg-surface-secondary);
+    border: 1px solid var(--tblr-border-color);
+    min-width: 0;
+  }
+  .server-tile--wide { grid-column: 1 / -1; }
+  .server-tile-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .45rem; }
+  .server-tile-label { font-size: .82rem; font-weight: 600; }
+  .server-tile-sub { font-size: .68rem; color: var(--tblr-secondary); margin-top: .3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .server-state-badge {
+    font-size: .62rem; font-weight: 700; padding: .12rem .45rem; border-radius: 999px;
+    text-transform: uppercase; letter-spacing: .04em;
+  }
+  .server-state-badge.is-ok { background: rgba(34,197,94,.15); color: #22c55e; }
+  .server-state-badge.is-ko { background: rgba(239,68,68,.15); color: #ef4444; }
+  .server-bar { flex: 1; height: 6px; border-radius: 3px; background: var(--tblr-border-color); overflow: hidden; }
+  .server-bar-fill { height: 100%; border-radius: 3px; background: var(--tblr-primary); transition: width .3s ease; }
+  .server-bar-fill.is-hot { background: #ef4444; }
+  .server-gauge-row { display: flex; align-items: center; gap: .5rem; margin-top: .35rem; }
+  .server-gauge-label { font-size: .66rem; color: var(--tblr-secondary); width: 2.2rem; flex-shrink: 0; }
+  .server-gauge-value { font-size: .68rem; font-weight: 600; width: 2.4rem; text-align: right; flex-shrink: 0; }
+  .server-chips { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .35rem; }
+  .server-chip-muted {
+    font-size: .62rem; padding: .1rem .4rem; border-radius: 4px;
+    background: var(--tblr-bg-surface); border: 1px solid var(--tblr-border-color);
+    color: var(--tblr-secondary);
+  }
+  .server-disk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: .5rem; }
+  .server-disk { min-width: 0; }
+  .server-disk-name { font-size: .68rem; font-weight: 600; display: flex; justify-content: space-between; gap: .3rem; margin-bottom: .25rem; }
+  .server-disk-temp { color: var(--tblr-secondary); font-weight: 500; }
+  .server-disk-temp.is-hot { color: #ef4444; font-weight: 700; }
+  .server-disk-sub { font-size: .62rem; color: var(--tblr-secondary); margin-top: .2rem; }
   /* Async widget hydration skeletons (#27) */
   .dash-skel { pointer-events: none; }
   .dash-skel .poster-tile-wrap { aspect-ratio: 2/3; }
@@ -609,6 +649,21 @@
     if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); }
     window._dashPlexTimer = setInterval(refreshPlex, 10000);
 
+    // Same live-refresh pattern for the Unraid server widget — 30s cadence
+    // (UnraidClient caches 20s server-side, so this is at most one upstream
+    // round of GraphQL queries per poll). Fails open; hidden-tab guarded.
+    function refreshServer() {
+      if (document.hidden) return;
+      var node = document.querySelector('[data-dash-widget="server"][data-dash-url]');
+      if (!node) return;
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
+        .catch(function () {});
+    }
+    if (window._dashServerTimer) { clearInterval(window._dashServerTimer); }
+    window._dashServerTimer = setInterval(refreshServer, 30000);
+
     // Plex widget tabs: client-side pane toggle, remembers the active tab so the
     // 10s fragment refresh doesn't snap the user back to "Now playing".
     function applyPlexTab(scope) {
@@ -637,6 +692,7 @@
     document.addEventListener('turbo:before-render', function () {
       if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
       if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); window._dashPlexTimer = null; }
+      if (window._dashServerTimer) { clearInterval(window._dashServerTimer); window._dashServerTimer = null; }
     });
 
   })();
