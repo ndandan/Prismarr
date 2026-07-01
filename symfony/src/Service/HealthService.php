@@ -11,6 +11,7 @@ use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\UnraidClient;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
 
@@ -51,6 +52,9 @@ class HealthService
         // Tautulli (current Plex activity) — nullable + last for the same
         // legacy-test-constructor reason as the Usenet clients above.
         private readonly ?TautulliClient   $tautulli = null,
+        // Unraid (server monitoring widget) — nullable + last, same
+        // legacy-test-constructor reason as the Usenet clients above.
+        private readonly ?UnraidClient     $unraid = null,
     ) {}
 
     /**
@@ -190,6 +194,7 @@ class HealthService
             'sabnzbd'     => $this->sabnzbd?->ping() ?? false,
             'nzbget'      => $this->nzbget?->ping() ?? false,
             'tautulli'    => $this->tautulli?->ping() ?? false,
+            'unraid'      => $this->unraid?->ping() ?? false,
             default       => true,
         };
     }
@@ -206,7 +211,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'];
 
     public function isConfigured(string $service): bool
     {
@@ -251,6 +256,9 @@ class HealthService
             // including get_activity, is apikey-authenticated).
             'tautulli' =>
                 $this->config->has('tautulli_url') && $this->config->has('tautulli_api_key'),
+            // Unraid needs both the URL and a (read-only scoped) API key.
+            'unraid' =>
+                $this->config->has('unraid_url') && $this->config->has('unraid_api_key'),
             default => true,
         };
     }
@@ -267,7 +275,7 @@ class HealthService
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -315,6 +323,7 @@ class HealthService
             $probe['headers'] ?? [],
             $probe['method'] ?? 'GET',
             $probe['body']    ?? null,
+            $probe['insecure'] ?? false,
         );
 
         return $this->diagnoseFromResponse($resp, $service);
@@ -387,7 +396,7 @@ class HealthService
      * service has no URL/credentials configured at all.
      *
      * @param array<string, ?string>|null $overrides
-     * @return ?array{url: string, headers?: array<int,string>, method?: string, body?: string}
+     * @return ?array{url: string, headers?: array<int,string>, method?: string, body?: string, insecure?: bool}
      */
     private function probeFor(string $service, ?array $overrides = null): ?array
     {
@@ -527,6 +536,20 @@ class HealthService
                     'body'    => (string) json_encode(['version' => '1.1', 'id' => 1, 'method' => 'version', 'params' => []]),
                 ];
             }
+            case 'unraid': {
+                $url = $get('unraid_url');
+                $key = $get('unraid_api_key');
+                if ($url === '' || $key === '') return null;
+                // Trivial read-only GraphQL query; a bad key gets a 401/403.
+                return [
+                    'url'      => rtrim($url, '/') . '/graphql',
+                    'headers'  => ['x-api-key: ' . $key, 'Content-Type: application/json', 'Accept: application/json'],
+                    'method'   => 'POST',
+                    'body'     => (string) json_encode(['query' => UnraidClient::QUERY_PING]),
+                    // LAN Unraid GUIs commonly run self-signed certs.
+                    'insecure' => $get('unraid_skip_tls_verify') === '1',
+                ];
+            }
             default:
                 return null;
         }
@@ -614,7 +637,7 @@ class HealthService
      * @param array<int, string> $headers
      * @return array{http: ?int, body: ?string, err: string}
      */
-    private function httpProbe(string $url, array $headers, string $method, ?string $body): array
+    private function httpProbe(string $url, array $headers, string $method, ?string $body, bool $insecure = false): array
     {
         // SSRF guard #1 — reject before opening the socket. Cuts off
         // file:// / gopher:// / dict:// schemes that curl would otherwise
@@ -637,8 +660,8 @@ class HealthService
             CURLOPT_TIMEOUT        => 5,
             CURLOPT_FOLLOWLOCATION => false,
             CURLOPT_NOSIGNAL       => true,
-            CURLOPT_SSL_VERIFYPEER => true,
-            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_SSL_VERIFYPEER => !$insecure,
+            CURLOPT_SSL_VERIFYHOST => $insecure ? 0 : 2,
             CURLOPT_HTTPHEADER     => $headers,
         ]);
         if ($method === 'POST') {
