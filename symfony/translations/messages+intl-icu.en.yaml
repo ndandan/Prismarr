@@ -454,6 +454,22 @@ dashboard:
       cast: 'Cast:'
       studio: 'Studio:'
       tech: Stream
+  server:
+    title: Server
+    settings_cta: Settings
+    unreachable: Unraid is unreachable
+    array: Array
+    parity: Parity
+    disks: Disks
+    system: System
+    docker: Docker
+    ups: UPS
+    cpu: CPU
+    ram: RAM
+    uptime: Up since
+    running: running
+    battery: Battery
+    load: Load
   type:
     film: Movie
     series: TV Show
@@ -676,6 +692,7 @@ admin:
       nzbget: Usenet downloader
       gluetun: 'VPN / port forwarding'
       tautulli: 'Plex activity (via Tautulli)'
+      unraid: 'Unraid server monitoring — array, disks, system, Docker, UPS (Unraid 7+, read-only API key)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Show in sidebar
     status:
@@ -869,6 +886,8 @@ admin:
     clear: Clear
     tmdb:
       api_key: v3 API key
+    unraid:
+      skip_tls_verify: 'Skip TLS certificate verification (self-signed certificate)'
   internal:
     calendar:
       label: Calendar
