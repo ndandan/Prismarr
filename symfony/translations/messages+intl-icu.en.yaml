@@ -470,6 +470,11 @@ dashboard:
     running: running
     battery: Battery
     load: Load
+    parity_checking: Checking
+    elapsed: Elapsed
+    eta: ETA
+    errors: errors
+    last_check: Last check
   type:
     film: Movie
     series: TV Show
