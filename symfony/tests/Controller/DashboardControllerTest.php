@@ -153,7 +153,7 @@ class DashboardControllerTest extends TestCase
         self::assertNull($m->invoke($controller, 'series', 'sonarr-1', 999));
     }
 
-public function testQuickLookTmdbMovieAndTv(): void
+    public function testQuickLookTmdbMovieAndTv(): void
     {
         $tmdb = $this->createMock(TmdbClient::class);
         $tmdb->method('getMovie')->willReturn([
