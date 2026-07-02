@@ -453,6 +453,22 @@ dashboard:
       cast: 'Distribution :'
       studio: 'Studio :'
       tech: Flux
+  server:
+    title: Serveur
+    settings_cta: Paramètres
+    unreachable: Unraid est injoignable
+    array: Baie
+    parity: Parité
+    disks: Disques
+    system: Système
+    docker: Docker
+    ups: Onduleur
+    cpu: CPU
+    ram: RAM
+    uptime: Démarré depuis
+    running: actifs
+    battery: Batterie
+    load: Charge
   type:
     film: Film
     series: Série
@@ -675,6 +691,7 @@ admin:
       nzbget: Téléchargeur Usenet
       gluetun: 'VPN / port forwarding'
       tautulli: 'Activité Plex (via Tautulli)'
+      unraid: 'Supervision du serveur Unraid — baie, disques, système, Docker, onduleur (Unraid 7+, clé API en lecture seule)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Afficher dans le menu latéral
     status:
@@ -868,6 +885,8 @@ admin:
     clear: Effacer
     tmdb:
       api_key: Clé API v3
+    unraid:
+      skip_tls_verify: 'Ignorer la vérification du certificat TLS (certificat auto-signé)'
   internal:
     calendar:
       label: Calendrier

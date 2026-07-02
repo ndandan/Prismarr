@@ -92,6 +92,11 @@ class AdminSettingsController extends AbstractController
             ['key' => 'tautulli_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8181'],
             ['key' => 'tautulli_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
         ],
+        'unraid' => [
+            ['key' => 'unraid_url',             'type' => 'text',     'label' => 'admin.field.url', 'placeholder' => 'https://tower.local'],
+            ['key' => 'unraid_api_key',         'type' => 'password', 'label' => 'admin.field.api_key'],
+            ['key' => 'unraid_skip_tls_verify', 'type' => 'checkbox', 'label' => 'admin.field.unraid.skip_tls_verify'],
+        ],
     ];
 
     /**
@@ -138,6 +143,7 @@ class AdminSettingsController extends AbstractController
         'nzbget'      => 'NZBGet',
         'gluetun'     => 'Gluetun',
         'tautulli'    => 'Tautulli',
+        'unraid'      => 'Unraid',
     ];
 
     /**
@@ -513,6 +519,7 @@ class AdminSettingsController extends AbstractController
             'sabnzbd'                                    => ['sabnzbd_url', 'sabnzbd_api_key'],
             'nzbget'                                     => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
             'tautulli'                                   => ['tautulli_url', 'tautulli_api_key'],
+            'unraid'                                     => ['unraid_url', 'unraid_api_key', 'unraid_skip_tls_verify'],
             default                                      => [],
         };
         $overrides = [];
@@ -561,7 +568,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
+        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'];
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }
