@@ -52,11 +52,12 @@
           <span class="server-gauge-value">{{ server.system.memPercent|round }}%</span>
         </div>
       {% endif %}
-      {% if server.system.uptime %}
-        {# `relative_date` casts its input to (int) and treats it as a Unix
-           epoch timestamp; Unraid's GraphQL `info.os.uptime` is an ISO-8601
-           datetime string, not epoch seconds, so the filter would silently
-           produce a garbage/zero date here. Render the raw string instead. #}
+      {% if server.system.uptimeEpoch %}
+        {# Boot time parsed to epoch by UnraidClient so the locale-aware
+           relative_date filter applies ("17 days ago" / "il y a 17 jours"). #}
+        <div class="server-tile-sub">{{ 'dashboard.server.uptime'|trans }} · {{ server.system.uptimeEpoch|relative_date }}</div>
+      {% elseif server.system.uptime %}
+        {# Unparseable boot timestamp — fall back to the raw string. #}
         <div class="server-tile-sub">{{ 'dashboard.server.uptime'|trans }} · {{ server.system.uptime }}</div>
       {% endif %}
     </div>

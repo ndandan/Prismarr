@@ -71,7 +71,7 @@ class UnraidClientTest extends TestCase
     ]]];
     private const UPS_DATA = ['upsDevices' => [[
         'name'    => 'APC',
-        'battery' => ['chargeLevel' => 100, 'estimatedRuntime' => 45],
+        'battery' => ['chargeLevel' => 100, 'estimatedRuntime' => 4302], // seconds (≈72 min)
         'power'   => ['loadPercentage' => 18.0],
     ]]];
 
@@ -103,13 +103,14 @@ class UnraidClientTest extends TestCase
         $this->assertSame(12.5, $o['system']['cpuPercent']);
         $this->assertSame(40.0, $o['system']['memPercent']);
         $this->assertSame('2026-06-20T04:05:06Z', $o['system']['uptime']);
+        $this->assertSame(strtotime('2026-06-20T04:05:06Z'), $o['system']['uptimeEpoch']);
 
         $this->assertSame(2, $o['docker']['running']);
         $this->assertSame(3, $o['docker']['total']);
         $this->assertSame(['old-app'], $o['docker']['stopped']);
 
         $this->assertSame(100, $o['ups']['battery']);
-        $this->assertSame(45, $o['ups']['runtime']);
+        $this->assertSame(72, $o['ups']['runtime'], 'estimatedRuntime seconds must convert to whole minutes');
         $this->assertSame(18.0, $o['ups']['load']);
     }
 

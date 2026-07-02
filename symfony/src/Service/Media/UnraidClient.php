@@ -26,10 +26,11 @@ use Symfony\Contracts\Service\ResetInterface;
  *                 'parities' => list<['name' => ?string, 'temp' => ?int, 'status' => ?string]>,
  *                 'caches'   => list<['name' => ?string, 'temp' => ?int,
  *                                     'size' => ?float, 'free' => ?float, 'used' => ?float]>],
- *    'system' => ['uptime' => ?string, 'cpuBrand' => ?string, 'cores' => ?int, 'threads' => ?int,
+ *    'system' => ['uptime' => ?string (raw ISO), 'uptimeEpoch' => ?int, 'cpuBrand' => ?string,
+ *                 'cores' => ?int, 'threads' => ?int,
  *                 'cpuPercent' => ?float, 'memPercent' => ?float, 'memTotal' => ?float, 'memUsed' => ?float],
  *    'docker' => ['running' => int, 'total' => int, 'stopped' => list<string>],
- *    'ups'    => ?['name' => ?string, 'battery' => ?int, 'runtime' => ?int, 'load' => ?float],
+ *    'ups'    => ?['name' => ?string, 'battery' => ?int, 'runtime' => ?int (minutes), 'load' => ?float],
  *  ]
  */
 class UnraidClient implements ResetInterface
@@ -152,8 +153,16 @@ class UnraidClient implements ResetInterface
         $m = $metrics['metrics'] ?? null;
         if (!is_array($i) && !is_array($m)) return null;
 
+        // os.uptime is an ISO-8601 boot timestamp (live-verified:
+        // "2026-06-14T03:31:03.786Z"). Parse it to an epoch so the template
+        // can render it via the locale-aware relative_date filter; keep the
+        // raw string as a fallback for unparseable values.
+        $uptimeRaw   = isset($i['os']['uptime']) ? (string) $i['os']['uptime'] : null;
+        $uptimeEpoch = $uptimeRaw !== null ? strtotime($uptimeRaw) : false;
+
         return [
-            'uptime'     => isset($i['os']['uptime'])   ? (string) $i['os']['uptime']   : null,
+            'uptime'      => $uptimeRaw,
+            'uptimeEpoch' => $uptimeEpoch !== false ? $uptimeEpoch : null,
             'cpuBrand'   => isset($i['cpu']['brand'])   ? (string) $i['cpu']['brand']   : null,
             'cores'      => isset($i['cpu']['cores'])   ? (int) $i['cpu']['cores']      : null,
             'threads'    => isset($i['cpu']['threads']) ? (int) $i['cpu']['threads']    : null,
@@ -191,7 +200,9 @@ class UnraidClient implements ResetInterface
         return [
             'name'    => isset($ups['name']) ? (string) $ups['name'] : null,
             'battery' => isset($ups['battery']['chargeLevel'])      ? (int) $ups['battery']['chargeLevel']        : null,
-            'runtime' => isset($ups['battery']['estimatedRuntime']) ? (int) $ups['battery']['estimatedRuntime']   : null,
+            // estimatedRuntime is SECONDS (live-verified: 4302 ≈ 72 min on a
+            // CP1500 at 15% load) — convert to whole minutes for the widget.
+            'runtime' => isset($ups['battery']['estimatedRuntime']) ? (int) round(((float) $ups['battery']['estimatedRuntime']) / 60) : null,
             'load'    => isset($ups['power']['loadPercentage'])     ? (float) $ups['power']['loadPercentage']     : null,
         ];
     }
