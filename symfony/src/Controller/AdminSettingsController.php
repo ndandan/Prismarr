@@ -88,10 +88,6 @@ class AdminSettingsController extends AbstractController
             ['key' => 'tautulli_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8181'],
             ['key' => 'tautulli_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
         ],
-        'tautulli' => [
-            ['key' => 'tautulli_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8181'],
-            ['key' => 'tautulli_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
-        ],
         'unraid' => [
             ['key' => 'unraid_url',             'type' => 'text',     'label' => 'admin.field.url', 'placeholder' => 'https://tower.local'],
             ['key' => 'unraid_api_key',         'type' => 'password', 'label' => 'admin.field.api_key'],
