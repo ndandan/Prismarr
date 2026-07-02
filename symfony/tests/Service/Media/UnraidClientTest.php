@@ -225,4 +225,21 @@ class UnraidClientTest extends TestCase
         $this->assertFalse($opts[CURLOPT_SSL_VERIFYPEER]);
         $this->assertSame(0, $opts[CURLOPT_SSL_VERIFYHOST]);
     }
+
+    public function testDockerContainersListIsCompleteAndAlphabetical(): void
+    {
+        $client = $this->makeClient(['docker {' => self::DOCKER_DATA]);
+        $docker = $client->overview()['docker'];
+
+        // Full list, case-insensitive alphabetical, running flag per container.
+        self::assertSame([
+            ['name' => 'old-app', 'running' => false],
+            ['name' => 'plex',    'running' => true],
+            ['name' => 'radarr',  'running' => true],
+        ], $docker['containers']);
+        // Legacy keys untouched.
+        self::assertSame(2, $docker['running']);
+        self::assertSame(3, $docker['total']);
+        self::assertSame(['old-app'], $docker['stopped']);
+    }
 }

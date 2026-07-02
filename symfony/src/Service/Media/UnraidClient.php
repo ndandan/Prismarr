@@ -29,7 +29,7 @@ use Symfony\Contracts\Service\ResetInterface;
  *    'system' => ['uptime' => ?string (raw ISO), 'uptimeEpoch' => ?int, 'cpuBrand' => ?string,
  *                 'cores' => ?int, 'threads' => ?int,
  *                 'cpuPercent' => ?float, 'memPercent' => ?float, 'memTotal' => ?float, 'memUsed' => ?float],
- *    'docker' => ['running' => int, 'total' => int, 'stopped' => list<string>],
+ *    'docker' => ['running' => int, 'total' => int, 'stopped' => list<string>, 'containers' => list<['name' => string, 'running' => bool]>],
  *    'ups'    => ?['name' => ?string, 'battery' => ?int, 'runtime' => ?int (minutes), 'load' => ?float],
  *  ]
  */
@@ -194,21 +194,28 @@ class UnraidClient implements ResetInterface
 
     private function mapDocker(?array $data): ?array
     {
-        $containers = $data['docker']['containers'] ?? null;
-        if (!is_array($containers)) return null;
+        $raw = $data['docker']['containers'] ?? null;
+        if (!is_array($raw)) return null;
 
-        $running = 0;
-        $stopped = [];
-        foreach ($containers as $c) {
+        $running    = 0;
+        $stopped    = [];
+        $containers = [];
+        foreach ($raw as $c) {
             if (!is_array($c)) continue;
             $name = trim((string) (($c['names'][0] ?? '')), '/');
-            if (strtoupper((string) ($c['state'] ?? '')) === 'RUNNING') {
+            $isRunning = strtoupper((string) ($c['state'] ?? '')) === 'RUNNING';
+            if ($isRunning) {
                 $running++;
             } elseif ($name !== '') {
                 $stopped[] = $name;
             }
+            if ($name !== '') {
+                $containers[] = ['name' => $name, 'running' => $isRunning];
+            }
         }
-        return ['running' => $running, 'total' => count($containers), 'stopped' => $stopped];
+        usort($containers, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+
+        return ['running' => $running, 'total' => count($raw), 'stopped' => $stopped, 'containers' => $containers];
     }
 
     private function mapUps(?array $data): ?array
