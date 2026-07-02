@@ -434,6 +434,7 @@
     .prismarr-health-row-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
     .prismarr-health-row-dot.is-ok  { background: #22c55e; }
     .prismarr-health-row-dot.is-ko  { background: #ef4444; }
+    .prismarr-health-row-dot.is-warn { background: #f59e0b; }
     .prismarr-health-row-dot.is-unk { background: #6b7280; }
     .prismarr-health-row-name { flex: 1; font-weight: 500; }
     .prismarr-health-row-state { font-size: .7rem; color: var(--tblr-secondary); }
@@ -1358,9 +1359,11 @@
       'health.unknown':        'topbar.health.summary_unknown'|trans,
       'health.no_service':     'topbar.health.summary_no_service'|trans,
       'health.summary_tpl':    'topbar.health.summary_running'|trans({'{ok}': '__OK__', '{total}': '__TOTAL__'}),
-      'health.status_ok':      'topbar.health.status.ok'|trans,
-      'health.status_down':    'topbar.health.status.down'|trans,
-      'health.status_unk':     'topbar.health.status.not_configured'|trans,
+      'health.status_up':        'dashboard.health.status_up'|trans,
+      'health.status_slow':      'dashboard.health.status_slow'|trans,
+      'health.status_very_slow': 'dashboard.health.status_very_slow'|trans,
+      'health.status_degraded':  'dashboard.health.status_degraded'|trans,
+      'health.status_down':      'dashboard.health.status_down'|trans,
       'common.loading':        'common.status.loading'|trans,
       'qa.add_radarr':         'quickadd.cta.add_radarr'|trans,
       'qa.add_sonarr':         'quickadd.cta.add_sonarr'|trans,
@@ -2578,73 +2581,48 @@
   <script>
     // Topbar health indicator — lazy-loaded state + auto-refresh 60s.
     (function () {
-      var SERVICE_LABELS = {
-        radarr: 'Radarr', sonarr: 'Sonarr', prowlarr: 'Prowlarr',
-        jellyseerr: 'Seerr', qbittorrent: 'qBittorrent',
-        sabnzbd: 'SABnzbd', nzbget: 'NZBGet', tmdb: 'TMDb',
-      };
-      // v1.1.0 — radarr/sonarr can have multiple instances; we render
-      // each instance on its own row instead of a single aggregate row.
-      var INSTANCE_TYPES = ['radarr', 'sonarr'];
-      var FLAT_SERVICES = ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'sabnzbd', 'nzbget'];
       var dot   = document.getElementById('topbar-health-dot');
       var summ  = document.getElementById('topbar-health-summary');
       var list  = document.getElementById('topbar-health-list');
       if (!dot || !summ || !list) return;
 
+      // v1.2 — renders the server-built `chips` list (same rows as the
+      // dashboard health section): brand-colored names, latency, 5-state
+      // dots, and NO rows for unconfigured services.
+      var STATUS_I18N = { up: 'health.status_up', slow: 'health.status_slow', very_slow: 'health.status_very_slow', degraded: 'health.status_degraded', down: 'health.status_down' };
+      var DOT_CLS = { up: 'is-ok', slow: 'is-warn', very_slow: 'is-warn', degraded: 'is-warn', down: 'is-ko' };
+
       function renderHealth(data) {
+        var i18n = window._i18n || {};
+        var chips = data.chips || [];
         var ok = data.ok || 0;
         var total = data.total || 0;
-        var services = data.services || {};
 
-        // Overall dot color : all configured up = green, partial = orange,
-        // none configured or all down = red.
         dot.classList.remove('is-ok', 'is-warn', 'is-ko');
         if (total === 0)       dot.classList.add('is-ko');
         else if (ok === total) dot.classList.add('is-ok');
         else if (ok > 0)       dot.classList.add('is-warn');
         else                   dot.classList.add('is-ko');
 
-        var i18n = window._i18n || {};
         summ.textContent = total === 0
           ? (i18n['health.no_service'] || 'No service configured')
           : (i18n['health.summary_tpl'] || '__OK__ / __TOTAL__ services up')
               .replace('__OK__', ok).replace('__TOTAL__', total);
 
-        function rowFor(name, state) {
-          var cls = state === null || state === undefined ? 'is-unk' : (state ? 'is-ok' : 'is-ko');
-          var label = state === null || state === undefined
-            ? (i18n['health.status_unk']  || 'Not configured')
-            : (state
-                ? (i18n['health.status_ok']   || 'Up')
-                : (i18n['health.status_down'] || 'Unreachable'));
-          return '<div class="prismarr-health-row">'
-               +  '<span class="prismarr-health-row-dot ' + cls + '"></span>'
-               +  '<span class="prismarr-health-row-name">' + window.escHtml(name) + '</span>'
-               +  '<span class="prismarr-health-row-state">' + label + '</span>'
-               +  '</div>';
+        if (!chips.length) {
+          list.innerHTML = '<div class="px-3 py-2 small text-secondary">'
+            + (i18n['health.no_service'] || 'No service configured') + '</div>';
+          return;
         }
-
-        var html = '';
-        // TMDb first (cosmetic — matches the wizard order).
-        html += rowFor(SERVICE_LABELS.tmdb, services.tmdb);
-        // Multi-instance services — one row per configured instance, falls
-        // back to a single "Not configured" row when none enabled.
-        INSTANCE_TYPES.forEach(function (type) {
-          var insts = (data.instances || {})[type] || [];
-          if (insts.length === 0) {
-            html += rowFor(SERVICE_LABELS[type], services[type]);
-            return;
-          }
-          insts.forEach(function (inst) {
-            html += rowFor(inst.name, inst.state);
-          });
-        });
-        // Remaining flat services.
-        ['prowlarr', 'jellyseerr', 'qbittorrent', 'sabnzbd', 'nzbget'].forEach(function (id) {
-          html += rowFor(SERVICE_LABELS[id], services[id]);
-        });
-        list.innerHTML = html;
+        list.innerHTML = chips.map(function (c) {
+          var state = i18n[STATUS_I18N[c.status]] || c.status || '';
+          if (c.latencyMs !== null && c.latencyMs !== undefined) state += ' · ' + c.latencyMs + ' ms';
+          return '<div class="prismarr-health-row">'
+            +  '<span class="prismarr-health-row-dot ' + (DOT_CLS[c.status] || 'is-unk') + '"></span>'
+            +  '<span class="prismarr-health-row-name" style="color:' + (c.color || 'inherit') + '">' + window.escHtml(c.name) + '</span>'
+            +  '<span class="prismarr-health-row-state">' + window.escHtml(state) + '</span>'
+            +  '</div>';
+        }).join('');
       }
 
       function fetchHealth() {
