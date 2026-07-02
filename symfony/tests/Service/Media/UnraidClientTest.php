@@ -132,6 +132,46 @@ class UnraidClientTest extends TestCase
         $this->assertNull($this->makeClient([])->overview());
     }
 
+    public function testDeadHostShortCircuitsAfterFirstQuery(): void
+    {
+        // Simulate a transport-level failure (connect refused/timeout) on the
+        // first (array) query: gql() sets transportDown and returns null.
+        // overview() must bail immediately without issuing the other 4 queries.
+        $config = $this->createMock(ConfigService::class);
+        $config->method('get')->willReturnCallback(fn(string $k) => [
+            'unraid_url'     => 'https://tower.local',
+            'unraid_api_key' => 'k3y',
+        ][$k] ?? null);
+
+        $client = new class($config, $this->createMock(LoggerInterface::class)) extends UnraidClient {
+            public int $calls = 0;
+            protected function gql(string $query): ?array
+            {
+                $this->calls++;
+                $this->transportDown = true; // first (and only) call: host down
+                return null;
+            }
+        };
+
+        $this->assertNull($client->overview());
+        $this->assertSame(1, $client->calls, 'must stop after the first transport-failed query');
+    }
+
+    public function testAppLevelGraphqlErrorDoesNotShortCircuit(): void
+    {
+        // A missing array group WITHOUT a transport failure (e.g. scope error,
+        // HTTP 200 {errors}) must NOT stop the remaining group queries.
+        $responses = $this->allGroups();
+        unset($responses['array {']); // array group returns null, transportDown stays false
+        $client = $this->makeClient($responses);
+        $o = $client->overview();
+
+        $this->assertNotNull($o);
+        $this->assertNull($o['array']);
+        $this->assertNotNull($o['docker']);
+        $this->assertGreaterThan(1, count($client->queriesSent), 'app-level error must not short-circuit');
+    }
+
     public function testOverviewIsNullAndSendsNothingWhenUnconfigured(): void
     {
         $client = $this->makeClient($this->allGroups(), ['unraid_url' => null]);

@@ -50,6 +50,15 @@ class UnraidClient implements ResetInterface
     private ?array $overviewCache = null;
     private float  $overviewCacheAt = 0.0;
 
+    /**
+     * Set by gql() when a request fails at the transport layer (connect
+     * refused / timed out / DNS) as opposed to an application-level GraphQL
+     * error. overview() reads it to fail fast on a dead host instead of
+     * waiting out a connect timeout on every remaining group query. Protected
+     * so tests can simulate a transport failure without real cURL.
+     */
+    protected bool $transportDown = false;
+
     private ?string $baseUrl = null;
     private string  $apiKey = '';
     private bool    $skipTlsVerify = false;
@@ -80,6 +89,7 @@ class UnraidClient implements ResetInterface
         $this->enabled         = true;
         $this->overviewCache   = null;
         $this->overviewCacheAt = 0.0;
+        $this->transportDown   = false;
     }
 
     public function ping(): bool
@@ -101,7 +111,16 @@ class UnraidClient implements ResetInterface
             return $this->overviewCache;
         }
 
-        $array  = $this->mapArray($this->gql(self::QUERY_ARRAY));
+        $this->transportDown = false;
+        $array = $this->mapArray($this->gql(self::QUERY_ARRAY));
+        // Fail fast on a dead host: if the first query couldn't even reach the
+        // box (connect refused / timed out / DNS), the remaining four group
+        // queries would each burn another connect timeout (~12s total). A
+        // GraphQL app-level error (HTTP 200 with {errors}) does NOT set this,
+        // so a partial-scope key still queries every group.
+        if ($this->transportDown) {
+            return null; // don't cache — retry next call
+        }
         $system = $this->mapSystem($this->gql(self::QUERY_INFO), $this->gql(self::QUERY_METRICS));
         $docker = $this->mapDocker($this->gql(self::QUERY_DOCKER));
         $ups    = $this->mapUps($this->gql(self::QUERY_UPS));
@@ -227,12 +246,18 @@ class UnraidClient implements ResetInterface
         $opts[CURLOPT_POSTFIELDS] = (string) json_encode(['query' => $query]);
         $opts[CURLOPT_HTTPHEADER] = $this->authHeaders();
         curl_setopt_array($ch, $opts);
-        $body = curl_exec($ch);
-        $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $body  = curl_exec($ch);
+        $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errno = curl_errno($ch);
         curl_close($ch);
 
         if ($body === false || $code !== 200) {
-            $this->logger->debug('UnraidClient gql failed', ['code' => $code]);
+            // Distinguish "host unreachable" (connect/DNS/timeout) from an
+            // HTTP/GraphQL error so overview() can short-circuit a dead box.
+            if (in_array($errno, [CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEOUTED, CURLE_COULDNT_RESOLVE_HOST], true)) {
+                $this->transportDown = true;
+            }
+            $this->logger->debug('UnraidClient gql failed', ['code' => $code, 'errno' => $errno]);
             return null;
         }
         $decoded = json_decode((string) $body, true);
