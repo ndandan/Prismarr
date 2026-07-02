@@ -213,6 +213,61 @@ class HealthService
      */
     public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'];
 
+    /** Brand colors for the health chips — single source for dashboard + topbar. */
+    private const SERVICE_COLORS = [
+        'radarr'      => '#FFC230',
+        'sonarr'      => '#00CCFF',
+        'prowlarr'    => '#E88D1A',
+        'jellyseerr'  => '#a259ff',
+        'qbittorrent' => '#2f67ba',
+        'sabnzbd'     => '#fbc531',
+        'nzbget'      => '#54c754',
+        'tmdb'        => '#01B4E4',
+        'tautulli'    => '#e5a00d',
+        'unraid'      => '#f15a2c',
+    ];
+
+    /**
+     * Services-health chip list — the ONE list both the dashboard section and
+     * the topbar popover render (they drifted apart when built separately).
+     * Radarr/Sonarr expand to one chip per enabled instance; unconfigured
+     * services (status null) are dropped; Unraid is admin-gated by the caller.
+     *
+     * @return list<array{id: string, name: string, status: string, latencyMs: ?int, color: string}>
+     */
+    public function chips(bool $includeUnraid = false): array
+    {
+        $chips = [];
+
+        foreach ([ServiceInstance::TYPE_RADARR, ServiceInstance::TYPE_SONARR] as $type) {
+            foreach ($this->instances?->getEnabled($type) ?? [] as $inst) {
+                try {
+                    $s = $this->statusFor($type, $inst->getSlug());
+                } catch (\Throwable) {
+                    $s = ['status' => 'down', 'latencyMs' => null];
+                }
+                if ($s['status'] === null) continue;
+                $chips[] = ['id' => $type, 'name' => $inst->getName(), 'status' => $s['status'], 'latencyMs' => $s['latencyMs'], 'color' => self::SERVICE_COLORS[$type]];
+            }
+        }
+
+        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli'];
+        if ($includeUnraid) {
+            $labels['unraid'] = 'Unraid';
+        }
+        foreach ($labels as $service => $label) {
+            try {
+                $s = $this->statusFor($service);
+            } catch (\Throwable) {
+                $s = ['status' => null, 'latencyMs' => null];
+            }
+            if ($s['status'] === null) continue;
+            $chips[] = ['id' => $service, 'name' => $label, 'status' => $s['status'], 'latencyMs' => $s['latencyMs'], 'color' => self::SERVICE_COLORS[$service]];
+        }
+
+        return $chips;
+    }
+
     public function isConfigured(string $service): bool
     {
         if ($this->config === null) {
