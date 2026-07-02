@@ -11,8 +11,11 @@
     <div class="server-tile">
       <div class="server-tile-head">
         <span class="server-tile-label">{{ 'dashboard.server.array'|trans }}</span>
-        {% set started = (server.array.state|default('')|upper) starts with 'STARTED' %}
-        <span class="server-state-badge {{ started ? 'is-ok' : 'is-ko' }}">{{ server.array.state|default('—') }}</span>
+        {# STARTED = green; STOPPED = neutral grey (a deliberately-stopped array
+           isn't an error); anything else (unmountable, etc.) = red. #}
+        {% set state_up = server.array.state|default('')|upper %}
+        {% set state_class = state_up starts with 'STARTED' ? 'is-ok' : (state_up starts with 'STOPPED' ? 'is-idle' : 'is-ko') %}
+        <span class="server-state-badge {{ state_class }}">{{ server.array.state|default('—') }}</span>
       </div>
       {% if server.array.capacity.total %}
         {% set pct = (server.array.capacity.used / server.array.capacity.total * 100)|round %}
