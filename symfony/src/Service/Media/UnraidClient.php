@@ -40,7 +40,9 @@ use Symfony\Contracts\Service\ResetInterface;
  * Int-overflow workaround: on arrays > 2^31 md-units, the API's 32-bit Int
  * type nulls mdResync/mdResyncSize (live-verified), so `parity.running` keys
  * off mdResyncPos alone and the progress denominator falls back to the
- * parities[].size from the array group (same units, big-safe).
+ * parities[].size from the array group (same units, big-safe). etaSeconds
+ * prefers the live throughput (mdResyncDb/mdResyncDt) over the elapsed
+ * average — sbSynced may mark a resume, not the check's true start.
  */
 class UnraidClient implements ResetInterface
 {
@@ -52,7 +54,7 @@ class UnraidClient implements ResetInterface
     private const QUERY_METRICS = 'query { metrics { cpu { percentTotal } memory { percentTotal total used } } }';
     private const QUERY_DOCKER  = 'query { docker { containers { names state } } }';
     private const QUERY_UPS     = 'query { upsDevices { name battery { chargeLevel estimatedRuntime } power { loadPercentage } } }';
-    private const QUERY_PARITY_STATUS  = 'query { vars { mdResyncPos mdResyncSize sbSynced sbSyncErrs } }';
+    private const QUERY_PARITY_STATUS  = 'query { vars { mdResyncPos mdResyncSize mdResyncDt mdResyncDb sbSynced sbSyncErrs } }';
     private const QUERY_PARITY_HISTORY = 'query { parityHistory { date duration errors status } }';
 
     /** Widget polls every 30s; TTL keeps a paint + poll from double-querying. */
@@ -280,8 +282,20 @@ class UnraidClient implements ResetInterface
         if ($running && (int) ($vars['sbSynced'] ?? 0) > 0) {
             $elapsed = max(0, $this->now() - (int) $vars['sbSynced']);
         }
-        $eta = ($elapsed !== null && $progress !== null && $progress > 0)
-            ? (int) round($elapsed * (100 - $progress) / $progress) : null;
+        // ETA: prefer the live md throughput (mdResyncDb blocks per mdResyncDt
+        // seconds — the same current-rate estimate Unraid's own footer shows).
+        // The elapsed-average formula is only a fallback: sbSynced can reflect
+        // a pause/resume rather than the check's true start (live-verified ~8h
+        // drift), which skews any average computed from it.
+        $dt = isset($vars['mdResyncDt']) ? (float) $vars['mdResyncDt'] : 0.0;
+        $db = isset($vars['mdResyncDb']) ? (float) $vars['mdResyncDb'] : 0.0;
+        if ($running && $denom > 0 && $dt > 0 && $db > 0) {
+            $eta = (int) round(($denom - $pos) / ($db / $dt));
+        } elseif ($elapsed !== null && $progress !== null && $progress > 0) {
+            $eta = (int) round($elapsed * (100 - $progress) / $progress);
+        } else {
+            $eta = null;
+        }
 
         $last = null;
         foreach ($runs ?? [] as $run) {
