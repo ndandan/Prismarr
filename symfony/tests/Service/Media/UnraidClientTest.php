@@ -55,7 +55,7 @@ class UnraidClientTest extends TestCase
         'disks'    => [
             ['name' => 'disk1', 'temp' => 38, 'status' => 'DISK_OK', 'fsSize' => '4000', 'fsFree' => '1000', 'fsUsed' => '3000'],
         ],
-        'parities' => [['name' => 'parity', 'temp' => 41, 'status' => 'DISK_OK']],
+        'parities' => [['name' => 'parity', 'temp' => 41, 'status' => 'DISK_OK', 'size' => '10000']],
         'caches'   => [['name' => 'cache', 'temp' => 35, 'fsSize' => '500', 'fsFree' => '200', 'fsUsed' => '300']],
     ]];
     private const INFO_DATA = ['info' => [
@@ -82,6 +82,10 @@ class UnraidClientTest extends TestCase
     ]];
     private const PARITY_STATUS_IDLE = ['vars' => [
         'mdResyncPos' => '0', 'mdResyncSize' => '10000',
+        'sbSynced' => '1750000000', 'sbSyncErrs' => '0',
+    ]];
+    private const PARITY_STATUS_RUNNING_NULLSIZE = ['vars' => [
+        'mdResyncPos' => '5000', 'mdResyncSize' => null,
         'sbSynced' => '1750000000', 'sbSyncErrs' => '0',
     ]];
     private const PARITY_HISTORY = ['parityHistory' => [
@@ -291,6 +295,40 @@ class UnraidClientTest extends TestCase
         self::assertNull($parity['elapsed']);
         self::assertNull($parity['errors']); // sbSyncErrs only meaningful while running
         self::assertSame(0, $parity['last']['errors']);
+    }
+
+    public function testParityRunningWithNullSizeFallsBackToParityDiskSize(): void
+    {
+        // Live-verified: mdResyncSize nulls (32-bit Int overflow) on big arrays,
+        // while array.parities[].size returns the same value big-safe.
+        $client = $this->makeClient([
+            'array {'         => self::ARRAY_DATA,          // parity size 10000
+            'vars {'          => self::PARITY_STATUS_RUNNING_NULLSIZE,
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $client->nowOverride = 1750050000;
+
+        $parity = $client->overview()['parity'];
+        self::assertTrue($parity['running']);
+        self::assertSame(50.0, $parity['progress']); // 5000 / 10000 via fallback
+        self::assertSame(50000, $parity['elapsed']);
+        self::assertSame(50000, $parity['etaSeconds']);
+    }
+
+    public function testParityRunningWithNoDenominatorStillReportsRunning(): void
+    {
+        $client = $this->makeClient([
+            'vars {'          => self::PARITY_STATUS_RUNNING_NULLSIZE, // no array group
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $client->nowOverride = 1750050000;
+
+        $parity = $client->overview()['parity'];
+        self::assertTrue($parity['running']);   // no more idle-lie
+        self::assertNull($parity['progress']);
+        self::assertNull($parity['etaSeconds']);
+        self::assertSame(50000, $parity['elapsed']);
+        self::assertSame(0, $parity['errors']);
     }
 
     public function testParityGroupAbsentWhenBothQueriesFail(): void

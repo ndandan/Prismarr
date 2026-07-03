@@ -76,13 +76,16 @@
         {% endif %}
       </div>
       {% if server.parity is not null and server.parity.running %}
-        {% set ppct = server.parity.progress ?? 0 %}
-        <div class="server-bar" title="{{ ppct }}%"><div class="server-bar-fill" style="width: {{ ppct }}%"></div></div>
-        <div class="server-tile-sub">
-          {{ ppct }}%
-          {% if server.parity.elapsed is not null %} · {{ 'dashboard.server.elapsed'|trans }} {{ _self.dur(server.parity.elapsed) }}{% endif %}
-          {% if server.parity.etaSeconds is not null %} · {{ 'dashboard.server.eta'|trans }} {{ _self.dur(server.parity.etaSeconds) }}{% endif %}
-        </div>
+        {% if server.parity.progress is not null %}
+          <div class="server-bar" title="{{ server.parity.progress }}%"><div class="server-bar-fill" style="width: {{ server.parity.progress }}%"></div></div>
+          <div class="server-tile-sub">
+            {{ server.parity.progress }}%
+            {% if server.parity.elapsed is not null %} · {{ 'dashboard.server.elapsed'|trans }} {{ _self.dur(server.parity.elapsed) }}{% endif %}
+            {% if server.parity.etaSeconds is not null %} · {{ 'dashboard.server.eta'|trans }} {{ _self.dur(server.parity.etaSeconds) }}{% endif %}
+          </div>
+        {% elseif server.parity.elapsed is not null %}
+          <div class="server-tile-sub">{{ 'dashboard.server.elapsed'|trans }} {{ _self.dur(server.parity.elapsed) }}</div>
+        {% endif %}
         {% if server.parity.errors is not null %}
           <div class="server-tile-sub">{{ server.parity.errors }} {{ 'dashboard.server.errors'|trans }}</div>
         {% endif %}

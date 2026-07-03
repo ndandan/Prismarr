@@ -24,7 +24,7 @@ use Symfony\Contracts\Service\ResetInterface;
  *                 'capacity' => ['free' => ?float, 'used' => ?float, 'total' => ?float], // kilobytes
  *                 'disks'    => list<['name' => ?string, 'temp' => ?int, 'status' => ?string,
  *                                     'size' => ?float, 'free' => ?float, 'used' => ?float]>,
- *                 'parities' => list<['name' => ?string, 'temp' => ?int, 'status' => ?string]>,
+ *                 'parities' => list<['name' => ?string, 'temp' => ?int, 'status' => ?string, 'size' => ?float]>,
  *                 'caches'   => list<['name' => ?string, 'temp' => ?int,
  *                                     'size' => ?float, 'free' => ?float, 'used' => ?float]>],
  *    'system' => ['uptime' => ?string (raw ISO), 'uptimeEpoch' => ?int, 'cpuBrand' => ?string,
@@ -36,13 +36,18 @@ use Symfony\Contracts\Service\ResetInterface;
  *                  'etaSeconds' => ?int, 'errors' => ?int,
  *                  'last' => ?['dateEpoch' => ?int, 'duration' => ?int (sec), 'errors' => ?int, 'status' => ?string]],
  *  ]
+ *
+ * Int-overflow workaround: on arrays > 2^31 md-units, the API's 32-bit Int
+ * type nulls mdResync/mdResyncSize (live-verified), so `parity.running` keys
+ * off mdResyncPos alone and the progress denominator falls back to the
+ * parities[].size from the array group (same units, big-safe).
  */
 class UnraidClient implements ResetInterface
 {
     /** Trivial read used by HealthService::probeFor() and ping(). */
     public const QUERY_PING = 'query { info { os { uptime } } }';
 
-    private const QUERY_ARRAY   = 'query { array { state capacity { kilobytes { free used total } } disks { name temp status fsSize fsFree fsUsed } parities { name temp status } caches { name temp fsSize fsFree fsUsed } } }';
+    private const QUERY_ARRAY   = 'query { array { state capacity { kilobytes { free used total } } disks { name temp status fsSize fsFree fsUsed } parities { name temp status size } caches { name temp fsSize fsFree fsUsed } } }';
     private const QUERY_INFO    = 'query { info { os { uptime } cpu { brand cores threads } } }';
     private const QUERY_METRICS = 'query { metrics { cpu { percentTotal } memory { percentTotal total used } } }';
     private const QUERY_DOCKER  = 'query { docker { containers { names state } } }';
@@ -130,7 +135,12 @@ class UnraidClient implements ResetInterface
         $system = $this->mapSystem($this->gql(self::QUERY_INFO), $this->gql(self::QUERY_METRICS));
         $docker = $this->mapDocker($this->gql(self::QUERY_DOCKER));
         $ups    = $this->mapUps($this->gql(self::QUERY_UPS));
-        $parity = $this->mapParity($this->gql(self::QUERY_PARITY_STATUS), $this->gql(self::QUERY_PARITY_HISTORY));
+        $paritySizes = array_filter(array_column($array['parities'] ?? [], 'size'));
+        $parity = $this->mapParity(
+            $this->gql(self::QUERY_PARITY_STATUS),
+            $this->gql(self::QUERY_PARITY_HISTORY),
+            $paritySizes !== [] ? (float) max($paritySizes) : null,
+        );
 
         if ($array === null && $system === null && $docker === null && $ups === null && $parity === null) {
             return null; // fully unreachable — don't cache, retry next call
@@ -168,6 +178,7 @@ class UnraidClient implements ResetInterface
                 'name'   => isset($p['name']) ? (string) $p['name'] : null,
                 'temp'   => isset($p['temp']) ? (int) $p['temp'] : null,
                 'status' => isset($p['status']) ? (string) $p['status'] : null,
+                'size'   => isset($p['size']) ? (float) $p['size'] : null,
             ], array_values(array_filter((array) ($a['parities'] ?? []), 'is_array'))),
             'caches'   => array_map($mapDisk, array_values(array_filter((array) ($a['caches'] ?? []), 'is_array'))),
         ];
@@ -245,18 +256,25 @@ class UnraidClient implements ResetInterface
      * live progress) and `parityHistory` (completed checks). Either side may be
      * missing (old API / partial key scope); null only when both are.
      */
-    private function mapParity(?array $status, ?array $history): ?array
+    private function mapParity(?array $status, ?array $history, ?float $sizeFallback = null): ?array
     {
         $vars = is_array($status['vars'] ?? null) ? $status['vars'] : null;
         $runs = is_array($history['parityHistory'] ?? null)
             ? array_values(array_filter($history['parityHistory'], 'is_array')) : null;
         if ($vars === null && $runs === null) return null;
 
-        // mdResyncPos > 0 ⇔ a check/rebuild is in flight (position resets to 0 when idle).
         $pos  = isset($vars['mdResyncPos'])  ? (float) $vars['mdResyncPos']  : 0.0;
         $size = isset($vars['mdResyncSize']) ? (float) $vars['mdResyncSize'] : 0.0;
-        $running  = $pos > 0 && $size > 0;
-        $progress = $running ? round($pos / $size * 100, 1) : null;
+        // mdResyncPos > 0 ⇔ a check/rebuild is in flight. Deliberately NOT gated on
+        // mdResyncSize: on arrays > 2^31 md-units the API's 32-bit Int type nulls
+        // that field (live-verified), so requiring it would read "idle" mid-check.
+        $running = $pos > 0;
+        // Denominator preference: mdResyncSize (exact md units) when the API managed
+        // to return it, else the parity-disk size from the array group — live-verified
+        // to be the SAME value/units (27344764876 on a dual-parity box). No denominator
+        // → progress null; the tile still shows the badge/elapsed/errors.
+        $denom = $size > 0 ? $size : (float) ($sizeFallback ?? 0.0);
+        $progress = ($running && $denom > 0) ? round($pos / $denom * 100, 1) : null;
 
         $elapsed = null;
         if ($running && (int) ($vars['sbSynced'] ?? 0) > 0) {
