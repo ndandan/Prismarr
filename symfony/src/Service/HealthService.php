@@ -13,6 +13,8 @@ use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 
 /**
  * Tests third-party service availability.
@@ -30,8 +32,19 @@ class HealthService
 {
     private const CACHE_TTL = 10;
 
+    /**
+     * Pool key of the cache "generation" — a random token mixed into every
+     * status key. invalidate() just drops it: the next read mints a new one,
+     * which orphans every previous entry at once (they expire by TTL anyway)
+     * without having to enumerate per-instance slugs.
+     */
+    private const GEN_KEY = 'health.status.gen';
+
     /** @var array<string, array{result: array{status: ?string, latencyMs: ?int}, at: int}> */
     private array $statusCache = [];
+
+    /** Per-request memo of the pool generation token. */
+    private ?string $generation = null;
 
     public function __construct(
         private readonly RadarrClient      $radarr,
@@ -51,6 +64,11 @@ class HealthService
         // Tautulli (current Plex activity) — nullable + last for the same
         // legacy-test-constructor reason as the Usenet clients above.
         private readonly ?TautulliClient   $tautulli = null,
+        // Shared status cache (cache.app). Without it the 10 s memo lives
+        // only in $statusCache, which classic-mode FrankenPHP discards with
+        // the request — every topbar poll then re-pings every service.
+        // Nullable + last for the legacy-test-constructor reason above.
+        private readonly ?CacheInterface   $statusPool = null,
     ) {}
 
     /**
@@ -110,10 +128,32 @@ class HealthService
             return $this->statusCache[$key]['result'];
         }
 
+        // Shared pool first (cache.app) — one probe sweep per TTL for the
+        // whole install instead of per request/tab. Falls back to a direct
+        // probe when no pool is wired (legacy test constructors).
+        $result = $this->statusPool !== null
+            ? $this->statusPool->get($this->poolKey($key), function (ItemInterface $item) use ($service, $instanceSlug): array {
+                $item->expiresAfter(self::CACHE_TTL);
+                return $this->computeStatus($service, $instanceSlug);
+            })
+            : $this->computeStatus($service, $instanceSlug);
+
+        return $this->remember($key, $result, $now);
+    }
+
+    /**
+     * The uncached probe: configured check → circuit breaker → live ping,
+     * classified by round-trip latency. Extracted from statusFor() so the
+     * shared-pool path and the pool-less legacy path run the same logic.
+     *
+     * @return array{status: ?string, latencyMs: ?int}
+     */
+    private function computeStatus(string $service, ?string $instanceSlug): array
+    {
         // Unconfigured services are never pinged (issue #9). Skipped when no
         // ConfigService is wired (legacy test paths).
         if ($this->config !== null && !$this->isConfigured($service)) {
-            return $this->remember($key, ['status' => null, 'latencyMs' => null], $now);
+            return ['status' => null, 'latencyMs' => null];
         }
 
         // Circuit breaker open → we'd serve a stale cached-down verdict without
@@ -121,7 +161,7 @@ class HealthService
         // outage → degraded. radarr/sonarr mark the breaker WITH the instance
         // slug, so per-instance degraded detection lines up here.
         if ($this->serviceHealthCache?->isDown($service, $instanceSlug)) {
-            return $this->remember($key, ['status' => 'degraded', 'latencyMs' => null], $now);
+            return ['status' => 'degraded', 'latencyMs' => null];
         }
 
         // Live probe — time it with a monotonic clock.
@@ -134,17 +174,25 @@ class HealthService
         $latencyMs = (int) round((hrtime(true) - $start) / 1e6);
 
         if ($ok === null) {
-            return $this->remember($key, ['status' => null, 'latencyMs' => null], $now);
+            return ['status' => null, 'latencyMs' => null];
         }
         if ($ok === false) {
-            return $this->remember($key, ['status' => 'down', 'latencyMs' => null], $now);
+            return ['status' => 'down', 'latencyMs' => null];
         }
 
-        return $this->remember(
-            $key,
-            ['status' => self::classifyLatency($latencyMs), 'latencyMs' => $latencyMs],
-            $now,
-        );
+        return ['status' => self::classifyLatency($latencyMs), 'latencyMs' => $latencyMs];
+    }
+
+    /**
+     * Pool key for one service/instance status. Namespaced by the current
+     * generation token; ':' (PSR-6 reserved) in instance-scoped keys becomes
+     * '.'. Only called when $statusPool is non-null.
+     */
+    private function poolKey(string $key): string
+    {
+        $this->generation ??= $this->statusPool->get(self::GEN_KEY, fn (): string => bin2hex(random_bytes(4)));
+
+        return 'health.status.' . $this->generation . '.' . str_replace(':', '.', $key);
     }
 
     /**
@@ -264,6 +312,16 @@ class HealthService
      */
     public function invalidate(?string $service = null): void
     {
+        // Shared pool: rotate the generation token — every pooled status
+        // (including per-instance ones we can't enumerate here) becomes
+        // unreachable at once. Cheaper than tracking keys, and the orphans
+        // expire on their own within CACHE_TTL. Scoped invalidation isn't
+        // worth the bookkeeping at a 10 s TTL.
+        if ($this->statusPool !== null) {
+            $this->statusPool->delete(self::GEN_KEY);
+            $this->generation = null;
+        }
+
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
