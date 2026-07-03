@@ -43,6 +43,18 @@
 	# Compression
 	encode zstd gzip
 
+	# Browser caching for static assets.
+	# /assets/* are AssetMapper-compiled files with a content digest in the
+	# filename — safe to cache forever (a new build = a new URL).
+	# /static/* (vendored Tabler/Chart.js) and /img/* are NOT fingerprinted:
+	# one day keeps them out of the request log without pinning a stale UI
+	# past an image upgrade (Caddy's ETag revalidates them after expiry).
+	@hashed_assets path /assets/*
+	header @hashed_assets Cache-Control "public, max-age=31536000, immutable"
+
+	@static_assets path /static/* /img/* /favicon.ico
+	header @static_assets Cache-Control "public, max-age=86400"
+
 	# Mercure hub (real-time SSE).
 	# Bolt DB stored in var/data (volume) so www-data can write to it.
 	# cors_origins is exposed via env so public deployments can restrict
