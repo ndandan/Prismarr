@@ -331,6 +331,27 @@ class UnraidClientTest extends TestCase
         self::assertSame(0, $parity['errors']);
     }
 
+    public function testParityEtaPrefersCurrentThroughput(): void
+    {
+        // mdResyncDt/mdResyncDb = live sampling window; ETA = (denom − pos) ÷
+        // (db/dt), independent of sbSynced — which drifts to the resume time
+        // on paused checks (live-verified ~8h off the true start).
+        $client = $this->makeClient([
+            'vars {' => ['vars' => [
+                'mdResyncPos' => '5000', 'mdResyncSize' => '10000',
+                'mdResyncDt' => '10', 'mdResyncDb' => '100',
+                'sbSynced' => '1750000000', 'sbSyncErrs' => '0',
+            ]],
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $client->nowOverride = 1750050000;
+
+        $parity = $client->overview()['parity'];
+        self::assertSame(50.0, $parity['progress']);
+        self::assertSame(50000, $parity['elapsed']);   // still sbSynced-based
+        self::assertSame(500, $parity['etaSeconds']);  // (10000-5000)/(100/10)
+    }
+
     public function testParityGroupAbsentWhenBothQueriesFail(): void
     {
         $client = $this->makeClient(['docker {' => self::DOCKER_DATA]); // no parity payloads
