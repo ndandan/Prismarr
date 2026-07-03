@@ -257,7 +257,7 @@ class DashboardController extends AbstractController
         set_time_limit(60);
 
         return $this->render('dashboard/_health.html.twig', [
-            'services_health' => $this->servicesHealth($this->isGranted('ROLE_ADMIN')),
+            'services_health' => $this->health->chips($this->isGranted('ROLE_ADMIN')),
         ]);
     }
 
@@ -692,47 +692,6 @@ class DashboardController extends AbstractController
         return $out;
     }
 
-    /**
-     * @return list<array{id: string, name: string, status: string, latencyMs: ?int}>
-     *
-     * v1.1.0 — radarr/sonarr expand to one chip PER enabled instance, named
-     * after the instance (Radarr 1080p, Radarr 4K…), matching the topbar
-     * dropdown / `/api/health/services` rather than collapsing to a single
-     * aggregate dot. Mono-instance services (prowlarr, jellyseerr, qbit, tmdb)
-     * keep one chip each. Unconfigured entries (isHealthy null) are dropped.
-     */
-    private function servicesHealth(bool $includeUnraid = false): array
-    {
-        $chips = [];
-
-        foreach ([ServiceInstance::TYPE_RADARR, ServiceInstance::TYPE_SONARR] as $type) {
-            foreach ($this->instances->getEnabled($type) as $inst) {
-                try {
-                    $s = $this->health->statusFor($type, $inst->getSlug());
-                } catch (\Throwable) {
-                    $s = ['status' => 'down', 'latencyMs' => null];
-                }
-                if ($s['status'] === null) continue; // instance has no credentials yet
-                $chips[] = ['id' => $type, 'name' => $inst->getName(), 'status' => $s['status'], 'latencyMs' => $s['latencyMs']];
-            }
-        }
-
-        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli'];
-        if ($includeUnraid) {
-            $labels['unraid'] = 'Unraid';
-        }
-        foreach ($labels as $service => $label) {
-            try {
-                $s = $this->health->statusFor($service);
-            } catch (\Throwable) {
-                $s = ['status' => null, 'latencyMs' => null];
-            }
-            if ($s['status'] === null) continue; // not configured / disabled
-            $chips[] = ['id' => $service, 'name' => $label, 'status' => $s['status'], 'latencyMs' => $s['latencyMs']];
-        }
-
-        return $chips;
-    }
 
     private function recommendations(): array
     {

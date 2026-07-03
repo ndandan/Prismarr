@@ -30,6 +30,7 @@ class UnraidClientTest extends TestCase
 
         return new class($config, $this->createMock(LoggerInterface::class), $responses) extends UnraidClient {
             public array $queriesSent = [];
+            public ?int $nowOverride = null;
             public function __construct($config, $logger, private array $responses)
             {
                 parent::__construct($config, $logger);
@@ -44,6 +45,7 @@ class UnraidClientTest extends TestCase
                 }
                 return null;
             }
+            protected function now(): int { return $this->nowOverride ?? parent::now(); }
         };
     }
 
@@ -53,7 +55,7 @@ class UnraidClientTest extends TestCase
         'disks'    => [
             ['name' => 'disk1', 'temp' => 38, 'status' => 'DISK_OK', 'fsSize' => '4000', 'fsFree' => '1000', 'fsUsed' => '3000'],
         ],
-        'parities' => [['name' => 'parity', 'temp' => 41, 'status' => 'DISK_OK']],
+        'parities' => [['name' => 'parity', 'temp' => 41, 'status' => 'DISK_OK', 'size' => '10000']],
         'caches'   => [['name' => 'cache', 'temp' => 35, 'fsSize' => '500', 'fsFree' => '200', 'fsUsed' => '300']],
     ]];
     private const INFO_DATA = ['info' => [
@@ -74,15 +76,34 @@ class UnraidClientTest extends TestCase
         'battery' => ['chargeLevel' => 100, 'estimatedRuntime' => 4302], // seconds (≈72 min)
         'power'   => ['loadPercentage' => 18.0],
     ]]];
+    private const PARITY_STATUS_RUNNING = ['vars' => [
+        'mdResyncPos' => '5000', 'mdResyncSize' => '10000',
+        'sbSynced' => '1750000000', 'sbSyncErrs' => '3',
+    ]];
+    private const PARITY_STATUS_IDLE = ['vars' => [
+        'mdResyncPos' => '0', 'mdResyncSize' => '10000',
+        'sbSynced' => '1750000000', 'sbSyncErrs' => '0',
+    ]];
+    private const PARITY_STATUS_RUNNING_NULLSIZE = ['vars' => [
+        'mdResyncPos' => '5000', 'mdResyncSize' => null,
+        'sbSynced' => '1750000000', 'sbSyncErrs' => '0',
+    ]];
+    private const PARITY_HISTORY = ['parityHistory' => [
+        // Deliberately oldest-first: mapParity must pick the newest by date.
+        ['date' => '2026-05-01 06:00:00', 'duration' => 80000, 'errors' => 2, 'status' => 'OK'],
+        ['date' => '2026-06-01 06:00:00', 'duration' => 76440, 'errors' => 0, 'status' => 'OK'],
+    ]];
 
     private function allGroups(): array
     {
         return [
-            'array {'     => self::ARRAY_DATA,
-            'info {'      => self::INFO_DATA,
-            'metrics {'   => self::METRICS_DATA,
-            'docker {'    => self::DOCKER_DATA,
-            'upsDevices'  => self::UPS_DATA,
+            'array {'         => self::ARRAY_DATA,
+            'info {'          => self::INFO_DATA,
+            'metrics {'       => self::METRICS_DATA,
+            'docker {'        => self::DOCKER_DATA,
+            'upsDevices'      => self::UPS_DATA,
+            'vars {'          => self::PARITY_STATUS_IDLE,
+            'parityHistory {' => self::PARITY_HISTORY,
         ];
     }
 
@@ -224,5 +245,104 @@ class UnraidClientTest extends TestCase
         $opts = (new \ReflectionMethod($off, 'curlOptions'))->invoke($off);
         $this->assertFalse($opts[CURLOPT_SSL_VERIFYPEER]);
         $this->assertSame(0, $opts[CURLOPT_SSL_VERIFYHOST]);
+    }
+
+    public function testDockerContainersListIsCompleteAndAlphabetical(): void
+    {
+        $client = $this->makeClient(['docker {' => self::DOCKER_DATA]);
+        $docker = $client->overview()['docker'];
+
+        // Full list, case-insensitive alphabetical, running flag per container.
+        self::assertSame([
+            ['name' => 'old-app', 'running' => false],
+            ['name' => 'plex',    'running' => true],
+            ['name' => 'radarr',  'running' => true],
+        ], $docker['containers']);
+        // Legacy keys untouched.
+        self::assertSame(2, $docker['running']);
+        self::assertSame(3, $docker['total']);
+        self::assertSame(['old-app'], $docker['stopped']);
+    }
+
+    public function testParityRunningCheckComputesProgressElapsedAndEta(): void
+    {
+        $client = $this->makeClient([
+            'vars {'          => self::PARITY_STATUS_RUNNING,
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $client->nowOverride = 1750050000; // 50 000 s after sbSynced
+
+        $parity = $client->overview()['parity'];
+        self::assertTrue($parity['running']);
+        self::assertSame(50.0, $parity['progress']);
+        self::assertSame(50000, $parity['elapsed']);
+        self::assertSame(50000, $parity['etaSeconds']); // 50% done → same again
+        self::assertSame(3, $parity['errors']);
+        self::assertSame(strtotime('2026-06-01 06:00:00'), $parity['last']['dateEpoch']);
+        self::assertSame(76440, $parity['last']['duration']);
+        self::assertSame(0, $parity['last']['errors']);
+    }
+
+    public function testParityIdleShowsLastCheckOnly(): void
+    {
+        $client = $this->makeClient([
+            'vars {'          => self::PARITY_STATUS_IDLE,
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $parity = $client->overview()['parity'];
+        self::assertFalse($parity['running']);
+        self::assertNull($parity['progress']);
+        self::assertNull($parity['elapsed']);
+        self::assertNull($parity['errors']); // sbSyncErrs only meaningful while running
+        self::assertSame(0, $parity['last']['errors']);
+    }
+
+    public function testParityRunningWithNullSizeFallsBackToParityDiskSize(): void
+    {
+        // Live-verified: mdResyncSize nulls (32-bit Int overflow) on big arrays,
+        // while array.parities[].size returns the same value big-safe.
+        $client = $this->makeClient([
+            'array {'         => self::ARRAY_DATA,          // parity size 10000
+            'vars {'          => self::PARITY_STATUS_RUNNING_NULLSIZE,
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $client->nowOverride = 1750050000;
+
+        $parity = $client->overview()['parity'];
+        self::assertTrue($parity['running']);
+        self::assertSame(50.0, $parity['progress']); // 5000 / 10000 via fallback
+        self::assertSame(50000, $parity['elapsed']);
+        self::assertSame(50000, $parity['etaSeconds']);
+    }
+
+    public function testParityRunningWithNoDenominatorStillReportsRunning(): void
+    {
+        $client = $this->makeClient([
+            'vars {'          => self::PARITY_STATUS_RUNNING_NULLSIZE, // no array group
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $client->nowOverride = 1750050000;
+
+        $parity = $client->overview()['parity'];
+        self::assertTrue($parity['running']);   // no more idle-lie
+        self::assertNull($parity['progress']);
+        self::assertNull($parity['etaSeconds']);
+        self::assertSame(50000, $parity['elapsed']);
+        self::assertSame(0, $parity['errors']);
+    }
+
+    public function testParityGroupAbsentWhenBothQueriesFail(): void
+    {
+        $client = $this->makeClient(['docker {' => self::DOCKER_DATA]); // no parity payloads
+        self::assertNull($client->overview()['parity']);
+        self::assertNotNull($client->overview()['docker']); // rest of widget unaffected
+    }
+
+    public function testParityHistoryAloneStillMapsLastCheck(): void
+    {
+        $client = $this->makeClient(['parityHistory {' => self::PARITY_HISTORY]);
+        $parity = $client->overview()['parity'];
+        self::assertFalse($parity['running']);
+        self::assertSame(76440, $parity['last']['duration']);
     }
 }

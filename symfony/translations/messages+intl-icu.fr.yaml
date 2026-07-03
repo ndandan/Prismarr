@@ -469,6 +469,11 @@ dashboard:
     running: actifs
     battery: Batterie
     load: Charge
+    parity_checking: En cours
+    elapsed: Écoulé
+    eta: Fin estimée
+    errors: erreurs
+    last_check: Dernier contrôle
   type:
     film: Film
     series: Série
