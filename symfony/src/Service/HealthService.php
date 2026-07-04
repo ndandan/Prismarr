@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\ServiceInstance;
+use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\QBittorrentClient;
@@ -73,6 +74,9 @@ class HealthService
         // the request — every topbar poll then re-pings every service.
         // Nullable + last for the legacy-test-constructor reason above.
         private readonly ?CacheInterface   $statusPool = null,
+        // Houndarr (dashboard stat tile) — nullable + last, same
+        // legacy-test-constructor reason as the clients above.
+        private readonly ?HoundarrClient   $houndarr = null,
     ) {}
 
     /**
@@ -243,6 +247,7 @@ class HealthService
             'nzbget'      => $this->nzbget?->ping() ?? false,
             'tautulli'    => $this->tautulli?->ping() ?? false,
             'unraid'      => $this->unraid?->ping() ?? false,
+            'houndarr'    => $this->houndarr?->ping() ?? false,
             default       => true,
         };
     }
@@ -259,7 +264,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'];
 
     /** Brand colors for the health chips — single source for dashboard + topbar. */
     private const SERVICE_COLORS = [
@@ -273,6 +278,7 @@ class HealthService
         'tmdb'        => '#01B4E4',
         'tautulli'    => '#e5a00d',
         'unraid'      => '#f15a2c',
+        'houndarr'    => '#c2703d',
     ];
 
     /**
@@ -299,7 +305,7 @@ class HealthService
             }
         }
 
-        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli'];
+        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr'];
         if ($includeUnraid) {
             $labels['unraid'] = 'Unraid';
         }
@@ -362,6 +368,9 @@ class HealthService
             // Unraid needs both the URL and a (read-only scoped) API key.
             'unraid' =>
                 $this->config->has('unraid_url') && $this->config->has('unraid_api_key'),
+            // Houndarr needs both the URL and the (single, widget-scoped) API key.
+            'houndarr' =>
+                $this->config->has('houndarr_url') && $this->config->has('houndarr_api_key'),
             default => true,
         };
     }
@@ -388,7 +397,7 @@ class HealthService
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -661,6 +670,17 @@ class HealthService
                     'body'     => (string) json_encode(['query' => UnraidClient::QUERY_PING]),
                     // LAN Unraid GUIs commonly run self-signed certs.
                     'insecure' => $get('unraid_skip_tls_verify') === '1',
+                ];
+            }
+            case 'houndarr': {
+                $url = $get('houndarr_url');
+                $key = $get('houndarr_api_key');
+                if ($url === '' || $key === '') return null;
+                // The single endpoint the Houndarr key authorizes; a bad or
+                // revoked key answers 401 → diagnosed as `auth`.
+                return [
+                    'url'     => rtrim($url, '/') . '/api/v1/widget',
+                    'headers' => ['X-Api-Key: ' . $key, 'Accept: application/json'],
                 ];
             }
             default:

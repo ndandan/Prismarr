@@ -11,7 +11,7 @@ final class DashboardSections
 {
     /** Section keys in their default top-to-bottom order. */
     public const DEFAULT_ORDER = [
-        'upcoming', 'requests', 'health', 'plex', 'watchlist', 'trending', 'recent', 'server',
+        'upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'trending', 'recent', 'server',
     ];
 
     /**
@@ -23,6 +23,7 @@ final class DashboardSections
         'upcoming'  => ['label' => 'dashboard.upcoming.title'],
         'requests'  => ['label' => 'dashboard.requests.title'],
         'health'    => ['label' => 'dashboard.health.title'],
+        'houndarr'  => ['label' => 'dashboard.houndarr.title'],
         'plex'      => ['label' => 'dashboard.plex.title'],
         'watchlist' => ['label' => 'dashboard.watchlist.title'],
         'trending'  => ['label' => 'dashboard.trending.title'],

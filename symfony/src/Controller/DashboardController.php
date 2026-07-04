@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\ServiceInstance;
 use App\Repository\Media\WatchlistItemRepository;
 use App\Service\HealthService;
+use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
@@ -68,6 +69,9 @@ class DashboardController extends AbstractController
         // Unraid server widget — nullable + last so legacy positional test
         // constructors keep working.
         private readonly ?UnraidClient $unraid = null,
+        // Houndarr stat tile — nullable + last so legacy positional test
+        // constructors keep working.
+        private readonly ?HoundarrClient $houndarr = null,
     ) {}
 
     /**
@@ -162,6 +166,7 @@ class DashboardController extends AbstractController
             'tmdb'       => $this->health->isConfigured('tmdb'),
             'tautulli'   => $this->health->isConfigured('tautulli'),
             'unraid'     => $this->health->isConfigured('unraid'),
+            'houndarr'   => $this->health->isConfigured('houndarr'),
         ];
 
         return $this->render('dashboard/index.html.twig', [
@@ -313,6 +318,73 @@ class DashboardController extends AbstractController
         return $this->render('dashboard/_server.html.twig', [
             'server' => $this->unraid->overview(),
         ]);
+    }
+
+    /**
+     * Async fragment — Houndarr backlog-search totals. Visible to every
+     * logged-in user (harmless read-only counts). Empty body → hidden
+     * client-side when unconfigured. Fails open: an unreachable Houndarr
+     * renders the fragment's "unreachable" state, never breaks the dashboard.
+     */
+    #[Route('/tableau-de-bord/widget/houndarr', name: 'app_dashboard_widget_houndarr')]
+    public function widgetHoundarr(): Response
+    {
+        if ($this->houndarr === null || !$this->health->isConfigured('houndarr')) {
+            return new Response('');
+        }
+
+        return $this->render('dashboard/_houndarr.html.twig', [
+            'houndarr'  => $this->houndarr->widget(),
+            'instances' => $this->arrWantedCounts(),
+        ]);
+    }
+
+    /**
+     * Per-instance Radarr/Sonarr wanted counts for the Houndarr widget's
+     * *arr split rows. These come from OUR *arr clients (`totalRecords` of
+     * /wanted/missing and /wanted/cutoff), not from Houndarr's cooldown
+     * math — the widget renders a micro-note to that effect. One row per
+     * enabled instance, Radarr first. Fails open per instance: a dead
+     * Radarr yields null counts (rendered as '—'), never a broken fragment.
+     *
+     * @return list<array{type: string, name: string, wanted: ?int, cutoffUnmet: ?int}>
+     */
+    private function arrWantedCounts(): array
+    {
+        return $this->cached('houndarr.arr_wanted', function () {
+            // totalRecords read defensively: the *arr wanted endpoints return
+            // the decoded paging envelope directly ({page, totalRecords,
+            // records…}), but a failed call surfaces as [] — count unknown.
+            $total = static function (array $data): ?int {
+                return isset($data['totalRecords']) ? (int) $data['totalRecords'] : null;
+            };
+
+            $out = [];
+            foreach ([['radarr', ServiceInstance::TYPE_RADARR, $this->radarr],
+                      ['sonarr', ServiceInstance::TYPE_SONARR, $this->sonarr]] as [$type, $instType, $client]) {
+                foreach ($this->instances->getEnabled($instType) as $inst) {
+                    $wanted = $cutoff = null;
+                    try {
+                        $bound  = $client->withInstance($inst);
+                        // pageSize 1 — only the envelope's totalRecords matters.
+                        $wanted = $total($bound->getMissing(1, 1));
+                        $cutoff = $total($bound->getCutoff(1, 1));
+                    } catch (\Throwable $e) {
+                        $this->logger->warning('Dashboard widget failed [houndarr.arr_wanted.{slug}]: {message}', [
+                            'slug'    => $inst->getSlug(),
+                            'message' => $e->getMessage(),
+                        ]);
+                    }
+                    $out[] = [
+                        'type'        => $type,
+                        'name'        => $inst->getName(),
+                        'wanted'      => $wanted,
+                        'cutoffUnmet' => $cutoff,
+                    ];
+                }
+            }
+            return $out;
+        });
     }
 
     /**

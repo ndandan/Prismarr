@@ -93,6 +93,12 @@ class AdminSettingsController extends AbstractController
             ['key' => 'unraid_api_key',         'type' => 'password', 'label' => 'admin.field.api_key'],
             ['key' => 'unraid_skip_tls_verify', 'type' => 'checkbox', 'label' => 'admin.field.unraid.skip_tls_verify'],
         ],
+        'houndarr' => [
+            ['key' => 'houndarr_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8877'],
+            // Houndarr has ONE key per install, shown once at creation —
+            // regenerating it there silently breaks the widget until re-saved here.
+            ['key' => 'houndarr_api_key', 'type' => 'password', 'label' => 'admin.field.api_key', 'placeholder' => 'hndarr_…'],
+        ],
     ];
 
     /**
@@ -140,6 +146,7 @@ class AdminSettingsController extends AbstractController
         'gluetun'     => 'Gluetun',
         'tautulli'    => 'Tautulli',
         'unraid'      => 'Unraid',
+        'houndarr'    => 'Houndarr',
     ];
 
     /**
@@ -516,6 +523,7 @@ class AdminSettingsController extends AbstractController
             'nzbget'                                     => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
             'tautulli'                                   => ['tautulli_url', 'tautulli_api_key'],
             'unraid'                                     => ['unraid_url', 'unraid_api_key', 'unraid_skip_tls_verify'],
+            'houndarr'                                   => ['houndarr_url', 'houndarr_api_key'],
             default                                      => [],
         };
         $overrides = [];
@@ -564,7 +572,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'];
+        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'];
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }

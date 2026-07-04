@@ -475,6 +475,20 @@ dashboard:
     eta: ETA
     errors: errors
     last_check: Last check
+  houndarr:
+    title: Houndarr
+    settings_cta: Settings
+    tracked: Tracked
+    eligible: Eligible
+    gated: Cooldown
+    unreleased: Unreleased
+    searches_7d: Searches (7d)
+    updated: Updated
+    unreachable: Houndarr is unreachable
+    auth_error: Houndarr rejected the API key — check Settings
+    wanted: Wanted
+    cutoff_unmet: Cutoff unmet
+    arr_note: Wanted counts from Radarr/Sonarr
   type:
     film: Movie
     series: TV Show
@@ -698,6 +712,7 @@ admin:
       gluetun: 'VPN / port forwarding'
       tautulli: 'Plex activity (via Tautulli)'
       unraid: 'Unraid server monitoring — array, disks, system, Docker, UPS (Unraid 7+, read-only API key)'
+      houndarr: 'Automated *arr backlog search (read-only widget)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Show in sidebar
     status:
