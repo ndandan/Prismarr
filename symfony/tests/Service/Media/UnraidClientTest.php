@@ -366,4 +366,84 @@ class UnraidClientTest extends TestCase
         self::assertFalse($parity['running']);
         self::assertSame(76440, $parity['last']['duration']);
     }
+
+    public function testParityIdleSynthesizesLastCheckFromVarsWhenNewerThanHistory(): void
+    {
+        // Live-verified gap: parity-checks.log (the parityHistory source) is
+        // appended by a webGui nchan daemon that only runs while the Unraid
+        // Main page is open in a browser — history can lag a finished check
+        // by days. vars.sbSynced2 is the kernel's completion stamp and is
+        // always current, so it must win when newer.
+        $client = $this->makeClient([
+            'vars {' => ['vars' => [
+                'mdResyncPos' => '0', 'mdResyncSize' => '10000',
+                'sbSynced' => '1783088534', 'sbSynced2' => '1783132190',
+                'sbSyncErrs' => '5', 'sbSyncExit' => '0',
+            ]],
+            'parityHistory {' => self::PARITY_HISTORY, // newest entry 2026-06-01
+        ]);
+        $parity = $client->overview()['parity'];
+        self::assertFalse($parity['running']);
+        self::assertSame(1783132190, $parity['last']['dateEpoch']);
+        self::assertNull($parity['last']['duration']); // true duration unknowable from vars on paused/resumed checks
+        self::assertSame(5, $parity['last']['errors']);
+        self::assertSame('COMPLETED', $parity['last']['status']);
+    }
+
+    public function testParityIdleKeepsHistoryLastWhenHistoryIsNewer(): void
+    {
+        $client = $this->makeClient([
+            'vars {' => ['vars' => [
+                'mdResyncPos' => '0',
+                'sbSynced' => '1700000000', 'sbSynced2' => '1700003600', // 2023 — older than history
+                'sbSyncErrs' => '0', 'sbSyncExit' => '0',
+            ]],
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $last = $client->overview()['parity']['last'];
+        self::assertSame(strtotime('2026-06-01 06:00:00'), $last['dateEpoch']);
+        self::assertSame(76440, $last['duration']);
+    }
+
+    public function testParityVarsAloneSynthesizesLastCheckWhenIdle(): void
+    {
+        // No parityHistory scope at all — sbSynced2 still yields a last check.
+        $client = $this->makeClient(['vars {' => ['vars' => [
+            'mdResyncPos' => '0',
+            'sbSynced' => '1783088534', 'sbSynced2' => '1783132190',
+            'sbSyncErrs' => '0', 'sbSyncExit' => '-4',
+        ]]]);
+        $parity = $client->overview()['parity'];
+        self::assertFalse($parity['running']);
+        self::assertSame(1783132190, $parity['last']['dateEpoch']);
+        self::assertSame(0, $parity['last']['errors']);
+        self::assertSame('CANCELLED', $parity['last']['status']); // -4 = cancelled, mirroring Unraid's own mapping
+    }
+
+    public function testParityRunningDoesNotSynthesizeLastFromVars(): void
+    {
+        // While a check runs, vars reflect the in-flight check — the history
+        // entry stays the richer record for the previous one.
+        $client = $this->makeClient([
+            'vars {' => ['vars' => [
+                'mdResyncPos' => '5000', 'mdResyncSize' => '10000',
+                'sbSynced' => '1750000000', 'sbSynced2' => '1783132190',
+                'sbSyncErrs' => '3',
+            ]],
+            'parityHistory {' => self::PARITY_HISTORY,
+        ]);
+        $client->nowOverride = 1750050000;
+        $last = $client->overview()['parity']['last'];
+        self::assertSame(strtotime('2026-06-01 06:00:00'), $last['dateEpoch']);
+        self::assertSame(76440, $last['duration']);
+    }
+
+    public function testParityStatusQueryRequestsCompletionFields(): void
+    {
+        $client = $this->makeClient($this->allGroups());
+        $client->overview();
+        $varsQuery = implode("\n", array_filter($client->queriesSent, fn($q) => str_contains($q, 'vars {')));
+        self::assertStringContainsString('sbSynced2', $varsQuery);
+        self::assertStringContainsString('sbSyncExit', $varsQuery);
+    }
 }

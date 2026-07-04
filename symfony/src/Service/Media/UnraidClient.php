@@ -54,7 +54,7 @@ class UnraidClient implements ResetInterface
     private const QUERY_METRICS = 'query { metrics { cpu { percentTotal } memory { percentTotal total used } } }';
     private const QUERY_DOCKER  = 'query { docker { containers { names state } } }';
     private const QUERY_UPS     = 'query { upsDevices { name battery { chargeLevel estimatedRuntime } power { loadPercentage } } }';
-    private const QUERY_PARITY_STATUS  = 'query { vars { mdResyncPos mdResyncSize mdResyncDt mdResyncDb sbSynced sbSyncErrs } }';
+    private const QUERY_PARITY_STATUS  = 'query { vars { mdResyncPos mdResyncSize mdResyncDt mdResyncDb sbSynced sbSynced2 sbSyncErrs sbSyncExit } }';
     private const QUERY_PARITY_HISTORY = 'query { parityHistory { date duration errors status } }';
 
     /** Widget polls every 30s; TTL keeps a paint + poll from double-querying. */
@@ -309,6 +309,24 @@ class UnraidClient implements ResetInterface
             if ($last === null || ($cand['dateEpoch'] ?? PHP_INT_MIN) > ($last['dateEpoch'] ?? PHP_INT_MIN)) {
                 $last = $cand;
             }
+        }
+
+        // parityHistory reads /boot/config/parity-checks.log, which Unraid only
+        // appends while its webGui Main page is open in a browser (the writer is
+        // an nchan daemon that exits without listeners) — so history can lag a
+        // finished check by days. vars.sbSynced2 is the kernel's completion
+        // stamp and always current: synthesize the last check from it when it
+        // is newer. Duration is omitted — sbSynced may mark a resume, not the
+        // start, so sbSynced2−sbSynced lies on paused checks.
+        $synced2 = (int) ($vars['sbSynced2'] ?? 0);
+        if (!$running && $synced2 > 0 && $synced2 > ($last['dateEpoch'] ?? PHP_INT_MIN)) {
+            $exit = isset($vars['sbSyncExit']) ? (int) $vars['sbSyncExit'] : null;
+            $last = [
+                'dateEpoch' => $synced2,
+                'duration'  => null,
+                'errors'    => isset($vars['sbSyncErrs']) ? (int) $vars['sbSyncErrs'] : null,
+                'status'    => $exit === null ? null : ($exit === 0 ? 'COMPLETED' : ($exit === -4 ? 'CANCELLED' : 'FAILED')),
+            ];
         }
 
         return [
