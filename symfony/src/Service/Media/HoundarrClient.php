@@ -61,11 +61,105 @@ class HoundarrClient implements ResetInterface
         ];
     }
 
+    /** Totals move slowly; 45 s keeps widget refresh + health pings to ≤1 upstream GET per window. */
+    private const WIDGET_TTL = 45.0;
+
+    private ?array $widgetCache = null;
+    private float  $widgetCacheAt = 0.0;
+
+    private function ensureConfig(): void
+    {
+        if ($this->configLoaded) return;
+        $this->baseUrl = (string) ($this->config->get('houndarr_url') ?? '');
+        $this->apiKey  = (string) ($this->config->get('houndarr_api_key') ?? '');
+        $this->enabled = $this->config->get('houndarr_enabled') !== '0';
+        $this->configLoaded = true;
+    }
+
+    public function widget(): ?array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
+            return null;
+        }
+
+        $now = microtime(true);
+        if ($this->widgetCache !== null && ($now - $this->widgetCacheAt) < self::WIDGET_TTL) {
+            return $this->widgetCache;
+        }
+
+        $resp = $this->request();
+        if ($resp === null) {
+            return null; // transport failure — don't cache, retry next poll
+        }
+        if ($resp['http'] === 401) {
+            // Bad/revoked key. Cache the verdict for the full TTL: hammering a
+            // 401 trips Houndarr's per-IP 429 lockout on every poll otherwise.
+            $this->widgetCache   = ['totals' => null, 'generatedAtEpoch' => null, 'error' => 'auth'];
+            $this->widgetCacheAt = $now;
+            return $this->widgetCache;
+        }
+        if ($resp['http'] < 200 || $resp['http'] >= 300) {
+            $this->logger->debug('HoundarrClient widget non-2xx', ['http' => $resp['http']]);
+            return null; // 429/5xx — unreachable-ish, don't cache
+        }
+
+        $decoded = json_decode($resp['body'], true);
+        if (!is_array($decoded)) {
+            $this->logger->debug('HoundarrClient widget bad JSON', ['body' => substr($resp['body'], 0, 200)]);
+            return null;
+        }
+
+        $this->widgetCache   = self::normalizeWidget($decoded);
+        $this->widgetCacheAt = $now;
+        return $this->widgetCache;
+    }
+
+    /** For HealthService::pingFor() — up only on a clean, key-accepted fetch. */
+    public function ping(): bool
+    {
+        $w = $this->widget();
+        return $w !== null && $w['error'] === null;
+    }
+
+    /**
+     * One GET to the widget endpoint. Returns ['http' => int, 'body' => string],
+     * or null when the request failed at the transport layer (connect refused /
+     * timed out / DNS). Protected so tests can substitute canned responses.
+     */
+    protected function request(): ?array
+    {
+        $url = rtrim($this->baseUrl, '/') . '/api/v1/widget';
+        $ch = curl_init($url);
+        if ($ch === false) return null;
+        curl_setopt_array($ch, [
+            CURLOPT_RETURNTRANSFER  => true,
+            CURLOPT_TIMEOUT         => 8,
+            CURLOPT_CONNECTTIMEOUT  => 3,
+            // HTTP(S) only — same SSRF stance as the other clients.
+            CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_HTTPHEADER      => ['X-Api-Key: ' . $this->apiKey, 'Accept: application/json'],
+        ]);
+        $body  = curl_exec($ch);
+        $code  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $errno = curl_errno($ch);
+        curl_close($ch);
+
+        if ($body === false || $code === 0) {
+            $this->logger->debug('HoundarrClient request failed', ['errno' => $errno]);
+            return null;
+        }
+        return ['http' => $code, 'body' => (string) $body];
+    }
+
     public function reset(): void
     {
         $this->configLoaded = false;
         $this->enabled = true;
         $this->baseUrl = '';
         $this->apiKey = '';
+        $this->widgetCache = null;
+        $this->widgetCacheAt = 0.0;
     }
 }
