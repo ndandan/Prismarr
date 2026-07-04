@@ -697,6 +697,7 @@ admin:
       gluetun: 'VPN / port forwarding'
       tautulli: 'Activité Plex (via Tautulli)'
       unraid: 'Supervision du serveur Unraid — baie, disques, système, Docker, onduleur (Unraid 7+, clé API en lecture seule)'
+      houndarr: 'Recherche automatique du backlog *arr (widget en lecture seule)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Afficher dans le menu latéral
     status:
