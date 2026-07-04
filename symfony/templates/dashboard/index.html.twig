@@ -507,6 +507,14 @@
   .dash-skel-line { height: .7rem; width: 80%; margin-top: .45rem; border-radius: .25rem; }
   @keyframes dash-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 
+  /* ── Houndarr stat strip ───────────────────────────────────────── */
+  .houndarr-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .75rem; }
+  .houndarr-stat { background: var(--tblr-bg-surface-secondary, rgba(128,128,128,.06)); border-radius: .5rem; padding: .6rem .75rem; text-align: center; }
+  .houndarr-stat-value { font-size: 1.4rem; font-weight: 700; line-height: 1.2; }
+  .houndarr-stat--eligible .houndarr-stat-value { color: var(--tblr-primary); }
+  .houndarr-stat-label { font-size: .72rem; color: var(--tblr-secondary); text-transform: uppercase; letter-spacing: .04em; }
+  .houndarr-updated { margin-top: .5rem; font-size: .72rem; color: var(--tblr-secondary); text-align: right; }
+
   /* ── Edit-mode layout toolbar ──────────────────────────────────── */
   .dash-layout-toolbar { display: flex; gap: .5rem; justify-content: flex-end; margin-bottom: 1rem; }
   .dashboard-scope.is-editing [data-section-key] { position: relative; outline: 2px dashed rgba(var(--tblr-primary-rgb), .5); outline-offset: 4px; border-radius: 12px; cursor: grab; }
@@ -670,6 +678,21 @@
     if (window._dashServerTimer) { clearInterval(window._dashServerTimer); }
     window._dashServerTimer = setInterval(refreshServer, 30000);
 
+    // Same live-refresh pattern for the Houndarr totals — 60s cadence
+    // (HoundarrClient caches 45s server-side, so this is at most one upstream
+    // GET per poll). Fails open; hidden-tab guarded.
+    function refreshHoundarr() {
+      if (document.hidden) return;
+      var node = document.querySelector('[data-dash-widget="houndarr"][data-dash-url]');
+      if (!node) return;
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
+        .catch(function () {});
+    }
+    if (window._dashHoundarrTimer) { clearInterval(window._dashHoundarrTimer); }
+    window._dashHoundarrTimer = setInterval(refreshHoundarr, 60000);
+
     // Plex widget tabs: client-side pane toggle, remembers the active tab so the
     // 10s fragment refresh doesn't snap the user back to "Now playing".
     function applyPlexTab(scope) {
@@ -699,6 +722,7 @@
       if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
       if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); window._dashPlexTimer = null; }
       if (window._dashServerTimer) { clearInterval(window._dashServerTimer); window._dashServerTimer = null; }
+      if (window._dashHoundarrTimer) { clearInterval(window._dashHoundarrTimer); window._dashHoundarrTimer = null; }
     });
 
   })();

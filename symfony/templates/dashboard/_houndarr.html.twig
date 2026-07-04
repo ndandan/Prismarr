@@ -1,0 +1,35 @@
+{# Async-hydrated fragment — Houndarr widget totals, rendered by
+   DashboardController::widgetHoundarr into the card's [data-dash-body].
+   `houndarr` = HoundarrClient::widget(): null → unreachable; error 'auth' →
+   key rejected; otherwise the five allow-listed totals. #}
+{% if houndarr is null %}
+  <div class="text-center text-secondary py-3">{{ 'dashboard.houndarr.unreachable'|trans }}</div>
+{% elseif houndarr.error == 'auth' %}
+  <div class="text-center text-secondary py-3">{{ 'dashboard.houndarr.auth_error'|trans }}</div>
+{% else %}
+  <div class="houndarr-stats">
+    <div class="houndarr-stat">
+      <div class="houndarr-stat-value">{{ houndarr.totals.tracked }}</div>
+      <div class="houndarr-stat-label">{{ 'dashboard.houndarr.tracked'|trans }}</div>
+    </div>
+    <div class="houndarr-stat houndarr-stat--eligible">
+      <div class="houndarr-stat-value">{{ houndarr.totals.eligible }}</div>
+      <div class="houndarr-stat-label">{{ 'dashboard.houndarr.eligible'|trans }}</div>
+    </div>
+    <div class="houndarr-stat">
+      <div class="houndarr-stat-value">{{ houndarr.totals.gated }}</div>
+      <div class="houndarr-stat-label">{{ 'dashboard.houndarr.gated'|trans }}</div>
+    </div>
+    <div class="houndarr-stat">
+      <div class="houndarr-stat-value">{{ houndarr.totals.unreleased }}</div>
+      <div class="houndarr-stat-label">{{ 'dashboard.houndarr.unreleased'|trans }}</div>
+    </div>
+    <div class="houndarr-stat">
+      <div class="houndarr-stat-value">{{ houndarr.totals.searches7d }}</div>
+      <div class="houndarr-stat-label">{{ 'dashboard.houndarr.searches_7d'|trans }}</div>
+    </div>
+  </div>
+  {% if houndarr.generatedAtEpoch %}
+    <div class="houndarr-updated">{{ 'dashboard.houndarr.updated'|trans }} {{ houndarr.generatedAtEpoch|prismarr_time }}</div>
+  {% endif %}
+{% endif %}

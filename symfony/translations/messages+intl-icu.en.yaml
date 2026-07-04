@@ -475,6 +475,17 @@ dashboard:
     eta: ETA
     errors: errors
     last_check: Last check
+  houndarr:
+    title: Houndarr
+    settings_cta: Settings
+    tracked: Tracked
+    eligible: Eligible
+    gated: Cooldown
+    unreleased: Unreleased
+    searches_7d: Searches (7d)
+    updated: Updated
+    unreachable: Houndarr is unreachable
+    auth_error: Houndarr rejected the API key — check Settings
   type:
     film: Movie
     series: TV Show

@@ -474,6 +474,17 @@ dashboard:
     eta: Fin estimée
     errors: erreurs
     last_check: Dernier contrôle
+  houndarr:
+    title: Houndarr
+    settings_cta: Paramètres
+    tracked: Suivis
+    eligible: Éligibles
+    gated: 'En cooldown'
+    unreleased: 'À paraître'
+    searches_7d: 'Recherches (7 j)'
+    updated: 'Mis à jour'
+    unreachable: 'Houndarr est injoignable'
+    auth_error: 'Houndarr a rejeté la clé API — vérifiez les paramètres'
   type:
     film: Film
     series: Série

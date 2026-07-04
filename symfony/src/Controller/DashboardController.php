@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Entity\ServiceInstance;
 use App\Repository\Media\WatchlistItemRepository;
 use App\Service\HealthService;
+use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
@@ -68,6 +69,9 @@ class DashboardController extends AbstractController
         // Unraid server widget — nullable + last so legacy positional test
         // constructors keep working.
         private readonly ?UnraidClient $unraid = null,
+        // Houndarr stat tile — nullable + last so legacy positional test
+        // constructors keep working.
+        private readonly ?HoundarrClient $houndarr = null,
     ) {}
 
     /**
@@ -162,6 +166,7 @@ class DashboardController extends AbstractController
             'tmdb'       => $this->health->isConfigured('tmdb'),
             'tautulli'   => $this->health->isConfigured('tautulli'),
             'unraid'     => $this->health->isConfigured('unraid'),
+            'houndarr'   => $this->health->isConfigured('houndarr'),
         ];
 
         return $this->render('dashboard/index.html.twig', [
@@ -312,6 +317,24 @@ class DashboardController extends AbstractController
 
         return $this->render('dashboard/_server.html.twig', [
             'server' => $this->unraid->overview(),
+        ]);
+    }
+
+    /**
+     * Async fragment — Houndarr backlog-search totals. Visible to every
+     * logged-in user (harmless read-only counts). Empty body → hidden
+     * client-side when unconfigured. Fails open: an unreachable Houndarr
+     * renders the fragment's "unreachable" state, never breaks the dashboard.
+     */
+    #[Route('/tableau-de-bord/widget/houndarr', name: 'app_dashboard_widget_houndarr')]
+    public function widgetHoundarr(): Response
+    {
+        if ($this->houndarr === null || !$this->health->isConfigured('houndarr')) {
+            return new Response('');
+        }
+
+        return $this->render('dashboard/_houndarr.html.twig', [
+            'houndarr' => $this->houndarr->widget(),
         ]);
     }
 
