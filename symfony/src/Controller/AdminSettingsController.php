@@ -516,6 +516,7 @@ class AdminSettingsController extends AbstractController
             'nzbget'                                     => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
             'tautulli'                                   => ['tautulli_url', 'tautulli_api_key'],
             'unraid'                                     => ['unraid_url', 'unraid_api_key', 'unraid_skip_tls_verify'],
+            'houndarr'                                   => ['houndarr_url', 'houndarr_api_key'],
             default                                      => [],
         };
         $overrides = [];
@@ -564,7 +565,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid'];
+        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'];
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }
