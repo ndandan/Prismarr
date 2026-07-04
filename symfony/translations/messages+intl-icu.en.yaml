@@ -486,6 +486,9 @@ dashboard:
     updated: Updated
     unreachable: Houndarr is unreachable
     auth_error: Houndarr rejected the API key — check Settings
+    wanted: Wanted
+    cutoff_unmet: Cutoff unmet
+    arr_note: Wanted counts from Radarr/Sonarr
   type:
     film: Movie
     series: TV Show

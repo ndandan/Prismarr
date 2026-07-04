@@ -485,6 +485,9 @@ dashboard:
     updated: 'Mis à jour'
     unreachable: 'Houndarr est injoignable'
     auth_error: 'Houndarr a rejeté la clé API — vérifiez les paramètres'
+    wanted: Manquants
+    cutoff_unmet: 'Sous le seuil'
+    arr_note: 'Comptes manquants issus de Radarr/Sonarr'
   type:
     film: Film
     series: Série

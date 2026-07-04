@@ -514,6 +514,16 @@
   .houndarr-stat--eligible .houndarr-stat-value { color: var(--tblr-primary); }
   .houndarr-stat-label { font-size: .72rem; color: var(--tblr-secondary); text-transform: uppercase; letter-spacing: .04em; }
   .houndarr-updated { margin-top: .5rem; font-size: .72rem; color: var(--tblr-secondary); text-align: right; }
+  .houndarr-bar { display: flex; height: .5rem; border-radius: .25rem; overflow: hidden; margin-top: .75rem; background: var(--tblr-bg-surface-secondary, rgba(128,128,128,.06)); }
+  .houndarr-bar-seg { height: 100%; }
+  .houndarr-legend { display: flex; flex-wrap: wrap; gap: .35rem 1rem; margin-top: .4rem; font-size: .72rem; color: var(--tblr-secondary); }
+  .houndarr-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .3rem; }
+  .houndarr-insts { margin-top: .75rem; }
+  .houndarr-inst { display: flex; align-items: center; gap: .5rem; font-size: .8rem; padding: .35rem 0; border-top: 1px solid var(--tblr-border-color-translucent, rgba(128,128,128,.15)); }
+  .houndarr-inst-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+  .houndarr-inst-name { font-weight: 600; }
+  .houndarr-inst-counts { margin-left: auto; display: flex; gap: .75rem; color: var(--tblr-secondary); text-align: right; }
+  .houndarr-note { margin-top: .35rem; font-size: .7rem; color: var(--tblr-secondary); }
 
   /* ── Edit-mode layout toolbar ──────────────────────────────────── */
   .dash-layout-toolbar { display: flex; gap: .5rem; justify-content: flex-end; margin-bottom: 1rem; }
