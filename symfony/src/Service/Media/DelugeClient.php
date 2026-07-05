@@ -226,6 +226,157 @@ class DelugeClient implements ResetInterface
     }
 
     // ══════════════════════════════════════════════════════════════════════════
+    //  Torrents — Actions
+    // ══════════════════════════════════════════════════════════════════════════
+
+    public function pauseTorrents(array $hashes): bool
+    {
+        return $this->ok('core.pause_torrent', [$hashes]);
+    }
+
+    public function resumeTorrents(array $hashes): bool
+    {
+        return $this->ok('core.resume_torrent', [$hashes]);
+    }
+
+    /** core.remove_torrent takes ONE hash — loop for bulk. */
+    public function deleteTorrents(array $hashes, bool $deleteFiles = false): bool
+    {
+        $allOk = true;
+        foreach ($hashes as $hash) {
+            $allOk = $this->ok('core.remove_torrent', [$hash, $deleteFiles]) && $allOk;
+        }
+        return $allOk;
+    }
+
+    public function recheckTorrents(array $hashes): bool
+    {
+        return $this->ok('core.force_recheck', [$hashes]);
+    }
+
+    public function reannounceTorrents(array $hashes): bool
+    {
+        return $this->ok('core.force_reannounce', [$hashes]);
+    }
+
+    public function setTorrentLocation(string $hash, string $location): bool
+    {
+        return $this->ok('core.move_storage', [[$hash], $location]);
+    }
+
+    public function setTorrentDownloadLimit(array $hashes, int $bytes): bool
+    {
+        return $this->ok('core.set_torrent_options', [$hashes, (object) ['max_download_speed' => self::bytesToKib($bytes)]]);
+    }
+
+    public function setTorrentUploadLimit(array $hashes, int $bytes): bool
+    {
+        return $this->ok('core.set_torrent_options', [$hashes, (object) ['max_upload_speed' => self::bytesToKib($bytes)]]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  Add torrent
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * Split a multi-line/pipe-separated add box into magnets vs http(s) URLs.
+     *
+     * @return array{magnets: list<string>, urls: list<string>}
+     */
+    private static function splitAddUrls(string $raw): array
+    {
+        $magnets = [];
+        $urls = [];
+        foreach (preg_split('/[\r\n|]+/', trim($raw)) as $line) {
+            $line = trim($line);
+            if ($line === '') {
+                continue;
+            }
+            if (stripos($line, 'magnet:') === 0) {
+                $magnets[] = $line;
+            } else {
+                $urls[] = $line;
+            }
+        }
+        return ['magnets' => $magnets, 'urls' => $urls];
+    }
+
+    /** @return object Options dict for core.add_torrent_* ((object) so empty encodes as {}). */
+    private static function addOptions(?string $savepath, bool $paused): object
+    {
+        $options = [];
+        if ($savepath !== null && $savepath !== '') {
+            $options['download_location'] = $savepath;
+        }
+        if ($paused) {
+            $options['add_paused'] = true;
+        }
+        return (object) $options;
+    }
+
+    public function addTorrentFromUrl(string $urls, ?string $savepath = null, bool $paused = false): bool
+    {
+        $split = self::splitAddUrls($urls);
+        $options = self::addOptions($savepath, $paused);
+        $any = false;
+        $allOk = true;
+        foreach ($split['magnets'] as $magnet) {
+            $any = true;
+            $allOk = $this->ok('core.add_torrent_magnet', [$magnet, $options]) && $allOk;
+        }
+        foreach ($split['urls'] as $url) {
+            $any = true;
+            $allOk = $this->ok('core.add_torrent_url', [$url, $options]) && $allOk;
+        }
+        return $any && $allOk;
+    }
+
+    /**
+     * @param array<array{content: string, name: string}> $files
+     */
+    public function addTorrentFromFiles(array $files, ?string $savepath = null, bool $paused = false): bool
+    {
+        if ($files === []) {
+            return false;
+        }
+        $options = self::addOptions($savepath, $paused);
+        $allOk = true;
+        foreach ($files as $file) {
+            $allOk = $this->ok('core.add_torrent_file', [$file['name'], base64_encode($file['content']), $options]) && $allOk;
+        }
+        return $allOk;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  Global transfer limits
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** qBit convention at the boundary: 0 = unlimited for GLOBAL limits. */
+    public function getGlobalDownloadLimit(): int
+    {
+        $c = $this->result('core.get_config_values', [['max_download_speed']]);
+        $kib = is_array($c) ? (float) ($c['max_download_speed'] ?? -1) : -1.0;
+        return $kib <= 0 ? 0 : (int) round($kib * 1024);
+    }
+
+    public function getGlobalUploadLimit(): int
+    {
+        $c = $this->result('core.get_config_values', [['max_upload_speed']]);
+        $kib = is_array($c) ? (float) ($c['max_upload_speed'] ?? -1) : -1.0;
+        return $kib <= 0 ? 0 : (int) round($kib * 1024);
+    }
+
+    public function setGlobalDownloadLimit(int $bytes): bool
+    {
+        return $this->ok('core.set_config', [(object) ['max_download_speed' => self::bytesToKib($bytes)]]);
+    }
+
+    public function setGlobalUploadLimit(int $bytes): bool
+    {
+        return $this->ok('core.set_config', [(object) ['max_upload_speed' => self::bytesToKib($bytes)]]);
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
     //  Aggregated statistics
     // ══════════════════════════════════════════════════════════════════════════
 

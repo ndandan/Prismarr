@@ -165,4 +165,16 @@ class DelugeClientTest extends TestCase
         $this->assertSame(512000, $t['up_limit']);        // 500 KiB/s → bytes
         $this->assertSame(86400, $t['seeding_time']);
     }
+
+    /**
+     * splitAddUrls() feeds addTorrentFromUrl(): magnet lines go to
+     * core.add_torrent_magnet, http(s) lines to core.add_torrent_url.
+     * Split on newlines and pipes like the qBit add box.
+     */
+    public function testSplitAddUrlsSeparatesMagnetsFromHttp(): void
+    {
+        $split = $this->invokeStatic('splitAddUrls', "magnet:?xt=urn:btih:aaa\nhttps://tracker.example/x.torrent | magnet:?xt=urn:btih:bbb");
+        $this->assertSame(['magnet:?xt=urn:btih:aaa', 'magnet:?xt=urn:btih:bbb'], $split['magnets']);
+        $this->assertSame(['https://tracker.example/x.torrent'], $split['urls']);
+    }
 }
