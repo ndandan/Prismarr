@@ -86,4 +86,83 @@ class DelugeClientTest extends TestCase
     {
         $this->assertSame($expected, $this->invokeStatic('extractSessionCookie', $rawHeaders));
     }
+
+    /**
+     * Deluge state names → the normalized vocabulary the (copied) qBit
+     * template understands. `Paused` stays paused even when finished —
+     * Deluge has no "completed" state.
+     *
+     * @return iterable<string, array{string, bool, string}>
+     */
+    public static function states(): iterable
+    {
+        yield 'Downloading'        => ['Downloading', false, 'downloading'];
+        yield 'Seeding'            => ['Seeding', true, 'seeding'];
+        yield 'Paused unfinished'  => ['Paused', false, 'paused'];
+        yield 'Paused finished'    => ['Paused', true, 'paused'];
+        yield 'Queued'             => ['Queued', false, 'queued'];
+        yield 'Checking'           => ['Checking', false, 'checking'];
+        yield 'Error'              => ['Error', false, 'error'];
+        yield 'Moving'             => ['Moving', true, 'moving'];
+        yield 'Allocating'         => ['Allocating', false, 'downloading'];
+        yield 'unknown unfinished' => ['Bogus', false, 'unknown'];
+        yield 'unknown finished'   => ['Bogus', true, 'seeding'];
+    }
+
+    #[DataProvider('states')]
+    public function testNormalizeState(string $state, bool $finished, string $expected): void
+    {
+        $this->assertSame($expected, $this->invokeStatic('normalizeState', $state, $finished));
+    }
+
+    /**
+     * Deluge speaks KiB/s for speed limits (-1 = unlimited); the rest of
+     * Prismarr (and the copied template) speaks bytes/s.
+     */
+    public function testSpeedLimitUnitConversions(): void
+    {
+        $this->assertSame(-1, $this->invokeStatic('kibToBytes', -1.0));
+        $this->assertSame(1024, $this->invokeStatic('kibToBytes', 1.0));
+        $this->assertSame(512000, $this->invokeStatic('kibToBytes', 500.0));
+        $this->assertSame(-1.0, $this->invokeStatic('bytesToKib', 0));
+        $this->assertSame(-1.0, $this->invokeStatic('bytesToKib', -1));
+        $this->assertSame(500.0, $this->invokeStatic('bytesToKib', 512000));
+    }
+
+    public function testNormalizeTorrentMapsDelugeStatusToQbitShape(): void
+    {
+        $client = $this->makeClient();
+        $m = (new \ReflectionClass($client))->getMethod('normalizeTorrent');
+        $m->setAccessible(true);
+
+        $t = $m->invoke($client, 'a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0', [
+            'name' => 'Example.2026.1080p.WEB.h264-GRP',
+            'total_wanted' => 4000000000, 'total_size' => 4000000000,
+            'total_done' => 4000000000, 'all_time_download' => 4100000000,
+            'total_uploaded' => 900000000,
+            'progress' => 100.0, 'download_payload_rate' => 0, 'upload_payload_rate' => 12345,
+            'eta' => 0, 'state' => 'Seeding', 'is_finished' => true,
+            'label' => 'tv-sonarr', 'ratio' => 0.219512,
+            'num_seeds' => 1, 'total_seeds' => 14, 'num_peers' => 2, 'total_peers' => 3,
+            'time_added' => 1751000000, 'completed_time' => 1751100000,
+            'save_path' => '/downloads', 'tracker_host' => 'xspeeds.eu',
+            'seeding_time' => 86400, 'max_download_speed' => -1.0, 'max_upload_speed' => 500.0,
+            'distributed_copies' => 14.97,
+        ]);
+
+        $this->assertSame('a1b2c3d4e5f6a7b8c9d0a1b2c3d4e5f6a7b8c9d0', $t['hash']);
+        $this->assertSame('seeding', $t['state']);
+        $this->assertSame('Seeding', $t['raw_state']);
+        $this->assertSame(100.0, $t['progress']);
+        $this->assertSame('tv-sonarr', $t['category']);   // Deluge label rides the category field
+        $this->assertSame('', $t['tags']);
+        $this->assertSame(0.22, $t['ratio']);
+        $this->assertSame(8640000, $t['eta']);            // 0 → qBit "no ETA" sentinel
+        $this->assertSame(1751000000, $t['added_on']);
+        $this->assertSame(1751100000, $t['completion_on']);
+        $this->assertSame('xspeeds.eu', $t['tracker']);
+        $this->assertSame(-1, $t['dl_limit']);
+        $this->assertSame(512000, $t['up_limit']);        // 500 KiB/s → bytes
+        $this->assertSame(86400, $t['seeding_time']);
+    }
 }

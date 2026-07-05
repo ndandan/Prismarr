@@ -107,6 +107,234 @@ class DelugeClient implements ResetInterface
         return is_string($v) ? $v : null;
     }
 
+    /** Status keys requested for the torrent table. */
+    private const TORRENT_KEYS = [
+        'name', 'state', 'progress', 'total_size', 'total_wanted', 'total_done',
+        'total_uploaded', 'all_time_download', 'download_payload_rate', 'upload_payload_rate',
+        'eta', 'ratio', 'num_seeds', 'total_seeds', 'num_peers', 'total_peers',
+        'time_added', 'completed_time', 'save_path', 'label', 'tracker_host',
+        'seeding_time', 'is_finished', 'max_download_speed', 'max_upload_speed',
+        'distributed_copies',
+    ];
+
+    /** Extra keys for the detail panel. */
+    private const DETAIL_KEYS = [
+        'name', 'state', 'progress', 'save_path', 'total_size', 'piece_length', 'num_pieces',
+        'comment', 'total_uploaded', 'all_time_download', 'ratio', 'time_added',
+        'completed_time', 'active_time', 'seeding_time', 'next_announce', 'label',
+        'tracker_status', 'trackers', 'files', 'file_progress', 'file_priorities', 'peers',
+        'is_finished', 'eta', 'num_seeds', 'total_seeds', 'num_peers', 'total_peers',
+    ];
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  Torrents — Read
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** All torrents, normalized to the qBit-compatible shape, newest first. */
+    public function getTorrents(): array
+    {
+        // First param is a FILTER DICT — must encode as {} not [], hence stdClass.
+        $data = $this->result('core.get_torrents_status', [new \stdClass(), self::TORRENT_KEYS]);
+        if (!is_array($data)) {
+            return [];
+        }
+        $out = [];
+        foreach ($data as $hash => $t) {
+            if (is_array($t)) {
+                $out[] = $this->normalizeTorrent((string) $hash, $t);
+            }
+        }
+        usort($out, fn($a, $b) => ($b['added_on'] ?? 0) <=> ($a['added_on'] ?? 0));
+        return $out;
+    }
+
+    /** Detail panel payload: {properties, files, trackers, peers} — qBit-detail-compatible field names. */
+    public function getTorrentDetail(string $hash): ?array
+    {
+        $t = $this->result('core.get_torrent_status', [$hash, self::DETAIL_KEYS]);
+        if (!is_array($t) || $t === []) {
+            return null;
+        }
+
+        $files = [];
+        $progressList = $t['file_progress'] ?? [];
+        $prioList     = $t['file_priorities'] ?? [];
+        foreach (($t['files'] ?? []) as $i => $f) {
+            $files[] = [
+                'name'     => $f['path'] ?? ($f['name'] ?? '—'),
+                'size'     => (int) ($f['size'] ?? 0),
+                'progress' => round((float) ($progressList[$i] ?? 0) * 100, 1),
+                'priority' => (int) ($prioList[$i] ?? 1),
+            ];
+        }
+
+        $trackers = [];
+        foreach (($t['trackers'] ?? []) as $tr) {
+            $trackers[] = [
+                'url'    => $tr['url'] ?? '',
+                'tier'   => (int) ($tr['tier'] ?? 0),
+                'status' => (string) ($t['tracker_status'] ?? ''),
+                'msg'    => '',
+            ];
+        }
+
+        $peers = [];
+        foreach (($t['peers'] ?? []) as $p) {
+            $peers[] = [
+                'ip'         => $p['ip'] ?? '',
+                'client'     => $p['client'] ?? '',
+                'country'    => $p['country'] ?? '',
+                'progress'   => round((float) ($p['progress'] ?? 0) * 100, 1),
+                'dl_speed'   => (int) ($p['down_speed'] ?? 0),
+                'up_speed'   => (int) ($p['up_speed'] ?? 0),
+                'flags'      => ($p['seed'] ?? 0) ? 'seed' : '',
+                'connection' => '',
+            ];
+        }
+
+        return [
+            'properties' => [
+                'save_path'        => (string) ($t['save_path'] ?? ''),
+                'total_size'       => (int) ($t['total_size'] ?? 0),
+                'piece_size'       => (int) ($t['piece_length'] ?? 0),
+                'pieces_num'       => (int) ($t['num_pieces'] ?? 0),
+                'comment'          => (string) ($t['comment'] ?? ''),
+                'total_uploaded'   => (int) ($t['total_uploaded'] ?? 0),
+                'total_downloaded' => (int) ($t['all_time_download'] ?? 0),
+                'share_ratio'      => round((float) ($t['ratio'] ?? 0), 2),
+                'addition_date'    => (int) ($t['time_added'] ?? 0),
+                'completion_date'  => (int) ($t['completed_time'] ?? 0),
+                'time_elapsed'     => (int) ($t['active_time'] ?? 0),
+                'seeding_time'     => (int) ($t['seeding_time'] ?? 0),
+                'next_announce'    => (int) ($t['next_announce'] ?? 0),
+            ],
+            'files'    => $files,
+            'trackers' => $trackers,
+            'peers'    => $peers,
+        ];
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  Labels (Label plugin — read-only in Prismarr)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** @return list<string> Empty when the Label plugin is disabled. */
+    public function getLabels(): array
+    {
+        $r = $this->result('label.get_labels');
+        return is_array($r) ? array_values(array_map('strval', $r)) : [];
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  Aggregated statistics
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /** Same output keys as QBittorrentClient::getStats() so the template ports. */
+    public function getStats(?array $torrents = null): array
+    {
+        $torrents = $torrents ?? $this->getTorrents();
+
+        $sess = $this->result('core.get_session_status', [[
+            'payload_download_rate', 'payload_upload_rate',
+            'total_payload_download', 'total_payload_upload',
+        ]]);
+        $sess = is_array($sess) ? $sess : [];
+        $free = $this->result('core.get_free_space');
+
+        $count = fn(string $state) => count(array_filter($torrents, fn($t) => $t['state'] === $state));
+        // Deluge has no completed/stalled states — completed = 100% progress.
+        $completed = count(array_filter($torrents, fn($t) => ($t['progress'] ?? 0) >= 100));
+
+        $upAll = (int) array_sum(array_column($torrents, 'uploaded'));
+        $dlAll = (int) array_sum(array_column($torrents, 'downloaded'));
+
+        return [
+            'total'        => count($torrents),
+            'downloading'  => $count('downloading'),
+            'seeding'      => $count('seeding'),
+            'paused'       => $count('paused'),
+            'completed'    => $completed,
+            'errored'      => $count('error'),
+            'stalled'      => 0,
+            'dl_speed'     => (int) ($sess['payload_download_rate'] ?? 0),
+            'up_speed'     => (int) ($sess['payload_upload_rate'] ?? 0),
+            'connection'   => 'connected',
+            'dht_nodes'    => 0,
+            'dl_session'   => (int) ($sess['total_payload_download'] ?? 0),
+            'up_session'   => (int) ($sess['total_payload_upload'] ?? 0),
+            'dl_alltime'   => $dlAll,
+            'up_alltime'   => $upAll,
+            'global_ratio' => $dlAll > 0 ? round($upAll / $dlAll, 2) : 0,
+            'free_space'   => is_numeric($free) ? (int) $free : 0,
+        ];
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    //  Normalization
+    // ══════════════════════════════════════════════════════════════════════════
+
+    private function normalizeTorrent(string $hash, array $t): array
+    {
+        $eta = (int) ($t['eta'] ?? 0);
+        return [
+            'hash'           => $hash,
+            'name'           => $t['name'] ?? '—',
+            'size'           => (int) ($t['total_wanted'] ?? $t['total_size'] ?? 0),
+            'total_size'     => (int) ($t['total_size'] ?? 0),
+            'downloaded'     => (int) ($t['all_time_download'] ?? $t['total_done'] ?? 0),
+            'uploaded'       => (int) ($t['total_uploaded'] ?? 0),
+            'progress'       => round((float) ($t['progress'] ?? 0), 1),
+            'dlspeed'        => (int) ($t['download_payload_rate'] ?? 0),
+            'upspeed'        => (int) ($t['upload_payload_rate'] ?? 0),
+            'eta'            => $eta > 0 ? $eta : self::ETA_NONE,
+            'state'          => self::normalizeState((string) ($t['state'] ?? ''), (bool) ($t['is_finished'] ?? false)),
+            'raw_state'      => (string) ($t['state'] ?? ''),
+            'category'       => (string) ($t['label'] ?? ''),
+            'tags'           => '',
+            'ratio'          => round((float) ($t['ratio'] ?? 0), 2),
+            'num_seeds'      => (int) ($t['num_seeds'] ?? 0),
+            'num_leechs'     => (int) ($t['num_peers'] ?? 0),
+            'num_complete'   => (int) ($t['total_seeds'] ?? 0),
+            'num_incomplete' => (int) ($t['total_peers'] ?? 0),
+            'added_on'       => isset($t['time_added']) ? (int) $t['time_added'] : null,
+            'completion_on'  => isset($t['completed_time']) && (int) $t['completed_time'] > 0 ? (int) $t['completed_time'] : null,
+            'save_path'      => (string) ($t['save_path'] ?? ''),
+            'content_path'   => '',
+            'tracker'        => (string) ($t['tracker_host'] ?? ''),
+            'dl_limit'       => self::kibToBytes((float) ($t['max_download_speed'] ?? -1)),
+            'up_limit'       => self::kibToBytes((float) ($t['max_upload_speed'] ?? -1)),
+            'seeding_time'   => (int) ($t['seeding_time'] ?? 0),
+            'priority'       => 0,
+            'availability'   => round((float) ($t['distributed_copies'] ?? 0), 3),
+        ];
+    }
+
+    private static function normalizeState(string $state, bool $finished): string
+    {
+        return match ($state) {
+            'Downloading' => 'downloading',
+            'Seeding'     => 'seeding',
+            'Paused'      => 'paused',
+            'Queued'      => 'queued',
+            'Checking'    => 'checking',
+            'Error'       => 'error',
+            'Moving'      => 'moving',
+            'Allocating'  => 'downloading',
+            default       => $finished ? 'seeding' : 'unknown',
+        };
+    }
+
+    /** Deluge speed limits are KiB/s, -1 = unlimited. Prismarr speaks bytes/s. */
+    private static function kibToBytes(float $kib): int
+    {
+        return $kib < 0 ? -1 : (int) round($kib * 1024);
+    }
+
+    private static function bytesToKib(int $bytes): float
+    {
+        return $bytes <= 0 ? -1.0 : round($bytes / 1024, 1);
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  JSON-RPC transport
     // ══════════════════════════════════════════════════════════════════════════
