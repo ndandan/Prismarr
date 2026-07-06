@@ -2205,7 +2205,7 @@
     if (!window._prismarrQbtCleanupBound) {
       window._prismarrQbtCleanupBound = true;
       document.addEventListener('turbo:before-render', function () {
-        ['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer'].forEach(function (key) {
+        ['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer', '_prismarrDelugePollTimer'].forEach(function (key) {
           if (window[key]) { clearInterval(window[key]); window[key] = null; }
         });
         // Usenet page uses a setTimeout poll chain — kill it on navigation so
