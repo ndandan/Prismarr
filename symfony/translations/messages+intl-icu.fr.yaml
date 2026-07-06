@@ -712,6 +712,7 @@ admin:
       prowlarr: Agrégateur d'indexeurs
       jellyseerr: Plateforme de requêtes
       qbittorrent: Client torrent
+      deluge: Client torrent (Web UI)
       sabnzbd: Téléchargeur Usenet
       nzbget: Téléchargeur Usenet
       gluetun: 'VPN / port forwarding'
