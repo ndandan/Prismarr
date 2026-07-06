@@ -628,11 +628,8 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         </div>
         <div class="row g-3">
             <div class="col-6">
-                <label class="form-label">{{ 'qbittorrent.modal_add.category_label'|trans }}</label>
-                <select class="form-select form-select-sm" id="qbt-add-category">
-                    <option value="">{{ 'qbittorrent.modal_add.category_none'|trans }}</option>
-                    {% for key, cat in categories %}<option value="{{ key }}">{{ cat.name ?? key }}</option>{% endfor %}
-                </select>
+                <label class="form-label">{{ 'qbittorrent.modal_detail.props.save_path'|trans }}</label>
+                <input type="text" class="form-control form-control-sm" id="deluge-add-savepath" placeholder="{{ 'qbittorrent.modal_detail.props.save_path'|trans }}">
             </div>
             <div class="col-6">
                 <label class="form-label">{{ 'qbittorrent.modal_add.start_label'|trans }}</label>
@@ -1667,7 +1664,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
                 if (tr.url === '** [DHT] **' || tr.url === '** [PeX] **' || tr.url === '** [LSD] **') continue;
                 thtml += '<tr class="qbt-tracker-row">'
                     + '<td class="text-truncate" style="max-width:320px;" title="' + escapeHtml(tr.url) + '">' + escapeHtml(tr.url) + '</td>'
-                    + '<td>' + (TRACKER_STATUS[tr.status] || tr.status) + '</td>'
+                    + '<td>' + (TRACKER_STATUS[tr.status] || escapeHtml(tr.status)) + '</td>'
                     + '<td>' + (tr.num_seeds || 0) + '</td>'
                     + '<td>' + (tr.num_leeches || 0) + '</td>'
                     + '</tr>';
@@ -1873,7 +1870,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         if (addSubmitInFlight) return;  // garde anti double-submit globale
 
         var urls = document.getElementById('qbt-add-urls').value.trim();
-        var cat = document.getElementById('qbt-add-category').value;
+        var savepath = document.getElementById('deluge-add-savepath').value.trim();
         var paused = document.getElementById('qbt-add-paused').value === 'true';
         var hasFiles = pendingTorrentFiles.length > 0;
         var hasUrls = urls.length > 0;
@@ -1902,8 +1899,8 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         if (hasFiles) {
             var fd = new FormData();
             pendingTorrentFiles.forEach(function(f){ fd.append('torrents[]', f); });
-            if (cat)    fd.append('category', cat);
-            if (paused) fd.append('paused', 'true');
+            if (savepath) fd.append('savepath', savepath);
+            if (paused)   fd.append('paused', 'true');
             filesDone = fetch(BASE + '/api/add-file', { method: 'POST', body: fd })
                 .then(function(r){ return r.json(); })
                 .then(function(d){
@@ -1921,7 +1918,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         filesDone.then(function(filesOk){
             // 2) Puis les URLs si présentes
             if (hasUrls) {
-                return qbtPost(BASE + '/api/add', { urls: urls, category: cat || null, paused: paused })
+                return qbtPost(BASE + '/api/add', { urls: urls, savepath: savepath || null, paused: paused })
                     .then(function(d){
                         var ok = d && d.ok;
                         var msg = ok ? QBT_I18N.toast.add_url_ok : ((d && d.error) ? d.error : QBT_I18N.toast.add_url_ko);

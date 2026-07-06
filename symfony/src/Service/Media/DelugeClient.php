@@ -124,6 +124,7 @@ class DelugeClient implements ResetInterface
         'completed_time', 'active_time', 'seeding_time', 'next_announce', 'label',
         'tracker_status', 'trackers', 'files', 'file_progress', 'file_priorities', 'peers',
         'is_finished', 'eta', 'num_seeds', 'total_seeds', 'num_peers', 'total_peers',
+        'download_payload_rate', 'upload_payload_rate',
     ];
 
     // ══════════════════════════════════════════════════════════════════════════
@@ -163,7 +164,7 @@ class DelugeClient implements ResetInterface
             $files[] = [
                 'name'     => $f['path'] ?? ($f['name'] ?? '—'),
                 'size'     => (int) ($f['size'] ?? 0),
-                'progress' => round((float) ($progressList[$i] ?? 0) * 100, 1),
+                'progress' => round((float) ($progressList[$i] ?? 0), 3),
                 'priority' => (int) ($prioList[$i] ?? 1),
             ];
         }
@@ -194,6 +195,7 @@ class DelugeClient implements ResetInterface
 
         return [
             'properties' => [
+                'name'             => (string) ($t['name'] ?? ''),
                 'save_path'        => (string) ($t['save_path'] ?? ''),
                 'total_size'       => (int) ($t['total_size'] ?? 0),
                 'piece_size'       => (int) ($t['piece_length'] ?? 0),
@@ -207,6 +209,13 @@ class DelugeClient implements ResetInterface
                 'time_elapsed'     => (int) ($t['active_time'] ?? 0),
                 'seeding_time'     => (int) ($t['seeding_time'] ?? 0),
                 'next_announce'    => (int) ($t['next_announce'] ?? 0),
+                'eta'              => (int) ($t['eta'] ?? 0),
+                'seeds'            => (int) ($t['num_seeds'] ?? 0),
+                'seeds_total'      => (int) ($t['total_seeds'] ?? 0),
+                'peers'            => (int) ($t['num_peers'] ?? 0),
+                'peers_total'      => (int) ($t['total_peers'] ?? 0),
+                'dl_speed'         => (int) ($t['download_payload_rate'] ?? 0),
+                'up_speed'         => (int) ($t['upload_payload_rate'] ?? 0),
             ],
             'files'    => $files,
             'trackers' => $trackers,
