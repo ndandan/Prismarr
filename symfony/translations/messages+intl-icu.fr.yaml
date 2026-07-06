@@ -64,6 +64,7 @@ sidebar:
   nav:
     dashboard: Tableau de bord
     qbittorrent: qBittorrent
+    deluge: Deluge
     discovery: Découverte
     calendar: Calendrier
     radarr: Radarr
@@ -289,6 +290,11 @@ setup:
         user: Utilisateur
         password: Mot de passe
         reverse_proxy_hint: 'Laissez l''utilisateur et le mot de passe vides si qBittorrent est derrière un reverse proxy qui injecte lui-même l''authentification (qui, traefik forward auth, …).'
+      deluge:
+        section: Deluge
+        subtitle: "Client torrent (Web UI) — utilisé pour l'onglet Deluge."
+        password: Mot de passe Web UI
+        reverse_proxy_hint: 'Laissez le mot de passe vide si Deluge est derrière un reverse proxy authentifiant qui injecte la session.'
       usenet_optional: 'Usenet — optionnel'
       sabnzbd:
         section: 'SABnzbd'
@@ -864,6 +870,9 @@ admin:
         '5': '5 secondes'
         '10': '10 secondes (économe)'
         '0': Désactivé
+    deluge_refresh:
+      label: Intervalle de rafraîchissement Deluge
+      help: Fréquence de mise à jour de la page Deluge et du badge. 0 désactive le polling.
     ui_density:
       label: Densité de l'interface
       options:
@@ -3768,6 +3777,16 @@ qbittorrent:
     no_valid_hash: Aucun hash valide
     no_valid_file: Aucun fichier valide
     torrent_not_found: Torrent introuvable
+
+deluge:
+  title: Deluge
+  filters:
+    labels: Labels
+  table:
+    uploaded: Envoyé
+    completed: Terminé le
+  api:
+    empty_location: Le chemin de destination est requis
 
 usenet:
   page_title: 'Téléchargements Usenet'
