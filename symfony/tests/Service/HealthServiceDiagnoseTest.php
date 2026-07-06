@@ -193,4 +193,40 @@ class HealthServiceDiagnoseTest extends TestCase
         $m->setAccessible(true);
         return $m->invoke($this->makeService(), $service, $overrides);
     }
+
+    // Deluge (#deluge-tab): deluge-web answers HTTP 200 for everything — the
+    // real outcome lives in the JSON-RPC envelope, same shape problem as
+    // Tautulli above but with a different success/failure encoding.
+    public function testDelugeWrongPasswordIsAuthNotOk(): void
+    {
+        $health = $this->makeService();
+        $r = $health->diagnoseFromResponse(
+            ['http' => 200, 'body' => '{"result": false, "error": null, "id": 1}', 'err' => ''],
+            'deluge'
+        );
+        $this->assertFalse($r['ok']);
+        $this->assertSame('auth', $r['category']);
+    }
+
+    public function testDelugeRpcErrorEnvelopeIsAuth(): void
+    {
+        $health = $this->makeService();
+        $r = $health->diagnoseFromResponse(
+            ['http' => 200, 'body' => '{"result": null, "error": {"message": "Not authenticated", "code": 1}, "id": 1}', 'err' => ''],
+            'deluge'
+        );
+        $this->assertFalse($r['ok']);
+        $this->assertSame('auth', $r['category']);
+    }
+
+    public function testDelugeSuccessEnvelopeIsOk(): void
+    {
+        $health = $this->makeService();
+        $r = $health->diagnoseFromResponse(
+            ['http' => 200, 'body' => '{"result": true, "error": null, "id": 1}', 'err' => ''],
+            'deluge'
+        );
+        $this->assertTrue($r['ok']);
+        $this->assertSame('ok', $r['category']);
+    }
 }

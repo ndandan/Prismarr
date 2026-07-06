@@ -151,6 +151,7 @@ class DisplayPreferencesExtension extends AbstractExtension
             'theme_color_hex'      => $this->prefs->getThemeColorHex(),
             'theme_color_rgb'      => $this->prefs->getThemeColorRgb(),
             'qbit_refresh_seconds' => $this->prefs->getQbitRefreshSeconds(),
+            'deluge_refresh_seconds' => $this->prefs->getDelugeRefreshSeconds(),
             'ui_density'           => $this->prefs->getUiDensity(),
             default                => null,
         };
