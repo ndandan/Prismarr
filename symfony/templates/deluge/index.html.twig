@@ -1,7 +1,7 @@
 {% extends 'base.html.twig' %}
 {% import '_icons.html.twig' as ico %}
-{% block title %}{{ 'deluge.page_title'|trans }}{% endblock %}
-{% block page_title %}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f67ba" stroke-width="2"><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg> {{ 'deluge.page_title'|trans }}{% endblock %}
+{% block title %}{{ 'deluge.title'|trans }}{% endblock %}
+{% block page_title %}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f67ba" stroke-width="2"><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg> {{ 'deluge.title'|trans }}{% endblock %}
 
 {% block stylesheets %}
 <style>
@@ -499,7 +499,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     <div class="qbt-sort" data-sort="progress" style="justify-content:center">{{ 'qbittorrent.table.progress'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
     <div class="qbt-sort" data-sort="dlspeed" style="justify-content:flex-end">{{ 'qbittorrent.table.dl_speed'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
     <div class="qbt-sort" data-sort="upspeed" style="justify-content:flex-end">{{ 'qbittorrent.table.up_speed'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
-    <div class="qbt-sort" data-sort="num_seeds" style="justify-content:flex-end">{{ 'qbittorrent.table.seeds'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
+    <div class="qbt-sort" data-sort="seeds" style="justify-content:flex-end">{{ 'qbittorrent.table.seeds'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
     <div class="qbt-sort" data-sort="ratio" style="justify-content:flex-end">{{ 'qbittorrent.table.ratio'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
     <div class="qbt-sort" data-sort="uploaded" style="justify-content:flex-end">{{ 'deluge.table.uploaded'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
     <div class="qbt-sort" data-sort="completed" style="justify-content:flex-end">{{ 'deluge.table.completed'|trans }} <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path d="M6 9l6 6 6-6"/></svg></div>
@@ -1811,8 +1811,8 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     };
 
     // ── Pause all / Resume all ──────────────────────────────────────────────
-    bindBulk('qbt-btn-pause-all',  function(btn){ qbtAction(btn, BASE + '/api/bulk/pause',  { hashes: ['all'] }, QBT_I18N.toast.pause_all).then(refreshData); });
-    bindBulk('qbt-btn-resume-all', function(btn){ qbtAction(btn, BASE + '/api/bulk/resume', { hashes: ['all'] }, QBT_I18N.toast.resume_all).then(refreshData); });
+    bindBulk('qbt-btn-pause-all',  function(btn){ qbtAction(btn, BASE + '/api/pause-all',  null, QBT_I18N.toast.pause_all).then(refreshData); });
+    bindBulk('qbt-btn-resume-all', function(btn){ qbtAction(btn, BASE + '/api/resume-all', null, QBT_I18N.toast.resume_all).then(refreshData); });
 
     // ── Ajout torrent ───────────────────────────────────────────────────────
     // ── Ajouter torrent : reset URL + fichiers ──
