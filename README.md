@@ -56,8 +56,16 @@
   <img src="docs/screenshots/radarr.png" width="49%" alt="Movies (Radarr)">
 </p>
 <p align="center">
-  <img src="docs/screenshots/series-detail.png" width="49%" alt="Series detail (Sonarr)">
-  <img src="docs/screenshots/downloads.png" width="49%" alt="Downloads (qBittorrent)">
+  <img src="docs/screenshots/sonarr.png" width="49%" alt="Series (Sonarr)">
+  <img src="docs/screenshots/requests.png" width="49%" alt="Requests (Seerr)">
+</p>
+<p align="center">
+  <img src="docs/screenshots/deluge.png" width="49%" alt="Downloads (Deluge)">
+  <img src="docs/screenshots/sabnzbd.png" width="49%" alt="Downloads (SABnzbd)">
+</p>
+<p align="center">
+  <img src="docs/screenshots/plex-activity.png" width="49%" alt="Plex activity (Tautulli)">
+  <img src="docs/screenshots/prowlarr.png" width="49%" alt="Indexers (Prowlarr)">
 </p>
 <p align="center">
   <img src="docs/screenshots/settings.png" width="49%" alt="Settings (custom theme)">
@@ -111,6 +119,9 @@ part of the original project:
 - Dashboard theming: 17 glance-style HSL presets with an admin Theme picker — [#66](https://github.com/Shoshuo/Prismarr/pull/66)
 - Dashboard layout customization: reorder + hide/show sections — [#68](https://github.com/Shoshuo/Prismarr/pull/68)
 - One unified rich detail modal everywhere (top-bar search, dashboard, Explorer, Plex activity) — [#69](https://github.com/Shoshuo/Prismarr/pull/69)
+- Performance slice: cross-request service-health caching, browser cache headers on static assets, prod cache pre-warmed at image build — [#74](https://github.com/Shoshuo/Prismarr/pull/74)
+- Plex items open the app-global quick-look modal — [#75](https://github.com/Shoshuo/Prismarr/pull/75)
+- Deluge tab: full torrent management via deluge-web JSON-RPC — [#76](https://github.com/Shoshuo/Prismarr/pull/76)
 
 **Fork-only** — outside upstream's scope, only available here:
 
@@ -120,9 +131,6 @@ part of the original project:
 - **Houndarr widget:** a read-only dashboard stat tile for
   [Houndarr](https://github.com/av1155/houndarr) backlog searching — tracked /
   eligible / cooldown / unreleased counts and 7-day searches, plus a health chip.
-- Performance work ahead of upstream (not yet proposed): cross-request
-  service-health caching, browser cache headers on static assets, and the
-  prod cache pre-warmed at image build.
 
 The full details live in [docs/FORK-CHANGES.md](docs/FORK-CHANGES.md) and the
 [CHANGELOG](CHANGELOG.md). The fork is run daily on a real homelab (Unraid),
@@ -141,7 +149,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Dashboard:** hero spotlight, upcoming releases, pending Seerr requests, live service health, watchlist, trending and latest additions. Paints instantly, each widget hydrates on its own.
 - **Dashboard customization (fork):** an admin can reorder and hide/show every dashboard section, and pick one of 17 theme presets.
 - **Quick-look everywhere (fork):** clicking any media tile — dashboard, top-bar search result, Explorer, Plex activity — opens one rich in-place detail modal (poster, synopsis, ratings, release/air dates, watchlist, Add/Manage deep-links) instead of navigating away.
-- **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload) plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
+- **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload), a full Deluge tab (live table, labels, seeding columns, detail panel, add/limits — via deluge-web JSON-RPC), plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
 - **Discovery:** TMDb landing page with recommendations and trending, watchlist, an explorer with filters, and deep-links into your library.
 - **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs with a per-user filter, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
@@ -156,8 +164,9 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 ### Requirements
 
 - Docker and Docker Compose
-- At least one of: qBittorrent, Radarr, Sonarr, Prowlarr, Seerr
+- At least one of: qBittorrent, Deluge, Radarr, Sonarr, Prowlarr, Seerr
 - Optional: Gluetun if qBittorrent runs behind a VPN
+- Optional: a Deluge instance (deluge-web URL + password) for the Deluge tab
 - Optional: a TMDb API key (free) to enable the Discovery page
 - Optional: a Tautulli instance (URL + API key) for the Plex activity page and widget
 - Optional: an Unraid 7 server (GraphQL API key) for the server monitoring widget
@@ -225,7 +234,7 @@ will guide you through:
 - admin account creation
 - TMDb API key (optional)
 - Radarr / Sonarr / Prowlarr / Seerr URLs and keys
-- qBittorrent + Gluetun (optional)
+- qBittorrent + Gluetun, Deluge (optional)
 
 Tautulli, Unraid and Houndarr are configured later from
 **Settings → Services** (each with its own enable toggle and Test-connection
@@ -254,7 +263,7 @@ Everything is configured from the UI:
 - **Later**: the Settings page at `/admin/settings` (admin only)
 
 External service credentials (TMDb / Radarr / Sonarr / Prowlarr / Seerr /
-Tautulli / Unraid / Houndarr API keys, qBittorrent password, service URLs),
+Tautulli / Unraid / Houndarr API keys, qBittorrent and Deluge passwords, service URLs),
 display preferences and language are stored in the SQLite database
 (`setting` table). They never appear in environment variables or in any
 committable file.

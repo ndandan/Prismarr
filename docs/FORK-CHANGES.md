@@ -118,13 +118,7 @@ Also open upstream: [#70](https://github.com/Shoshuo/Prismarr/pull/70), a
 small fix stopping the global-search icon overlapping its text in compact
 density.
 
----
-
-## 3. Shipped in the fork, not yet proposed upstream
-
-On the fork's `main`; candidates for a future PR wave.
-
-### Plex items open the global quick-look (2026-07-03)
+### Plex items open the global quick-look — [#75](https://github.com/Shoshuo/Prismarr/pull/75) (stacked on #69)
 
 Clicking a title on the Plex Activity page or the dashboard Plex widget now
 opens the same global quick-look modal as everywhere else, replacing the
@@ -136,7 +130,7 @@ and only the numeric TMDb id reaches the browser, preserving the existing
 guid allow-list stance. Items with no TMDb match (music, home videos) fall
 back to the legacy Plex modal so every click keeps working.
 
-### Performance batch (2026-07-03)
+### Performance batch — [#74](https://github.com/Shoshuo/Prismarr/pull/74)
 
 - **Cross-request service-health cache.** `HealthService`'s 10 s verdict memo
   lived in a per-object array, which classic (non-worker) FrankenPHP throws
@@ -154,6 +148,26 @@ back to the legacy Plex modal so every click keeps working.
   container (re)start no longer pays the 1–3 s container/route/Twig compile.
   Env vars stay runtime-resolved placeholders, so the boot-generated
   `APP_SECRET` doesn't invalidate the baked cache.
+
+### Deluge tab — [#76](https://github.com/Shoshuo/Prismarr/pull/76)
+
+A full torrent-management `/deluge` page (shipped 2026-07-05) mirroring the
+qBittorrent tab, via the deluge-web JSON-RPC API: live table with server-side
+pagination/filter/sort/search, read-only Label filter (labels stay owned by
+Sonarr/Radarr), seeding-focused Ratio / Uploaded / Completed columns, detail
+panel (files, trackers, peers) with Radarr/Sonarr resolve, single/bulk
+actions, session-wide Pause/Resume All, add via magnet/URL/.torrent
+(SSRF-guarded, bencode-validated), per-torrent + global speed limits, sidebar
+badge with completion toasts. The client judges success on the JSON-RPC
+envelope (deluge-web answers HTTP 200 even on failure), auto-reconnects a
+daemon-disconnected web UI, supports reverse-proxy auth (empty password) and
+sits behind the same circuit breaker + SSRF locks as every other client.
+
+---
+
+## 3. Shipped in the fork, not yet proposed upstream
+
+On the fork's `main`; candidates for a future PR wave.
 
 ### Houndarr widget (2026-07-04)
 
