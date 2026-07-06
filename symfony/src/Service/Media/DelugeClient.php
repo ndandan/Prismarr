@@ -239,6 +239,17 @@ class DelugeClient implements ResetInterface
         return $this->ok('core.resume_torrent', [$hashes]);
     }
 
+    /** Pause/resume the whole session — Deluge's native "all torrents" RPCs. */
+    public function pauseAll(): bool
+    {
+        return $this->ok('core.pause_session');
+    }
+
+    public function resumeAll(): bool
+    {
+        return $this->ok('core.resume_session');
+    }
+
     /** core.remove_torrent takes ONE hash — loop for bulk. */
     public function deleteTorrents(array $hashes, bool $deleteFiles = false): bool
     {

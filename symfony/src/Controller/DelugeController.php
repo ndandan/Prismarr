@@ -308,6 +308,20 @@ class DelugeController extends AbstractController
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Deluge', $this->deluge);
     }
 
+    #[Route('/api/pause-all', name: 'api_pause_all', methods: ['POST'])]
+    public function pauseAll(): JsonResponse
+    {
+        $ok = $this->deluge->pauseAll();
+        return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Deluge', $this->deluge);
+    }
+
+    #[Route('/api/resume-all', name: 'api_resume_all', methods: ['POST'])]
+    public function resumeAll(): JsonResponse
+    {
+        $ok = $this->deluge->resumeAll();
+        return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Deluge', $this->deluge);
+    }
+
     // ══════════════════════════════════════════════════════════════════════════
     //  Add torrent
     // ══════════════════════════════════════════════════════════════════════════
