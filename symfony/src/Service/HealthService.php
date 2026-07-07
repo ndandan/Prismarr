@@ -418,7 +418,7 @@ class HealthService
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
