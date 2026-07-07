@@ -530,7 +530,9 @@
   .net-chart { display: block; width: 100%; height: 120px; margin-top: .35rem; }
   .net-chart-fill { fill: rgba(var(--tblr-primary-rgb, 99,102,241), .22); stroke: none; }
   .net-chart-down { fill: none; stroke: var(--tblr-primary); stroke-width: 1.5; }
-  .net-chart-up { fill: none; stroke: #22c55e; stroke-width: 1.5; }
+  /* Upload is a fixed sky blue (not the theme primary): green-primary themes
+     otherwise render both series in near-identical greens (live-verified). */
+  .net-chart-up { fill: none; stroke: #38bdf8; stroke-width: 1.5; }
   .net-chart-axis { display: flex; justify-content: space-between; font-size: .62rem; color: var(--tblr-secondary); margin-top: .2rem; }
   .net-legend { display: flex; gap: 1rem; font-size: .66rem; color: var(--tblr-secondary); margin-top: .3rem; }
   .net-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: .3rem; }
