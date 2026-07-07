@@ -480,6 +480,22 @@ dashboard:
     eta: Fin estimée
     errors: erreurs
     last_check: Dernier contrôle
+  network:
+    title: Réseau
+    settings_cta: Paramètres
+    unreachable: Console UniFi injoignable — vérifiez l’URL et la clé API dans les paramètres.
+    down: Téléchargement
+    up: Envoi
+    clients: Clients
+    wired: filaire
+    wireless: sans fil
+    guest: invités
+    wan: WAN
+    uptime: Connexion
+    usage_24h: Utilisation — dernières 24 h
+    infrastructure: Infrastructure
+    online: en ligne
+    offline: hors ligne
   houndarr:
     title: Houndarr
     settings_cta: Paramètres

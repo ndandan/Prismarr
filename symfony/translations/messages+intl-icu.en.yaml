@@ -481,6 +481,22 @@ dashboard:
     eta: ETA
     errors: errors
     last_check: Last check
+  network:
+    title: Network
+    settings_cta: Settings
+    unreachable: UniFi console unreachable — check the URL and API key in settings.
+    down: Download
+    up: Upload
+    clients: Clients
+    wired: wired
+    wireless: wireless
+    guest: guest
+    wan: WAN
+    uptime: Uptime
+    usage_24h: Usage — last 24 h
+    infrastructure: Infrastructure
+    online: online
+    offline: offline
   houndarr:
     title: Houndarr
     settings_cta: Settings
