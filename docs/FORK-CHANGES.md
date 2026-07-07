@@ -194,6 +194,33 @@ nothing richer. Whether to propose this upstream is undecided — it's
 service-monitoring-adjacent, which the maintainer has signalled is out of
 scope (see the Unraid widget below).
 
+### UniFi Network widget (2026-07-05)
+
+Admin-only dashboard section pulling from the **UniFi OS Network API** (read-only
+local API key, configured in `/admin/settings` with kill switch, optional
+TLS-verify skip and Test connection). Non-admins never trigger an API call — the
+route and partial are both role-gated.
+
+- **WAN tile:** live download and upload bandwidth (polled every 2 s).
+- **Clients tile:** client count split by wired, wireless and guest networks.
+- **24-hour usage chart:** inline-SVG graph showing bandwidth over time,
+  refreshing every 2 s with a moving 24-hour window, populated via a
+  server-side-cached (20 s) statistics endpoint.
+- **Infrastructure row:** per-device status chip (gateway, switches, APs;
+  green running / orange degraded / grey unreachable), gateway CPU/RAM % with
+  threshold styling, all cached for 20 s.
+
+The client caches statistics for 20 s, queries the network group independently
+so one failure doesn't blank the rest, fails open, and fail-fasts the remaining
+queries when the host itself is unreachable (~15 s → ~3 s first paint after an
+outage).
+
+**Files:** `symfony/src/Service/Media/UnifiClient.php`, `symfony/src/Dashboard/NetworkUsageChart.php`,
+HealthService and AdminSettingsController edits (UniFi chip registration, admin settings card),
+DashboardController edit (network section registration), dashboard templates
+(`templates/dashboard/sections/_network.html.twig`), translations
+(`translations/en/messages.en.yaml`, `translations/fr/messages.fr.yaml`).
+
 ---
 
 ## 4. Fork-only — declined upstream
