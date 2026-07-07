@@ -194,6 +194,40 @@ nothing richer. Whether to propose this upstream is undecided — it's
 service-monitoring-adjacent, which the maintainer has signalled is out of
 scope (see the Unraid widget below).
 
+### UniFi Network widget (2026-07-05)
+
+Admin-only dashboard section pulling from the **UniFi OS Network API** (read-only
+local API key, configured in `/admin/settings` with kill switch, optional
+TLS-verify skip and Test connection). Non-admins never trigger an API call — the
+route and partial are both role-gated.
+
+- **WAN tile:** live download and upload bandwidth, client-polled every 30 s
+  against a 20 s server-side cache.
+- **Clients tile:** client count split by wired, wireless and guest networks.
+- **24-hour usage chart:** inline-SVG graph showing bandwidth over time with a
+  moving 24-hour window, built by a pure geometry helper (`NetworkUsageChart`)
+  from the same 20 s-cached overview.
+- **Infrastructure row:** per-device status chip (gateway, switches, APs) —
+  green when online, red when offline — plus gateway CPU/RAM %, all from the
+  same cached overview.
+
+`UnifiClient::overview()` fires one call per endpoint (health / hourly report /
+device list) so a missing or drifted endpoint degrades one block instead of
+blanking the widget, caches the combined result for 20 s, and fails open: a
+transport-level failure (connect refused/timed out, DNS) on the first call
+short-circuits the remaining two calls instead of paying their connect timeout
+too. Each call runs with an 8 s total / 3 s connect cURL timeout.
+
+**Files:** `symfony/src/Service/Media/UnifiClient.php`,
+`symfony/src/Dashboard/NetworkUsageChart.php`, `symfony/src/Dashboard/DashboardSections.php`
+(section registration), `HealthService` and `AdminSettingsController` edits (UniFi
+chip, admin settings card, kill switch, test fields), `DashboardController` edit
+(network widget route), dashboard templates
+(`templates/dashboard/sections/_network.html.twig`,
+`templates/dashboard/_network.html.twig`, `templates/dashboard/index.html.twig`,
+`templates/admin/settings.html.twig`), `unifi.svg`, translations
+(`translations/messages+intl-icu.en.yaml`, `translations/messages+intl-icu.fr.yaml`), tests.
+
 ---
 
 ## 4. Fork-only — declined upstream

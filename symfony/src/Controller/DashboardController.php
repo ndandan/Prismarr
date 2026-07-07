@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Dashboard\NetworkUsageChart;
 use App\Entity\ServiceInstance;
 use App\Repository\Media\WatchlistItemRepository;
 use App\Service\HealthService;
@@ -11,6 +12,7 @@ use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\UnifiClient;
 use App\Service\Media\UnraidClient;
 use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
@@ -72,6 +74,9 @@ class DashboardController extends AbstractController
         // Houndarr stat tile — nullable + last so legacy positional test
         // constructors keep working.
         private readonly ?HoundarrClient $houndarr = null,
+        // UniFi network widget — nullable + last so legacy positional test
+        // constructors keep working.
+        private readonly ?UnifiClient $unifi = null,
     ) {}
 
     /**
@@ -167,6 +172,7 @@ class DashboardController extends AbstractController
             'tautulli'   => $this->health->isConfigured('tautulli'),
             'unraid'     => $this->health->isConfigured('unraid'),
             'houndarr'   => $this->health->isConfigured('houndarr'),
+            'unifi'      => $this->health->isConfigured('unifi'),
         ];
 
         return $this->render('dashboard/index.html.twig', [
@@ -385,6 +391,33 @@ class DashboardController extends AbstractController
             }
             return $out;
         });
+    }
+
+    /**
+     * Async fragment — UniFi network overview (WAN throughput, clients, 24h
+     * usage, infrastructure). Admin-only: WAN IPs and client counts aren't
+     * for regular users, so both the fragment and the section partial gate
+     * on ROLE_ADMIN, and non-admins never trigger a UniFi call. Empty body →
+     * hidden client-side. Fails open: an unreachable console renders the
+     * fragment's "unreachable" state.
+     */
+    #[Route('/tableau-de-bord/widget/network', name: 'app_dashboard_widget_network')]
+    public function widgetNetwork(): Response
+    {
+        if (!$this->isGranted('ROLE_ADMIN')) {
+            return new Response('');
+        }
+        if ($this->unifi === null || !$this->health->isConfigured('unifi')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        $net = $this->unifi->overview();
+
+        return $this->render('dashboard/_network.html.twig', [
+            'net'   => $net,
+            'chart' => NetworkUsageChart::build($net['usage24h'] ?? null),
+        ]);
     }
 
     /**

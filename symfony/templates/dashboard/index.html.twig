@@ -525,6 +525,23 @@
   .houndarr-inst-counts { margin-left: auto; display: flex; gap: .75rem; color: var(--tblr-secondary); text-align: right; }
   .houndarr-note { margin-top: .35rem; font-size: .7rem; color: var(--tblr-secondary); }
 
+  /* ── UniFi network widget ──────────────────────────────────────── */
+  .net-rate { font-size: 1.35rem; font-weight: 700; line-height: 1.2; margin-top: .1rem; }
+  .net-chart { display: block; width: 100%; height: 120px; margin-top: .35rem; }
+  .net-chart-fill { fill: rgba(var(--tblr-primary-rgb, 99,102,241), .22); stroke: none; }
+  .net-chart-down { fill: none; stroke: var(--tblr-primary); stroke-width: 1.5; }
+  /* Upload is a fixed sky blue (not the theme primary): green-primary themes
+     otherwise render both series in near-identical greens (live-verified). */
+  .net-chart-up { fill: none; stroke: #38bdf8; stroke-width: 1.5; }
+  .net-chart-axis { display: flex; justify-content: space-between; font-size: .62rem; color: var(--tblr-secondary); margin-top: .2rem; }
+  .net-legend { display: flex; gap: 1rem; font-size: .66rem; color: var(--tblr-secondary); margin-top: .3rem; }
+  .net-legend-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: .3rem; }
+  .server-chip-ko {
+    font-size: .62rem; padding: .1rem .4rem; border-radius: 4px;
+    background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.35);
+    color: #ef4444;
+  }
+
   /* ── Edit-mode layout toolbar ──────────────────────────────────── */
   .dash-layout-toolbar { display: flex; gap: .5rem; justify-content: flex-end; margin-bottom: 1rem; }
   .dashboard-scope.is-editing [data-section-key] { position: relative; outline: 2px dashed rgba(var(--tblr-primary-rgb), .5); outline-offset: 4px; border-radius: 12px; cursor: grab; }
@@ -703,6 +720,21 @@
     if (window._dashHoundarrTimer) { clearInterval(window._dashHoundarrTimer); }
     window._dashHoundarrTimer = setInterval(refreshHoundarr, 60000);
 
+    // Same live-refresh pattern for the UniFi network widget — 30s cadence
+    // (UnifiClient caches 20s server-side, so this is at most one upstream
+    // round of REST calls per poll). Fails open; hidden-tab guarded.
+    function refreshNetwork() {
+      if (document.hidden) return;
+      var node = document.querySelector('[data-dash-widget="network"][data-dash-url]');
+      if (!node) return;
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
+        .catch(function () {});
+    }
+    if (window._dashNetworkTimer) { clearInterval(window._dashNetworkTimer); }
+    window._dashNetworkTimer = setInterval(refreshNetwork, 30000);
+
     // Plex widget tabs: client-side pane toggle, remembers the active tab so the
     // 10s fragment refresh doesn't snap the user back to "Now playing".
     function applyPlexTab(scope) {
@@ -733,6 +765,7 @@
       if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); window._dashPlexTimer = null; }
       if (window._dashServerTimer) { clearInterval(window._dashServerTimer); window._dashServerTimer = null; }
       if (window._dashHoundarrTimer) { clearInterval(window._dashHoundarrTimer); window._dashHoundarrTimer = null; }
+      if (window._dashNetworkTimer) { clearInterval(window._dashNetworkTimer); window._dashNetworkTimer = null; }
     });
 
   })();

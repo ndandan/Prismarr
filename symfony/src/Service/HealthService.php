@@ -13,6 +13,7 @@ use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\UnifiClient;
 use App\Service\Media\UnraidClient;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
@@ -81,6 +82,9 @@ class HealthService
         // Deluge (#deluge-tab) — nullable + last, same legacy-test-constructor
         // reason as the clients above.
         private readonly ?DelugeClient     $deluge = null,
+        // UniFi (network monitoring widget) — nullable + last, same
+        // legacy-positional-constructor stance as Unraid/Houndarr.
+        private readonly ?UnifiClient      $unifi = null,
     ) {}
 
     /**
@@ -253,6 +257,7 @@ class HealthService
             'tautulli'    => $this->tautulli?->ping() ?? false,
             'unraid'      => $this->unraid?->ping() ?? false,
             'houndarr'    => $this->houndarr?->ping() ?? false,
+            'unifi'       => $this->unifi?->ping() ?? false,
             default       => true,
         };
     }
@@ -269,7 +274,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'];
 
     /** Brand colors for the health chips — single source for dashboard + topbar. */
     private const SERVICE_COLORS = [
@@ -285,6 +290,7 @@ class HealthService
         'tautulli'    => '#e5a00d',
         'unraid'      => '#f15a2c',
         'houndarr'    => '#c2703d',
+        'unifi'       => '#006fff',
     ];
 
     /**
@@ -314,6 +320,7 @@ class HealthService
         $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr'];
         if ($includeUnraid) {
             $labels['unraid'] = 'Unraid';
+            $labels['unifi']  = 'UniFi';
         }
         foreach ($labels as $service => $label) {
             try {
@@ -382,6 +389,9 @@ class HealthService
             // Houndarr needs both the URL and the (single, widget-scoped) API key.
             'houndarr' =>
                 $this->config->has('houndarr_url') && $this->config->has('houndarr_api_key'),
+            // UniFi needs the console URL and a local API key (Network 9.0+).
+            'unifi' =>
+                $this->config->has('unifi_url') && $this->config->has('unifi_api_key'),
             default => true,
         };
     }
@@ -408,7 +418,7 @@ class HealthService
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -730,6 +740,21 @@ class HealthService
                 return [
                     'url'     => rtrim($url, '/') . '/api/v1/widget',
                     'headers' => ['X-Api-Key: ' . $key, 'Accept: application/json'],
+                ];
+            }
+            case 'unifi': {
+                $url  = $get('unifi_url');
+                $key  = $get('unifi_api_key');
+                $site = trim($get('unifi_site'));
+                if ($url === '' || $key === '') return null;
+                // Same read-only endpoint the widget uses; a bad key answers
+                // 401 → diagnosed as `auth`.
+                return [
+                    'url'      => rtrim($url, '/') . '/proxy/network/api/s/'
+                        . rawurlencode($site !== '' ? $site : 'default') . UnifiClient::PATH_HEALTH,
+                    'headers'  => ['X-API-KEY: ' . $key, 'Accept: application/json'],
+                    // UniFi OS consoles ship a self-signed cert by default.
+                    'insecure' => $get('unifi_skip_tls_verify') === '1',
                 ];
             }
             default:

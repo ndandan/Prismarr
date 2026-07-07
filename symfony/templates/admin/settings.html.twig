@@ -448,6 +448,7 @@
             'gluetun':     { icon_bg: '#10b981', subtitle: 'admin.services.subtitle.gluetun'|trans },
             'tautulli':    { icon_bg: '#e5a00d', subtitle: 'admin.services.subtitle.tautulli'|trans },
             'unraid':      { icon_bg: '#f15a2c', subtitle: 'admin.services.subtitle.unraid'|trans },
+            'unifi':       { icon_bg: '#006fff', subtitle: 'admin.services.subtitle.unifi'|trans },
             'houndarr':    { icon_bg: '#c2703d', subtitle: 'admin.services.subtitle.houndarr'|trans },
           } %}
 
@@ -456,7 +457,7 @@
             ('admin.services.group.managers'|trans):   ['radarr', 'sonarr'],
             ('admin.services.group.indexers'|trans):   ['prowlarr', 'jellyseerr'],
             ('admin.services.group.downloads'|trans):  ['qbittorrent', 'deluge', 'gluetun', 'sabnzbd', 'nzbget'],
-            ('admin.services.group.monitoring'|trans): ['tautulli', 'unraid', 'houndarr'],
+            ('admin.services.group.monitoring'|trans): ['tautulli', 'unraid', 'unifi', 'houndarr'],
           } %}
 
           {# ─── Section 1 : Services externes ─────────────────────── #}
@@ -497,7 +498,7 @@
                       {# Issue #15 — per-service kill switch. Only the flat-config
                          services have it; radarr/sonarr enable/disable per
                          instance. Unchecked box isn't POSTed → disabled. #}
-                      {% if service_id in ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr'] %}
+                      {% if service_id in ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr'] %}
                         <label class="form-check form-switch m-0 me-2" style="padding-left:2.4em;"
                                title="{{ 'admin.services.enabled_title'|trans }}">
                           <input class="form-check-input" type="checkbox"
@@ -1338,6 +1339,7 @@
         deluge:      ['deluge_url', 'deluge_password'],
         sabnzbd:     ['sabnzbd_url', 'sabnzbd_api_key'],
         nzbget:      ['nzbget_url', 'nzbget_user', 'nzbget_password'],
+        unifi:       ['unifi_url', 'unifi_api_key', 'unifi_site'],
       };
       // Per-service test buttons (TMDb, Prowlarr, Jellyseerr, qBit). Same
       // state-driven look as the per-instance Test (button colour + label

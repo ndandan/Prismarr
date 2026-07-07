@@ -481,6 +481,22 @@ dashboard:
     eta: ETA
     errors: errors
     last_check: Last check
+  network:
+    title: Network
+    settings_cta: Settings
+    unreachable: UniFi console unreachable — check the URL and API key in settings.
+    down: Download
+    up: Upload
+    clients: Clients
+    wired: wired
+    wireless: wireless
+    guest: guest
+    wan: WAN
+    uptime: Uptime
+    usage_24h: Usage — last 24 h
+    infrastructure: Infrastructure
+    online: online
+    offline: offline
   houndarr:
     title: Houndarr
     settings_cta: Settings
@@ -719,6 +735,7 @@ admin:
       gluetun: 'VPN / port forwarding'
       tautulli: 'Plex activity (via Tautulli)'
       unraid: 'Unraid server monitoring — array, disks, system, Docker, UPS (Unraid 7+, read-only API key)'
+      unifi: 'UniFi network monitoring — WAN throughput, clients, devices (Network 9.0+, read-only API key from Control Plane → Integrations)'
       houndarr: 'Automated *arr backlog search (read-only widget)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Show in sidebar
@@ -918,6 +935,9 @@ admin:
       api_key: v3 API key
     unraid:
       skip_tls_verify: 'Skip TLS certificate verification (self-signed certificate)'
+    unifi:
+      site: Site name
+      skip_tls_verify: Skip TLS certificate verification (self-signed console certificate)
   internal:
     calendar:
       label: Calendar
