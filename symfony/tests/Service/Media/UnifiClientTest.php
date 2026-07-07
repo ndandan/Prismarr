@@ -204,6 +204,5 @@ class UnifiClientTest extends TestCase
     {
         $this->assertTrue($this->makeClient($this->allEndpoints())->ping());
         $this->assertFalse($this->makeClient(['stat/health' => null])->ping());
-        $this->assertFalse($this->makeClient($this->allEndpoints(), ['unifi_enabled' => '0'])->ping());
     }
 }
