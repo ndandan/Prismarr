@@ -49,8 +49,8 @@ final class NetworkUsageChart
         $downPts = $upPts = $points = [];
         foreach ($rows as $i => $r) {
             $x = round($i * $stepX, 1);
-            $downPts[] = (int) $x . ',' . ((int) $y($r['down']) === $y($r['down']) && $y($r['down']) === (int) $y($r['down']) ? (int) $y($r['down']) : $y($r['down']));
-            $upPts[]   = (int) $x . ',' . ((int) $y($r['up']) === $y($r['up']) && $y($r['up']) === (int) $y($r['up']) ? (int) $y($r['up']) : $y($r['up']));
+            $downPts[] = $x . ',' . $y($r['down']);
+            $upPts[]   = $x . ',' . $y($r['up']);
             $points[]  = [
                 'x'     => round(max(0.0, $x - $stepX / 2), 1),
                 'w'     => round($stepX, 1),

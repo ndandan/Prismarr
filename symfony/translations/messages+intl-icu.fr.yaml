@@ -734,7 +734,7 @@ admin:
       gluetun: 'VPN / port forwarding'
       tautulli: 'Activité Plex (via Tautulli)'
       unraid: 'Supervision du serveur Unraid — baie, disques, système, Docker, onduleur (Unraid 7+, clé API en lecture seule)'
-      unifi: 'Supervision réseau UniFi — débit WAN, clients, équipements (Network 9.0+, clé API en lecture seule)'
+      unifi: 'Supervision réseau UniFi — débit WAN, clients, équipements (Network 9.0+, clé API en lecture seule via Control Plane → Integrations)'
       houndarr: 'Recherche automatique du backlog *arr (widget en lecture seule)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Afficher dans le menu latéral

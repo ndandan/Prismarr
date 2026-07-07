@@ -201,25 +201,32 @@ local API key, configured in `/admin/settings` with kill switch, optional
 TLS-verify skip and Test connection). Non-admins never trigger an API call — the
 route and partial are both role-gated.
 
-- **WAN tile:** live download and upload bandwidth (polled every 2 s).
+- **WAN tile:** live download and upload bandwidth, client-polled every 30 s
+  against a 20 s server-side cache.
 - **Clients tile:** client count split by wired, wireless and guest networks.
-- **24-hour usage chart:** inline-SVG graph showing bandwidth over time,
-  refreshing every 2 s with a moving 24-hour window, populated via a
-  server-side-cached (20 s) statistics endpoint.
-- **Infrastructure row:** per-device status chip (gateway, switches, APs;
-  green running / orange degraded / grey unreachable), gateway CPU/RAM % with
-  threshold styling, all cached for 20 s.
+- **24-hour usage chart:** inline-SVG graph showing bandwidth over time with a
+  moving 24-hour window, built by a pure geometry helper (`NetworkUsageChart`)
+  from the same 20 s-cached overview.
+- **Infrastructure row:** per-device status chip (gateway, switches, APs) —
+  green when online, red when offline — plus gateway CPU/RAM %, all from the
+  same cached overview.
 
-The client caches statistics for 20 s, queries the network group independently
-so one failure doesn't blank the rest, fails open, and fail-fasts the remaining
-queries when the host itself is unreachable (~15 s → ~3 s first paint after an
-outage).
+`UnifiClient::overview()` fires one call per endpoint (health / hourly report /
+device list) so a missing or drifted endpoint degrades one block instead of
+blanking the widget, caches the combined result for 20 s, and fails open: a
+transport-level failure (connect refused/timed out, DNS) on the first call
+short-circuits the remaining two calls instead of paying their connect timeout
+too. Each call runs with an 8 s total / 3 s connect cURL timeout.
 
-**Files:** `symfony/src/Service/Media/UnifiClient.php`, `symfony/src/Dashboard/NetworkUsageChart.php`,
-HealthService and AdminSettingsController edits (UniFi chip registration, admin settings card),
-DashboardController edit (network section registration), dashboard templates
-(`templates/dashboard/sections/_network.html.twig`), translations
-(`translations/en/messages.en.yaml`, `translations/fr/messages.fr.yaml`).
+**Files:** `symfony/src/Service/Media/UnifiClient.php`,
+`symfony/src/Dashboard/NetworkUsageChart.php`, `symfony/src/Dashboard/DashboardSections.php`
+(section registration), `HealthService` and `AdminSettingsController` edits (UniFi
+chip, admin settings card, kill switch, test fields), `DashboardController` edit
+(network widget route), dashboard templates
+(`templates/dashboard/sections/_network.html.twig`,
+`templates/dashboard/_network.html.twig`, `templates/dashboard/index.html.twig`,
+`templates/admin/settings.html.twig`), `unifi.svg`, translations
+(`translations/messages+intl-icu.en.yaml`, `translations/messages+intl-icu.fr.yaml`), tests.
 
 ---
 
