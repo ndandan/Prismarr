@@ -9,7 +9,7 @@ final class DashboardSectionsTest extends TestCase
     public function testDefaultOrderIsTheNineKnownSections(): void
     {
         self::assertSame(
-            ['upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'trending', 'recent', 'server'],
+            ['upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'trending', 'recent', 'server', 'network'],
             DashboardSections::DEFAULT_ORDER,
         );
     }

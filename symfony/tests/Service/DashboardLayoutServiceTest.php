@@ -19,7 +19,7 @@ final class DashboardLayoutServiceTest extends TestCase
     {
         $r = $this->serviceFor([])->resolve();
         self::assertSame(
-            ['upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'trending', 'recent', 'server'],
+            ['upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'trending', 'recent', 'server', 'network'],
             array_column($r, 'key'),
         );
         foreach ($r as $row) {
@@ -32,7 +32,7 @@ final class DashboardLayoutServiceTest extends TestCase
         $r = $this->serviceFor(['dashboard_section_order' => 'recent,plex,upcoming'])->resolve();
         // Stored keys first, in stored order; the rest appended in default order.
         self::assertSame(
-            ['recent', 'plex', 'upcoming', 'requests', 'health', 'houndarr', 'watchlist', 'trending', 'server'],
+            ['recent', 'plex', 'upcoming', 'requests', 'health', 'houndarr', 'watchlist', 'trending', 'server', 'network'],
             array_column($r, 'key'),
         );
     }
@@ -42,7 +42,7 @@ final class DashboardLayoutServiceTest extends TestCase
         $r = $this->serviceFor(['dashboard_section_order' => 'trending,bogus,recent'])->resolve();
         $keys = array_column($r, 'key');
         self::assertNotContains('bogus', $keys);
-        self::assertSame(['trending', 'recent', 'upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'server'], $keys);
+        self::assertSame(['trending', 'recent', 'upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'server', 'network'], $keys);
     }
 
     public function testDuplicateKeysAreCollapsed(): void
@@ -70,17 +70,17 @@ final class DashboardLayoutServiceTest extends TestCase
         });
         $svc = new DashboardLayoutService($config);
 
-        // First resolve: uncached, should call get() once for order + 9 times for per-section visibility = 10 total.
+        // First resolve: uncached, should call get() once for order + 10 times for per-section visibility = 11 total.
         $svc->resolve();
-        self::assertSame(10, $calls, 'First resolve should call ConfigService::get() 10 times (1 order + 9 sections)');
+        self::assertSame(11, $calls, 'First resolve should call ConfigService::get() 11 times (1 order + 10 sections)');
 
         // Second resolve: cached, should not call get() again.
         $svc->resolve();
-        self::assertSame(10, $calls, 'Second resolve should use cache and not call ConfigService::get()');
+        self::assertSame(11, $calls, 'Second resolve should use cache and not call ConfigService::get()');
 
         // After reset: cache cleared, next resolve should call get() again.
         $svc->reset();
         $svc->resolve();
-        self::assertSame(20, $calls, 'After reset, resolve should call ConfigService::get() another 10 times');
+        self::assertSame(22, $calls, 'After reset, resolve should call ConfigService::get() another 11 times');
     }
 }
