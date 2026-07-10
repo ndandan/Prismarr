@@ -21,6 +21,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\Service\ResetInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
@@ -31,7 +32,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
  * whole page. Session 9c will wire the UI preferences (timezone, date
  * format, density…) into this template.
  */
-class DashboardController extends AbstractController
+class DashboardController extends AbstractController implements ResetInterface
 {
     private const UPCOMING_DAYS       = 7;
     private const MAX_REQUESTS        = 5;
@@ -78,6 +79,21 @@ class DashboardController extends AbstractController
         // constructors keep working.
         private readonly ?UnifiClient $unifi = null,
     ) {}
+
+    /**
+     * FrankenPHP worker mode — controllers autowired as services are shared
+     * singletons that survive across requests in a worker. Without this, the
+     * per-request `$moviesCache` / `$seriesCache` memo (primed by the first
+     * dashboard paint) would be served to every later request in the same
+     * worker, showing stale library data until the worker recycled. Symfony's
+     * services_resetter calls reset() between requests (auto-tagged
+     * kernel.reset via the ResetInterface autoconfiguration).
+     */
+    public function reset(): void
+    {
+        $this->moviesCache = null;
+        $this->seriesCache = null;
+    }
 
     /**
      * #30 — wrap an expensive upstream aggregate in a short shared cache.
