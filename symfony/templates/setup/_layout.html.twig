@@ -75,20 +75,17 @@
       box-shadow: 0 0 10px rgba(34,197,94,.4);
     }
     .status .status-dot { box-shadow: 0 0 6px var(--tblr-status-color, currentColor); }
-
-    /* ── Card ── */
-    .wizard-card {
-      background: #1c1c1c;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 12px;
-      padding: 2rem;
-      box-shadow: 0 2px 16px rgba(0,0,0,.35);
+    .btn-wizard-accent {
+      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+      border: 0;
+      box-shadow: 0 2px 10px rgba(99, 102, 241, .3);
+      transition: transform .15s ease, box-shadow .15s ease;
     }
-    [data-bs-theme="light"] .wizard-card {
-      background: #ffffff;
-      border-color: rgba(0,0,0,.08);
-      box-shadow: 0 1px 8px rgba(0,0,0,.06);
+    .btn-wizard-accent:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(99, 102, 241, .45);
     }
+    .btn-wizard-accent:active { transform: translateY(0); }
 
     .wizard-eyebrow {
       font-size: .72rem;
@@ -158,85 +155,6 @@
       margin-bottom: 1rem;
     }
 
-    /* ── Actions footer ── */
-    .wizard-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      margin-top: 2rem;
-      padding-top: 1.25rem;
-      border-top: 1px solid rgba(255,255,255,.06);
-    }
-    [data-bs-theme="light"] .wizard-actions { border-top-color: rgba(0,0,0,.07); }
-    .wizard-actions-right { display: flex; gap: .75rem; align-items: center; }
-
-    /* Bouton principal (Continuer / Enregistrer) */
-    .btn-wizard-next {
-      background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
-      border: none;
-      border-radius: 8px;
-      padding: .6rem 1.25rem;
-      font-weight: 500;
-      color: #fff;
-      font-size: .9rem;
-      box-shadow: 0 2px 10px rgba(99, 102, 241, 0.3);
-      transition: all .15s ease;
-    }
-    .btn-wizard-next:hover {
-      transform: translateY(-1px);
-      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.45);
-      color: #fff;
-    }
-    .btn-wizard-next:active { transform: translateY(0); }
-
-    /* Bouton secondaire (Précédent) — outline */
-    .btn-wizard-back {
-      background: transparent;
-      border: 1px solid rgba(255,255,255,.12);
-      border-radius: 8px;
-      padding: .55rem 1rem;
-      color: inherit;
-      font-size: .88rem;
-      font-weight: 500;
-      transition: all .15s ease;
-    }
-    .btn-wizard-back:hover {
-      background: rgba(255,255,255,.05);
-      border-color: rgba(255,255,255,.25);
-      color: inherit;
-    }
-    [data-bs-theme="light"] .btn-wizard-back { border-color: rgba(0,0,0,.15); }
-    [data-bs-theme="light"] .btn-wizard-back:hover { background: rgba(0,0,0,.03); border-color: rgba(0,0,0,.25); }
-
-    /* Bouton tertiaire (Passer) — texte souligné */
-    .btn-wizard-skip {
-      background: transparent;
-      border: none;
-      color: #9ca3af;
-      font-size: .85rem;
-      font-weight: 500;
-      text-decoration: underline;
-      text-underline-offset: 3px;
-      text-decoration-color: rgba(156,163,175,.35);
-      padding: .55rem .5rem;
-      transition: all .15s ease;
-    }
-    .btn-wizard-skip:hover {
-      color: #e4e4e7;
-      text-decoration-color: currentColor;
-    }
-    [data-bs-theme="light"] .btn-wizard-skip { color: #64748b; }
-    [data-bs-theme="light"] .btn-wizard-skip:hover { color: #1e293b; }
-
-    .alert { border-radius: 8px; font-size: .85rem; }
-    .alert-danger {
-      background: rgba(239, 68, 68, 0.1);
-      border: 1px solid rgba(239, 68, 68, 0.25);
-      color: #fca5a5;
-    }
-    [data-bs-theme="light"] .alert-danger { color: #991b1b; }
-
     .wizard-footer {
       text-align: center;
       margin-top: 2rem;
@@ -269,32 +187,6 @@
     .theme-toggle .icon-sun  { display: none; }
     [data-bs-theme="light"] .theme-toggle .icon-moon { display: none; }
     [data-bs-theme="light"] .theme-toggle .icon-sun  { display: inline; }
-
-    /* ── Service badge (récap) ── */
-    .service-row {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 1rem;
-      padding: .75rem 0;
-      border-bottom: 1px solid rgba(255,255,255,.05);
-    }
-    [data-bs-theme="light"] .service-row { border-bottom-color: rgba(0,0,0,.06); }
-    .service-row:last-child { border-bottom: 0; }
-    .service-row-name { font-weight: 500; }
-    .service-row-sub { font-size: .78rem; opacity: .55; margin-top: .1rem; }
-    .service-badge {
-      font-size: .7rem;
-      padding: .2rem .55rem;
-      border-radius: 999px;
-      font-weight: 500;
-      letter-spacing: .03em;
-      text-transform: uppercase;
-    }
-    .service-badge.ok { background: rgba(34,197,94,.15); color: #4ade80; border: 1px solid rgba(34,197,94,.3); }
-    .service-badge.skipped { background: rgba(255,255,255,.05); color: rgba(255,255,255,.5); border: 1px solid rgba(255,255,255,.08); }
-    [data-bs-theme="light"] .service-badge.ok { color: #16a34a; }
-    [data-bs-theme="light"] .service-badge.skipped { background: rgba(0,0,0,.04); color: rgba(0,0,0,.5); border-color: rgba(0,0,0,.08); }
 
     /* ── Welcome screen ── */
     .welcome-hero {
@@ -393,8 +285,10 @@
         </div>
       {% endif %}
 
-      <div class="wizard-card">
-        {% block wizard_body %}{% endblock %}
+      <div class="card">
+        <div class="card-body">
+          {% block wizard_body %}{% endblock %}
+        </div>
       </div>
 
       <div class="wizard-footer">

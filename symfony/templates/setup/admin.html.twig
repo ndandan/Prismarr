@@ -55,9 +55,9 @@
       </div>
     </div>
 
-    <div class="wizard-actions">
-      <a href="{{ path('app_setup_welcome') }}" class="btn-wizard-back">{{ 'setup.step.admin.back'|trans }}</a>
-      <button type="submit" class="btn-wizard-next">
+    <div class="d-flex align-items-center justify-content-between gap-3 mt-4 pt-4 border-top">
+      <a href="{{ path('app_setup_welcome') }}" class="btn btn-outline-secondary">{{ 'setup.step.admin.back'|trans }}</a>
+      <button type="submit" class="btn btn-primary btn-wizard-accent">
         {{ 'setup.step.admin.cta'|trans }}
       </button>
     </div>

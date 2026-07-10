@@ -181,11 +181,11 @@
       </div>
     </div>
 
-    <div class="wizard-actions">
-      <button type="submit" name="_action" value="back" class="btn-wizard-back" formnovalidate>{{ 'setup.step.common.back'|trans }}</button>
-      <div class="wizard-actions-right">
-        <button type="submit" name="_action" value="skip" class="btn-wizard-skip" formnovalidate>{{ 'setup.step.common.skip'|trans }}</button>
-        <button type="submit" name="_action" value="save" class="btn-wizard-next">{{ 'setup.step.common.save_next'|trans }}</button>
+    <div class="d-flex align-items-center justify-content-between gap-3 mt-4 pt-4 border-top">
+      <button type="submit" name="_action" value="back" class="btn btn-outline-secondary" formnovalidate>{{ 'setup.step.common.back'|trans }}</button>
+      <div class="d-flex align-items-center gap-2">
+        <button type="submit" name="_action" value="skip" class="btn btn-link text-secondary" formnovalidate>{{ 'setup.step.common.skip'|trans }}</button>
+        <button type="submit" name="_action" value="save" class="btn btn-primary btn-wizard-accent">{{ 'setup.step.common.save_next'|trans }}</button>
       </div>
     </div>
   </form>
