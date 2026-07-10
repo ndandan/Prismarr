@@ -13,6 +13,7 @@ use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * Tests third-party service availability.
@@ -26,7 +27,7 @@ use App\Service\Media\Usenet\SabnzbdClient;
  *    the admin "Test connection" button can return an actionable hint
  *    without leaking internal stack traces.
  */
-class HealthService
+class HealthService implements ResetInterface
 {
     private const CACHE_TTL = 10;
 
@@ -275,6 +276,18 @@ class HealthService
             unset($this->statusCache[$service]);
             $this->serviceHealthCache?->clear($service);
         }
+    }
+
+    /**
+     * FrankenPHP worker mode — Symfony's services_resetter calls reset()
+     * between requests (this service is auto-tagged kernel.reset via the
+     * ResetInterface autoconfiguration). Drop the per-request in-process
+     * isHealthy() memo so one request's health verdicts can't bleed into the
+     * next; this also removes a latent staleness edge in classic mode.
+     */
+    public function reset(): void
+    {
+        $this->statusCache = [];
     }
 
     /**
