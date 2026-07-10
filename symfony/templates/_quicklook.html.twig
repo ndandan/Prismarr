@@ -74,6 +74,16 @@
   .ql-wl { cursor: pointer; gap: .35rem; }
   .ql-wl.is-active { border-color: #f59e0b; color: #f59e0b; }
   .ql-wl.is-active:hover { border-color: #f59e0b; color: #f59e0b; }
+
+  /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
+     Floor sub-11px text at 11px (.6875rem) below the lg breakpoint;
+     desktop (≥992px) keeps the original sizes. */
+  @media (max-width: 991.98px) {
+    .ql-badge,
+    .ql-date-label,
+    .ql-airstatus,
+    .ql-cast-name { font-size: .6875rem; }
+  }
 </style>
 
 {% include 'dashboard/_quicklook_modal.html.twig' with {} only %}

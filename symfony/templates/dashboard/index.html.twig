@@ -461,6 +461,30 @@
   .dash-skel-line { height: .7rem; width: 80%; margin-top: .45rem; border-radius: .25rem; }
   @keyframes dash-shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
 
+  /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ────
+     Floor sub-11px dashboard text at 11px (.6875rem) below the lg
+     breakpoint. Same selectors as above so specificity matches; desktop
+     (≥992px) keeps the original sizes. */
+  @media (max-width: 991.98px) {
+    .mini-cal-dow,
+    .mini-cal-more,
+    .mini-cal-item-type,
+    .mini-cal-item-meta,
+    .dash-date-time,
+    .dash-badge-inline,
+    .poster-tile-sub,
+    .poster-tile-badge,
+    .service-chip-state { font-size: .6875rem; }
+  }
+
+  /* ── Tap targets (responsive audit 2026-06-29) ────────────────────────
+     The small header/section arrow links measure ~26px tall; on touch
+     devices give them a ≥44px hit area. Coarse-pointer only, desktop
+     rendering unchanged. */
+  @media (pointer: coarse) {
+    .dash-action-btn,
+    .row-section-link { min-height: 44px; padding-top: .3rem; padding-bottom: .3rem; }
+  }
 </style>
 {% include 'dashboard/_plex_styles.html.twig' %}
 {% endblock %}

@@ -136,6 +136,24 @@
     .explorer-layout { flex-direction: column !important; }
     .explorer-sidebar { width: 100% !important; }
   }
+
+  /* ── Touch devices: the watchlist star is hover-only and unreachable on
+     touch (responsive audit 2026-06-29) — keep it always visible with a
+     bigger hit area. Desktop hover behaviour unchanged. */
+  @media (hover: none) {
+    .ex-card .wl-star { opacity: 1; width: 32px; height: 32px; }
+    .ex-card .wl-star svg { width: 16px; height: 16px; }
+  }
+
+  /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
+     Floor sub-11px text at 11px (.6875rem) below the lg breakpoint;
+     desktop (≥992px) keeps the original sizes. */
+  @media (max-width: 991.98px) {
+    .ex-card .overlay .sub,
+    .ex-card .badge-type,
+    .ex-card .badge-lib,
+    .ex-card .badge-vote { font-size: .6875rem; }
+  }
 </style>
 
 <div class="container-xl">
