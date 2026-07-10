@@ -244,6 +244,24 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
    la page. Donne l'impression que ça réagit instantanément même sur un full
    reload de 200-500ms. */
 .library-loading { opacity: 0.5; transition: opacity 120ms ease-out; pointer-events: none; }
+
+/* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
+   Floor sub-11px text at 11px (.6875rem) below the lg breakpoint. Kept last
+   in this block so it wins the cascade at equal specificity; desktop
+   (≥992px) keeps the original sizes. Note: the hover-info overlay stays
+   hover-only here — every action it carries is also reachable by tapping
+   the card (detail modal), so touch loses nothing. */
+@media (max-width: 991.98px) {
+  .media-card .card-year,
+  .media-card .quality-badge,
+  .media-grid.view-extended .media-card .no-poster,
+  .media-card .hover-info .h-year,
+  .media-card .hover-info .h-overview,
+  .media-card .hover-info .h-badges .badge,
+  .shelf-scroll .shelf-card .shelf-title,
+  .cast-card .cast-role,
+  .film-genre-badge { font-size: .6875rem; }
+}
 </style>
 {% endblock %}
 

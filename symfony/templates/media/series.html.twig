@@ -234,6 +234,25 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
    la page. Donne l'impression que ça réagit instantanément même sur un full
    reload de 200-500ms. */
 .library-loading { opacity: 0.5; transition: opacity 120ms ease-out; pointer-events: none; }
+
+/* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
+   Floor sub-11px text at 11px (.6875rem) below the lg breakpoint. Kept last
+   in this block so it wins the cascade at equal specificity; desktop
+   (≥992px) keeps the original sizes. Note: the hover-info overlay stays
+   hover-only here — every action it carries is also reachable by tapping
+   the card (detail modal), so touch loses nothing. */
+@media (max-width: 991.98px) {
+  .media-card .card-sub,
+  .media-card .type-badge,
+  .media-card .hover-info .h-year,
+  .media-card .hover-info .h-overview,
+  .media-card .hover-info .h-badges .badge,
+  .media-grid.view-table .media-card .no-poster,
+  .media-grid.view-extended .media-card .no-poster,
+  .media-grid.view-compact .media-card .card-title-text,
+  .media-grid.view-compact .media-card .card-sub,
+  .shelf-scroll .shelf-card .shelf-title { font-size: .6875rem; }
+}
 </style>
 {% endblock %}
 
