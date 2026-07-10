@@ -586,27 +586,12 @@
     .row-section-link { min-height: 44px; padding-top: .3rem; padding-bottom: .3rem; }
   }
 
-  /* ── Tablet 2-column sections (responsive audit 2026-06-29) ───────────
-     At tablet widths (768–1199px) the dashboard rendered one narrow column
-     of full-width sections. The sections container becomes a 2-col grid;
-     everything spans both columns by default (poster rows and the 7-day
-     mini-calendar need full width), and only the narrow stat-tile-ish
-     sections (health chips, Houndarr stats, UniFi widget — all auto-fit
-     grids that live happily at ~half width) opt in to a single column.
-     Order is preserved (no `dense` packing): a lone half section simply
-     leaves the second column empty for that row. */
-  @media (min-width: 768px) and (max-width: 1199.98px) {
-    .dashboard-scope .container-xl {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      column-gap: 1rem;
-      align-items: start;
-    }
-    .dashboard-scope .container-xl > * { grid-column: 1 / -1; min-width: 0; }
-    .dashboard-scope .container-xl > [data-section-key="health"],
-    .dashboard-scope .container-xl > [data-section-key="houndarr"],
-    .dashboard-scope .container-xl > [data-section-key="network"] { grid-column: auto / span 1; }
-  }
+  /* Tablet 2-column dashboard was tried (responsive audit 2026-06-29) but
+     reverted after live verification: dashboard section order is
+     admin-configurable, so a half-width section (health / houndarr / network)
+     with no adjacent half-width neighbour left a large empty column beside it
+     — e.g. Services health next to an empty cell — which looked worse than
+     the single-column stack. Sections stay full-width at every breakpoint. */
 
 </style>
 {% include 'dashboard/_plex_styles.html.twig' %}
