@@ -1,6 +1,7 @@
 {% extends 'base.html.twig' %}
 
 {% import '_icons.html.twig' as ico %}
+{% import '_form.html.twig' as forms %}
 
 {% block title %}{{ 'admin.page.title'|trans }}{% endblock %}
 
@@ -193,22 +194,6 @@
     font-size: .78rem; font-weight: 500; letter-spacing: .02em; opacity: .75;
     margin-bottom: .3rem;
   }
-
-  .secret-wrapper { position: relative; }
-  .secret-wrapper input {
-    padding-right: 2.4rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
-    font-size: .85rem;
-  }
-  .secret-toggle {
-    position: absolute; right: .55rem; top: 50%; transform: translateY(-50%);
-    background: transparent; border: 0; padding: 0;
-    cursor: pointer; color: inherit; opacity: .5;
-    display: inline-flex; align-items: center;
-    transition: opacity .15s ease;
-  }
-  .secret-toggle:hover { opacity: .95; }
-  .secret-toggle svg { width: 16px; height: 16px; }
 
   /* "Clear" button next to qBit user/password (issue #10 — reverse-proxy
      setups need to deliberately wipe these credentials; the default
@@ -532,25 +517,7 @@
                     <div class="field-row" data-field-key="{{ field.key }}">
                       <label for="{{ field.key }}">{{ field.label|trans }}</label>
                       {% if field.type == 'password' %}
-                        <div class="secret-wrapper">
-                          <input type="password"
-                                 id="{{ field.key }}"
-                                 name="{{ field.key }}"
-                                 class="form-control"
-                                 value="{{ values[field.key] ?? '' }}"
-                                 autocomplete="off"
-                                 spellcheck="false"
-                                 {% if field.placeholder is defined %}placeholder="{{ field.placeholder }}"{% endif %}/>
-                          <button type="button" class="secret-toggle" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}"
-                                  data-toggle-for="{{ field.key }}">
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
-                                 fill="none" stroke="currentColor" stroke-width="2"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                              <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
-                              <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
-                            </svg>
-                          </button>
-                        </div>
+                        {{ forms.secret_input(field.key, field.key, { value: values[field.key] ?? '', placeholder: field.placeholder ?? null }) }}
                       {% elseif field.type == 'checkbox' %}
                         {# Unchecked box isn't POSTed → saveSubmitted stores
                            null (off). Checked → '1'. #}
@@ -1282,7 +1249,7 @@
       // Turbo-safe: IIFE + var + .then()
 
       // ── Toggle secret visibility ────────────────────────────────────
-      document.querySelectorAll('.secret-toggle').forEach(function (btn) {
+      document.querySelectorAll('[data-toggle-for]').forEach(function (btn) {
         btn.onclick = function () {
           var input = document.getElementById(btn.dataset.toggleFor);
           if (!input) return;

@@ -5,7 +5,7 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-07-05 (covers 2026-06-13 → 2026-07-04).*
+*Last updated: 2026-07-10 (covers 2026-06-13 → 2026-07-10).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
@@ -227,6 +227,34 @@ chip, admin settings card, kill switch, test fields), `DashboardController` edit
 `templates/dashboard/_network.html.twig`, `templates/dashboard/index.html.twig`,
 `templates/admin/settings.html.twig`), `unifi.svg`, translations
 (`translations/messages+intl-icu.en.yaml`, `translations/messages+intl-icu.fr.yaml`), tests.
+
+### Setup wizard on stock Tabler primitives (2026-07-10)
+
+The first-run wizard (`templates/setup/`) carried its own mini design system —
+custom stepper, buttons, card, badges, test-result dots, secret toggles and
+section headers. All of it was consolidated onto the stock Tabler components
+the rest of the app already loads:
+
+- `.wizard-steps` → Tabler `.steps.steps-counter` (plus one accent rule so
+  completed steps render green; a skipped step's predecessor renders indigo via
+  stock Tabler sibling selectors — deliberate and informative).
+- `.test-result` dots → `.status` pills; `.btn-wizard-*` → stock `.btn`
+  variants (the accent gradient survives as `.btn-wizard-accent`);
+  `.wizard-card` → `.card`; service recap rows → list-group + badges.
+- Secret fields → `input-group` reveal toggle driven by a `[data-toggle-for]`
+  JS selector; section headers → `.hr-text.hr-text-left`; eyebrow text →
+  `.subheader`; all bespoke form-control overrides deleted.
+
+Net **−268 lines of custom CSS**; every remaining flourish lives in a single
+commented "Prismarr accent layer" block in `setup/_layout.html.twig`. One
+Tabler gotcha worth keeping on record: Tabler ships **two** unrelated `.steps`
+components, and the doc-steps one bleeds `margin/padding/border-left` onto the
+stepper — those are explicitly zeroed. Behaviour unchanged: PHPUnit 794/794,
+`lint:twig` clean, and all 7 wizard steps live-verified on a fresh empty-DB
+container in dark, light and 390 px widths.
+
+**Files:** the eight `symfony/templates/setup/*.html.twig` templates (merge
+`968da85`, 4 commits).
 
 ---
 

@@ -1,4 +1,5 @@
 {% extends 'setup/_layout.html.twig' %}
+{% import '_form.html.twig' as forms %}
 
 {% block title %}{{ 'setup.stepper.admin'|trans }} - Prismarr{% endblock %}
 
@@ -29,33 +30,11 @@
     <div class="row g-3">
       <div class="col-md-6">
         <label class="form-label" for="password">{{ 'setup.step.admin.password'|trans }} <span class="text-muted">{{ 'setup.step.admin.password_hint'|trans }}</span></label>
-        <div class="input-group input-group-flat">
-          <input type="password" id="password" name="password" class="form-control"
-                 placeholder="••••••••" autocomplete="new-password" required minlength="8"/>
-          <span class="input-group-text">
-            <button type="button" class="btn btn-link link-secondary p-0 border-0" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="password">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
-                <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
-              </svg>
-            </button>
-          </span>
-        </div>
+        {{ forms.secret_input('password', 'password', { placeholder: '••••••••', autocomplete: 'new-password', required: true, minlength: 8 }) }}
       </div>
       <div class="col-md-6">
         <label class="form-label" for="password_confirm">{{ 'setup.step.admin.password_confirm'|trans }}</label>
-        <div class="input-group input-group-flat">
-          <input type="password" id="password_confirm" name="password_confirm" class="form-control"
-                 placeholder="••••••••" autocomplete="new-password" required minlength="8"/>
-          <span class="input-group-text">
-            <button type="button" class="btn btn-link link-secondary p-0 border-0" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="password_confirm">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
-                <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
-              </svg>
-            </button>
-          </span>
-        </div>
+        {{ forms.secret_input('password_confirm', 'password_confirm', { placeholder: '••••••••', autocomplete: 'new-password', required: true, minlength: 8 }) }}
       </div>
     </div>
 
