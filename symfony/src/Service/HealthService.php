@@ -19,6 +19,7 @@ use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\Service\ResetInterface;
 
 /**
  * Tests third-party service availability.
@@ -32,7 +33,7 @@ use Symfony\Contracts\Cache\ItemInterface;
  *    the admin "Test connection" button can return an actionable hint
  *    without leaking internal stack traces.
  */
-class HealthService
+class HealthService implements ResetInterface
 {
     private const CACHE_TTL = 10;
 
@@ -426,6 +427,21 @@ class HealthService
             unset($this->statusCache[$service]);
             $this->serviceHealthCache?->clear($service);
         }
+    }
+
+    /**
+     * FrankenPHP worker mode — Symfony's services_resetter calls reset()
+     * between requests (this service is auto-tagged kernel.reset via the
+     * ResetInterface autoconfiguration). Drop the per-request in-process
+     * memo so one request's health verdicts and generation token can't bleed
+     * into the next. The cross-request shared pool (cache.app) is left intact
+     * on purpose — that's the whole point of the shared 10 s cache; it self-
+     * expires by TTL and rotates via invalidate() on reconfiguration.
+     */
+    public function reset(): void
+    {
+        $this->statusCache = [];
+        $this->generation  = null;
     }
 
     /**
