@@ -17,12 +17,12 @@
              value="{{ values.tmdb_api_key }}"
              autocomplete="off"/>
       <div class="form-text mt-1">{{ 'setup.step.tmdb.api_key_hint'|trans }}</div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="tmdb"
                 data-test-csrf="{{ csrf_token('setup_test_tmdb') }}"
                 data-test-fields="tmdb_api_key">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="tmdb" aria-live="polite"></span>
+        <span data-test-result-for="tmdb" aria-live="polite"></span>
       </div>
     </div>
 

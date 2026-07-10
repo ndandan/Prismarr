@@ -48,12 +48,12 @@
           </small>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="qbittorrent"
                 data-test-csrf="{{ csrf_token('setup_test_qbittorrent') }}"
                 data-test-fields="qbittorrent_url,qbittorrent_user,qbittorrent_password">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="qbittorrent" aria-live="polite"></span>
+        <span data-test-result-for="qbittorrent" aria-live="polite"></span>
       </div>
     </div>
 
@@ -85,12 +85,12 @@
           </small>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="deluge"
                 data-test-csrf="{{ csrf_token('setup_test_deluge') }}"
                 data-test-fields="deluge_url,deluge_password">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="deluge" aria-live="polite"></span>
+        <span data-test-result-for="deluge" aria-live="polite"></span>
       </div>
     </div>
 
@@ -117,12 +117,12 @@
           </div>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="sabnzbd"
                 data-test-csrf="{{ csrf_token('setup_test_sabnzbd') }}"
                 data-test-fields="sabnzbd_url,sabnzbd_api_key">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="sabnzbd" aria-live="polite"></span>
+        <span data-test-result-for="sabnzbd" aria-live="polite"></span>
       </div>
     </div>
 
@@ -154,12 +154,12 @@
           </div>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="nzbget"
                 data-test-csrf="{{ csrf_token('setup_test_nzbget') }}"
                 data-test-fields="nzbget_url,nzbget_user,nzbget_password">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="nzbget" aria-live="polite"></span>
+        <span data-test-result-for="nzbget" aria-live="polite"></span>
       </div>
     </div>
 

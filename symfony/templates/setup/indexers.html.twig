@@ -27,12 +27,12 @@
                  placeholder="X-Api-Key" value="{{ values.prowlarr_api_key }}"/>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="prowlarr"
                 data-test-csrf="{{ csrf_token('setup_test_prowlarr') }}"
                 data-test-fields="prowlarr_url,prowlarr_api_key">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="prowlarr" aria-live="polite"></span>
+        <span data-test-result-for="prowlarr" aria-live="polite"></span>
       </div>
     </div>
 
@@ -51,12 +51,12 @@
                  placeholder="X-Api-Key" value="{{ values.jellyseerr_api_key }}"/>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="jellyseerr"
                 data-test-csrf="{{ csrf_token('setup_test_jellyseerr') }}"
                 data-test-fields="jellyseerr_url,jellyseerr_api_key">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="jellyseerr" aria-live="polite"></span>
+        <span data-test-result-for="jellyseerr" aria-live="polite"></span>
       </div>
     </div>
 

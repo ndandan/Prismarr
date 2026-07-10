@@ -31,12 +31,12 @@
                  placeholder="X-Api-Key" value="{{ values.radarr_api_key }}"/>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="radarr"
                 data-test-csrf="{{ csrf_token('setup_test_radarr') }}"
                 data-test-fields="radarr_url,radarr_api_key">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="radarr" aria-live="polite"></span>
+        <span data-test-result-for="radarr" aria-live="polite"></span>
       </div>
     </div>
 
@@ -55,12 +55,12 @@
                  placeholder="X-Api-Key" value="{{ values.sonarr_api_key }}"/>
         </div>
       </div>
-      <div class="test-row">
+      <div class="d-flex align-items-center gap-2 mt-2 flex-wrap">
         <button type="button" class="btn btn-sm btn-outline-primary"
                 data-test-service="sonarr"
                 data-test-csrf="{{ csrf_token('setup_test_sonarr') }}"
                 data-test-fields="sonarr_url,sonarr_api_key">{{ 'setup.test.button'|trans }}</button>
-        <span class="test-result" data-test-result-for="sonarr" aria-live="polite"></span>
+        <span data-test-result-for="sonarr" aria-live="polite"></span>
       </div>
     </div>
 
