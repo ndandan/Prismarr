@@ -262,6 +262,18 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   .cast-card .cast-role,
   .film-genre-badge { font-size: .6875rem; }
 }
+/* ── Mobile filter drawer (responsive offcanvas) ──
+   At ≥992px Bootstrap renders .offcanvas-lg static/inline. It forces the
+   element transparent and the body to flex/no-padding/overflow-visible and
+   hides the header — undoing the .card look. Restore the desktop card chrome
+   at equal-or-higher specificity so the ≥992px toolbar is unchanged. */
+@media (min-width: 992px) {
+  .films-toolbar-filters.offcanvas-lg { background-color: var(--tblr-bg-surface, var(--tblr-card-bg)) !important; border: var(--tblr-border-width, 1px) solid var(--tblr-border-color) !important; }
+  .films-toolbar-filters.offcanvas-lg .offcanvas-body { display: block !important; padding: .5rem 1rem !important; overflow: visible !important; }
+}
+@media (max-width: 991.98px) {
+  .films-toolbar-filters.offcanvas-lg { border: 0; border-radius: 0; height: auto !important; }
+}
 </style>
 {% endblock %}
 
@@ -320,10 +332,15 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
      - Right card: view modes (row 1) + actions refresh / RSS / select / + Add (row 2)
    The right card sizes to its content, the left one stretches to fill the rest.
    On mobile (<1200px) they stack vertically via the xl breakpoint. #}
+{% set filter_count = (query.status != 'all' ? 1 : 0) + (query.q != '' ? 1 : 0) + (query.quality != '' ? 1 : 0) + (query.genre != '' ? 1 : 0) + (query.language != '' ? 1 : 0) + (query.sort != 'title-asc' ? 1 : 0) %}
 <div class="row g-2 mb-3 align-items-stretch films-toolbar">
   <div class="col-12 col-xl-9">
-    <div class="card h-100 films-toolbar-filters">
-      <div class="card-body py-2">
+    <div class="card h-100 films-toolbar-filters offcanvas-lg offcanvas-start" tabindex="-1" id="films-filters-drawer" aria-labelledby="films-filters-drawer-label">
+      <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="films-filters-drawer-label">{{ 'media.films.filters.drawer_title'|trans }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#films-filters-drawer" aria-label="Close"></button>
+      </div>
+      <div class="card-body offcanvas-body py-2">
       <form method="get" id="films-filter-form" action="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="d-flex flex-column gap-2">
         <input type="hidden" name="status" id="films-filter-status" value="{{ query.status }}">
         {# Row 1: search input (fixed width) + 5 status buttons sharing the remaining width via flex-fill. #}
@@ -382,6 +399,10 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
           <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-sm btn-ghost-secondary ms-auto">{{ 'media.films.pagination.reset_filters'|trans }}</a>
         </div>
       {% endif %}
+      <div class="films-drawer-footer d-lg-none d-flex gap-2 justify-content-end mt-2 pt-2 border-top">
+        <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-ghost-secondary">{{ 'media.films.pagination.reset_filters'|trans }}</a>
+        <button type="button" class="btn btn-primary" id="films-filters-apply">{{ 'media.films.filters.apply'|trans }}</button>
+      </div>
       </div>
     </div>
   </div>
@@ -389,6 +410,11 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     <div class="card h-100 films-toolbar-actions">
       <div class="card-body py-2">
       <div class="d-flex flex-column gap-2 align-items-stretch">
+        <button type="button" class="btn btn-sm btn-outline-secondary d-lg-none" data-bs-toggle="offcanvas" data-bs-target="#films-filters-drawer">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>
+          {{ 'media.films.filters.open'|trans }}
+          {% if filter_count > 0 %}<span class="badge bg-primary ms-1" id="films-filters-count">{{ filter_count }}</span>{% endif %}
+        </button>
         <div class="d-flex gap-1" id="view-mode-btns">
           <button type="button" class="btn btn-sm btn-secondary view-btn flex-fill active" data-view="grid" title="{{ 'media.films.view.grid'|trans }}">
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
@@ -1364,7 +1390,14 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   var statusInput  = document.getElementById('films-filter-status');
   var filmsShelfBuilt = false;
 
+  // Below lg the filters live in an offcanvas drawer: auto-submit-on-change is
+  // suppressed (it would navigate and destroy the open drawer). The Apply
+  // button flips _applyingFilters and calls submitFiltersForm() once.
+  var _filtersMobile = window.matchMedia('(max-width: 991.98px)');
+  var _applyingFilters = false;
+
   function submitFiltersForm() {
+    if (_filtersMobile.matches && !_applyingFilters) return;
     if (!filterForm) return;
     if (typeof filterForm.requestSubmit === 'function') {
       filterForm.requestSubmit();
@@ -1385,6 +1418,13 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   ['filter-quality', 'filter-genre', 'filter-language', 'sort-select'].forEach(function(id) {
     var el = document.getElementById(id);
     if (el) el.addEventListener('change', submitFiltersForm);
+  });
+
+  // Drawer Apply (mobile only): defer the single navigation to here.
+  var _filmsApplyBtn = document.getElementById('films-filters-apply');
+  if (_filmsApplyBtn) _filmsApplyBtn.addEventListener('click', function() {
+    _applyingFilters = true;
+    submitFiltersForm();
   });
 
   // Debounced text search: submit after 300ms of inactivity so typing
