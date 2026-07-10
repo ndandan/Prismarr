@@ -266,7 +266,8 @@
         // Reflect "pending" state with an aria-live update for screen readers.
         btn.disabled = true;
         resultEl.className = 'status status-secondary';
-        resultEl.innerHTML = '<span class="status-dot status-dot-animated"></span><span>' + TEST_LABELS.pending + '</span>';
+        resultEl.innerHTML = '<span class="status-dot status-dot-animated"></span><span></span>';
+        resultEl.querySelector('span:last-child').textContent = TEST_LABELS.pending;
 
         var fd = new FormData();
         fd.append('_csrf_token', csrf);
