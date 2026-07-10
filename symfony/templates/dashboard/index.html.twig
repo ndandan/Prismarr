@@ -550,6 +550,49 @@
   .section-edit-overlay button { background: rgba(0,0,0,.7); color: #fff; border: 0; border-radius: 6px; padding: .25rem .5rem; font-size: .72rem; cursor: pointer; }
   .dashboard-scope:not(.is-editing) .section-edit-overlay { display: none; }
 
+  /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ────
+     Floor sub-11px dashboard text at 11px (.6875rem) below the lg
+     breakpoint. Same selectors as above so specificity matches; desktop
+     (≥992px) keeps the original sizes. */
+  @media (max-width: 991.98px) {
+    .mini-cal-dow,
+    .mini-cal-more,
+    .mini-cal-item-type,
+    .mini-cal-item-meta,
+    .dash-date-time,
+    .dash-badge-inline,
+    .poster-tile-sub,
+    .poster-tile-badge,
+    .service-chip-state,
+    .server-tile-sub,
+    .server-state-badge,
+    .server-gauge-label,
+    .server-gauge-value,
+    .server-chip-muted,
+    .server-chip-ok,
+    .server-chip-ko,
+    .server-disk-name,
+    .server-disk-sub,
+    .net-chart-axis,
+    .net-legend { font-size: .6875rem; }
+  }
+
+  /* ── Tap targets (responsive audit 2026-06-29) ────────────────────────
+     The small header/section arrow links measure ~26px tall; on touch
+     devices give them a ≥44px hit area. Coarse-pointer only, desktop
+     rendering unchanged. */
+  @media (pointer: coarse) {
+    .dash-action-btn,
+    .row-section-link { min-height: 44px; padding-top: .3rem; padding-bottom: .3rem; }
+  }
+
+  /* Tablet 2-column dashboard was tried (responsive audit 2026-06-29) but
+     reverted after live verification: dashboard section order is
+     admin-configurable, so a half-width section (health / houndarr / network)
+     with no adjacent half-width neighbour left a large empty column beside it
+     — e.g. Services health next to an empty cell — which looked worse than
+     the single-column stack. Sections stay full-width at every breakpoint. */
+
 </style>
 {% include 'dashboard/_plex_styles.html.twig' %}
 {% endblock %}

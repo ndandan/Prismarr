@@ -180,6 +180,28 @@
     :root[data-bs-theme="light"] .badge.bg-secondary-lt { background: rgba(0,0,0,.06) !important; color: #555 !important; }
     :root[data-bs-theme="light"] .text-secondary { color: #5a5a6e !important; }
     :root[data-bs-theme="light"] .btn-ghost-secondary:hover { background: rgba(0,0,0,.05) !important; }
+
+    /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
+       Sub-12px text (clusters at 8.8/9.6/10.4px) is illegible on phones and
+       tablets. Below the lg breakpoint we floor the shared offenders at 11px
+       (.6875rem). Hierarchy is preserved — floored text stays the smallest on
+       the page — and desktop (≥992px) is untouched. Per-page style blocks
+       carry the same floor for their local classes. */
+    @media (max-width: 991.98px) {
+      .sidebar-dl-badge,
+      .prismarr-search-section,
+      .prismarr-search-section .count { font-size: .6875rem; }
+      /* Badges/helper text sized via inline style="font-size:.5–.68rem"
+         (Twig + JS-built markup across the app): an attribute-substring
+         match is the only CSS-only way to floor inline styles. Only values
+         starting with ".5"/".6"/"0.5"/"0.6" match — larger sizes such as
+         "1.5rem" contain "1.5", never ":.5", and are unaffected. */
+      [style*="font-size:.5"], [style*="font-size:.6"],
+      [style*="font-size: .5"], [style*="font-size: .6"],
+      [style*="font-size:0.5"], [style*="font-size:0.6"] {
+        font-size: .6875rem !important;
+      }
+    }
   </style>
 
   {# Modal and backdrop cleanup — in <head> to survive Turbo navigations #}
@@ -644,6 +666,31 @@
     .navbar-vertical ~ .page-wrapper,
     .navbar-vertical ~ .navbar {
       transition: margin-left 0.2s ease;
+    }
+
+    /* ── Tap targets on touch devices (responsive audit 2026-06-29) ────
+       Secondary controls measured 22–33px (nav toggle 32px, topbar icon
+       buttons, search clear 22px) against the 44px guideline. Coarse-pointer
+       only, so desktop rendering is completely unchanged. */
+    @media (pointer: coarse) {
+      .btn-icon,
+      .navbar-toggler {
+        min-width: 44px; min-height: 44px;
+        display: inline-flex; align-items: center; justify-content: center;
+      }
+      .prismarr-search-clear { width: 32px; height: 32px; right: .45rem; }
+      .prismarr-search-recent .clear-x { width: 32px; height: 32px; }
+    }
+
+    /* ── Phone table density (responsive audit 2026-06-29) ─────────────
+       Library sub-pages (history/queue…) keep their .table-responsive
+       sideways scroll, but slightly tighter type/padding lets noticeably
+       more columns fit on a phone. 13px stays above the 11px readability
+       floor. */
+    @media (max-width: 575.98px) {
+      .table-responsive > .table { font-size: .8125rem; }
+      .table-responsive > .table th,
+      .table-responsive > .table td { padding: .4rem .5rem; }
     }
   </style>
 

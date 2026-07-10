@@ -148,6 +148,33 @@
   .media-card[data-tmdb-id] .wl-star.in-wl:hover { background: rgba(245,158,11,1); }
   .media-card[data-tmdb-id] .wl-star:not(.in-wl):hover { background: rgba(245,158,11,.6); }
 
+  /* ── Touch devices: hover-only actions made reachable (audit 2026-06-29)
+     Details/Add and the watchlist star only appear via :hover, which never
+     fires on touch. On hover-less devices the hover-info becomes a compact
+     persistent bottom bar (not the full-cover overlay) carrying title/year
+     + actions, replacing the plain card-overlay, and the star stays
+     visible. CSS-only; desktop hover behaviour unchanged. */
+  @media (hover: none) {
+    .media-card[data-tmdb-id] .hover-info {
+      opacity: 1; pointer-events: auto;
+      top: auto; /* bottom bar instead of inset:0 full cover */
+      background: linear-gradient(transparent, rgba(0,0,0,.88) 35%);
+      padding-top: 1.4rem;
+    }
+    .media-card[data-tmdb-id] .hover-info .h-overview { display: none; }
+    .media-card[data-tmdb-id] .card-overlay { display: none; } /* title/year now in hover-info */
+    .media-card[data-tmdb-id] .wl-star { opacity: 1; }
+    /* Tap targets: the 24px star and the tiny action buttons get a larger
+       hit area on coarse pointers. */
+    .media-card[data-tmdb-id] .wl-star { width: 32px; height: 32px; }
+    .media-card[data-tmdb-id] .wl-star svg { width: 16px; height: 16px; }
+    .media-card[data-tmdb-id] .hover-info .h-actions .btn { min-height: 32px; }
+    /* The compact "Vu récemment" strip (100px tiles) has no room for the
+       persistent bar — keep its plain overlay there. */
+    #tmdb-recent-row .media-card[data-tmdb-id] .hover-info { display: none; }
+    #tmdb-recent-row .media-card[data-tmdb-id] .card-overlay { display: block; }
+  }
+
   /* Overrides contextuels */
   .tmdb-results-grid .media-card[data-tmdb-id] { flex: none; width: auto; }
   .td-similar-row .media-card[data-tmdb-id] { flex: 0 0 110px; width: 110px; }
@@ -434,6 +461,29 @@
   }
   .td-video-btn:hover { background: var(--tblr-primary); color: white; border-color: var(--tblr-primary); }
   .td-video-btn.active { background: var(--tblr-primary); color: white; border-color: var(--tblr-primary); }
+
+  /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
+     Floor sub-11px text at 11px (.6875rem) below the lg breakpoint. Kept
+     last in this block so it wins the cascade at equal specificity;
+     desktop (≥992px) keeps the original sizes. */
+  @media (max-width: 991.98px) {
+    .media-card[data-tmdb-id] .card-year,
+    .media-card[data-tmdb-id] .quality-badge,
+    .media-card[data-tmdb-id] .lib-badge,
+    .media-card[data-tmdb-id] .vote-badge,
+    .media-card[data-tmdb-id] .countdown-badge,
+    #tmdb-recent-row .media-card[data-tmdb-id] .card-title-text,
+    #tmdb-recent-row .media-card[data-tmdb-id] .card-year,
+    .media-card[data-tmdb-id] .hover-info .h-year,
+    .media-card[data-tmdb-id] .hover-info .h-actions .btn,
+    .tmdb-search-kbd,
+    .tmdb-filter-badge,
+    .tmdb-results-grid .media-card .card-year,
+    .tmdb-hero-label,
+    .td-cast-card .cast-role,
+    .td-season-card .season-meta,
+    .td-genre-badge { font-size: .6875rem; }
+  }
 </style>
 
 <div class="page-body">
