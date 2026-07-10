@@ -1973,9 +1973,18 @@
   var filterReset   = document.getElementById('filter-reset');
   var genresCache   = { movie: null, tv: null };
 
+  // This build ships Bootstrap under window.tabler (no window.bootstrap global),
+  // so resolve the Offcanvas class defensively rather than assuming `bootstrap`.
+  function offcanvasFor(el) {
+    var C = (window.bootstrap && window.bootstrap.Offcanvas)
+         || (window.tabler && (window.tabler.Offcanvas
+              || (window.tabler.bootstrap && window.tabler.bootstrap.Offcanvas)));
+    return C ? C.getOrCreateInstance(el) : null;
+  }
+
   filtersToggle.addEventListener('click', function() {
-    var oc = bootstrap.Offcanvas.getOrCreateInstance(filtersPanel);
-    oc.toggle();
+    var oc = offcanvasFor(filtersPanel);
+    if (oc) oc.toggle();
     if (!genresCache.movie) loadGenres('movie');
   });
 
@@ -2072,7 +2081,8 @@
   }
   filterApply.addEventListener('click', function() {
     applyFilters();
-    bootstrap.Offcanvas.getOrCreateInstance(filtersPanel).hide();
+    var oc = offcanvasFor(filtersPanel);
+    if (oc) oc.hide();
   });
   filterReset.addEventListener('click', function() {
     filterGenre.value = '';
