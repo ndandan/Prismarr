@@ -6,16 +6,16 @@
 {% block max_width %}720px{% endblock %}
 
 {% block wizard_body %}
-  <div class="wizard-eyebrow">{{ 'setup.step.downloads.eyebrow'|trans }}</div>
-  <h2 class="wizard-title">{{ 'setup.step.downloads.title'|trans }}</h2>
-  <p class="wizard-subtitle">{{ 'setup.step.downloads.subtitle'|trans }}</p>
+  <div class="subheader mb-1">{{ 'setup.step.downloads.eyebrow'|trans }}</div>
+  <h2 class="mb-1">{{ 'setup.step.downloads.title'|trans }}</h2>
+  <p class="text-secondary mb-4">{{ 'setup.step.downloads.subtitle'|trans }}</p>
 
   <form action="{{ path('app_setup_downloads') }}" method="post" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf_token" value="{{ csrf_token('setup_downloads') }}"/>
 
-    <div class="wizard-section">
-      <div class="wizard-section-title">{{ 'setup.step.downloads.qbittorrent.section'|trans }}</div>
-      <div class="wizard-section-subtitle">{{ 'setup.step.downloads.qbittorrent.subtitle'|trans }}</div>
+    <div class="mt-3">
+      <div class="hr-text hr-text-left">{{ 'setup.step.downloads.qbittorrent.section'|trans }}</div>
+      <p class="text-secondary small mb-3">{{ 'setup.step.downloads.qbittorrent.subtitle'|trans }}</p>
       <div class="row g-3">
         <div class="col-md-12">
           <label class="form-label" for="qbittorrent_url">{{ 'setup.step.managers.fields.url'|trans }}</label>
@@ -30,16 +30,18 @@
         </div>
         <div class="col-md-6">
           <label class="form-label" for="qbittorrent_password">{{ 'setup.step.downloads.qbittorrent.password'|trans }}</label>
-          <div class="secret-wrapper">
+          <div class="input-group input-group-flat">
             <input type="password" id="qbittorrent_password" name="qbittorrent_password" class="form-control"
                    placeholder="••••••••" value="{{ values.qbittorrent_password }}"
                    autocomplete="new-password"/>
-            <button type="button" class="secret-toggle" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="qbittorrent_password">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
-                <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
-              </svg>
-            </button>
+            <span class="input-group-text">
+              <button type="button" class="btn btn-link link-secondary p-0 border-0" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="qbittorrent_password">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
+                  <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
+                </svg>
+              </button>
+            </span>
           </div>
         </div>
         <div class="col-md-12">
@@ -57,9 +59,9 @@
       </div>
     </div>
 
-    <div class="wizard-section">
-      <div class="wizard-section-title">{{ 'setup.step.downloads.deluge.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.usenet_optional'|trans }}</span></div>
-      <div class="wizard-section-subtitle">{{ 'setup.step.downloads.deluge.subtitle'|trans }}</div>
+    <div class="mt-3">
+      <div class="hr-text hr-text-left">{{ 'setup.step.downloads.deluge.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.usenet_optional'|trans }}</span></div>
+      <p class="text-secondary small mb-3">{{ 'setup.step.downloads.deluge.subtitle'|trans }}</p>
       <div class="row g-3">
         <div class="col-md-7">
           <label class="form-label" for="deluge_url">{{ 'setup.step.managers.fields.url'|trans }}</label>
@@ -68,15 +70,17 @@
         </div>
         <div class="col-md-5">
           <label class="form-label" for="deluge_password">{{ 'setup.step.downloads.deluge.password'|trans }}</label>
-          <div class="secret-wrapper">
+          <div class="input-group input-group-flat">
             <input type="password" id="deluge_password" name="deluge_password" class="form-control"
                    placeholder="••••••••" value="{{ values.deluge_password }}" autocomplete="new-password"/>
-            <button type="button" class="secret-toggle" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="deluge_password">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
-                <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
-              </svg>
-            </button>
+            <span class="input-group-text">
+              <button type="button" class="btn btn-link link-secondary p-0 border-0" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="deluge_password">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
+                  <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
+                </svg>
+              </button>
+            </span>
           </div>
         </div>
         <div class="col-md-12">
@@ -94,9 +98,9 @@
       </div>
     </div>
 
-    <div class="wizard-section">
-      <div class="wizard-section-title">{{ 'setup.step.downloads.sabnzbd.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.usenet_optional'|trans }}</span></div>
-      <div class="wizard-section-subtitle">{{ 'setup.step.downloads.sabnzbd.subtitle'|trans }}</div>
+    <div class="mt-3">
+      <div class="hr-text hr-text-left">{{ 'setup.step.downloads.sabnzbd.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.usenet_optional'|trans }}</span></div>
+      <p class="text-secondary small mb-3">{{ 'setup.step.downloads.sabnzbd.subtitle'|trans }}</p>
       <div class="row g-3">
         <div class="col-md-7">
           <label class="form-label" for="sabnzbd_url">{{ 'setup.step.managers.fields.url'|trans }}</label>
@@ -105,15 +109,17 @@
         </div>
         <div class="col-md-5">
           <label class="form-label" for="sabnzbd_api_key">{{ 'setup.step.downloads.sabnzbd.api_key'|trans }}</label>
-          <div class="secret-wrapper">
+          <div class="input-group input-group-flat">
             <input type="password" id="sabnzbd_api_key" name="sabnzbd_api_key" class="form-control"
                    placeholder="••••••••" value="{{ values.sabnzbd_api_key }}" autocomplete="new-password"/>
-            <button type="button" class="secret-toggle" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="sabnzbd_api_key">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
-                <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
-              </svg>
-            </button>
+            <span class="input-group-text">
+              <button type="button" class="btn btn-link link-secondary p-0 border-0" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="sabnzbd_api_key">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
+                  <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
+                </svg>
+              </button>
+            </span>
           </div>
         </div>
       </div>
@@ -126,9 +132,9 @@
       </div>
     </div>
 
-    <div class="wizard-section">
-      <div class="wizard-section-title">{{ 'setup.step.downloads.nzbget.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.usenet_optional'|trans }}</span></div>
-      <div class="wizard-section-subtitle">{{ 'setup.step.downloads.nzbget.subtitle'|trans }}</div>
+    <div class="mt-3">
+      <div class="hr-text hr-text-left">{{ 'setup.step.downloads.nzbget.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.usenet_optional'|trans }}</span></div>
+      <p class="text-secondary small mb-3">{{ 'setup.step.downloads.nzbget.subtitle'|trans }}</p>
       <div class="row g-3">
         <div class="col-md-12">
           <label class="form-label" for="nzbget_url">{{ 'setup.step.managers.fields.url'|trans }}</label>
@@ -142,15 +148,17 @@
         </div>
         <div class="col-md-6">
           <label class="form-label" for="nzbget_password">{{ 'setup.step.downloads.qbittorrent.password'|trans }}</label>
-          <div class="secret-wrapper">
+          <div class="input-group input-group-flat">
             <input type="password" id="nzbget_password" name="nzbget_password" class="form-control"
                    placeholder="••••••••" value="{{ values.nzbget_password }}" autocomplete="new-password"/>
-            <button type="button" class="secret-toggle" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="nzbget_password">
-              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
-                <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
-              </svg>
-            </button>
+            <span class="input-group-text">
+              <button type="button" class="btn btn-link link-secondary p-0 border-0" aria-label="{{ 'setup.step.admin.toggle_visibility'|trans }}" data-toggle-for="nzbget_password">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/>
+                  <path d="M21 12c-2.4 4 -5.4 6 -9 6c-3.6 0 -6.6 -2 -9 -6c2.4 -4 5.4 -6 9 -6c3.6 0 6.6 2 9 6"/>
+                </svg>
+              </button>
+            </span>
           </div>
         </div>
       </div>
@@ -163,9 +171,9 @@
       </div>
     </div>
 
-    <div class="wizard-section">
-      <div class="wizard-section-title">{{ ico.icon('shield', '', 18) }} {{ 'setup.step.downloads.gluetun.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.gluetun.section_suffix'|trans }}</span></div>
-      <div class="wizard-section-subtitle">{{ 'setup.step.downloads.gluetun.subtitle'|trans }}</div>
+    <div class="mt-3">
+      <div class="hr-text hr-text-left">{{ ico.icon('shield', '', 18) }} {{ 'setup.step.downloads.gluetun.section'|trans }} <span class="text-muted" style="font-weight:400;font-size:.75rem;">{{ 'setup.step.downloads.gluetun.section_suffix'|trans }}</span></div>
+      <p class="text-secondary small mb-3">{{ 'setup.step.downloads.gluetun.subtitle'|trans }}</p>
       <div class="row g-3">
         <div class="col-md-12">
           <label class="form-label" for="gluetun_url">{{ 'setup.step.downloads.gluetun.url'|trans }}</label>

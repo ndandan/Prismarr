@@ -3,9 +3,9 @@
 {% block title %}TMDb - Prismarr{% endblock %}
 
 {% block wizard_body %}
-  <div class="wizard-eyebrow">{{ 'setup.step.tmdb.eyebrow'|trans }}</div>
-  <h2 class="wizard-title">{{ 'setup.step.tmdb.title'|trans }}</h2>
-  <p class="wizard-subtitle">{{ 'setup.step.tmdb.subtitle'|trans|raw }}</p>
+  <div class="subheader mb-1">{{ 'setup.step.tmdb.eyebrow'|trans }}</div>
+  <h2 class="mb-1">{{ 'setup.step.tmdb.title'|trans }}</h2>
+  <p class="text-secondary mb-4">{{ 'setup.step.tmdb.subtitle'|trans|raw }}</p>
 
   <form action="{{ path('app_setup_tmdb') }}" method="post" autocomplete="off" novalidate>
     <input type="hidden" name="_csrf_token" value="{{ csrf_token('setup_tmdb') }}"/>

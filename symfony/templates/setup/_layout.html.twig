@@ -87,74 +87,6 @@
     }
     .btn-wizard-accent:active { transform: translateY(0); }
 
-    .wizard-eyebrow {
-      font-size: .72rem;
-      text-transform: uppercase;
-      letter-spacing: .1em;
-      opacity: .55;
-      margin-bottom: .4rem;
-    }
-    .wizard-title {
-      font-size: 1.4rem;
-      font-weight: 600;
-      margin-bottom: .4rem;
-      letter-spacing: -0.01em;
-    }
-    .wizard-subtitle {
-      opacity: .6;
-      margin-bottom: 1.5rem;
-      font-size: .9rem;
-      line-height: 1.5;
-    }
-
-    .form-label {
-      font-size: .78rem;
-      font-weight: 500;
-      letter-spacing: .02em;
-      opacity: .75;
-    }
-
-    .form-control, .form-select {
-      background: rgba(255,255,255,.03);
-      border: 1px solid rgba(255,255,255,.09);
-      border-radius: 8px;
-      padding: .6rem .8rem;
-      transition: all .15s ease;
-      color: inherit;
-    }
-    [data-bs-theme="light"] .form-control,
-    [data-bs-theme="light"] .form-select {
-      background: rgba(0,0,0,.02);
-      border-color: rgba(0,0,0,.1);
-    }
-
-    .form-control:focus, .form-select:focus {
-      background: rgba(99, 102, 241, 0.05);
-      border-color: rgba(99, 102, 241, 0.55);
-      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
-      color: inherit;
-    }
-
-    .form-text { opacity: .55; font-size: .78rem; }
-
-    .wizard-section {
-      padding-top: 1rem;
-      margin-top: 1rem;
-      border-top: 1px solid rgba(255,255,255,.06);
-    }
-    [data-bs-theme="light"] .wizard-section { border-top-color: rgba(0,0,0,.07); }
-    .wizard-section:first-of-type { border-top: 0; margin-top: 0; padding-top: 0; }
-    .wizard-section-title {
-      font-size: .82rem;
-      font-weight: 600;
-      margin-bottom: .2rem;
-    }
-    .wizard-section-subtitle {
-      font-size: .78rem;
-      opacity: .55;
-      margin-bottom: 1rem;
-    }
-
     .wizard-footer {
       text-align: center;
       margin-top: 2rem;
@@ -218,19 +150,6 @@
       margin-bottom: .3rem;
       color: #6366f1;
     }
-
-    /* ── Secret input (password/API key show/hide toggle) ── */
-    .secret-wrapper { position: relative; }
-    .secret-wrapper .form-control { padding-right: 2.4rem; }
-    .secret-toggle {
-      position: absolute; right: .55rem; top: 50%; transform: translateY(-50%);
-      background: transparent; border: 0; padding: 0;
-      cursor: pointer; color: inherit; opacity: .5;
-      display: inline-flex; align-items: center;
-      transition: opacity .15s ease;
-    }
-    .secret-toggle:hover { opacity: .95; }
-    .secret-toggle svg { width: 16px; height: 16px; }
 
     {% block extra_css %}{% endblock %}
   </style>
@@ -306,7 +225,7 @@
       localStorage.setItem('tablerTheme', next);
     });
 
-    document.querySelectorAll('.secret-toggle').forEach(function (btn) {
+    document.querySelectorAll('[data-toggle-for]').forEach(function (btn) {
       btn.onclick = function () {
         var input = document.getElementById(btn.dataset.toggleFor);
         if (!input) return;
