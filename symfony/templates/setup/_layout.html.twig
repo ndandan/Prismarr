@@ -62,7 +62,10 @@
 
     /* ── Prismarr accent layer (deliberate — spec 2026-07-10). Everything
        else in this wizard is stock Tabler; only these flourishes are ours. ── */
-    .steps { margin-bottom: 2rem; }
+    /* margin/padding/border-left zeroed: Tabler ships a second, unrelated
+       ".steps" doc-component whose border-left otherwise renders a stub
+       line left of step 1. */
+    .steps { margin-bottom: 2rem; margin-left: 0; padding-left: 0; border-left: 0; }
     .steps .step-item.active::before {
       box-shadow: 0 0 12px rgba(var(--tblr-primary-rgb), .5);
     }
