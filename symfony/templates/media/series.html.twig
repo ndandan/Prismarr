@@ -26,6 +26,8 @@
     transition: transform .15s, box-shadow .15s;
 }
 .media-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.3); z-index: 2; }
+/* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
+.media-card .ribbon { font-size: .56rem; font-weight: 700; padding: .05rem .4rem; z-index: 3; letter-spacing: .03em; }
 .media-card .hover-info {
     position: absolute; inset: 0;
     background: rgba(0,0,0,.75);
@@ -587,6 +589,11 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
       <img src="{{ s.poster }}" alt="{{ s.title }}" loading="lazy">
     {% else %}
       <div class="no-poster">{{ s.title }}</div>
+    {% endif %}
+
+    {# "New" ribbon on freshly-added series (Tabler .ribbon), sparse signal. #}
+    {% if s.addedAt and date(s.addedAt) > date('-7 days') %}
+      <span class="ribbon ribbon-top ribbon-start bg-green">{{ 'common.labels.new_badge'|trans }}</span>
     {% endif %}
 
     {# Selection checkbox #}

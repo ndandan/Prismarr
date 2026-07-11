@@ -39,6 +39,7 @@ common:
     required: requis
     coming_soon: Bientôt
   labels:
+    new_badge: Nouveau
     email: Adresse email
     username: Nom d'utilisateur
     password: Mot de passe
@@ -421,6 +422,7 @@ dashboard:
     title: Activité Plex en cours
     settings_cta: 'Réglages →'
     streams: Flux
+    viewers: Spectateurs actuels
     mbps: Mbps
     unknown_title: Inconnu
     empty: Aucun flux Plex en cours

@@ -56,6 +56,8 @@
     border-radius: .25rem; background: rgba(0,0,0,.65); color: #fff;
     backdrop-filter: blur(4px);
 }
+/* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
+.media-card .ribbon { font-size: .56rem; font-weight: 700; padding: .05rem .4rem; z-index: 2; letter-spacing: .03em; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
 .queue-progress-bar { height: 100%; border-radius: 2px; background: var(--tblr-primary); transition: width .3s; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
@@ -714,8 +716,12 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
       <div class="status-dot" style="background:#6b7280;" title="{{ 'media.films.status.unmonitored'|trans }}"></div>
     {% endif %}
 
-    {# Quality badge #}
-    {% if movie.quality %}
+    {# "New" ribbon on freshly-added items (Tabler .ribbon), otherwise the
+       quality badge — mutually exclusive so the top-left corner never doubles
+       up and the ribbon stays a sparse, meaningful signal. #}
+    {% if movie.added and date(movie.added) > date('-7 days') %}
+      <span class="ribbon ribbon-top ribbon-start bg-green">{{ 'common.labels.new_badge'|trans }}</span>
+    {% elseif movie.quality %}
       <div class="quality-badge">{{ movie.quality }}</div>
     {% endif %}
 
