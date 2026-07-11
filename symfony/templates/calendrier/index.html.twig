@@ -12,8 +12,8 @@
 .cal-toolbar { display:flex; flex-wrap:wrap; gap:.75rem; align-items:center; margin-bottom:1rem; padding:.6rem .85rem; background:var(--tblr-bg-surface); border:1px solid var(--tblr-border-color); border-radius:.75rem; }
 .cal-toolbar-label { font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.08em; color:var(--tblr-secondary); }
 .cal-filter-pill { display:inline-flex; align-items:center; gap:.35rem; padding:.25rem .6rem; border:1px solid var(--tblr-border-color); background:none; border-radius:2rem; font-size:.72rem; color:var(--tblr-body-color); cursor:pointer; transition:all .15s; white-space:nowrap; }
-.cal-filter-pill:hover { background:rgba(255,255,255,.05); border-color:rgba(255,255,255,.15); }
-.cal-filter-pill.active { background:rgba(var(--tblr-primary-rgb),.15); border-color:var(--tblr-primary); color:#a5b4fc; font-weight:600; }
+.cal-filter-pill:hover { background:rgba(var(--tblr-primary-rgb),.06); border-color:rgba(var(--tblr-primary-rgb),.2); }
+.cal-filter-pill.active { background:rgba(var(--tblr-primary-rgb),.15); border-color:var(--tblr-primary); color:var(--tblr-primary); font-weight:600; }
 .cal-filter-dot { width:7px; height:7px; border-radius:50%; flex-shrink:0; }
 .cal-filter-count { font-size:.6rem; color:var(--tblr-secondary); }
 .cal-toolbar-sep { width:1px; height:1.5rem; background:var(--tblr-border-color); margin:0 .25rem; }
@@ -147,7 +147,7 @@
 @media (max-width: 768px) {
   .cal-grid { grid-template-columns:repeat(7, minmax(92px, 1fr)); min-width:680px; }
 }
-.cal-grid-dow { background:rgba(var(--tblr-primary-rgb),.08); padding:.5rem .35rem; text-align:center; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:#818cf8; }
+.cal-grid-dow { background:rgba(var(--tblr-primary-rgb),.08); padding:.5rem .35rem; text-align:center; font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.06em; color:var(--tblr-primary); }
 .cal-grid-dow.is-weekend { color:#f59e0b; }
 .cal-cell { background:var(--tblr-bg-surface); min-height:110px; padding:.3rem .35rem; position:relative; transition:background .15s; }
 .cal-cell:hover { background:rgba(255,255,255,.02); }
@@ -161,7 +161,7 @@
 .cal-cell.is-past .cal-block:hover { opacity:.85; filter:grayscale(0); }
 .cal-cell.is-selected { box-shadow:inset 0 0 0 2px var(--tblr-primary); }
 .cal-cell.is-weekend { background:rgba(255,255,255,.01); }
-.cal-cell-num { font-size:.75rem; font-weight:700; color:rgba(255,255,255,.45); padding:.15rem .3rem; display:inline-block; border-radius:.25rem; cursor:pointer; }
+.cal-cell-num { font-size:.75rem; font-weight:700; color:var(--tblr-secondary-color); padding:.15rem .3rem; display:inline-block; border-radius:.25rem; cursor:pointer; }
 .cal-cell.is-today .cal-cell-num { background:var(--tblr-primary); color:#fff; border-radius:50%; width:1.5rem; height:1.5rem; display:inline-flex; align-items:center; justify-content:center; padding:0; }
 .cal-cell-events { display:flex; flex-direction:column; gap:2px; margin-top:3px; }
 
@@ -187,7 +187,21 @@
 .cal-block-ep-v4 { background:rgba(15,118,178,.72); border-left-color:#7dd3fc; color:#e0f2fe; }
 .cal-block-ep-v5 { background:rgba(30,64,175,.68);  border-left-color:#93c5fd; color:#dbeafe; }
 
-.cal-block-more { font-size:.58rem; color:#818cf8; font-weight:700; padding:1px 5px; cursor:pointer; }
+/* Light mode: the .6–.75 translucent fills composite over the white cell
+   surface and wash out, dropping the pastel text below contrast. Bump the
+   fills near-opaque so the existing light text stays legible. */
+[data-bs-theme="light"] .cal-block-cinema   { background:rgba(185,28,28,.92); }
+[data-bs-theme="light"] .cal-block-digital  { background:rgba(126,34,206,.92); }
+[data-bs-theme="light"] .cal-block-physical { background:rgba(21,128,61,.92); }
+[data-bs-theme="light"] .cal-block-unknown  { background:rgba(75,85,99,.92); }
+[data-bs-theme="light"] .cal-block-episode  { background:rgba(14,165,233,.92); }
+[data-bs-theme="light"] .cal-block-ep-v1    { background:rgba(37,99,235,.92); }
+[data-bs-theme="light"] .cal-block-ep-v2    { background:rgba(2,132,199,.92); }
+[data-bs-theme="light"] .cal-block-ep-v3    { background:rgba(6,182,212,.92); }
+[data-bs-theme="light"] .cal-block-ep-v4    { background:rgba(15,118,178,.94); }
+[data-bs-theme="light"] .cal-block-ep-v5    { background:rgba(30,64,175,.92); }
+
+.cal-block-more { font-size:.58rem; color:var(--tblr-primary); font-weight:700; padding:1px 5px; cursor:pointer; }
 .cal-block-more:hover { text-decoration:underline; }
 
 /* ── Bloc infos dans grille (2 lignes) ── */

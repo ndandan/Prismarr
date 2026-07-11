@@ -174,7 +174,7 @@
                             </td>
                             <td>
                                 {% if idx.protocol == 'torrent' %}
-                                    <span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:#818cf8;">Torrent</span>
+                                    <span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:var(--tblr-primary);">Torrent</span>
                                 {% elseif idx.protocol == 'usenet' %}
                                     <span class="badge" style="background:rgba(14,165,233,.15);color:#38bdf8;">Usenet</span>
                                 {% else %}
@@ -623,15 +623,15 @@
         (tagsCache || []).forEach(function(t) {
             var active = selectedTags.indexOf(t.id) !== -1;
             h += '<span class="badge ' + (active ? '' : '') + '" style="cursor:pointer;font-size:.7rem;padding:.3em .6em;border-radius:2rem;transition:all .15s;'
-              + (active ? 'background:var(--tblr-primary);color:#fff;box-shadow:0 0 6px rgba(var(--tblr-primary-rgb),.4);' : 'background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);border:1px solid rgba(255,255,255,.1);')
+              + (active ? 'background:var(--tblr-primary);color:#fff;box-shadow:0 0 6px rgba(var(--tblr-primary-rgb),.4);' : 'background:rgba(var(--tblr-primary-rgb),.08);color:var(--tblr-secondary-color);border:1px solid var(--tblr-border-color);')
               + '" data-tag-id="' + t.id + '">'
               + (active ? '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right:3px;"><path d="M5 12l5 5l10-10"/></svg>' : '')
               + esc(t.label) + '</span>';
         });
         // Create-new input
         h += '<div class="d-flex gap-1 align-items-center ms-1" style="border-left:1px solid rgba(255,255,255,.08);padding-left:.5rem;">'
-           + '<input type="text" class="form-control form-control-sm" id="pw-tag-new" placeholder="' + esc(_I18N.newTag) + '" style="width:90px;font-size:.7rem;background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);">'
-           + '<button class="btn btn-sm btn-icon" id="pw-tag-add-btn" style="width:28px;height:28px;background:rgba(var(--tblr-primary-rgb),.15);color:#818cf8;border:none;border-radius:.3rem;" title="' + esc(_I18N.createTagTitle) + '">'
+           + '<input type="text" class="form-control form-control-sm" id="pw-tag-new" placeholder="' + esc(_I18N.newTag) + '" style="width:90px;font-size:.7rem;background:var(--tblr-bg-surface);border-color:rgba(255,255,255,.1);">'
+           + '<button class="btn btn-sm btn-icon" id="pw-tag-add-btn" style="width:28px;height:28px;background:rgba(var(--tblr-primary-rgb),.15);color:var(--tblr-primary);border:none;border-radius:.3rem;" title="' + esc(_I18N.createTagTitle) + '">'
            + '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg></button></div>';
         wrap.innerHTML = h;
 
@@ -947,7 +947,7 @@
 
         var h = '';
         filtered.forEach(function (s) {
-            var proto = s.protocol === 'torrent' ? '<span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:#818cf8;font-size:.6rem;">Torrent</span>' : '<span class="badge" style="background:rgba(14,165,233,.15);color:#38bdf8;font-size:.6rem;">Usenet</span>';
+            var proto = s.protocol === 'torrent' ? '<span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:var(--tblr-primary);font-size:.6rem;">Torrent</span>' : '<span class="badge" style="background:rgba(14,165,233,.15);color:#38bdf8;font-size:.6rem;">Usenet</span>';
             var privacy = s.privacy === 'private' ? '<span class="badge bg-danger-lt" style="font-size:.6rem;">' + esc(_I18N.infoPrivacyPrivate) + '</span>' : (s.privacy === 'semiPrivate' ? '<span class="badge bg-warning-lt" style="font-size:.6rem;">' + esc(_I18N.listPrivacySemi) + '</span>' : '<span class="badge bg-green-lt" style="font-size:.6rem;">' + esc(_I18N.infoPrivacyPublic) + '</span>');
             var displayName = esc(s.name || s.definitionName || s.implementationName || '—');
             var lang = s.language ? '<span class="badge bg-secondary-lt" style="font-size:.55rem;">' + esc(s.language) + '</span>' : '';
@@ -1157,7 +1157,7 @@
         var musicParams = cap.musicSearchParams || [];
         var bookParams = cap.bookSearchParams || [];
 
-        var protoBadge = raw.protocol === 'torrent' ? '<span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:#818cf8;">Torrent</span>' : '<span class="badge" style="background:rgba(14,165,233,.15);color:#38bdf8;">Usenet</span>';
+        var protoBadge = raw.protocol === 'torrent' ? '<span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:var(--tblr-primary);">Torrent</span>' : '<span class="badge" style="background:rgba(14,165,233,.15);color:#38bdf8;">Usenet</span>';
         var privBadge = raw.privacy === 'private' ? '<span class="badge bg-danger-lt">' + esc(_I18N.infoPrivacyPrivate) + '</span>' : (raw.privacy === 'semiPrivate' ? '<span class="badge bg-warning-lt">' + esc(_I18N.infoPrivacySemi) + '</span>' : '<span class="badge bg-green-lt">' + esc(_I18N.infoPrivacyPublic) + '</span>');
 
         var torznabUrl = '';
@@ -1191,7 +1191,7 @@
         h += '<div class="row g-1">';
         capRows.forEach(function(c) {
             h += '<div class="col-12 d-flex align-items-center gap-2 py-1">';
-            h += '<div class="small" style="width:130px;flex-shrink:0;color:rgba(255,255,255,.6);">' + esc(c.label) + '</div>';
+            h += '<div class="small" style="width:130px;flex-shrink:0;color:var(--tblr-secondary-color);">' + esc(c.label) + '</div>';
             if (c.supported !== undefined) {
                 h += c.supported
                     ? '<span class="badge bg-green-lt" style="font-size:.6rem;">' + esc(_I18N.infoCapSupported) + '</span>'
