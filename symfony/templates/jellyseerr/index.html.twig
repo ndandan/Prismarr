@@ -165,7 +165,7 @@
     </div>
     <div class="col-6 col-lg-2">
         <div class="card card-sm"><div class="card-body text-center">
-            <div class="js-stat" style="color:#f59e0b;">{{ counts.pending ?? 0 }}</div>
+            <div class="js-stat" style="color:{{ (counts.pending ?? 0) > 0 ? '#f59e0b' : 'var(--tblr-text-secondary)' }};">{{ counts.pending ?? 0 }}</div>
             <div class="text-secondary small">{{ 'jellyseerr.index.stat_pending'|trans }}</div>
         </div></div>
     </div>
@@ -183,7 +183,7 @@
     </div>
     <div class="col-6 col-lg-2">
         <div class="card card-sm"><div class="card-body text-center">
-            <div class="js-stat" style="color:#ef4444;">{{ counts.declined ?? 0 }}</div>
+            <div class="js-stat" style="color:{{ (counts.declined ?? 0) > 0 ? '#ef4444' : 'var(--tblr-text-secondary)' }};">{{ counts.declined ?? 0 }}</div>
             <div class="text-secondary small">{{ 'jellyseerr.index.stat_declined'|trans }}</div>
         </div></div>
     </div>
