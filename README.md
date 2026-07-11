@@ -119,12 +119,19 @@ part of the original project:
 - Dashboard theming: 17 glance-style HSL presets with an admin Theme picker — [#66](https://github.com/Shoshuo/Prismarr/pull/66)
 - Dashboard layout customization: reorder + hide/show sections — [#68](https://github.com/Shoshuo/Prismarr/pull/68)
 - One unified rich detail modal everywhere (top-bar search, dashboard, Explorer, Plex activity) — [#69](https://github.com/Shoshuo/Prismarr/pull/69)
+- Search fix: keep the global search icon from overlapping text in compact density — [#70](https://github.com/Shoshuo/Prismarr/pull/70)
 - Performance slice: cross-request service-health caching, browser cache headers on static assets, prod cache pre-warmed at image build — [#74](https://github.com/Shoshuo/Prismarr/pull/74)
 - Plex items open the app-global quick-look modal — [#75](https://github.com/Shoshuo/Prismarr/pull/75)
 - Deluge tab: full torrent management via deluge-web JSON-RPC — [#76](https://github.com/Shoshuo/Prismarr/pull/76)
 
 **Fork-only** — outside upstream's scope, only available here:
 
+- **FrankenPHP/Symfony worker mode (opt-in):** an env-gated flag
+  (`PRISMARR_WORKER`) that boots the kernel once and keeps it resident instead
+  of rebuilding it per request. Off by default. On a real homelab it cut a
+  health-poll response from ~46 ms to ~3 ms (~15×) and a large Films-page render
+  from ~3.0 s to ~0.3 s (~10×); TMDb-bound pages like Discover are unchanged,
+  as expected. See the [Configuration](#environment-variables-optional) table.
 - **Unraid server widget:** an admin-only dashboard section for the Unraid 7
   GraphQL API — array and disk health, parity status with live check progress
   and ETA, CPU/RAM/uptime, per-container Docker status chips, and UPS state.
@@ -340,7 +347,7 @@ upstream image (`shoshuo/prismarr:1.x.x`) — minus the fork-only features.
 ## Tech stack
 
 - **Backend**: PHP 8.4 / Symfony 8 / Doctrine ORM
-- **Server**: FrankenPHP (Caddy + PHP embed, worker mode) supervised by s6-overlay
+- **Server**: FrankenPHP (Caddy + PHP embed; optional resident worker mode) supervised by s6-overlay
 - **Frontend**: Tabler UI + Alpine.js + Turbo (Hotwire) via Symfony AssetMapper
 - **Database**: SQLite (zero-config, automatic Doctrine migrations)
 - **Cache + sessions**: filesystem (no Redis required)
