@@ -360,6 +360,8 @@ home:
 
 dashboard:
   title: Tableau de bord
+  widget_error:
+    unreachable: 'Cette section n''a pas pu être chargée'
   greeting:
     morning: Bonjour
     afternoon: Bon après-midi

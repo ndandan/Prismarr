@@ -361,6 +361,8 @@ home:
 
 dashboard:
   title: Dashboard
+  widget_error:
+    unreachable: This section failed to load
   greeting:
     morning: Good morning
     afternoon: Good afternoon

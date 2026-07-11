@@ -683,21 +683,53 @@
       }
     }
 
+    // Failure ≠ empty: an empty 200 body means "section not applicable" and
+    // hides the node (contract above), but a non-OK response or network error
+    // must stay visible — a monitoring dashboard may never answer "is
+    // everything OK?" by removing the evidence. Render a retryable state
+    // in the card body instead.
+    function applyFailure(node) {
+      var body = node.querySelector('[data-dash-body]') || node;
+      body.innerHTML =
+        '<div class="text-center text-secondary py-3" data-dash-error>' +
+          '<div class="mb-2">{{ 'dashboard.widget_error.unreachable'|trans|e('js') }}</div>' +
+          '<button type="button" class="btn btn-sm btn-outline-secondary" data-dash-retry>{{ 'common.retry'|trans|e('js') }}</button>' +
+        '</div>';
+    }
+
+    function hydrateNode(node) {
+      if (node.dataset.dashLoaded === '1') return;
+      node.dataset.dashLoaded = '1';
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) {
+          if (!r.ok) { applyFailure(node); return; }
+          return r.text().then(function (html) { applyFragment(node, html); });
+        })
+        .catch(function () { applyFailure(node); });
+    }
+
     function hydrateDashWidgets() {
       var nodes = document.querySelectorAll('[data-dash-widget][data-dash-url]');
-      for (var i = 0; i < nodes.length; i++) {
-        (function (node) {
-          if (node.dataset.dashLoaded === '1') return;
-          node.dataset.dashLoaded = '1';
-          fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
-            .then(function (r) { return r.ok ? r.text() : ''; })
-            .then(function (html) { applyFragment(node, html); })
-            .catch(function () { node.style.display = 'none'; });
-        })(nodes[i]);
-      }
+      for (var i = 0; i < nodes.length; i++) { hydrateNode(nodes[i]); }
     }
     document.addEventListener('turbo:load', hydrateDashWidgets);
     if (document.readyState !== 'loading') { hydrateDashWidgets(); }
+
+    // Retry: delegated + bound once per session (window guard) — this block
+    // re-executes on every Turbo visit, so a bare addEventListener would stack.
+    if (!window._dashRetryBound) {
+      window._dashRetryBound = true;
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest('[data-dash-retry]');
+        if (!btn) return;
+        var node = btn.closest('[data-dash-widget]');
+        if (!node) return;
+        node.dataset.dashLoaded = '';
+        var body = node.querySelector('[data-dash-body]') || node;
+        body.innerHTML = '<div class="text-center text-secondary py-3"><span class="spinner-border spinner-border-sm"></span></div>';
+        hydrateNode(node);
+      });
+    }
 
     // Keep the services-health widget live instead of frozen at first paint:
     // re-fetch just that fragment on an interval. It's cheap — isHealthy() is
