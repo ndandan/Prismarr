@@ -299,7 +299,7 @@ class MediaController extends AbstractController
 
             $health = $this->radarr->getSystemHealth();
             foreach ($health as $h) {
-                $warnings[] = ($h['source'] ?? 'Radarr') . ' : ' . ($h['message'] ?? '?');
+                $warnings[] = $this->translator->trans('media.api.warning_format', ['source' => $h['source'] ?? 'Radarr', 'message' => $h['message'] ?? '?']);
             }
 
             $queue = $this->radarr->getQueue();

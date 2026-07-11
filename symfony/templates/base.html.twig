@@ -179,26 +179,24 @@
     :root[data-bs-theme="light"] .text-secondary { color: #5a5a6e !important; }
     :root[data-bs-theme="light"] .btn-ghost-secondary:hover { background: rgba(0,0,0,.05) !important; }
 
-    /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
-       Sub-12px text (clusters at 8.8/9.6/10.4px) is illegible on phones and
-       tablets. Below the lg breakpoint we floor the shared offenders at 11px
-       (.6875rem). Hierarchy is preserved — floored text stays the smallest on
-       the page — and desktop (≥992px) is untouched. Per-page style blocks
-       carry the same floor for their local classes. */
-    @media (max-width: 991.98px) {
-      .sidebar-dl-badge,
-      .prismarr-search-section,
-      .prismarr-search-section .count { font-size: .6875rem; }
-      /* Badges/helper text sized via inline style="font-size:.5–.68rem"
-         (Twig + JS-built markup across the app): an attribute-substring
-         match is the only CSS-only way to floor inline styles. Only values
-         starting with ".5"/".6"/"0.5"/"0.6" match — larger sizes such as
-         "1.5rem" contain "1.5", never ":.5", and are unaffected. */
-      [style*="font-size:.5"], [style*="font-size:.6"],
-      [style*="font-size: .5"], [style*="font-size: .6"],
-      [style*="font-size:0.5"], [style*="font-size:0.6"] {
-        font-size: .6875rem !important;
-      }
+    /* ── Readability floor (responsive audit 2026-06-29, extended to desktop
+       2026-07-10) ── Sub-12px text (clusters at 8.8/9.6/10.4px) is illegible
+       on phones and hard to read anywhere. The shared offenders are floored
+       at 11px (.6875rem) at ALL breakpoints. Hierarchy is preserved — floored
+       text stays the smallest on the page. Per-page style blocks carry the
+       same floor for their local classes below lg. */
+    .sidebar-dl-badge,
+    .prismarr-search-section,
+    .prismarr-search-section .count { font-size: .6875rem; }
+    /* Badges/helper text sized via inline style="font-size:.5–.68rem"
+       (Twig + JS-built markup across the app): an attribute-substring
+       match is the only CSS-only way to floor inline styles. Only values
+       starting with ".5"/".6"/"0.5"/"0.6" match — larger sizes such as
+       "1.5rem" contain "1.5", never ":.5", and are unaffected. */
+    [style*="font-size:.5"], [style*="font-size:.6"],
+    [style*="font-size: .5"], [style*="font-size: .6"],
+    [style*="font-size:0.5"], [style*="font-size:0.6"] {
+      font-size: .6875rem !important;
     }
   </style>
 

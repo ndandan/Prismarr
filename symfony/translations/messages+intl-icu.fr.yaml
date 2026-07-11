@@ -360,6 +360,8 @@ home:
 
 dashboard:
   title: Tableau de bord
+  widget_error:
+    unreachable: 'Cette section n''a pas pu être chargée'
   greeting:
     morning: Bonjour
     afternoon: Bon après-midi
@@ -945,6 +947,9 @@ admin:
 
 decouverte:
   title: Découverte
+  countdown_prefix: 'J-'
+  badge_type_film: Film
+  badge_type_series: Série
   search_placeholder: 'Rechercher un film ou une série sur TMDb…'
   actions:
     filters: Filtres
@@ -1205,7 +1210,7 @@ media:
     no_file: Aucun fichier
     no_missing_episodes: Aucun épisode manquant surveillé.
     network_error: Erreur réseau ou service injoignable.
-    warning_format: '{source} : {message}'
+    warning_format: '{message}'
   label:
     season_prefix: 'Saison {number}'
 

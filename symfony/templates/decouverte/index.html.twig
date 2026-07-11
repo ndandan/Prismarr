@@ -71,15 +71,15 @@
   .media-card[data-tmdb-id] .card-year { font-size: .62rem; color: rgba(255,255,255,.6); }
   .media-card[data-tmdb-id] .quality-badge {
     position: absolute; top: .4rem; left: .4rem;
-    font-size: .6rem; font-weight: 700; padding: .1rem .35rem;
+    font-size: .6875rem; font-weight: 700; padding: .1rem .35rem;
     border-radius: .25rem; background: rgba(0,0,0,.65); color: #fff;
     backdrop-filter: blur(4px);
   }
   .media-card[data-tmdb-id] .quality-badge.movie { background: rgba(255,194,48,.92); color: #1a1a1a; }
   .media-card[data-tmdb-id] .quality-badge.tv    { background: rgba(0,204,255,.92);  color: #1a1a1a; }
   .media-card[data-tmdb-id] .lib-badge {
-    position: absolute; top: .4rem; left: calc(.4rem + 2.2rem + .25rem);
-    font-size: .6rem; font-weight: 700; padding: .1rem .35rem;
+    position: absolute; top: .4rem; left: calc(.4rem + 2.7rem + .25rem);
+    font-size: .6875rem; font-weight: 700; padding: .1rem .35rem;
     border-radius: .25rem; color: #fff;
     backdrop-filter: blur(4px);
   }
@@ -1012,7 +1012,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 4v16l13 -8z"/></svg>
       </div>
     {% endif %}
-    <span class="quality-badge {{ item.type }}">{{ item.type == 'movie' ? 'decouverte.modal.type_film'|trans : 'decouverte.modal.type_series'|trans }}</span>
+    <span class="quality-badge {{ item.type }}">{{ item.type == 'movie' ? 'decouverte.badge_type_film'|trans : 'decouverte.badge_type_series'|trans }}</span>
     {% if item.in_library %}
       {% set statusColors = {'downloaded':'#22c55e','missing':'#f59e0b','announced':'#6366f1','inCinemas':'#6366f1','partial':'#3b82f6','unmonitored':'#6b7280'} %}
       {% set statusShortKey = 'decouverte.card.status_short.' ~ (item.lib_status ?: 'default') %}
@@ -1057,6 +1057,8 @@
   var TMDB_I18N = {
     type_film:    {{ 'decouverte.modal.type_film'|trans|json_encode|raw }},
     type_series:  {{ 'decouverte.modal.type_series'|trans|json_encode|raw }},
+    badge_film:   {{ 'decouverte.badge_type_film'|trans|json_encode|raw }},
+    badge_series: {{ 'decouverte.badge_type_series'|trans|json_encode|raw }},
     watchlist:    {{ 'decouverte.modal.watchlist'|trans|json_encode|raw }},
     in_watchlist: {{ 'decouverte.modal.in_watchlist'|trans|json_encode|raw }},
     in_library:   {{ 'decouverte.modal.in_library'|trans|json_encode|raw }},
@@ -1210,7 +1212,7 @@
       if (diff > 0 && diff <= 365) {
         var badge = document.createElement('span');
         badge.className = 'countdown-badge';
-        badge.textContent = 'J-' + diff;
+        badge.textContent = '{{ 'decouverte.countdown_prefix'|trans|e('js') }}' + diff;
         card.appendChild(badge);
       }
     });
@@ -1819,7 +1821,7 @@
     var countdown = '';
     if (item.release) {
       var diff = Math.ceil((new Date(item.release) - new Date()) / 86400000);
-      if (diff > 0 && diff <= 365) countdown = '<span class="countdown-badge">J-' + diff + '</span>';
+      if (diff > 0 && diff <= 365) countdown = '<span class="countdown-badge">{{ 'decouverte.countdown_prefix'|trans|e('js') }}' + diff + '</span>';
     }
 
     // safeTitle is already escHtml'd above; also escape the textual fields
@@ -1830,7 +1832,7 @@
     var safeYear    = escHtml(item.year || '');
     return '<div class="media-card" data-tmdb-id="' + item.id + '" data-tmdb-type="' + item.type + '" data-tmdb-title="' + safeTitle + '" data-tmdb-vote="' + (item.vote||'') + '" data-tmdb-year="' + safeYear + '" data-release="' + escHtml(item.release||'') + '">'
       + poster
-      + '<span class="quality-badge ' + item.type + '">' + (item.type === 'movie' ? TMDB_I18N.type_film : TMDB_I18N.type_series) + '</span>'
+      + '<span class="quality-badge ' + item.type + '">' + (item.type === 'movie' ? TMDB_I18N.badge_film : TMDB_I18N.badge_series) + '</span>'
       + libBadge + countdown + wlStar + voteBadge
       + '<div class="card-overlay"><div class="card-title-text" title="' + safeTitle + '">' + titleOrDash + '</div>'
       + '<div class="card-year">' + safeYear + '</div></div>'
