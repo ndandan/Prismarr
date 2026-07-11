@@ -622,7 +622,7 @@
             }
             // data-ev-idx pour tooltip hover
             var evIdx = allEvents.indexOf(ev);
-            h += '<div class="' + blockCls + '" data-ev-idx="' + evIdx + '">' + title + line2 + '</div>';
+            h += '<div class="' + blockCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(title) : title) + '" data-ev-idx="' + evIdx + '">' + title + line2 + '</div>';
         });
         if (evs.length > max) h += '<div class="cal-block-more" data-date-detail="' + ds + '">' + CAL_I18N.day_overflow.replace('__N__', evs.length-max) + '</div>';
         h += '</div></div>';
@@ -700,7 +700,7 @@
                     } else if (ev.type === 'episode' && ev.title) {
                         line2 = '<div class="cal-block-line2">' + ev.title + '</div>';
                     }
-                    h += '<div class="' + blockCls + '" data-ev-idx="' + evIdx + '">' + evTitle(ev) + line2 + '</div>';
+                    h += '<div class="' + blockCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(evTitle(ev)) : evTitle(ev)) + '" data-ev-idx="' + evIdx + '">' + evTitle(ev) + line2 + '</div>';
                 });
             }
             h += '</div></div>';
@@ -765,7 +765,7 @@
                     sub = sxe + (ev.title ? ' · ' + ev.title : '') + (ev.network ? ' · ' + ev.network : '');
                 }
 
-                h += '<div class="cal-day-row" data-ev-idx="' + evIdx + '">';
+                h += '<div class="cal-day-row" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(title) : title) + '" data-ev-idx="' + evIdx + '">';
                 h += poster;
                 h += '<div class="cal-day-row-body">';
                 h += '<span class="' + typeCls + '" style="' + typeBg + '">' + typeLbl + '</span>';
@@ -1071,7 +1071,7 @@
             var sub = ev.type === 'episode' && ev.title ? '<div class="cal-day-popup-ev-sub" style="color:rgba(255,255,255,.6);">' + ev.title + '</div>' : '';
             var meta = metas.length ? '<div class="cal-day-popup-ev-meta">' + metas.join(' · ') + '</div>' : '';
 
-            h += '<div class="cal-day-popup-event ' + relCls + '" data-ev-idx="' + evIdx + '">' + poster + '<div class="overflow-hidden flex-grow-1">'
+            h += '<div class="cal-day-popup-event ' + relCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(title) : title) + '" data-ev-idx="' + evIdx + '">' + poster + '<div class="overflow-hidden flex-grow-1">'
               + '<div class="d-flex align-items-center gap-1 mb-1">' + relLabel + ' ' + statusBadge + '</div>'
               + '<div class="cal-day-popup-ev-title">' + title + '</div>'
               + sub + meta

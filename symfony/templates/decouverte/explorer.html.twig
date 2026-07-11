@@ -328,7 +328,7 @@
     var vote = item.vote ? '<span class="badge-vote ' + vc + '">' + {{ ico.icon('star-filled', '', 14)|json_encode|raw }} + ' ' + escHtml(item.vote) + '</span>' : '';
     var wlClass = (window._prismarrWatchlist && window._prismarrWatchlist[item.type + '_' + item.id]) ? ' in-wl' : '';
     var wlStar = '<button type="button" class="wl-star' + wlClass + '" data-tmdb-id="' + escHtml(item.id) + '" data-tmdb-type="' + escHtml(item.type) + '" data-title="' + escHtml(item.title) + '" data-poster="' + escHtml(item.poster) + '" data-vote="' + escHtml(item.vote) + '" data-year="' + escHtml(item.year) + '"><svg viewBox="0 0 24 24" fill="' + (wlClass ? '#f59e0b' : 'none') + '" stroke="#f59e0b" stroke-width="2"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4-6.2-4.5h7.6z"/></svg></button>';
-    return '<div class="ex-card" data-tmdb-id="' + escHtml(item.id) + '" data-type="' + escHtml(item.type) + '">'
+    return '<div class="ex-card" tabindex="0" role="button" data-kb-activate aria-label="' + escHtml(item.title || item.name || '') + '" data-tmdb-id="' + escHtml(item.id) + '" data-type="' + escHtml(item.type) + '">'
       + poster
       + '<span class="badge-type ' + escHtml(item.type) + '">' + (item.type === 'movie' ? EX_I18N.type_film : EX_I18N.type_series) + '</span>'
       + lib + wlStar + vote

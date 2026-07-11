@@ -1002,6 +1002,8 @@
   {% elseif item.vote >= 5 %}{% set voteClass = 'mid' %}
   {% endif %}
   <div class="media-card"
+       tabindex="0" role="button" data-kb-activate
+       aria-label="{{ item.title }}"
        data-tmdb-id="{{ item.id }}"
        data-tmdb-type="{{ item.type }}"
        data-tmdb-title="{{ item.title }}"
@@ -1834,7 +1836,7 @@
     // numeric but defense-in-depth costs nothing.
     var titleOrDash = item.title ? safeTitle : '—';
     var safeYear    = escHtml(item.year || '');
-    return '<div class="media-card" data-tmdb-id="' + item.id + '" data-tmdb-type="' + item.type + '" data-tmdb-title="' + safeTitle + '" data-tmdb-vote="' + (item.vote||'') + '" data-tmdb-year="' + safeYear + '" data-release="' + escHtml(item.release||'') + '">'
+    return '<div class="media-card" tabindex="0" role="button" data-kb-activate aria-label="' + safeTitle + '" data-tmdb-id="' + item.id + '" data-tmdb-type="' + item.type + '" data-tmdb-title="' + safeTitle + '" data-tmdb-vote="' + (item.vote||'') + '" data-tmdb-year="' + safeYear + '" data-release="' + escHtml(item.release||'') + '">'
       + poster
       + '<span class="quality-badge ' + item.type + '">' + (item.type === 'movie' ? TMDB_I18N.badge_film : TMDB_I18N.badge_series) + '</span>'
       + libBadge + countdown + wlStar + voteBadge

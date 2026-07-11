@@ -225,6 +225,18 @@
         var m = qlEl();
         if (e.key === 'Escape' && m && m.classList.contains('show')) { qlClose(); }
       });
+      // Keyboard activation for card DIVs that act as buttons (media/ex/
+      // calendar cards). They open a modal/quick-look on click but aren't
+      // native buttons; make Enter/Space trigger the same click. Ignore the
+      // keystroke when focus is inside a real control.
+      document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+        var el = e.target.closest('[data-kb-activate]');
+        if (!el || el !== e.target) return;
+        if (e.target.matches('input, textarea, select, button, a, [contenteditable="true"]')) return;
+        e.preventDefault();
+        el.click();
+      });
       // Watchlist ☆ toggle from inside the modal (optimistic, then reconcile).
       document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-ql-wl]');

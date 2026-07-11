@@ -181,6 +181,11 @@
       .sidebar-dl-badge.dl-bumped { animation: none; }
     }
 
+    /* Keyboard focus ring for card DIVs promoted to buttons (media/ex/wl/
+       calendar cards carry [data-kb-activate]). outline is not clipped by the
+       cards' overflow:hidden, so a positive offset renders cleanly. */
+    [data-kb-activate]:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: 2px; }
+
     /* ── Live Plex streaming pill (sous le logo) ── */
     .sidebar-plex-pill {
       display: inline-flex; align-items: center; gap: 5px;

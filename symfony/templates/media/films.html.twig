@@ -676,6 +676,8 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     alternateTitles: movie.alternateTitles ?? []
   } %}
   <div class="media-card"
+       tabindex="0" role="button" data-kb-activate
+       aria-label="{{ movie.title }}{% if movie.year %} ({{ movie.year }}){% endif %}"
        data-bs-toggle="modal"
        data-bs-target="#modal-film"
        data-title="{{ movie.title|lower }}"
