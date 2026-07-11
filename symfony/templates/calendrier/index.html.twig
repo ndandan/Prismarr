@@ -243,26 +243,26 @@
 .cal-bottom-stat { display:flex; align-items:center; gap:.35rem; }
 .cal-bottom-dot { width:8px; height:8px; border-radius:2px; }
 
-/* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
-   Floor sub-11px calendar text at 11px (.6875rem) below the lg breakpoint.
-   Blocks/tooltips already truncate with ellipsis, so the bigger glyphs
-   clip instead of overflowing; desktop (≥992px) keeps the original sizes. */
-@media (max-width: 991.98px) {
-  .cal-toolbar-label,
-  .cal-filter-count,
-  .cal-week-dow,
-  .cal-day-row-type,
-  .cal-block,
-  .cal-block-more,
-  .cal-block-line2,
-  .cal-tooltip-type,
-  .cal-tooltip-meta,
-  .cal-tooltip-badge,
-  .cal-day-popup-ev-sub,
-  .cal-day-popup-ev-meta,
-  .cal-mini-dow,
-  .cal-mini-day { font-size: .6875rem; }
-}
+/* ── Readability floor (responsive audit 2026-06-29, extended to all
+   breakpoints 2026-07-10) ── Floor sub-11px calendar text at 11px
+   (.6875rem). The month-view event blocks were the app's smallest text
+   (8.8-9.9px) and equally unreadable on desktop. Blocks/tooltips already
+   truncate with ellipsis, so the bigger glyphs clip instead of overflowing;
+   line2 keeps its hierarchy via weight and opacity. */
+.cal-toolbar-label,
+.cal-filter-count,
+.cal-week-dow,
+.cal-day-row-type,
+.cal-block,
+.cal-block-more,
+.cal-block-line2,
+.cal-tooltip-type,
+.cal-tooltip-meta,
+.cal-tooltip-badge,
+.cal-day-popup-ev-sub,
+.cal-day-popup-ev-meta,
+.cal-mini-dow,
+.cal-mini-day { font-size: .6875rem; }
 </style>
 {% endblock %}
 

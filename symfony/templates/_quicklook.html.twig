@@ -11,7 +11,12 @@
     position: absolute; inset: 0;
     background: linear-gradient(to top, var(--tblr-bg-surface) 2%, rgba(0,0,0,.15) 60%, rgba(0,0,0,.35) 100%);
   }
-  .ql-close { position: absolute; top: .75rem; right: .75rem; z-index: 2; filter: drop-shadow(0 0 2px rgba(0,0,0,.8)); }
+  /* Close must survive any hero artwork: 32px circular target on a permanent
+     dark scrim, full-opacity glyph (was Bootstrap's 14px at 40% opacity). */
+  .ql-close { position: absolute; top: .75rem; right: .75rem; z-index: 2;
+    width: 32px; height: 32px; padding: 0; border-radius: 50%; opacity: 1;
+    background-color: rgba(0,0,0,.55); background-size: .85rem; }
+  .ql-close:hover, .ql-close:focus { opacity: 1; background-color: rgba(0,0,0,.75); }
   .ql-body { display: flex; gap: 1.25rem; padding: 0 1.5rem 1.5rem; margin-top: -60px; position: relative; z-index: 1; }
   @media (max-width: 576px) { .ql-body { flex-direction: column; align-items: center; text-align: center; } }
   .ql-poster { width: 120px; aspect-ratio: 2/3; object-fit: cover; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.45); flex-shrink: 0; }

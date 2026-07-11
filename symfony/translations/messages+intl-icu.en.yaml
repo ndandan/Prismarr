@@ -1037,6 +1037,9 @@ admin:
 
 decouverte:
   title: Discover
+  countdown_prefix: 'D-'
+  badge_type_film: Movie
+  badge_type_series: TV
   search_placeholder: 'Search a movie or TV show on TMDb…'
   actions:
     filters: Filters
@@ -1298,7 +1301,7 @@ media:
     no_file: No file
     no_missing_episodes: No missing monitored episode.
     network_error: Network or upstream error. Check the service is reachable.
-    warning_format: '{source}: {message}'
+    warning_format: '{message}'
   label:
     season_prefix: 'Season {number}'
 

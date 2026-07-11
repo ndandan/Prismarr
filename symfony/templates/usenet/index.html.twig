@@ -257,6 +257,9 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
         <span class="input-group-text" title="{{ 'usenet.toolbar.speed_limit'|trans }}">{{ ico.icon('bolt', '', 14) }}</span>
         <input type="number" min="0" step="1" class="form-control" data-usenet-speed
                placeholder="{{ 'usenet.toolbar.speed_limit_placeholder'|trans }}" aria-label="{{ 'usenet.toolbar.speed_limit'|trans }}">
+        {# Visible unit so a filled value never reads as a naked number
+           (the unit used to live only in the placeholder). #}
+        <span class="input-group-text">MB/s</span>
       </div>
       <div class="ms-auto d-flex align-items-center gap-2 flex-shrink-0">
         <span class="text-muted" style="font-size:.78rem;white-space:nowrap;font-weight:500;">{{ 'usenet.filters.sort_label'|trans }}</span>
