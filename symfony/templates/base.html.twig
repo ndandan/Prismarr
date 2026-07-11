@@ -747,7 +747,10 @@
         </button>
 
         <div class="navbar-brand navbar-brand-autodark">
-          <a href="{{ path('tmdb_index') }}" class="d-flex align-items-center gap-2 text-decoration-none">
+          {# Logo → the home route, which resolves the admin's display_home_page
+             preference (dashboard/discovery/films/…/last-visited), instead of
+             hardcoding Discover. #}
+          <a href="{{ path('app_home') }}" class="d-flex align-items-center gap-2 text-decoration-none">
             <img src="{{ asset('img/prismarr/prismarr-icon-512.png') }}" alt="Prismarr" width="28" height="28" style="border-radius:5px;">
             <span class="fw-bold fs-4" style="color: var(--tblr-primary)">Prismarr</span>
           </a>

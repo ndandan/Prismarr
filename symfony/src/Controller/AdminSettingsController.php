@@ -245,6 +245,7 @@ class AdminSettingsController extends AbstractController
                 'pink'   => '#ec4899',
                 'blue'   => '#3b82f6',
             ],
+            'help' => 'admin.display.theme_color.help',
         ],
         'display_theme' => [
             'label'   => 'admin.display.theme.label',

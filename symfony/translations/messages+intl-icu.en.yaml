@@ -535,7 +535,7 @@ dashboard:
     discover: 'View in Discover'
     close: 'Close'
     runtime: '{min} min'
-    seasons: '{count} seasons'
+    seasons: '{count, plural, one {# season} other {# seasons}}'
     error: "Couldn't load the preview"
     providers: 'Available on'
     trailer: 'Trailer'
@@ -863,9 +863,10 @@ admin:
         '12h': '12h (2:30 PM)'
     theme_color:
       label: Primary colour
+      help: Accent for buttons, links and highlights. “Auto” keeps the accent that comes with your theme.
     theme:
       label: Theme
-      help: Colour scheme for the whole interface.
+      help: Full colour scheme (background, surfaces, text) for the interface. Each theme ships its own accent — override it with Primary colour above.
       preset:
         midnight: Midnight
         nord: Nord
