@@ -15,6 +15,10 @@
 .pw-search-results { max-height:500px; overflow-y:auto; }
 .pw-result-row { font-size:.8rem; }
 .pw-result-row td { padding:.35rem .5rem !important; }
+/* The ADDED column is the least-read one; below ~1550px viewport the full
+   table outgrows the card and clips the actions column, so drop it first.
+   (Bootstrap's xxl breakpoint at 1400px is below the real fit point.) */
+@media (max-width: 1549.98px) { .pw-col-added { display:none; } }
 .pw-toggle-btn { cursor:pointer; padding:2px 6px; border-radius:.25rem; border:1px solid var(--tblr-border-color); background:none; transition:all .15s; font-size:.7rem; }
 .pw-toggle-btn:hover { border-color:var(--tblr-primary); }
 .pw-toggle-btn.is-on { background:rgba(34,197,94,.15); border-color:#22c55e; color:#22c55e; }
@@ -153,7 +157,7 @@
                         <th>{{ 'prowlarr.index.col_grabs'|trans }}</th>
                         <th>{{ 'prowlarr.index.col_failures'|trans }}</th>
                         <th>{{ 'prowlarr.index.col_health'|trans }}</th>
-                        <th class="d-none d-xxl-table-cell">{{ 'prowlarr.index.col_added'|trans }}</th>
+                        <th class="pw-col-added">{{ 'prowlarr.index.col_added'|trans }}</th>
                         <th class="text-end">{{ 'prowlarr.index.col_actions'|trans }}</th>
                     </tr>
                 </thead>
@@ -220,7 +224,7 @@
                                     <span class="d-flex align-items-center gap-1 text-success small"><span class="status-dot status-dot-animated bg-success"></span> {{ 'prowlarr.index.status_ok'|trans }}</span>
                                 {% endif %}
                             </td>
-                            <td class="text-secondary small text-nowrap d-none d-xxl-table-cell">{{ idx.added ? idx.added|date('d/m/Y') : '—' }}</td>
+                            <td class="text-secondary small text-nowrap pw-col-added">{{ idx.added ? idx.added|date('d/m/Y') : '—' }}</td>
                             <td class="text-end">
                                 <div class="d-flex gap-1 justify-content-end">
                                     <button class="btn btn-sm btn-ghost-secondary p-1" data-edit-id="{{ idx.id }}" title="{{ 'prowlarr.common.edit'|trans }}">
