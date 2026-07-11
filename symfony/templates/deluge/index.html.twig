@@ -323,14 +323,14 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     </div>
     <div class="col-6 col-md-4 col-lg-2">
         <div class="card card-sm qbt-stat-card"><div class="card-body">
-            <span class="stat-val" style="color:#f59e0b" id="qbt-stat-paused">{{ stats.paused ?? 0 }}</span>
+            <span class="stat-val" style="color:{{ (stats.paused ?? 0) > 0 ? '#f59e0b' : 'var(--tblr-text-secondary)' }}" id="qbt-stat-paused">{{ stats.paused ?? 0 }}</span>
             <div class="stat-lbl mt-1">{{ 'qbittorrent.stats.paused'|trans }}</div>
             <svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></svg>
         </div></div>
     </div>
     <div class="col-6 col-md-4 col-lg-2">
         <div class="card card-sm qbt-stat-card"><div class="card-body">
-            <span class="stat-val" style="color:#ef4444" id="qbt-stat-error">{{ stats.errored ?? 0 }}</span>
+            <span class="stat-val" style="color:{{ (stats.errored ?? 0) > 0 ? '#ef4444' : 'var(--tblr-text-secondary)' }}" id="qbt-stat-error">{{ stats.errored ?? 0 }}</span>
             <div class="stat-lbl mt-1">{{ 'qbittorrent.stats.errored'|trans }}</div>
             <svg class="stat-icon" xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5"><circle cx="12" cy="12" r="9"/><path d="M12 8v4m0 4h.01"/></svg>
         </div></div>
@@ -1183,6 +1183,10 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         function set(id, val) { var el = document.getElementById(id); if (el) el.textContent = val; }
         set('qbt-stat-total', s.total); set('qbt-stat-dl', s.downloading); set('qbt-stat-seed', s.seeding);
         set('qbt-stat-paused', s.paused); set('qbt-stat-error', s.errored);
+        // Semantic hues must be earned: orange/red only when the count is
+        // nonzero, otherwise the numeral goes neutral like the total.
+        function hue(id, n, c) { var el = document.getElementById(id); if (el) el.style.color = n > 0 ? c : 'var(--tblr-text-secondary)'; }
+        hue('qbt-stat-paused', s.paused, '#f59e0b'); hue('qbt-stat-error', s.errored, '#ef4444');
         var dlEl = document.getElementById('qbt-speed-dl'); if (dlEl) dlEl.innerHTML = s.dl_speed > 0 ? ('&#8595; ' + fmtSpeed(s.dl_speed)) : '&nbsp;';
         var upEl = document.getElementById('qbt-speed-up'); if (upEl) upEl.innerHTML = s.up_speed > 0 ? ('&#8593; ' + fmtSpeed(s.up_speed)) : '&nbsp;';
         var dot = document.getElementById('qbt-conn-dot');

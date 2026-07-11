@@ -64,7 +64,7 @@
     </div>
     <div class="col-6 col-lg-2">
         <div class="card card-sm"><div class="card-body text-center">
-            <div class="pw-stat text-danger">{{ stats.failing ?? 0 }}</div>
+            <div class="pw-stat {{ (stats.failing ?? 0) > 0 ? 'text-danger' : 'text-secondary' }}">{{ stats.failing ?? 0 }}</div>
             <div class="text-secondary small">{{ 'prowlarr.index.stats_failing'|trans }}</div>
         </div></div>
     </div>
@@ -153,7 +153,7 @@
                         <th>{{ 'prowlarr.index.col_grabs'|trans }}</th>
                         <th>{{ 'prowlarr.index.col_failures'|trans }}</th>
                         <th>{{ 'prowlarr.index.col_health'|trans }}</th>
-                        <th>{{ 'prowlarr.index.col_added'|trans }}</th>
+                        <th class="d-none d-xxl-table-cell">{{ 'prowlarr.index.col_added'|trans }}</th>
                         <th class="text-end">{{ 'prowlarr.index.col_actions'|trans }}</th>
                     </tr>
                 </thead>
@@ -220,7 +220,7 @@
                                     <span class="d-flex align-items-center gap-1 text-success small"><span class="status-dot status-dot-animated bg-success"></span> {{ 'prowlarr.index.status_ok'|trans }}</span>
                                 {% endif %}
                             </td>
-                            <td class="text-secondary small text-nowrap">{{ idx.added ? idx.added|date('d/m/Y') : '—' }}</td>
+                            <td class="text-secondary small text-nowrap d-none d-xxl-table-cell">{{ idx.added ? idx.added|date('d/m/Y') : '—' }}</td>
                             <td class="text-end">
                                 <div class="d-flex gap-1 justify-content-end">
                                     <button class="btn btn-sm btn-ghost-secondary p-1" data-edit-id="{{ idx.id }}" title="{{ 'prowlarr.common.edit'|trans }}">
@@ -229,10 +229,13 @@
                                     <button class="btn btn-sm btn-ghost-secondary p-1" data-test-id="{{ idx.id }}" title="{{ 'prowlarr.common.test'|trans }}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12l5 5l10-10"/></svg>
                                     </button>
-                                    <button class="pw-toggle-btn {{ idx.enabled ? 'is-on' : 'is-off' }}" data-toggle-id="{{ idx.id }}" title="{{ idx.enabled ? 'prowlarr.index.toggle_disable_title'|trans : 'prowlarr.index.toggle_enable_title'|trans }}">
-                                        {{ idx.enabled ? 'prowlarr.common.on'|trans : 'prowlarr.common.off'|trans }}
-                                    </button>
-                                    <button class="btn btn-sm btn-ghost-danger p-1" data-delete-id="{{ idx.id }}" data-delete-name="{{ idx.name }}" title="{{ 'prowlarr.common.delete'|trans }}">
+                                    {# Enabled state as a switch: position IS the state, so it can't
+                                       read as a mislabeled action button; the destructive delete is
+                                       separated from it by an extra gap. #}
+                                    <label class="form-check form-switch m-0 d-inline-flex align-items-center" title="{{ idx.enabled ? 'prowlarr.index.toggle_disable_title'|trans : 'prowlarr.index.toggle_enable_title'|trans }}">
+                                        <input class="form-check-input" type="checkbox" data-toggle-id="{{ idx.id }}" {% if idx.enabled %}checked{% endif %}>
+                                    </label>
+                                    <button class="btn btn-sm btn-ghost-danger p-1 ms-2" data-delete-id="{{ idx.id }}" data-delete-name="{{ idx.name }}" title="{{ 'prowlarr.common.delete'|trans }}">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6M14 11v6M5 7l1 12a2 2 0 002 2h8a2 2 0 002-2l1-12M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3"/></svg>
                                     </button>
                                 </div>
@@ -702,13 +705,14 @@
         return fields;
     }
 
-    // ── Toggle ON/OFF ──
-    document.querySelectorAll('[data-toggle-id]').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            btn.disabled = true; btn.textContent = '…';
-            fetch('/prowlarr/indexer/' + btn.dataset.toggleId + '/toggle', { method: 'POST' })
+    // ── Toggle ON/OFF (Tabler switch — checked state mirrors the server) ──
+    document.querySelectorAll('[data-toggle-id]').forEach(function (input) {
+        input.addEventListener('change', function () {
+            input.disabled = true;
+            fetch('/prowlarr/indexer/' + input.dataset.toggleId + '/toggle', { method: 'POST' })
                 .then(function (r) { return r.json(); })
-                .then(function (d) { btn.disabled = false; if (d.ok) { btn.classList.toggle('is-on', d.enabled); btn.classList.toggle('is-off', !d.enabled); btn.textContent = d.enabled ? 'ON' : 'OFF'; } });
+                .then(function (d) { input.disabled = false; input.checked = d.ok ? d.enabled : !input.checked; })
+                .catch(function () { input.disabled = false; input.checked = !input.checked; });
         });
     });
 
