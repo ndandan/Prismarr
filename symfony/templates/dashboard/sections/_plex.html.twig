@@ -2,7 +2,7 @@
 <div data-section-key="plex">
 {% if services_configured.tautulli %}
 <div class="row row-cards mb-3">
-  <div class="col-12" id="plex-activity" data-dash-widget="plex" data-dash-url="{{ path('app_dashboard_widget_plex') }}">
+  <div class="col-12" id="plex-activity" data-dash-widget="plex" data-dash-url="{{ path('app_dashboard_widget_plex') }}" data-dash-poll="10000">
     <div class="card h-100">
       <div class="card-header">
         <h3 class="card-title">

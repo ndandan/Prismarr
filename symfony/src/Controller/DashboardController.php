@@ -17,6 +17,7 @@ use App\Service\Media\UnraidClient;
 use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -271,6 +272,58 @@ class DashboardController extends AbstractController implements ResetInterface
         return $this->render('dashboard/_requests.html.twig', [
             'jellyseerr_requests' => $this->pendingRequests(),
         ]);
+    }
+
+    /**
+     * Combined live-widget fragment endpoint (#perf). The dashboard's five
+     * "live" widgets (plex/health/server/houndarr/network) poll on staggered
+     * cadences; instead of one timer + one HTTP request each, the client
+     * coalesces every widget due on a given tick into a single request here and
+     * we render each requested fragment into a { name: html } JSON map.
+     *
+     * Reuses the individual widget actions verbatim, so their admin gates,
+     * empty-when-unconfigured contract and fail-open behaviour are identical. A
+     * widget that renders empty (not applicable) or an unknown name is omitted
+     * from the map — the client then leaves that node at its last value, which
+     * matches each per-widget poll's own "keep last on empty" behaviour.
+     */
+    #[Route('/tableau-de-bord/widgets', name: 'app_dashboard_widgets')]
+    public function widgets(Request $request): Response
+    {
+        set_time_limit(60);
+
+        $names = array_filter(array_map('trim', explode(',', (string) $request->query->get('w', ''))));
+        $out = [];
+        foreach (array_unique($names) as $name) {
+            $fragment = $this->renderLiveWidget($name);
+            if ($fragment === null) {
+                continue;
+            }
+            $html = (string) $fragment->getContent();
+            if (trim($html) === '') {
+                continue;
+            }
+            $out[$name] = $html;
+        }
+
+        return $this->json($out);
+    }
+
+    /**
+     * Dispatch a live-widget name to its existing fragment action. Unknown
+     * names return null (omitted from the combined map). Kept in sync with the
+     * data-dash-poll nodes in the dashboard section partials.
+     */
+    private function renderLiveWidget(string $name): ?Response
+    {
+        return match ($name) {
+            'plex'     => $this->widgetPlex(),
+            'health'   => $this->widgetHealth(),
+            'server'   => $this->widgetServer(),
+            'houndarr' => $this->widgetHoundarr(),
+            'network'  => $this->widgetNetwork(),
+            default    => null,
+        };
     }
 
     /**
