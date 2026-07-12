@@ -61,14 +61,6 @@
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
 .queue-progress-bar { height: 100%; border-radius: 2px; background: var(--tblr-primary); transition: width .3s; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
-/* Issue #19 — status filter buttons: outlined variants with a tinted active state */
-.filter-btn { font-weight: 500; }
-.filter-btn.active { color: #fff !important; }
-.filter-btn[data-filter="all"].active,
-.filter-btn[data-filter="unmonitored"].active { background-color: var(--tblr-secondary) !important; border-color: var(--tblr-secondary) !important; }
-.filter-btn[data-filter="monitored"].active { background-color: var(--tblr-info) !important; border-color: var(--tblr-info) !important; }
-.filter-btn[data-filter="downloaded"].active { background-color: var(--tblr-success) !important; border-color: var(--tblr-success) !important; }
-.filter-btn[data-filter="missing"].active { background-color: var(--tblr-warning) !important; border-color: var(--tblr-warning) !important; }
 
 /* ── Modal film detail ── */
 .film-header-backdrop {
@@ -347,11 +339,17 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
           <input type="text" name="q" id="search-input" class="form-control form-control-sm" placeholder="{{ 'media.films.filters.search_placeholder'|trans }}" style="max-width:220px" value="{{ query.q }}" autocomplete="off">
           <div class="d-flex gap-1 flex-wrap flex-md-nowrap films-status-group flex-fill">
-            <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'all' %} active{% endif %}" data-filter="all">{{ 'media.films.filters.status.all'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-success filter-btn flex-fill{% if query.status == 'downloaded' %} active{% endif %}" data-filter="downloaded">{{ 'media.films.filters.status.downloaded'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-warning filter-btn flex-fill{% if query.status == 'missing' %} active{% endif %}" data-filter="missing">{{ 'media.films.filters.status.missing'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'unmonitored' %} active{% endif %}" data-filter="unmonitored">{{ 'media.films.filters.status.unmonitored'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-info filter-btn flex-fill{% if query.status == 'monitored' %} active{% endif %}" data-filter="monitored">{{ 'media.films.filters.status.monitored'|trans }}</button>
+            {% include '_filter_pills.html.twig' with {
+              active: query.status,
+              fill: true,
+              pills: [
+                { filter: 'all',         label: 'media.films.filters.status.all'|trans,         hue: 'var(--tblr-secondary)' },
+                { filter: 'downloaded',  label: 'media.films.filters.status.downloaded'|trans,  hue: 'var(--tblr-success)' },
+                { filter: 'missing',     label: 'media.films.filters.status.missing'|trans,     hue: 'var(--tblr-warning)' },
+                { filter: 'unmonitored', label: 'media.films.filters.status.unmonitored'|trans, hue: 'var(--tblr-secondary)' },
+                { filter: 'monitored',   label: 'media.films.filters.status.monitored'|trans,   hue: 'var(--tblr-info)' }
+              ]
+            } only %}
           </div>
         </div>
         {# Row 2: 4 dropdowns sharing the available width via flex-fill. #}
@@ -1389,7 +1387,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
      ══════════════════════════════════════════════════════════════════════════ */
   var grid    = document.getElementById('movies-grid');
   var search  = document.getElementById('search-input');
-  var btnAll  = document.querySelectorAll('#films-filter-form .filter-btn');
+  var btnAll  = document.querySelectorAll('#films-filter-form .filter-pill');
   var counter = document.getElementById('count-label'); // peut être null
   var filmsShelfView = document.getElementById('films-shelf-view');
   var filterForm   = document.getElementById('films-filter-form');

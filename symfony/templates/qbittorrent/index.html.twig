@@ -137,17 +137,6 @@ body[data-bs-theme="dark"] .qbt-bar-wrap { background:rgba(255,255,255,.06); }
 /* ══════════════════════════════════════════════════════════════════════════
    Filtres + recherche
    ══════════════════════════════════════════════════════════════════════════ */
-.qbt-filter-btn { border-radius:6px !important; background:transparent !important; font-size:.78rem; padding:4px 10px; transition:all .15s; }
-.qbt-filter-btn:hover { background:rgba(47,103,186,.06) !important; }
-.qbt-filter-btn.active { font-weight:600; }
-.qbt-filter-btn[data-filter="all"].active         { background:rgba(107,114,128,.15) !important; color:#6b7280 !important; }
-.qbt-filter-btn[data-filter="active"].active      { background:rgba(250,204,21,.18) !important; color:#b45309 !important; }
-.qbt-filter-btn[data-filter="downloading"].active { background:rgba(59,130,246,.15) !important; color:#3b82f6 !important; }
-.qbt-filter-btn[data-filter="seeding"].active     { background:rgba(34,197,94,.15) !important; color:#22c55e !important; }
-.qbt-filter-btn[data-filter="stalled"].active     { background:rgba(249,115,22,.15) !important; color:#f97316 !important; }
-.qbt-filter-btn[data-filter="paused"].active      { background:rgba(245,158,11,.15) !important; color:#f59e0b !important; }
-.qbt-filter-btn[data-filter="completed"].active   { background:rgba(20,184,166,.15) !important; color:#14b8a6 !important; }
-.qbt-filter-btn[data-filter="error"].active       { background:rgba(239,68,68,.15) !important; color:#ef4444 !important; }
 
 .qbt-filter-badge { display:inline-block; margin-left:4px; padding:0 5px; font-size:.6rem; background:rgba(0,0,0,.08); border-radius:8px; font-weight:700; }
 
@@ -441,14 +430,19 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
                 <input type="text" id="qbt-search" class="form-control form-control-sm" placeholder="{{ 'qbittorrent.filters.search_placeholder'|trans }}" autocomplete="off">
             </div>
             <div class="d-flex gap-1 flex-wrap">
-                <button class="btn btn-sm qbt-filter-btn active" data-filter="all">{{ 'qbittorrent.filters.all'|trans }}</button>
-                <button class="btn btn-sm qbt-filter-btn" data-filter="active" title="{{ 'qbittorrent.filters.active_title'|trans }}">{{ 'qbittorrent.filters.active'|trans }}</button>
-                <button class="btn btn-sm qbt-filter-btn" data-filter="downloading">{{ 'qbittorrent.filters.downloading'|trans }}</button>
-                <button class="btn btn-sm qbt-filter-btn" data-filter="seeding">{{ 'qbittorrent.filters.seeding'|trans }}</button>
-                <button class="btn btn-sm qbt-filter-btn" data-filter="stalled">{{ 'qbittorrent.filters.stalled'|trans }}</button>
-                <button class="btn btn-sm qbt-filter-btn" data-filter="paused">{{ 'qbittorrent.filters.paused'|trans }}</button>
-                <button class="btn btn-sm qbt-filter-btn" data-filter="completed">{{ 'qbittorrent.filters.completed'|trans }}</button>
-                <button class="btn btn-sm qbt-filter-btn" data-filter="error">{{ 'qbittorrent.filters.error'|trans }}</button>
+                {% include '_filter_pills.html.twig' with {
+                  active: 'all',
+                  pills: [
+                    { filter: 'all',         label: 'qbittorrent.filters.all'|trans,         hue: '#6b7280' },
+                    { filter: 'active',      label: 'qbittorrent.filters.active'|trans,      hue: '#b45309', title: 'qbittorrent.filters.active_title'|trans },
+                    { filter: 'downloading', label: 'qbittorrent.filters.downloading'|trans, hue: '#3b82f6' },
+                    { filter: 'seeding',     label: 'qbittorrent.filters.seeding'|trans,     hue: '#22c55e' },
+                    { filter: 'stalled',     label: 'qbittorrent.filters.stalled'|trans,     hue: '#f97316' },
+                    { filter: 'paused',      label: 'qbittorrent.filters.paused'|trans,      hue: '#f59e0b' },
+                    { filter: 'completed',   label: 'qbittorrent.filters.completed'|trans,   hue: '#14b8a6' },
+                    { filter: 'error',       label: 'qbittorrent.filters.error'|trans,       hue: '#ef4444' }
+                  ]
+                } only %}
             </div>
             <span class="text-muted small ms-auto" id="qbt-count">{{ 'qbittorrent.count_tpl'|trans({count: torrents|length}) }}</span>
             <div class="d-flex gap-1">
@@ -1593,7 +1587,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     });
 
     // ── Filtres ─────────────────────────────────────────────────────────────
-    var filterBtns = document.querySelectorAll('.qbt-filter-btn');
+    var filterBtns = document.querySelectorAll('.filter-pill');
     for (var i = 0; i < filterBtns.length; i++) {
         // onclick (pas addEventListener) — évite les doublons après re-exec Turbo
         filterBtns[i].onclick = function(){
@@ -2062,8 +2056,8 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     // ── Init ────────────────────────────────────────────────────────────────
     applyView(currentView);
     syncSortUI();
-    // Aligne l'état avec le filtre actif (.qbt-filter-btn.active)
-    var activeFilter = document.querySelector('.qbt-filter-btn.active');
+    // Aligne l'état avec le filtre actif (.filter-pill.active)
+    var activeFilter = document.querySelector('.filter-pill.active');
     if (activeFilter) pagState.filter = activeFilter.dataset.filter || 'all';
     refreshData();    // premier fetch immédiat (applique pagination+tri+filtre serveur)
     startRefresh();
