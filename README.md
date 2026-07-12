@@ -138,6 +138,10 @@ part of the original project:
 - **Houndarr widget:** a read-only dashboard stat tile for
   [Houndarr](https://github.com/av1155/houndarr) backlog searching — tracked /
   eligible / cooldown / unreleased counts and 7-day searches, plus a health chip.
+- **UniFi Network widget:** an admin-only dashboard section for the UniFi OS
+  Network API — live WAN up/download bandwidth, client counts
+  (wired/wireless/guest), a 24-hour usage graph, and per-device infrastructure
+  status (gateway/switches/APs) with gateway CPU/RAM.
 
 The full details live in [docs/FORK-CHANGES.md](docs/FORK-CHANGES.md) and the
 [CHANGELOG](CHANGELOG.md). The fork is run daily on a real homelab (Unraid),
@@ -161,6 +165,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs with a per-user filter, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
 - **Houndarr (fork):** optional dashboard stat tile with backlog-search totals and a health chip.
+- **UniFi network monitoring (fork):** optional admin-only dashboard section — live WAN up/download, client counts (wired/wireless/guest), a 24-hour usage graph and gateway/switch/AP status, via the UniFi OS Network API.
 - **Preferences:** theme, UI density, timezone, date format, English / French UI, settings export / import (credentials always stripped).
 - **Security:** Symfony auth with login rate-limiter, non-root container, dynamic CSP, SSRF protection on user-provided URLs, CSRF on every mutation.
 

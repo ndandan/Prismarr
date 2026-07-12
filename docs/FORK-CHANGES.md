@@ -5,7 +5,7 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-07-10 (covers 2026-06-13 → 2026-07-10).*
+*Last updated: 2026-07-11 (covers 2026-06-13 → 2026-07-11).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
@@ -255,6 +255,78 @@ container in dark, light and 390 px widths.
 
 **Files:** the eight `symfony/templates/setup/*.html.twig` templates (merge
 `968da85`, 4 commits).
+
+### Runtime & performance (2026-07-10 → 2026-07-11)
+
+A batch of runtime work, some general enough to propose upstream later:
+
+- **Opt-in FrankenPHP/Symfony worker mode** (`PRISMARR_WORKER`, default OFF).
+  Boots the Symfony kernel once and keeps it resident, skipping the
+  per-request bootstrap — the single biggest remaining per-request cost. On the
+  homelab it cut a health poll ~46 ms → ~3 ms (~15×) and a large Films render
+  ~3.0 s → ~0.3 s (~10×); TMDb-bound pages are unchanged, as expected.
+  Symfony 8's default runtime drives FrankenPHP's worker loop natively (no
+  `APP_RUNTIME` / extra Composer package). Correctness across the shared-kernel
+  boundary rests on every request-scoped service implementing `ResetInterface`;
+  this closed the last two gaps (`HealthService`, `DashboardController`), which
+  also removed a latent staleness edge in classic mode. `PRISMARR_WORKER_NUM`
+  pins the thread count.
+- **OPcache preload of the framework + app class graph.** `php.ini` sets
+  `opcache.preload` to Symfony's `config/preload.php` (backed by the build-time
+  `cache:warmup`), linking ~1,300 classes into shared memory at boot. FrankenPHP
+  reports `PHP_SAPI` as `frankenphp` (not `embed`), so Symfony's preload runs
+  rather than short-circuiting (verified: 1,336 scripts preloaded).
+- **Dashboard poller consolidation.** The dashboard's five live widgets (Plex
+  10 s; health/server/network 30 s; Houndarr 60 s) each ran their own
+  `setInterval` + fragment request, firing up to four simultaneous requests at
+  the 30 s alignment. One coalescing scheduler now ticks at the GCD of the
+  cadences and batches every widget due on a tick into a single
+  `GET /tableau-de-bord/widgets?w=…` request returning a `{name: html}` map —
+  ~13 → ~6 requests/min, aligned burst collapsed to one. Cadences are declared
+  per widget via `data-dash-poll`; initial hydration still fetches each fragment
+  in parallel for fast first paint; fail-open / hidden-tab / Turbo-singleton
+  behaviour is preserved.
+
+### Mobile & settings polish (2026-07-10)
+
+- **Library filters collapse into a drawer on mobile.** Below 992 px the
+  Films/Series filter card becomes a Bootstrap offcanvas opened by a
+  `Filtres (n)` button, with an **Apply** button that runs a single navigation
+  (no reload-per-tap); at ≥992 px the toolbar is inline exactly as before.
+  Discover's Filters panel becomes a slide-in drawer at all widths. One
+  responsive offcanvas markup drives both states.
+- **Settings service-cards pack tightly.** The "Services externes" grid used
+  row tracks sized to the tallest card, leaving dead space beside short cards;
+  it's now CSS multi-column packing (`columns: 2 320px`) with the multi-instance
+  Radarr/Sonarr cards spanning both columns.
+
+### Design-critique & accessibility pass (2026-07-11)
+
+A dual-agent design critique run at the owner's request drove a fork-only
+polish round (merge `5e62504`); all additive, several upstream-worthy:
+
+- **Light-preset legibility.** Four of the 17 theme presets set `light`, so
+  `data-bs-theme="light"` is reachable — but fork components hardcoded dark
+  colour literals (calendar numbers/labels/pills, Jellyseerr hero, Prowlarr
+  chips/labels, changelog text, series-detail header). Those are now theme
+  tokens (or pinned opaque-dark where the surface is deliberately dark).
+- **Calendar quick-look + legend-true colours.** Calendar events now open the
+  app-global quick-look in place (library detail for known items, media page
+  otherwise) instead of ejecting to `/medias?open=…`; episode blocks recoloured
+  to the blue/cyan family that matches their filter-chip legend.
+- **Keyboard accessibility.** Media/watchlist/calendar cards that open the
+  quick-look gained `tabindex=0` + `role=button` + `aria-label` + a shared
+  Enter/Space handler and a `:focus-visible` ring.
+- **Tabler round 3.** Sparse `.ribbon` "New" flags on items added ≤7 days, and
+  an `.avatar-list` of current Plex viewers on the dashboard widget.
+- **Locale-aware TMDb regions.** Release dates, certifications and watch
+  providers were hardcoded FR-first; a new `TmdbClient::regionPriority(locale)`
+  drives country ordering from the active UI locale (en → US/GB, fr → FR/BE, …)
+  with a common fallback, wired through every pick site and unit-tested.
+- **Shared component vocabulary.** Three near-duplicated patterns unified into
+  reusable partials — `_view_switcher`, `_stat_tiles`, `_filter_pills` — with
+  one CSS vocabulary; the infinite `dl-pulse` sidebar animation retired for a
+  static glow + reduced-motion-guarded pulse-on-increase.
 
 ---
 
