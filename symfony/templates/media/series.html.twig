@@ -26,6 +26,8 @@
     transition: transform .15s, box-shadow .15s;
 }
 .media-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.3); z-index: 2; }
+/* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
+.media-card .ribbon { font-size: .56rem; font-weight: 700; padding: .05rem .4rem; z-index: 3; letter-spacing: .03em; }
 .media-card .hover-info {
     position: absolute; inset: 0;
     background: rgba(0,0,0,.75);
@@ -97,16 +99,6 @@
 .ep-bar-fill { height: 100%; border-radius: 2px; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
 .queue-progress-bar { height: 100%; border-radius: 2px; background: var(--tblr-primary); transition: width .3s; }
-/* Issue #19 — status filter buttons: outlined variants with a tinted active state */
-.filter-btn { font-weight: 500; }
-.filter-btn.active { color: #fff !important; }
-.filter-btn[data-filter="all"].active,
-.filter-btn[data-filter="ended"].active,
-.filter-btn[data-filter="unmonitored"].active { background-color: var(--tblr-secondary) !important; border-color: var(--tblr-secondary) !important; }
-.filter-btn[data-filter="monitored"].active { background-color: var(--tblr-info) !important; border-color: var(--tblr-info) !important; }
-.filter-btn[data-filter="continuing"].active { background-color: var(--tblr-success) !important; border-color: var(--tblr-success) !important; }
-.filter-btn[data-filter="anime"].active { background-color: var(--tblr-purple) !important; border-color: var(--tblr-purple) !important; }
-.filter-btn[data-filter="missing"].active { background-color: var(--tblr-danger) !important; border-color: var(--tblr-danger) !important; }
 /* Mode sélection */
 .select-mode .media-card { cursor: pointer; }
 .select-mode .media-card .select-cb { display: flex !important; }
@@ -292,15 +284,13 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
 
 <div id="sonarr-warnings-banner"></div>
 
-{# ── Stats (compact strip — #7) ── #}
-<div class="card card-sm mb-3">
-  <div class="card-body py-2 d-flex flex-wrap align-items-baseline justify-content-around gap-2 gap-sm-3">
-    <div><span class="h3 mb-0">{{ stats.total }}</span> <span class="text-muted small">{{ 'media.series.stats.total'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-success">{{ stats.continuing }}</span> <span class="text-muted small">{{ 'media.series.stats.continuing'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-secondary">{{ stats.ended }}</span> <span class="text-muted small">{{ 'media.series.stats.ended'|trans }}</span></div>
-    <div><span class="h3 mb-0">{{ stats.totalGb }} <span class="text-muted fs-5">{{ 'media.series.stats.gb_suffix'|trans }}</span></span> <span class="text-muted small">{{ 'media.series.stats.total_size'|trans }}</span></div>
-  </div>
-</div>
+{# ── Stats (compact strip — #7, shared partial) ── #}
+{% include '_stat_tiles.html.twig' with { layout:'strip', tiles:[
+  { value: stats.total,      label: 'media.series.stats.total'|trans },
+  { value: stats.continuing, label: 'media.series.stats.continuing'|trans, hue:'success' },
+  { value: stats.ended,      label: 'media.series.stats.ended'|trans,      hue:'secondary' },
+  { value: stats.totalGb,    label: 'media.series.stats.total_size'|trans, unit: 'media.series.stats.gb_suffix'|trans }
+] } only %}
 
 {# ── Download queue (auto-refresh) ── #}
 <div class="card mb-3" id="queue-card" style="{{ queue is empty ? 'display:none;' : '' }}">
@@ -382,13 +372,19 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
           <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
             <input type="text" name="q" id="search-input" class="form-control form-control-sm" placeholder="{{ 'media.series.filters.search_placeholder'|trans }}" style="max-width:220px" value="{{ query.q }}" autocomplete="off">
             <div class="d-flex gap-1 flex-wrap flex-md-nowrap series-status-group flex-fill">
-              <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'all' %} active{% endif %}" data-filter="all">{{ 'media.series.filters.status.all'|trans }}</button>
-              <button type="button" class="btn btn-sm btn-outline-success filter-btn flex-fill{% if query.status == 'continuing' %} active{% endif %}" data-filter="continuing">{{ 'media.series.filters.status.continuing'|trans }}</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'ended' %} active{% endif %}" data-filter="ended">{{ 'media.series.filters.status.ended'|trans }}</button>
-              <button type="button" class="btn btn-sm btn-outline-purple filter-btn flex-fill{% if query.status == 'anime' %} active{% endif %}" data-filter="anime">{{ 'media.series.filters.status.anime'|trans }}</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'unmonitored' %} active{% endif %}" data-filter="unmonitored">{{ 'media.series.filters.status.unmonitored'|trans }}</button>
-              <button type="button" class="btn btn-sm btn-outline-info filter-btn flex-fill{% if query.status == 'monitored' %} active{% endif %}" data-filter="monitored">{{ 'media.series.filters.status.monitored'|trans }}</button>
-              <button type="button" class="btn btn-sm btn-outline-danger filter-btn flex-fill{% if query.status == 'missing' %} active{% endif %}" data-filter="missing">{{ 'media.series.filters.status.missing'|trans }}</button>
+              {% include '_filter_pills.html.twig' with {
+                active: query.status,
+                fill: true,
+                pills: [
+                  { filter: 'all',         label: 'media.series.filters.status.all'|trans,         hue: 'var(--tblr-secondary)' },
+                  { filter: 'continuing',  label: 'media.series.filters.status.continuing'|trans,  hue: 'var(--tblr-success)' },
+                  { filter: 'ended',       label: 'media.series.filters.status.ended'|trans,       hue: 'var(--tblr-secondary)' },
+                  { filter: 'anime',       label: 'media.series.filters.status.anime'|trans,       hue: 'var(--tblr-purple)' },
+                  { filter: 'unmonitored', label: 'media.series.filters.status.unmonitored'|trans, hue: 'var(--tblr-secondary)' },
+                  { filter: 'monitored',   label: 'media.series.filters.status.monitored'|trans,   hue: 'var(--tblr-info)' },
+                  { filter: 'missing',     label: 'media.series.filters.status.missing'|trans,     hue: 'var(--tblr-danger)' }
+                ]
+              } only %}
             </div>
           </div>
           {# Row 2: 3 dropdowns (genre, network, sort) sharing the available width via flex-fill. #}
@@ -554,6 +550,8 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
 <div class="media-grid" id="series-grid">
 {% for s in series %}
   <div class="media-card"
+       tabindex="0" role="button" data-kb-activate
+       aria-label="{{ s.title }}{% if s.year %} ({{ s.year }}){% endif %}"
        data-bs-toggle="modal" data-bs-target="#modal-serie"
        data-title="{{ s.title|lower }}"
        data-status="{{ s.status }}"
@@ -585,6 +583,11 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
       <img src="{{ s.poster }}" alt="{{ s.title }}" loading="lazy">
     {% else %}
       <div class="no-poster">{{ s.title }}</div>
+    {% endif %}
+
+    {# "New" ribbon on freshly-added series (Tabler .ribbon), sparse signal. #}
+    {% if s.addedAt and date(s.addedAt) > date('-7 days') %}
+      <span class="ribbon ribbon-top ribbon-start bg-green">{{ 'common.labels.new_badge'|trans }}</span>
     {% endif %}
 
     {# Selection checkbox #}
@@ -1295,7 +1298,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
   var grid    = document.getElementById('series-grid');
   var visibleCards = function() { return Array.from(grid.querySelectorAll('.media-card')).filter(function(c) { return getComputedStyle(c).display !== 'none'; }); };
   var search  = document.getElementById('search-input');
-  var btnAll  = document.querySelectorAll('#series-filter-form .filter-btn');
+  var btnAll  = document.querySelectorAll('#series-filter-form .filter-pill');
   var shelfView = document.getElementById('series-shelf-view');
   var filterForm   = document.getElementById('series-filter-form');
   var statusInput  = document.getElementById('series-filter-status');
@@ -2267,7 +2270,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     var badges = '';
     if (status === 'continuing') badges += '<span class="badge" style="background:rgba(34,197,94,.15);color:#4ade80;">' + esc(SERIES_I18N.continuing) + '</span>';
     else if (status === 'ended') badges += '<span class="badge" style="background:rgba(107,114,128,.15);color:#9ca3af;">' + esc(SERIES_I18N.ended) + '</span>';
-    if (currentMonitored) badges += '<span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:#818cf8;">' + esc(SERIES_I18N.followed) + '</span>';
+    if (currentMonitored) badges += '<span class="badge" style="background:rgba(var(--tblr-primary-rgb),.15);color:var(--tblr-primary);">' + esc(SERIES_I18N.followed) + '</span>';
     else badges += '<span class="badge" style="background:rgba(107,114,128,.15);color:#9ca3af;">' + esc(SERIES_I18N.unfollowed) + '</span>';
     if (type === 'anime') badges += '<span class="badge bg-purple-lt">' + esc(SERIES_I18N.anime) + '</span>';
     if (card.dataset.size && parseFloat(card.dataset.size) > 0) badges += '<span class="badge bg-secondary-lt">' + card.dataset.size + ' ' + esc(SERIES_I18N.gb_suffix) + '</span>';

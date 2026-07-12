@@ -62,6 +62,28 @@
         return Math.round(bytes) + ' ' + u.B;
       };
     }
+    // Shared sidebar download-count badge updater. Hides at 0, else shows the
+    // clamped count. Fires a single state-driven `.dl-bumped` pulse only when
+    // the count rises above its previous value (never on first paint), so the
+    // motion means "a new download appeared" rather than looping decoratively.
+    if (!window.prismarrDlBadge) {
+      window.prismarrDlBadge = function (badge, active) {
+        if (!badge) return;
+        if (active > 0) {
+          var prev = badge._dlPrev;
+          badge.textContent = active > 99 ? '99+' : String(active);
+          badge.style.display = '';
+          if (typeof prev === 'number' && active > prev) {
+            badge.classList.remove('dl-bumped');
+            void badge.offsetWidth; // restart the animation
+            badge.classList.add('dl-bumped');
+          }
+        } else {
+          badge.style.display = 'none';
+        }
+        badge._dlPrev = active;
+      };
+    }
 
     // HTML escape helper used wherever JS builds strings via innerHTML with
     // operator-side-controlled values (instance names, search results titles,
@@ -144,13 +166,25 @@
       font-size: .68rem; font-weight: 700; line-height: 1;
       background: linear-gradient(135deg, #3b82f6, #60a5fa);
       color: #fff; border-radius: 9px;
-      box-shadow: 0 0 10px rgba(59,130,246,.55);
-      animation: dl-pulse 2.2s ease-in-out infinite;
+      box-shadow: 0 0 8px rgba(59,130,246,.5);
     }
-    @keyframes dl-pulse {
-      0%, 100% { box-shadow: 0 0 8px rgba(59,130,246,.45); transform: scale(1); }
-      50%      { box-shadow: 0 0 14px rgba(59,130,246,.9);  transform: scale(1.08); }
+    /* The badge's presence is the state signal (downloads active); a static
+       glow draws the eye without an always-on decorative loop. When the count
+       increases the poller adds `.dl-bumped` for a single state-driven pulse. */
+    .sidebar-dl-badge.dl-bumped { animation: dl-bump .45s ease-out; }
+    @keyframes dl-bump {
+      0%   { transform: scale(1); }
+      40%  { transform: scale(1.14); box-shadow: 0 0 14px rgba(59,130,246,.9); }
+      100% { transform: scale(1); }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .sidebar-dl-badge.dl-bumped { animation: none; }
+    }
+
+    /* Keyboard focus ring for card DIVs promoted to buttons (media/ex/wl/
+       calendar cards carry [data-kb-activate]). outline is not clipped by the
+       cards' overflow:hidden, so a positive offset renders cleanly. */
+    [data-kb-activate]:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: 2px; }
 
     /* ── Live Plex streaming pill (sous le logo) ── */
     .sidebar-plex-pill {
@@ -167,6 +201,22 @@
     .page-header:has(#topbar-actions) .container-xl { padding-top: .5rem; padding-bottom: .5rem; }
     .page-header:has(#topbar-actions) .page-title { margin: 0; padding: 0; line-height: 1; }
     .page-header:has(#topbar-actions) .row { margin: 0; align-items: center; }
+    /* Shared segmented view-switcher (list-density toggles on the download-client pages) */
+    .view-switcher { display:inline-flex; background:rgba(0,0,0,.04); border-radius:6px; padding:2px; gap:1px; }
+    [data-bs-theme="dark"] .view-switcher { background:rgba(255,255,255,.05); }
+    .view-switcher .view-btn { border:0; background:transparent; color:var(--tblr-body-color); padding:3px 9px; border-radius:4px; font-size:.72rem; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:background .12s ease, color .12s ease; }
+    .view-switcher .view-btn:hover { background:rgba(var(--tblr-primary-rgb),.08); }
+    .view-switcher .view-btn.active { background:var(--tblr-primary); color:#fff; }
+    .view-switcher .view-btn svg { width:13px; height:13px; }
+    /* Shared stat-tile vocabulary (header summary metrics) */
+    .stat-val { font-size: 1.5rem; font-weight: 700; line-height: 1; letter-spacing: -.5px; }
+    .stat-lbl { font-size: .7rem; text-transform: uppercase; letter-spacing: .4px; color: var(--tblr-secondary-color); font-weight: 600; }
+    /* Shared filter pill: transparent by default, hue-tinted when active.
+       Per-pill semantic colour comes in via --pill-hue (a raw colour or a
+       Tabler var); defaults to the theme primary. */
+    .filter-pill { border: 1px solid transparent; background: transparent; border-radius: 6px; padding: 4px 11px; font-size: .78rem; font-weight: 500; line-height: 1.3; color: var(--tblr-body-color); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; gap: .35rem; transition: background .12s ease, color .12s ease; }
+    .filter-pill:hover { background: rgba(var(--tblr-primary-rgb), .07); }
+    .filter-pill.active { font-weight: 600; background: color-mix(in srgb, var(--pill-hue, var(--tblr-primary)) 16%, transparent); color: var(--pill-hue, var(--tblr-primary)); }
     /* ── Mode clair global — plus de profondeur et contraste ── */
     [data-bs-theme="light"] .page-header:has(#topbar-actions) { border-bottom: 1px solid var(--prismarr-border); box-shadow: 0 1px 4px rgba(0,0,0,.05); }
     :root[data-bs-theme="light"] .card { border-color: rgba(0,0,0,.1); box-shadow: 0 1px 6px rgba(0,0,0,.06); }
@@ -713,7 +763,10 @@
         </button>
 
         <div class="navbar-brand navbar-brand-autodark">
-          <a href="{{ path('tmdb_index') }}" class="d-flex align-items-center gap-2 text-decoration-none">
+          {# Logo → the home route, which resolves the admin's display_home_page
+             preference (dashboard/discovery/films/…/last-visited), instead of
+             hardcoding Discover. #}
+          <a href="{{ path('app_home') }}" class="d-flex align-items-center gap-2 text-decoration-none">
             <img src="{{ asset('img/prismarr/prismarr-icon-512.png') }}" alt="Prismarr" width="28" height="28" style="border-radius:5px;">
             <span class="fw-bold fs-4" style="color: var(--tblr-primary)">Prismarr</span>
           </a>
@@ -2367,16 +2420,8 @@
     function fmtGo(bytes) { return window.prismarrBytes(bytes); }
 
     function updateBadge(active) {
-      var label = active > 99 ? '99+' : String(active);
       ['sidebar-qbt-badge', 'sidebar-media-badge'].forEach(function (id) {
-        var badge = document.getElementById(id);
-        if (!badge) return;
-        if (active > 0) {
-          badge.textContent = label;
-          badge.style.display = '';
-        } else {
-          badge.style.display = 'none';
-        }
+        window.prismarrDlBadge(document.getElementById(id), active);
       });
     }
 
@@ -2538,17 +2583,7 @@
     function fmtGo(bytes) { return window.prismarrBytes(bytes); }
 
     function updateBadge(active) {
-      var label = active > 99 ? '99+' : String(active);
-      ['sidebar-deluge-badge'].forEach(function (id) {
-        var badge = document.getElementById(id);
-        if (!badge) return;
-        if (active > 0) {
-          badge.textContent = label;
-          badge.style.display = '';
-        } else {
-          badge.style.display = 'none';
-        }
-      });
+      window.prismarrDlBadge(document.getElementById('sidebar-deluge-badge'), active);
     }
 
     // Circuit breaker: when Deluge is unreachable we back off exponentially
@@ -2665,14 +2700,7 @@
     window._prismarrSeerrFailCount = 0;
 
     function updateSeerrBadge(pending) {
-      var badge = document.getElementById('sidebar-seerr-badge');
-      if (!badge) return;
-      if (pending > 0) {
-        badge.textContent = pending > 99 ? '99+' : String(pending);
-        badge.style.display = '';
-      } else {
-        badge.style.display = 'none';
-      }
+      window.prismarrDlBadge(document.getElementById('sidebar-seerr-badge'), pending);
     }
 
     function seerrNextDelay() {
@@ -2787,10 +2815,7 @@
       var fails = 0, timer = null;
 
       function update(active) {
-        var badge = document.getElementById(c.id);
-        if (!badge) return;
-        if (active > 0) { badge.textContent = active > 99 ? '99+' : String(active); badge.style.display = ''; }
-        else { badge.style.display = 'none'; }
+        window.prismarrDlBadge(document.getElementById(c.id), active);
       }
       function schedule() {
         if (timer) clearTimeout(timer);

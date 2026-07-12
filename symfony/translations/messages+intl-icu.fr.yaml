@@ -39,6 +39,7 @@ common:
     required: requis
     coming_soon: Bientôt
   labels:
+    new_badge: Nouveau
     email: Adresse email
     username: Nom d'utilisateur
     password: Mot de passe
@@ -421,6 +422,7 @@ dashboard:
     title: Activité Plex en cours
     settings_cta: 'Réglages →'
     streams: Flux
+    viewers: Spectateurs actuels
     mbps: Mbps
     unknown_title: Inconnu
     empty: Aucun flux Plex en cours
@@ -532,7 +534,7 @@ dashboard:
     discover: 'Voir dans Découverte'
     close: 'Fermer'
     runtime: '{min} min'
-    seasons: '{count} saisons'
+    seasons: '{count, plural, one {# saison} other {# saisons}}'
     error: "Impossible de charger l'aperçu"
     providers: 'Disponible sur'
     trailer: 'Bande-annonce'
@@ -860,9 +862,10 @@ admin:
         '12h': '12h (2:30 PM)'
     theme_color:
       label: Couleur principale
+      help: "Accent des boutons, liens et éléments mis en avant. « Auto » conserve l'accent fourni par votre thème."
     theme:
       label: Thème
-      help: "Palette de couleurs de toute l'interface."
+      help: "Palette complète (fond, surfaces, texte) de l'interface. Chaque thème a son propre accent — remplacez-le avec la Couleur principale ci-dessus."
       preset:
         midnight: Minuit
         nord: Nord

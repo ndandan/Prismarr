@@ -56,17 +56,11 @@
     border-radius: .25rem; background: rgba(0,0,0,.65); color: #fff;
     backdrop-filter: blur(4px);
 }
+/* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
+.media-card .ribbon { font-size: .56rem; font-weight: 700; padding: .05rem .4rem; z-index: 2; letter-spacing: .03em; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
 .queue-progress-bar { height: 100%; border-radius: 2px; background: var(--tblr-primary); transition: width .3s; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .5; } }
-/* Issue #19 — status filter buttons: outlined variants with a tinted active state */
-.filter-btn { font-weight: 500; }
-.filter-btn.active { color: #fff !important; }
-.filter-btn[data-filter="all"].active,
-.filter-btn[data-filter="unmonitored"].active { background-color: var(--tblr-secondary) !important; border-color: var(--tblr-secondary) !important; }
-.filter-btn[data-filter="monitored"].active { background-color: var(--tblr-info) !important; border-color: var(--tblr-info) !important; }
-.filter-btn[data-filter="downloaded"].active { background-color: var(--tblr-success) !important; border-color: var(--tblr-success) !important; }
-.filter-btn[data-filter="missing"].active { background-color: var(--tblr-warning) !important; border-color: var(--tblr-warning) !important; }
 
 /* ── Modal film detail ── */
 .film-header-backdrop {
@@ -301,15 +295,13 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
 {% if not error %}
 <div id="warnings-banner"></div>
 
-{# ── Stats (compact strip — #7) ── #}
-<div class="card card-sm mb-3">
-  <div class="card-body py-2 d-flex flex-wrap align-items-baseline justify-content-around gap-2 gap-sm-3">
-    <div><span class="h3 mb-0">{{ stats.total }}</span> <span class="text-muted small">{{ 'media.films.stats.total'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-success">{{ stats.downloaded }}</span> <span class="text-muted small">{{ 'media.films.stats.downloaded'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-warning">{{ stats.monitored }}</span> <span class="text-muted small">{{ 'media.films.stats.waiting'|trans }}</span></div>
-    <div><span class="h3 mb-0">{{ stats.totalGb }} <span class="text-muted fs-5">{{ 'media.films.stats.gb_suffix'|trans }}</span></span> <span class="text-muted small">{{ 'media.films.stats.total_size'|trans }}</span></div>
-  </div>
-</div>
+{# ── Stats (compact strip — #7, shared partial) ── #}
+{% include '_stat_tiles.html.twig' with { layout:'strip', tiles:[
+  { value: stats.total,      label: 'media.films.stats.total'|trans },
+  { value: stats.downloaded, label: 'media.films.stats.downloaded'|trans, hue:'success' },
+  { value: stats.monitored,  label: 'media.films.stats.waiting'|trans,    hue:'warning' },
+  { value: stats.totalGb,    label: 'media.films.stats.total_size'|trans, unit: 'media.films.stats.gb_suffix'|trans }
+] } only %}
 
 {# ── Download queue (auto-refresh) ── #}
 <div id="queue-card" class="card mb-3" style="{{ queue is empty ? 'display:none' : '' }}">
@@ -347,11 +339,17 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
           <input type="text" name="q" id="search-input" class="form-control form-control-sm" placeholder="{{ 'media.films.filters.search_placeholder'|trans }}" style="max-width:220px" value="{{ query.q }}" autocomplete="off">
           <div class="d-flex gap-1 flex-wrap flex-md-nowrap films-status-group flex-fill">
-            <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'all' %} active{% endif %}" data-filter="all">{{ 'media.films.filters.status.all'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-success filter-btn flex-fill{% if query.status == 'downloaded' %} active{% endif %}" data-filter="downloaded">{{ 'media.films.filters.status.downloaded'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-warning filter-btn flex-fill{% if query.status == 'missing' %} active{% endif %}" data-filter="missing">{{ 'media.films.filters.status.missing'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-secondary filter-btn flex-fill{% if query.status == 'unmonitored' %} active{% endif %}" data-filter="unmonitored">{{ 'media.films.filters.status.unmonitored'|trans }}</button>
-            <button type="button" class="btn btn-sm btn-outline-info filter-btn flex-fill{% if query.status == 'monitored' %} active{% endif %}" data-filter="monitored">{{ 'media.films.filters.status.monitored'|trans }}</button>
+            {% include '_filter_pills.html.twig' with {
+              active: query.status,
+              fill: true,
+              pills: [
+                { filter: 'all',         label: 'media.films.filters.status.all'|trans,         hue: 'var(--tblr-secondary)' },
+                { filter: 'downloaded',  label: 'media.films.filters.status.downloaded'|trans,  hue: 'var(--tblr-success)' },
+                { filter: 'missing',     label: 'media.films.filters.status.missing'|trans,     hue: 'var(--tblr-warning)' },
+                { filter: 'unmonitored', label: 'media.films.filters.status.unmonitored'|trans, hue: 'var(--tblr-secondary)' },
+                { filter: 'monitored',   label: 'media.films.filters.status.monitored'|trans,   hue: 'var(--tblr-info)' }
+              ]
+            } only %}
           </div>
         </div>
         {# Row 2: 4 dropdowns sharing the available width via flex-fill. #}
@@ -676,6 +674,8 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     alternateTitles: movie.alternateTitles ?? []
   } %}
   <div class="media-card"
+       tabindex="0" role="button" data-kb-activate
+       aria-label="{{ movie.title }}{% if movie.year %} ({{ movie.year }}){% endif %}"
        data-bs-toggle="modal"
        data-bs-target="#modal-film"
        data-title="{{ movie.title|lower }}"
@@ -712,8 +712,12 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
       <div class="status-dot" style="background:#6b7280;" title="{{ 'media.films.status.unmonitored'|trans }}"></div>
     {% endif %}
 
-    {# Quality badge #}
-    {% if movie.quality %}
+    {# "New" ribbon on freshly-added items (Tabler .ribbon), otherwise the
+       quality badge — mutually exclusive so the top-left corner never doubles
+       up and the ribbon stays a sparse, meaningful signal. #}
+    {% if movie.added and date(movie.added) > date('-7 days') %}
+      <span class="ribbon ribbon-top ribbon-start bg-green">{{ 'common.labels.new_badge'|trans }}</span>
+    {% elseif movie.quality %}
       <div class="quality-badge">{{ movie.quality }}</div>
     {% endif %}
 
@@ -1383,7 +1387,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
      ══════════════════════════════════════════════════════════════════════════ */
   var grid    = document.getElementById('movies-grid');
   var search  = document.getElementById('search-input');
-  var btnAll  = document.querySelectorAll('#films-filter-form .filter-btn');
+  var btnAll  = document.querySelectorAll('#films-filter-form .filter-pill');
   var counter = document.getElementById('count-label'); // peut être null
   var filmsShelfView = document.getElementById('films-shelf-view');
   var filterForm   = document.getElementById('films-filter-form');
