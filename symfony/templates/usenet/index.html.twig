@@ -13,8 +13,6 @@
    trimmed to Usenet semantics (no seeding / ratio / trackers / peers). */
 .usenet-stat-card { position:relative; overflow:hidden; height:100%; }
 .usenet-stat-card .card-body { min-height:80px; display:flex; flex-direction:column; justify-content:center; }
-.usenet-stat-card .stat-val { font-size:1.4rem; font-weight:700; line-height:1; letter-spacing:-.5px; }
-.usenet-stat-card .stat-lbl { font-size:.7rem; text-transform:uppercase; letter-spacing:.4px; color:var(--tblr-text-secondary); font-weight:600; }
 
 /* ── List / row base ─────────────────────────────────────────────────────── */
 .usenet-list { display:flex; flex-direction:column; gap:.3rem; }
@@ -179,39 +177,14 @@ body[data-bs-theme="dark"] .usenet-tmini { background:rgba(255,255,255,.08); }
      data-base="{{ path('app_usenet_index', {client: client}) }}"
      data-refresh="{{ display_pref('qbit_refresh_seconds') }}">
 
-  {# ─── Stats strip ──────────────────────────────────────────────── #}
-  <div class="row row-cards g-2 mb-3">
-    <div class="col-6 col-sm-4 col-lg">
-      <div class="card usenet-stat-card"><div class="card-body text-center">
-        <div class="stat-val text-blue" data-stat="active">—</div>
-        <div class="stat-lbl mt-1">{{ 'usenet.stats.active'|trans }}</div>
-      </div></div>
-    </div>
-    <div class="col-6 col-sm-4 col-lg">
-      <div class="card usenet-stat-card"><div class="card-body text-center">
-        <div class="stat-val text-secondary" data-stat="queued">—</div>
-        <div class="stat-lbl mt-1">{{ 'usenet.stats.queued'|trans }}</div>
-      </div></div>
-    </div>
-    <div class="col-6 col-sm-4 col-lg">
-      <div class="card usenet-stat-card"><div class="card-body text-center">
-        <div class="stat-val text-green" data-stat="speed">—</div>
-        <div class="stat-lbl mt-1">{{ 'usenet.stats.speed'|trans }}</div>
-      </div></div>
-    </div>
-    <div class="col-6 col-sm-4 col-lg">
-      <div class="card usenet-stat-card"><div class="card-body text-center">
-        <div class="stat-val text-cyan" data-stat="eta">—</div>
-        <div class="stat-lbl mt-1">{{ 'usenet.stats.eta'|trans }}</div>
-      </div></div>
-    </div>
-    <div class="col-6 col-sm-4 col-lg">
-      <div class="card usenet-stat-card"><div class="card-body text-center">
-        <div class="stat-val text-orange" data-stat="free_space">—</div>
-        <div class="stat-lbl mt-1">{{ 'usenet.stats.free_space'|trans }}</div>
-      </div></div>
-    </div>
-  </div>
+  {# ─── Stats strip (shared partial — JS fills [data-stat]) ──────────── #}
+  {% include '_stat_tiles.html.twig' with { layout:'grid', cols:'col-6 col-sm-4 col-lg', tiles:[
+    { value:'—', data_stat:'active',     label:'usenet.stats.active'|trans,     hue:'blue' },
+    { value:'—', data_stat:'queued',     label:'usenet.stats.queued'|trans,     hue:'secondary' },
+    { value:'—', data_stat:'speed',      label:'usenet.stats.speed'|trans,      hue:'green' },
+    { value:'—', data_stat:'eta',        label:'usenet.stats.eta'|trans,        hue:'cyan' },
+    { value:'—', data_stat:'free_space', label:'usenet.stats.free_space'|trans, hue:'orange' }
+  ] } only %}
 
   {# ─── Toolbar ──────────────────────────────────────────────────── #}
   <div class="card mb-3"><div class="card-body py-2">

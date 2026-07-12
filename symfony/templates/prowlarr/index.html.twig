@@ -5,7 +5,6 @@
 
 {% block stylesheets %}
 <style>
-.pw-stat { font-size:1.5rem; font-weight:700; line-height:1; }
 .pw-indexer-row { transition:background .1s; }
 .pw-indexer-row:hover { background:rgba(255,255,255,.02); }
 .pw-health-item { display:flex; align-items:flex-start; gap:.5rem; padding:.5rem .75rem; border-radius:.4rem; margin-bottom:.35rem; }
@@ -52,45 +51,15 @@
 
 {% if not error %}
 
-{# ── Stats ── #}
-<div class="row g-3 mb-3">
-    <div class="col-6 col-lg-2">
-        <div class="card card-sm"><div class="card-body text-center">
-            <div class="pw-stat" style="color:#E88D1A;">{{ stats.total ?? 0 }}</div>
-            <div class="text-secondary small">{{ 'prowlarr.index.stats_indexers'|trans }}</div>
-        </div></div>
-    </div>
-    <div class="col-6 col-lg-2">
-        <div class="card card-sm"><div class="card-body text-center">
-            <div class="pw-stat text-success">{{ stats.enabled ?? 0 }}</div>
-            <div class="text-secondary small">{{ 'prowlarr.index.stats_active'|trans }}</div>
-        </div></div>
-    </div>
-    <div class="col-6 col-lg-2">
-        <div class="card card-sm"><div class="card-body text-center">
-            <div class="pw-stat {{ (stats.failing ?? 0) > 0 ? 'text-danger' : 'text-secondary' }}">{{ stats.failing ?? 0 }}</div>
-            <div class="text-secondary small">{{ 'prowlarr.index.stats_failing'|trans }}</div>
-        </div></div>
-    </div>
-    <div class="col-6 col-lg-2">
-        <div class="card card-sm"><div class="card-body text-center">
-            <div class="pw-stat" style="color:var(--tblr-primary);">{{ stats.torrent ?? 0 }}</div>
-            <div class="text-secondary small">{{ 'prowlarr.index.stats_torrent'|trans }}</div>
-        </div></div>
-    </div>
-    <div class="col-6 col-lg-2">
-        <div class="card card-sm"><div class="card-body text-center">
-            <div class="pw-stat" style="color:#0ea5e9;">{{ stats.usenet ?? 0 }}</div>
-            <div class="text-secondary small">{{ 'prowlarr.index.stats_usenet'|trans }}</div>
-        </div></div>
-    </div>
-    <div class="col-6 col-lg-2">
-        <div class="card card-sm"><div class="card-body text-center">
-            <div class="pw-stat" style="color:#22c55e;">{{ apps|length }}</div>
-            <div class="text-secondary small">{{ 'prowlarr.index.stats_apps'|trans }}</div>
-        </div></div>
-    </div>
-</div>
+{# ── Stats (shared partial) ── #}
+{% include '_stat_tiles.html.twig' with { layout:'grid', cols:'col-6 col-lg-2', tiles:[
+    { value: stats.total ?? 0,   label: 'prowlarr.index.stats_indexers'|trans, hue:'#E88D1A' },
+    { value: stats.enabled ?? 0, label: 'prowlarr.index.stats_active'|trans,   hue:'success' },
+    { value: stats.failing ?? 0, label: 'prowlarr.index.stats_failing'|trans,  hue: (stats.failing ?? 0) > 0 ? 'danger' : 'secondary' },
+    { value: stats.torrent ?? 0, label: 'prowlarr.index.stats_torrent'|trans,  hue:'var(--tblr-primary)' },
+    { value: stats.usenet ?? 0,  label: 'prowlarr.index.stats_usenet'|trans,   hue:'#0ea5e9' },
+    { value: apps|length,        label: 'prowlarr.index.stats_apps'|trans,     hue:'#22c55e' }
+] } only %}
 
 {# ── Health ── #}
 {% if health is not empty %}

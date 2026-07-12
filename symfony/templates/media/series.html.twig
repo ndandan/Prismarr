@@ -294,15 +294,13 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
 
 <div id="sonarr-warnings-banner"></div>
 
-{# ── Stats (compact strip — #7) ── #}
-<div class="card card-sm mb-3">
-  <div class="card-body py-2 d-flex flex-wrap align-items-baseline justify-content-around gap-2 gap-sm-3">
-    <div><span class="h3 mb-0">{{ stats.total }}</span> <span class="text-muted small">{{ 'media.series.stats.total'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-success">{{ stats.continuing }}</span> <span class="text-muted small">{{ 'media.series.stats.continuing'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-secondary">{{ stats.ended }}</span> <span class="text-muted small">{{ 'media.series.stats.ended'|trans }}</span></div>
-    <div><span class="h3 mb-0">{{ stats.totalGb }} <span class="text-muted fs-5">{{ 'media.series.stats.gb_suffix'|trans }}</span></span> <span class="text-muted small">{{ 'media.series.stats.total_size'|trans }}</span></div>
-  </div>
-</div>
+{# ── Stats (compact strip — #7, shared partial) ── #}
+{% include '_stat_tiles.html.twig' with { layout:'strip', tiles:[
+  { value: stats.total,      label: 'media.series.stats.total'|trans },
+  { value: stats.continuing, label: 'media.series.stats.continuing'|trans, hue:'success' },
+  { value: stats.ended,      label: 'media.series.stats.ended'|trans,      hue:'secondary' },
+  { value: stats.totalGb,    label: 'media.series.stats.total_size'|trans, unit: 'media.series.stats.gb_suffix'|trans }
+] } only %}
 
 {# ── Download queue (auto-refresh) ── #}
 <div class="card mb-3" id="queue-card" style="{{ queue is empty ? 'display:none;' : '' }}">

@@ -303,15 +303,13 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
 {% if not error %}
 <div id="warnings-banner"></div>
 
-{# ── Stats (compact strip — #7) ── #}
-<div class="card card-sm mb-3">
-  <div class="card-body py-2 d-flex flex-wrap align-items-baseline justify-content-around gap-2 gap-sm-3">
-    <div><span class="h3 mb-0">{{ stats.total }}</span> <span class="text-muted small">{{ 'media.films.stats.total'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-success">{{ stats.downloaded }}</span> <span class="text-muted small">{{ 'media.films.stats.downloaded'|trans }}</span></div>
-    <div><span class="h3 mb-0 text-warning">{{ stats.monitored }}</span> <span class="text-muted small">{{ 'media.films.stats.waiting'|trans }}</span></div>
-    <div><span class="h3 mb-0">{{ stats.totalGb }} <span class="text-muted fs-5">{{ 'media.films.stats.gb_suffix'|trans }}</span></span> <span class="text-muted small">{{ 'media.films.stats.total_size'|trans }}</span></div>
-  </div>
-</div>
+{# ── Stats (compact strip — #7, shared partial) ── #}
+{% include '_stat_tiles.html.twig' with { layout:'strip', tiles:[
+  { value: stats.total,      label: 'media.films.stats.total'|trans },
+  { value: stats.downloaded, label: 'media.films.stats.downloaded'|trans, hue:'success' },
+  { value: stats.monitored,  label: 'media.films.stats.waiting'|trans,    hue:'warning' },
+  { value: stats.totalGb,    label: 'media.films.stats.total_size'|trans, unit: 'media.films.stats.gb_suffix'|trans }
+] } only %}
 
 {# ── Download queue (auto-refresh) ── #}
 <div id="queue-card" class="card mb-3" style="{{ queue is empty ? 'display:none' : '' }}">
