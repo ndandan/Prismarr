@@ -201,6 +201,13 @@
     .page-header:has(#topbar-actions) .container-xl { padding-top: .5rem; padding-bottom: .5rem; }
     .page-header:has(#topbar-actions) .page-title { margin: 0; padding: 0; line-height: 1; }
     .page-header:has(#topbar-actions) .row { margin: 0; align-items: center; }
+    /* Shared segmented view-switcher (list-density toggles on the download-client pages) */
+    .view-switcher { display:inline-flex; background:rgba(0,0,0,.04); border-radius:6px; padding:2px; gap:1px; }
+    [data-bs-theme="dark"] .view-switcher { background:rgba(255,255,255,.05); }
+    .view-switcher .view-btn { border:0; background:transparent; color:var(--tblr-body-color); padding:3px 9px; border-radius:4px; font-size:.72rem; font-weight:500; cursor:pointer; display:inline-flex; align-items:center; gap:4px; transition:background .12s ease, color .12s ease; }
+    .view-switcher .view-btn:hover { background:rgba(var(--tblr-primary-rgb),.08); }
+    .view-switcher .view-btn.active { background:var(--tblr-primary); color:#fff; }
+    .view-switcher .view-btn svg { width:13px; height:13px; }
     /* ── Mode clair global — plus de profondeur et contraste ── */
     [data-bs-theme="light"] .page-header:has(#topbar-actions) { border-bottom: 1px solid var(--prismarr-border); box-shadow: 0 1px 4px rgba(0,0,0,.05); }
     :root[data-bs-theme="light"] .card { border-color: rgba(0,0,0,.1); box-shadow: 0 1px 6px rgba(0,0,0,.06); }

@@ -205,13 +205,6 @@ body[data-bs-theme="dark"] .qbt-mini-bar { background:rgba(255,255,255,.08); }
 /* ══════════════════════════════════════════════════════════════════════════
    Sélecteur de vue
    ══════════════════════════════════════════════════════════════════════════ */
-.qbt-view-switcher { display:inline-flex; background:rgba(0,0,0,.04); border-radius:6px; padding:2px; gap:1px; }
-body[data-bs-theme="dark"] .qbt-view-switcher { background:rgba(255,255,255,.05); }
-.qbt-view-btn { border:none !important; background:transparent; padding:3px 9px; border-radius:4px; font-size:.72rem; font-weight:500; color:var(--tblr-text-secondary); display:inline-flex; align-items:center; gap:4px; transition:all .12s; cursor:pointer; }
-.qbt-view-btn:hover { background:rgba(47,103,186,.08); color:#2f67ba; }
-.qbt-view-btn.active { background:#2f67ba; color:#fff; box-shadow:0 1px 3px rgba(47,103,186,.3); }
-.qbt-view-btn.active:hover { background:#2f67ba; color:#fff; }
-.qbt-view-btn svg { width:13px; height:13px; }
 
 /* ══════════════════════════════════════════════════════════════════════════
    Mode COMPACT
@@ -510,20 +503,18 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
                     <option value="seeds|1">{{ 'qbittorrent.sort.seeds_desc'|trans }}</option>
                 </select>
             </div>
-            <div class="qbt-view-switcher" role="group" aria-label="{{ 'qbittorrent.view.aria_label'|trans }}">
-                <button type="button" class="qbt-view-btn active" data-view="list" title="{{ 'qbittorrent.view.list_title'|trans }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-                    {{ 'qbittorrent.view.list'|trans }}
-                </button>
-                <button type="button" class="qbt-view-btn" data-view="table" title="{{ 'qbittorrent.view.table_title'|trans }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18v14H3zM3 10h18M3 15h18M10 5v14"/></svg>
-                    {{ 'qbittorrent.view.table'|trans }}
-                </button>
-                <button type="button" class="qbt-view-btn" data-view="compact" title="{{ 'qbittorrent.view.compact_title'|trans }}">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
-                    {{ 'qbittorrent.view.compact'|trans }}
-                </button>
-            </div>
+            {% set vs_icon_list = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>' %}
+            {% set vs_icon_table = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18v14H3zM3 10h18M3 15h18M10 5v14"/></svg>' %}
+            {% set vs_icon_compact = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>' %}
+            {% include '_view_switcher.html.twig' with {
+                active: 'list',
+                aria_label: 'qbittorrent.view.aria_label'|trans,
+                modes: [
+                    { view: 'list', label: 'qbittorrent.view.list'|trans, title: 'qbittorrent.view.list_title'|trans, icon: vs_icon_list },
+                    { view: 'table', label: 'qbittorrent.view.table'|trans, title: 'qbittorrent.view.table_title'|trans, icon: vs_icon_table },
+                    { view: 'compact', label: 'qbittorrent.view.compact'|trans, title: 'qbittorrent.view.compact_title'|trans, icon: vs_icon_compact }
+                ]
+            } only %}
         </div>
         {# 3rd row of the card: pagination #}
         <div id="qbt-pagination-bar" class="d-flex align-items-center justify-content-between flex-wrap gap-2 mt-2 pt-2" style="display:none;border-top:1px solid var(--tblr-border-color);">
@@ -1547,7 +1538,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         if (list) list.dataset.view = view;
         var hdr = document.getElementById('qbt-table-header');
         if (hdr) hdr.classList.toggle('show', view === 'table');
-        var btns = document.querySelectorAll('.qbt-view-btn');
+        var btns = document.querySelectorAll('.view-btn');
         for (var i = 0; i < btns.length; i++) btns[i].classList.toggle('active', btns[i].dataset.view === view);
         syncSortUI();
     }
@@ -1578,7 +1569,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     }
 
     bindDoc('click', 'viewSortPag', function(e) {
-        var vb = e.target.closest('.qbt-view-btn');
+        var vb = e.target.closest('.view-btn');
         if (vb) { applyView(vb.dataset.view); return; }
         var sb = e.target.closest('#qbt-table-header .qbt-sort');
         if (sb) {

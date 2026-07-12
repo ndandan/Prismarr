@@ -139,12 +139,6 @@ body[data-bs-theme="dark"] .usenet-tmini { background:rgba(255,255,255,.08); }
 
 /* ── Filters / view switcher / bulk bar ──────────────────────────────────── */
 
-.usenet-view-switcher { display:inline-flex; background:rgba(0,0,0,.04); border-radius:6px; padding:2px; gap:1px; }
-body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.05); }
-.usenet-view-btn { border:none; background:transparent; padding:3px 9px; border-radius:4px; font-size:.72rem; font-weight:500; color:var(--tblr-text-secondary); display:inline-flex; align-items:center; gap:4px; cursor:pointer; }
-.usenet-view-btn:hover { background:rgba(var(--tblr-primary-rgb),.1); color:var(--tblr-primary); }
-.usenet-view-btn.active { background:var(--tblr-primary); color:#fff; }
-.usenet-view-btn svg { width:13px; height:13px; }
 
 .usenet-bulk-bar { position:fixed; bottom:0; left:15rem; right:0; z-index:1050; background:var(--tblr-bg-surface); border-top:2px solid var(--tblr-primary); padding:.7rem 1.25rem; display:none; align-items:center; gap:.6rem; box-shadow:0 -6px 18px rgba(0,0,0,.12); }
 .usenet-bulk-bar.show { display:flex; }
@@ -273,20 +267,18 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
           <option value="eta|0">{{ 'usenet.sort.eta_asc'|trans }}</option>
         </select>
       </div>
-      <div class="usenet-view-switcher" role="group" aria-label="{{ 'usenet.view.aria_label'|trans }}">
-        <button type="button" class="usenet-view-btn active" data-view="list" title="{{ 'usenet.view.list_title'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
-          {{ 'usenet.view.list'|trans }}
-        </button>
-        <button type="button" class="usenet-view-btn" data-view="table" title="{{ 'usenet.view.table_title'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18v14H3zM3 10h18M3 15h18M10 5v14"/></svg>
-          {{ 'usenet.view.table'|trans }}
-        </button>
-        <button type="button" class="usenet-view-btn" data-view="compact" title="{{ 'usenet.view.compact_title'|trans }}">
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>
-          {{ 'usenet.view.compact'|trans }}
-        </button>
-      </div>
+      {% set vs_icon_list = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>' %}
+      {% set vs_icon_table = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 5h18v14H3zM3 10h18M3 15h18M10 5v14"/></svg>' %}
+      {% set vs_icon_compact = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 10h16M4 14h16M4 18h16"/></svg>' %}
+      {% include '_view_switcher.html.twig' with {
+          active: 'list',
+          aria_label: 'usenet.view.aria_label'|trans,
+          modes: [
+              { view: 'list', label: 'usenet.view.list'|trans, title: 'usenet.view.list_title'|trans, icon: vs_icon_list },
+              { view: 'table', label: 'usenet.view.table'|trans, title: 'usenet.view.table_title'|trans, icon: vs_icon_table },
+              { view: 'compact', label: 'usenet.view.compact'|trans, title: 'usenet.view.compact_title'|trans, icon: vs_icon_compact }
+          ]
+      } only %}
     </div>
   </div></div>
 
@@ -709,10 +701,10 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   function setView(v) {
     view = v;
     localStorage.setItem(VKEY, v);
-    root.querySelectorAll('.usenet-view-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.view === v); });
+    root.querySelectorAll('.view-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.view === v); });
     renderQueue();
   }
-  root.querySelectorAll('.usenet-view-btn').forEach(function (b) {
+  root.querySelectorAll('.view-btn').forEach(function (b) {
     b.addEventListener('click', function () { setView(b.dataset.view); });
   });
   setView(view);
