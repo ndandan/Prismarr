@@ -40,6 +40,7 @@ common:
     required: required
     coming_soon: Coming soon
   labels:
+    new_badge: New
     email: Email
     username: Username
     password: Password
@@ -422,6 +423,7 @@ dashboard:
     title: Current Plex activity
     settings_cta: 'Settings →'
     streams: Streams
+    viewers: Current viewers
     mbps: Mbps
     unknown_title: Unknown
     empty: No active Plex streams
@@ -482,7 +484,7 @@ dashboard:
     discover: 'View in Discover'
     close: 'Close'
     runtime: '{min} min'
-    seasons: '{count} seasons'
+    seasons: '{count, plural, one {# season} other {# seasons}}'
     error: "Couldn't load the preview"
     providers: 'Available on'
     trailer: 'Trailer'
