@@ -1,7 +1,7 @@
 {# Services health card — always renders, no config gate. Full-width card. #}
 <div data-section-key="health">
 <div class="row row-cards mb-3">
-  <div class="col-12" data-dash-widget="health" data-dash-url="{{ path('app_dashboard_widget_health') }}">
+  <div class="col-12" data-dash-widget="health" data-dash-url="{{ path('app_dashboard_widget_health') }}" data-dash-poll="30000">
     <div class="card h-100">
       <div class="card-header">
         <h3 class="card-title">

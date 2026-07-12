@@ -4,7 +4,7 @@
 <div data-section-key="server">
 {% if is_granted('ROLE_ADMIN') and services_configured.unraid %}
 <div class="row row-cards mb-3">
-  <div class="col-12" data-dash-widget="server" data-dash-url="{{ path('app_dashboard_widget_server') }}">
+  <div class="col-12" data-dash-widget="server" data-dash-url="{{ path('app_dashboard_widget_server') }}" data-dash-poll="30000">
     <div class="card h-100">
       <div class="card-header">
         <h3 class="card-title">

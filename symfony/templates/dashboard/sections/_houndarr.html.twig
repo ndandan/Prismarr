@@ -2,7 +2,7 @@
 <div data-section-key="houndarr">
 {% if services_configured.houndarr %}
 <div class="row row-cards mb-3">
-  <div class="col-12" data-dash-widget="houndarr" data-dash-url="{{ path('app_dashboard_widget_houndarr') }}">
+  <div class="col-12" data-dash-widget="houndarr" data-dash-url="{{ path('app_dashboard_widget_houndarr') }}" data-dash-poll="60000">
     <div class="card h-100">
       <div class="card-header">
         <h3 class="card-title">

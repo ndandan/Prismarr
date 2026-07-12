@@ -731,84 +731,69 @@
       });
     }
 
-    // Keep the services-health widget live instead of frozen at first paint:
-    // re-fetch just that fragment on an interval. It's cheap — isHealthy() is
-    // 10s-cached server-side. Turbo-safe singleton (window._dashHealthTimer) so
-    // navigating away and back doesn't stack timers; skipped while the tab is
-    // hidden so a background dashboard isn't polling.
-    function refreshHealth() {
+    // Live-widget polling — one coalescing scheduler for every widget that
+    // declares a data-dash-poll cadence (plex 10s, health/server/network 30s,
+    // houndarr 60s). Previously each ran its own setInterval + its own fragment
+    // request, which at the 30s alignment fired up to four HTTP requests at
+    // once. Instead we tick once at the GCD of the cadences and batch every
+    // widget due on that tick into a single /widgets?w=… request, applying each
+    // returned fragment to its node. Preserves the per-widget behaviour exactly:
+    // hidden-tab guarded, fails open (a widget missing from the JSON map keeps
+    // its last value), Turbo-safe singleton timer (window._dashLiveTimer), and
+    // the plex post-apply hook that re-asserts the active tab after a swap.
+    var DASH_WIDGETS_URL = '{{ path('app_dashboard_widgets') }}';
+    var dashPostApply = {
+      plex: function (node) { applyPlexTab(node.querySelector('[data-dash-body]') || node); }
+    };
+    function dashGcd(a, b) { return b ? dashGcd(b, a % b) : a; }
+    function dashLiveNodes() {
+      return document.querySelectorAll('[data-dash-widget][data-dash-poll][data-dash-url]');
+    }
+    // First poll for each widget is scheduled one full interval out (matching
+    // the old setInterval), and re-armed to now+interval whenever it fires.
+    var dashNextDue = {};
+    var dashBaseTick = 0;
+    (function planDashCadences() {
+      var nodes = dashLiveNodes();
+      var now = Date.now();
+      for (var i = 0; i < nodes.length; i++) {
+        var name = nodes[i].dataset.dashWidget;
+        var ms = parseInt(nodes[i].dataset.dashPoll, 10) || 30000;
+        if (!(name in dashNextDue)) { dashNextDue[name] = now + ms; }
+        dashBaseTick = dashBaseTick ? dashGcd(dashBaseTick, ms) : ms;
+      }
+      if (!dashBaseTick) { dashBaseTick = 30000; }
+    })();
+    function dashTick() {
       if (document.hidden) return;
-      var node = document.querySelector('[data-dash-widget="health"][data-dash-url]');
-      if (!node) return;
-      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.text() : ''; })
-        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
+      var nodes = dashLiveNodes();
+      if (!nodes.length) return;
+      var now = Date.now();
+      var byName = {};
+      var due = [];
+      for (var i = 0; i < nodes.length; i++) {
+        var name = nodes[i].dataset.dashWidget;
+        var ms = parseInt(nodes[i].dataset.dashPoll, 10) || 30000;
+        byName[name] = nodes[i];
+        if (now >= (dashNextDue[name] || 0)) { due.push(name); dashNextDue[name] = now + ms; }
+      }
+      if (!due.length) return;
+      fetch(DASH_WIDGETS_URL + '?w=' + encodeURIComponent(due.join(',')),
+            { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (map) {
+          if (!map) return;
+          Object.keys(map).forEach(function (name) {
+            var node = byName[name];
+            if (!node || !(map[name] || '').trim()) return;
+            applyFragment(node, map[name]);
+            if (dashPostApply[name]) { dashPostApply[name](node); }
+          });
+        })
         .catch(function () {});
     }
-    if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); }
-    window._dashHealthTimer = setInterval(refreshHealth, 30000);
-
-    // Same live-refresh pattern for the Plex activity widget, but on a tighter
-    // 10s cadence (stream progress/state move fast). Cheap server-side:
-    // TautulliClient is 10s-circuit-breaker-cached and the call is read-only.
-    // Skipped while the tab is hidden; re-fetched fragment fails open so a
-    // down Tautulli can't break the loop.
-    function refreshPlex() {
-      if (document.hidden) return;
-      var node = document.querySelector('[data-dash-widget="plex"][data-dash-url]');
-      if (!node) return;
-      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.text() : ''; })
-        .then(function (html) { if ((html || '').trim()) { applyFragment(node, html); applyPlexTab(node.querySelector('[data-dash-body]') || node); } })
-        .catch(function () {});
-    }
-    if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); }
-    window._dashPlexTimer = setInterval(refreshPlex, 10000);
-
-    // Same live-refresh pattern for the Unraid server widget — 30s cadence
-    // (UnraidClient caches 20s server-side, so this is at most one upstream
-    // round of GraphQL queries per poll). Fails open; hidden-tab guarded.
-    function refreshServer() {
-      if (document.hidden) return;
-      var node = document.querySelector('[data-dash-widget="server"][data-dash-url]');
-      if (!node) return;
-      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.text() : ''; })
-        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
-        .catch(function () {});
-    }
-    if (window._dashServerTimer) { clearInterval(window._dashServerTimer); }
-    window._dashServerTimer = setInterval(refreshServer, 30000);
-
-    // Same live-refresh pattern for the Houndarr totals — 60s cadence
-    // (HoundarrClient caches 45s server-side, so this is at most one upstream
-    // GET per poll). Fails open; hidden-tab guarded.
-    function refreshHoundarr() {
-      if (document.hidden) return;
-      var node = document.querySelector('[data-dash-widget="houndarr"][data-dash-url]');
-      if (!node) return;
-      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.text() : ''; })
-        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
-        .catch(function () {});
-    }
-    if (window._dashHoundarrTimer) { clearInterval(window._dashHoundarrTimer); }
-    window._dashHoundarrTimer = setInterval(refreshHoundarr, 60000);
-
-    // Same live-refresh pattern for the UniFi network widget — 30s cadence
-    // (UnifiClient caches 20s server-side, so this is at most one upstream
-    // round of REST calls per poll). Fails open; hidden-tab guarded.
-    function refreshNetwork() {
-      if (document.hidden) return;
-      var node = document.querySelector('[data-dash-widget="network"][data-dash-url]');
-      if (!node) return;
-      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
-        .then(function (r) { return r.ok ? r.text() : ''; })
-        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
-        .catch(function () {});
-    }
-    if (window._dashNetworkTimer) { clearInterval(window._dashNetworkTimer); }
-    window._dashNetworkTimer = setInterval(refreshNetwork, 30000);
+    if (window._dashLiveTimer) { clearInterval(window._dashLiveTimer); }
+    window._dashLiveTimer = setInterval(dashTick, dashBaseTick);
 
     // Plex widget tabs: client-side pane toggle, remembers the active tab so the
     // 10s fragment refresh doesn't snap the user back to "Now playing".
@@ -836,11 +821,7 @@
     }
 
     document.addEventListener('turbo:before-render', function () {
-      if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
-      if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); window._dashPlexTimer = null; }
-      if (window._dashServerTimer) { clearInterval(window._dashServerTimer); window._dashServerTimer = null; }
-      if (window._dashHoundarrTimer) { clearInterval(window._dashHoundarrTimer); window._dashHoundarrTimer = null; }
-      if (window._dashNetworkTimer) { clearInterval(window._dashNetworkTimer); window._dashNetworkTimer = null; }
+      if (window._dashLiveTimer) { clearInterval(window._dashLiveTimer); window._dashLiveTimer = null; }
     });
 
   })();
