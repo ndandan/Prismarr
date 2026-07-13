@@ -293,7 +293,7 @@
 
   {# Library filter memory: loaded once in <head> so Turbo runs it a single
      time; it binds its own turbo:load/DOMContentLoaded listeners. #}
-  <script src="{{ asset('static/js/library-filter-memory.js') }}"></script>
+  <script defer src="{{ asset('static/js/library-filter-memory.js') }}"></script>
 
   {# Theme variables + user-picked accent — MUST be set after Tabler's own
      stylesheet, otherwise its own `:root { --tblr-primary }` rule wins the
