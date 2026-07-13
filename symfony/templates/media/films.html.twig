@@ -384,6 +384,21 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         </div>
         <noscript><button type="submit" class="btn btn-sm btn-primary align-self-start">{{ 'media.films.filters.apply'|trans }}</button></noscript>
       </form>
+      <script>
+        (function () {
+          function initFilmsFilterMemory() {
+            if (window.PrismarrLibFilters) {
+              window.PrismarrLibFilters.initPage({
+                type: 'films',
+                slug: {{ current_instance.slug|json_encode|raw }},
+                resetSelector: '.js-libfilter-reset'
+              });
+            }
+          }
+          document.addEventListener('turbo:load', initFilmsFilterMemory);
+          document.addEventListener('DOMContentLoaded', initFilmsFilterMemory);
+        })();
+      </script>
       {% if query.hasActiveFilter or query.q != '' %}
         <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top films-bulk-row">
           <button type="button" class="btn btn-primary btn-sm" id="btn-update-filtered" style="display:{% if query.hasActiveFilter %}inline-flex{% else %}none{% endif %}" title="{{ 'media.films.actions.refresh_filtered_title'|trans }}">
@@ -394,11 +409,11 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             {{ 'media.films.actions.search_filtered'|trans }}
           </button>
-          <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-sm btn-ghost-secondary ms-auto">{{ 'media.films.pagination.reset_filters'|trans }}</a>
+          <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-sm btn-ghost-secondary ms-auto js-libfilter-reset">{{ 'media.films.pagination.reset_filters'|trans }}</a>
         </div>
       {% endif %}
       <div class="films-drawer-footer d-lg-none d-flex gap-2 justify-content-end mt-2 pt-2 border-top">
-        <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-ghost-secondary">{{ 'media.films.pagination.reset_filters'|trans }}</a>
+        <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-ghost-secondary js-libfilter-reset">{{ 'media.films.pagination.reset_filters'|trans }}</a>
         <button type="button" class="btn btn-primary" id="films-filters-apply">{{ 'media.films.filters.apply'|trans }}</button>
       </div>
       </div>
