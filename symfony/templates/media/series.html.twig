@@ -366,7 +366,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#series-filters-drawer" aria-label="Close"></button>
       </div>
       <div class="card-body offcanvas-body py-2">
-        <form method="get" id="series-filter-form" action="{{ path('app_media_series', { slug: current_instance.slug }) }}" class="d-flex flex-column gap-2">
+        <form method="get" id="series-filter-form" action="{{ path('app_media_series', { slug: current_instance.slug }) }}" class="d-flex flex-column gap-2" data-libfilter-type="series" data-libfilter-slug="{{ current_instance.slug }}">
           <input type="hidden" name="status" id="series-filter-status" value="{{ query.status }}">
           {# Row 1: search input (fixed width) + 7 status buttons sharing the remaining width via flex-fill. #}
           <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
@@ -415,21 +415,6 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
           </div>
           <noscript><button type="submit" class="btn btn-sm btn-primary align-self-start">{{ 'media.series.filters.apply'|trans }}</button></noscript>
         </form>
-      <script>
-        (function () {
-          function initSeriesFilterMemory() {
-            if (window.PrismarrLibFilters) {
-              window.PrismarrLibFilters.initPage({
-                type: 'series',
-                slug: {{ current_instance.slug|json_encode|raw }},
-                resetSelector: '.js-libfilter-reset'
-              });
-            }
-          }
-          document.addEventListener('turbo:load', initSeriesFilterMemory);
-          document.addEventListener('DOMContentLoaded', initSeriesFilterMemory);
-        })();
-      </script>
         {% if query.hasActiveFilter or query.q != '' %}
           <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top series-bulk-row">
             <button type="button" class="btn btn-primary btn-sm" id="btn-update-filtered-series" style="display:{% if query.hasActiveFilter %}inline-flex{% else %}none{% endif %}" title="{{ 'media.series.actions.refresh_filtered_title'|trans }}">

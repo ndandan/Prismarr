@@ -291,6 +291,10 @@
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler.min.css') }}"/>
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler-themes.min.css') }}"/>
 
+  {# Library filter memory: loaded once in <head> so Turbo runs it a single
+     time; it binds its own turbo:load/DOMContentLoaded listeners. #}
+  <script src="{{ asset('static/js/library-filter-memory.js') }}"></script>
+
   {# Theme variables + user-picked accent — MUST be set after Tabler's own
      stylesheet, otherwise its own `:root { --tblr-primary }` rule wins the
      cascade and every page resets to Tabler's default blue.
@@ -1447,7 +1451,6 @@
   {% include '_quicklook.html.twig' with {} only %}
 
   <script src="{{ asset('static/tabler/js/tabler.min.js') }}"></script>
-  <script src="{{ asset('static/js/library-filter-memory.js') }}"></script>
 
   {# Strings translated server-side and exposed to inline JS. Keep this block
      small — only the strings JS actually renders dynamically (the rest lives

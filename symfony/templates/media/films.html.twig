@@ -333,7 +333,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#films-filters-drawer" aria-label="Close"></button>
       </div>
       <div class="card-body offcanvas-body py-2">
-      <form method="get" id="films-filter-form" action="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="d-flex flex-column gap-2">
+      <form method="get" id="films-filter-form" action="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="d-flex flex-column gap-2" data-libfilter-type="films" data-libfilter-slug="{{ current_instance.slug }}">
         <input type="hidden" name="status" id="films-filter-status" value="{{ query.status }}">
         {# Row 1: search input (fixed width) + 5 status buttons sharing the remaining width via flex-fill. #}
         <div class="d-flex align-items-center gap-2 flex-wrap flex-md-nowrap">
@@ -384,21 +384,6 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         </div>
         <noscript><button type="submit" class="btn btn-sm btn-primary align-self-start">{{ 'media.films.filters.apply'|trans }}</button></noscript>
       </form>
-      <script>
-        (function () {
-          function initFilmsFilterMemory() {
-            if (window.PrismarrLibFilters) {
-              window.PrismarrLibFilters.initPage({
-                type: 'films',
-                slug: {{ current_instance.slug|json_encode|raw }},
-                resetSelector: '.js-libfilter-reset'
-              });
-            }
-          }
-          document.addEventListener('turbo:load', initFilmsFilterMemory);
-          document.addEventListener('DOMContentLoaded', initFilmsFilterMemory);
-        })();
-      </script>
       {% if query.hasActiveFilter or query.q != '' %}
         <div class="d-flex align-items-center gap-1 mt-2 pt-2 border-top films-bulk-row">
           <button type="button" class="btn btn-primary btn-sm" id="btn-update-filtered" style="display:{% if query.hasActiveFilter %}inline-flex{% else %}none{% endif %}" title="{{ 'media.films.actions.refresh_filtered_title'|trans }}">
