@@ -923,7 +923,7 @@
 
               {% if _sonarr_count <= 1 %}
                 <li class="nav-item">
-                  <a class="nav-link {{ _sonarr_active ? 'active' }}" href="{{ instance_path('app_media_series') }}">
+                  <a class="nav-link {{ _sonarr_active ? 'active' }} js-libfilter-link" href="{{ instance_path('app_media_series') }}">
                     {{ _sonarr_icon|raw }}
                     <span class="nav-link-title">Sonarr</span>
                   </a>
@@ -931,7 +931,7 @@
               {% elseif _sonarr_count <= 3 %}
                 {% for _inst in _sonarr_instances %}
                   <li class="nav-item">
-                    <a class="nav-link {{ _sonarr_active and _sonarr_slug == _inst.slug ? 'active' }}"
+                    <a class="nav-link {{ _sonarr_active and _sonarr_slug == _inst.slug ? 'active' }} js-libfilter-link"
                        href="{{ instance_path('app_media_series', { slug: _inst.slug }) }}">
                       {{ _sonarr_icon|raw }}
                       <span class="nav-link-title">{{ _inst.name }}</span>
@@ -947,7 +947,7 @@
                   </a>
                   <div class="dropdown-menu">
                     {% for _inst in _sonarr_instances %}
-                      <a class="dropdown-item {{ _sonarr_active and _sonarr_slug == _inst.slug ? 'active' }}"
+                      <a class="dropdown-item {{ _sonarr_active and _sonarr_slug == _inst.slug ? 'active' }} js-libfilter-link"
                          href="{{ instance_path('app_media_series', { slug: _inst.slug }) }}">
                         {{ _inst.name }}
                       </a>
