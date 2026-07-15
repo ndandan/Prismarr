@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\ServiceInstance;
+use App\Service\Media\DelugeClient;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\QBittorrentClient;
@@ -51,6 +52,9 @@ class HealthService
         // Tautulli (current Plex activity) — nullable + last for the same
         // legacy-test-constructor reason as the Usenet clients above.
         private readonly ?TautulliClient   $tautulli = null,
+        // Deluge — nullable + last, same legacy-test-constructor
+        // reason as the clients above.
+        private readonly ?DelugeClient     $deluge = null,
     ) {}
 
     /**
@@ -182,6 +186,7 @@ class HealthService
             'prowlarr'    => $this->prowlarr->ping(),
             'jellyseerr'  => $this->jellyseerr->ping(),
             'qbittorrent' => $this->qbittorrent->ping(),
+            'deluge'      => $this->deluge?->ping() ?? false,
             'tmdb'        => $this->tmdb->ping(),
             // SABnzbd's ping() now probes mode=queue (key-aware) and runs
             // through the client's circuit breaker, so a downed SABnzbd
@@ -206,7 +211,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
 
     public function isConfigured(string $service): bool
     {
@@ -240,6 +245,11 @@ class HealthService
             // See issue #10.
             'qbittorrent' =>
                 $this->config->has('qbittorrent_url'),
+            // Deluge — URL only, same reverse-proxy stance as qBittorrent:
+            // an empty password is a legitimate "the proxy injects the
+            // session" setup, not a misconfiguration.
+            'deluge' =>
+                $this->config->has('deluge_url'),
             // SABnzbd needs URL + API key. NZBGet only needs the URL — user /
             // password are optional (reverse-proxy or auth-disabled LAN setup),
             // mirroring qBittorrent's reverse-proxy stance.
@@ -267,7 +277,7 @@ class HealthService
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -341,6 +351,24 @@ class HealthService
         // auth failure for a healthy response.
         if ($service === 'qbittorrent' && $http === 200 && is_string($body) && trim($body) === 'Fails.') {
             return ['ok' => false, 'category' => 'auth', 'http' => $http];
+        }
+        // Deluge: deluge-web answers HTTP 200 for everything — the outcome is
+        // in the JSON-RPC envelope. auth.login with a wrong password returns
+        // {"result": false}; an error object also means failure. In
+        // reverse-proxy mode the probe calls web.get_config, whose success
+        // result is a (truthy) dict.
+        if ($service === 'deluge' && $http === 200 && is_string($body)) {
+            $decoded = json_decode($body, true);
+            if (is_array($decoded)) {
+                if (($decoded['error'] ?? null) !== null) {
+                    return ['ok' => false, 'category' => 'auth', 'http' => $http];
+                }
+                if (($decoded['result'] ?? null) === false) {
+                    return ['ok' => false, 'category' => 'auth', 'http' => $http];
+                }
+                return ['ok' => true, 'category' => 'ok', 'http' => $http];
+            }
+            return ['ok' => false, 'category' => 'unknown', 'http' => $http];
         }
         // SABnzbd answers 403 for BOTH a wrong API key and a host that isn't in
         // its host_whitelist (anti DNS-rebinding). Tell them apart so the admin
@@ -484,6 +512,26 @@ class HealthService
                     ],
                     'method'  => 'POST',
                     'body'    => http_build_query(['username' => $user, 'password' => $pass]),
+                ];
+            }
+            case 'deluge': {
+                $url  = $get('deluge_url');
+                $pass = $get('deluge_password');
+                if ($url === '') return null;
+
+                // Reverse-proxy mode (empty password): auth.login('') would
+                // return result:false even when the proxy setup is fine, so
+                // probe a session-authenticated method instead — the proxy
+                // injects the session. Success result is a dict (truthy);
+                // without a proxy deluge-web answers an error envelope,
+                // which diagnoseFromResponse() maps to auth.
+                $method = $pass === '' ? 'web.get_config' : 'auth.login';
+                $params = $pass === '' ? [] : [$pass];
+                return [
+                    'url'     => rtrim($url, '/') . '/json',
+                    'headers' => ['Content-Type: application/json', 'Accept: application/json'],
+                    'method'  => 'POST',
+                    'body'    => json_encode(['method' => $method, 'params' => $params, 'id' => 1]),
                 ];
             }
             case 'sabnzbd': {

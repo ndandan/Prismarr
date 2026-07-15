@@ -64,6 +64,7 @@ class DisplayPreferencesService implements ResetInterface
     public function getTimeFormat(): string         { return $this->get('display_time_format'); }
     public function getThemeColor(): string         { return $this->get('display_theme_color'); }
     public function getQbitRefreshSeconds(): int    { return (int) $this->get('display_qbit_refresh'); }
+    public function getDelugeRefreshSeconds(): int  { return (int) $this->get('display_deluge_refresh'); }
     public function getUiDensity(): string          { return $this->get('display_ui_density'); }
 
     /**
@@ -167,6 +168,7 @@ class DisplayPreferencesService implements ResetInterface
      *   theme_color_hex: string,
      *   theme_color_rgb: string,
      *   qbit_refresh_seconds: int,
+     *   deluge_refresh_seconds: int,
      *   ui_density: string,
      *   page_size: int,
      *   language: string,
@@ -185,6 +187,7 @@ class DisplayPreferencesService implements ResetInterface
             'theme_color_hex'      => $this->getThemeColorHex(),
             'theme_color_rgb'      => $this->getThemeColorRgb(),
             'qbit_refresh_seconds' => $this->getQbitRefreshSeconds(),
+            'deluge_refresh_seconds' => $this->getDelugeRefreshSeconds(),
             'ui_density'           => $this->getUiDensity(),
             'page_size'            => $this->getPageSize(),
             'language'             => $this->getLanguage(),

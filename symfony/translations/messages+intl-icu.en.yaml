@@ -65,6 +65,7 @@ sidebar:
   nav:
     dashboard: Dashboard
     qbittorrent: qBittorrent
+    deluge: Deluge
     discovery: Discover
     calendar: Calendar
     radarr: Radarr
@@ -290,6 +291,11 @@ setup:
         user: Username
         password: Password
         reverse_proxy_hint: 'Leave the username and password empty if qBittorrent sits behind a reverse proxy that injects authentication itself (qui, traefik forward auth, …).'
+      deluge:
+        section: Deluge
+        subtitle: 'Torrent client (Web UI) — used for the Deluge tab.'
+        password: Web UI password
+        reverse_proxy_hint: 'Leave the password empty if Deluge sits behind an authenticating reverse proxy that injects the session for you.'
       usenet_optional: 'Usenet — optional'
       sabnzbd:
         section: 'SABnzbd'
@@ -667,6 +673,7 @@ admin:
       prowlarr: Indexer aggregator
       jellyseerr: Request platform
       qbittorrent: Torrent client
+      deluge: Torrent client (Web UI)
       sabnzbd: Usenet downloader
       nzbget: Usenet downloader
       gluetun: 'VPN / port forwarding'
@@ -798,6 +805,9 @@ admin:
         '5': '5 seconds'
         '10': '10 seconds (low load)'
         '0': Disabled
+    deluge_refresh:
+      label: Deluge refresh interval
+      help: How often the Deluge page and sidebar badge poll for changes. 0 disables polling.
     ui_density:
       label: UI density
       options:
@@ -3700,6 +3710,16 @@ qbittorrent:
     no_valid_hash: No valid hash
     no_valid_file: No valid file
     torrent_not_found: Torrent not found
+
+deluge:
+  title: Deluge
+  filters:
+    labels: Labels
+  table:
+    uploaded: Uploaded
+    completed: Completed
+  api:
+    empty_location: Destination path is required
 
 usenet:
   page_title: 'Usenet downloads'
