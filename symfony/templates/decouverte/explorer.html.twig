@@ -295,6 +295,7 @@
 
 <script>
 (function() {
+  var BASE = '{{ app.request.getBasePath() }}';
   function escHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
   // Localized strings used by the dynamic JS parts of this page.
@@ -495,7 +496,7 @@
 
   function openDetail(type, id) {
     openModal();
-    fetch('/decouverte/detail/' + type + '/' + id, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/detail/' + type + '/' + id, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) { detailLoading.innerHTML = '<div class="alert alert-danger m-3">' + escHtml(d.error) + '</div>'; return; }
@@ -519,7 +520,7 @@
     if (!btn) return;
     e.stopImmediatePropagation();
     var key = btn.dataset.type + '_' + btn.dataset.tmdbId;
-    fetch('/decouverte/watchlist/toggle', {
+    fetch(BASE + '/decouverte/watchlist/toggle', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -564,7 +565,7 @@
   var genrePills = document.getElementById('ex-genre-pills');
 
   function loadGenres(type) {
-    fetch('/decouverte/genres/' + type, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/genres/' + type, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         genrePills.innerHTML = (d.genres || []).map(function(g) {
@@ -623,7 +624,7 @@
     lastParams = info;
     lastLabel = buildLabel(info);
     showSpinner();
-    fetch('/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         totalPages = d.total_pages || 1;
@@ -639,7 +640,7 @@
     loadMoreBtn.disabled = true;
     loadMoreBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + EX_I18N.loading;
     var info = buildParams(currentPage);
-    fetch('/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         render(d.results || [], lastLabel, true);
@@ -676,7 +677,7 @@
     var q = colSearch.value.trim();
     if (q.length < 2) { colSugg.innerHTML = ''; return; }
     colTimer = setTimeout(function() {
-      fetch('/decouverte/collection/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+      fetch(BASE + '/decouverte/collection/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(d) {
           colSugg.innerHTML = (d.results || []).map(function(c) {
@@ -696,7 +697,7 @@
     clearCollectionActive();
     clearPersonHeader();
     showSpinner();
-    fetch('/decouverte/collection/' + s.dataset.colId, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/collection/' + s.dataset.colId, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) { grid.innerHTML = '<div class="ex-empty">' + escHtml(d.error) + '</div>'; return; }
@@ -713,7 +714,7 @@
     clearPersonHeader();
     pill.classList.add('active');
     showSpinner();
-    fetch('/decouverte/collection/' + pill.dataset.colId, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/collection/' + pill.dataset.colId, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) { grid.innerHTML = '<div class="ex-empty">' + escHtml(d.error) + '</div>'; return; }
@@ -738,7 +739,7 @@
     var q = personInput.value.trim();
     if (q.length < 2) { personSugg.innerHTML = ''; return; }
     personTimer = setTimeout(function() {
-      fetch('/decouverte/person/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+      fetch(BASE + '/decouverte/person/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(d) {
           personSugg.innerHTML = (d.results || []).map(function(p) {
@@ -764,7 +765,7 @@
     else { photo.style.display = 'none'; }
 
     showSpinner();
-    fetch('/decouverte/person/' + s.dataset.personId, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/person/' + s.dataset.personId, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) { grid.innerHTML = '<div class="ex-empty">' + escHtml(d.error) + '</div>'; return; }
@@ -782,7 +783,7 @@
     var origText = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + EX_I18N.resolving;
-    fetch('/decouverte/resolve/' + btn.dataset.type + '/' + btn.dataset.tmdbId, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/resolve/' + btn.dataset.type + '/' + btn.dataset.tmdbId, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(data) {
         if (data.error) {
@@ -812,7 +813,7 @@
 
   // ── Watchlist ──
   window._prismarrWatchlist = window._prismarrWatchlist || {};
-  fetch('/decouverte/watchlist/status', { credentials: 'same-origin' })
+  fetch(BASE + '/decouverte/watchlist/status', { credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       window._prismarrWatchlist = d.index || {};
@@ -851,7 +852,7 @@
     else delete window._prismarrWatchlist[key];
     syncExWlStar(star.dataset.tmdbId, star.dataset.tmdbType, willAdd);
 
-    fetch('/decouverte/watchlist/toggle', {
+    fetch(BASE + '/decouverte/watchlist/toggle', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

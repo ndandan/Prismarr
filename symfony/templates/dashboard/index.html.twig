@@ -874,15 +874,16 @@
       if (b) { b.innerHTML = '<div class="ql-loading"><span class="spinner-border"></span></div>'; }
     }
 
+    var BASE = '{{ app.request.getBasePath() }}';
     function qlUrl(t) {
       var src = t.getAttribute('data-ql-source');
       var type = t.getAttribute('data-ql-type');
       var id = t.getAttribute('data-ql-id');
       if (!type || !id) return null;
-      if (src === 'tmdb') { return '/tableau-de-bord/quicklook/tmdb/' + type + '/' + id; }
+      if (src === 'tmdb') { return BASE + '/tableau-de-bord/quicklook/tmdb/' + type + '/' + id; }
       var slug = t.getAttribute('data-ql-slug');
       if (!slug) return null;
-      return '/tableau-de-bord/quicklook/' + type + '/' + slug + '/' + id;
+      return BASE + '/tableau-de-bord/quicklook/' + type + '/' + slug + '/' + id;
     }
 
     if (!window._qlDelegated) {
