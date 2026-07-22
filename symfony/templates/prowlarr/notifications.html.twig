@@ -120,12 +120,12 @@
 {% block javascripts %}
 <script>
 (function () {
-    var SCHEMA_URL = '/prowlarr/notification/schema';
-    var GET_URL = '/prowlarr/notification/{id}';
-    var ADD_URL = '/prowlarr/notification/add';
-    var UPDATE_URL = '/prowlarr/notification/{id}/update';
-    var DELETE_URL = '/prowlarr/notification/{id}/delete';
-    var TEST_URL = '/prowlarr/notification/test';
+    var SCHEMA_URL = '{{ app.request.getBasePath() }}/prowlarr/notification/schema';
+    var GET_URL = '{{ app.request.getBasePath() }}/prowlarr/notification/{id}';
+    var ADD_URL = '{{ app.request.getBasePath() }}/prowlarr/notification/add';
+    var UPDATE_URL = '{{ app.request.getBasePath() }}/prowlarr/notification/{id}/update';
+    var DELETE_URL = '{{ app.request.getBasePath() }}/prowlarr/notification/{id}/delete';
+    var TEST_URL = '{{ app.request.getBasePath() }}/prowlarr/notification/test';
 
     var _I18N = {
         name: {{ 'prowlarr.common.name'|trans|json_encode|raw }},

@@ -183,7 +183,7 @@ document.querySelectorAll('.btn-backup-delete').forEach(function(btn) {
   btn.onclick = function() {
     if (!confirm(I18N.confirmDelete)) return;
     var id = btn.dataset.id;
-    fetch('/medias/' + INSTANCE_SLUG + '/sonarr/sauvegardes/' + id + '/supprimer', {
+    fetch('{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/sonarr/sauvegardes/' + id + '/supprimer', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
       body: '{}'
@@ -216,7 +216,7 @@ if (btnConfirmRestore) {
     alertEl.classList.remove('d-none');
     msg.textContent = I18N.restoreInProgress;
 
-    fetch('/medias/' + INSTANCE_SLUG + '/sonarr/sauvegardes/' + pendingRestoreId + '/restaurer', {
+    fetch('{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/sonarr/sauvegardes/' + pendingRestoreId + '/restaurer', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
       body: '{}'

@@ -167,7 +167,7 @@ document.querySelectorAll('.btn-backup-delete').forEach(function(btn) {
         if (!confirm(_I18N.confirmDeleteTpl.replace('__NAME__', name))) return;
         btn.disabled = true;
 
-        fetch('/prowlarr/sauvegardes/' + btn.dataset.id + '/supprimer', {
+        fetch('{{ app.request.getBasePath() }}/prowlarr/sauvegardes/' + btn.dataset.id + '/supprimer', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
             body: '{}',

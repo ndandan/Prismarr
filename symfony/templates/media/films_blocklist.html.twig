@@ -170,7 +170,7 @@
       var row = this.closest('tr');
       if (!confirm(BL_I18N.confirm_delete)) return;
       btn.disabled = true;
-      postJson('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/blocklist/' + id + '/delete')
+      postJson('{{ app.request.getBasePath() }}/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/blocklist/' + id + '/delete')
       .then(function (data) {
         if (data.ok) row.remove();
         else { alert(BL_I18N.error); btn.disabled = false; }
@@ -186,7 +186,7 @@
     if (!confirm(BL_I18N.confirm_bulk_delete_tpl.replace('__COUNT__', checked.length))) return;
     var ids = Array.from(checked).map(function (c) { return parseInt(c.value); });
     bulkBtn.disabled = true;
-    postJson('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/blocklist/bulk-delete', { ids: ids })
+    postJson('{{ app.request.getBasePath() }}/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/blocklist/bulk-delete', { ids: ids })
     .then(function (data) {
       if (data.ok) {
         ids.forEach(function (id) {

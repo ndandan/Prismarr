@@ -132,7 +132,7 @@ function bindCancelButtons() {
       var cmdId = btn.dataset.id;
       if (!confirm(I18N.confirmCancelTpl.replace('__ID__', cmdId))) return;
       btn.disabled = true;
-      fetch('/medias/' + INSTANCE_SLUG + '/radarr/command/' + cmdId + '/annuler', {
+      fetch('{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/radarr/command/' + cmdId + '/annuler', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: '{}'

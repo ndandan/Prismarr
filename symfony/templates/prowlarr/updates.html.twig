@@ -194,7 +194,7 @@ document.querySelectorAll('.btn-install').forEach(function(btn) {
         progress.classList.remove('d-none');
         msg.textContent = _I18N.starting;
 
-        fetch('/prowlarr/command', {
+        fetch('{{ app.request.getBasePath() }}/prowlarr/command', {
             method: 'POST',
             headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
             body: JSON.stringify({name: 'ApplicationUpdateCheck'}),

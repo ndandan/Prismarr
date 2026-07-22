@@ -156,7 +156,7 @@
         btn.disabled = true;
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> ' + _I18N.saving;
 
-        fetch('/prowlarr/ui/save', {
+        fetch('{{ app.request.getBasePath() }}/prowlarr/ui/save', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)

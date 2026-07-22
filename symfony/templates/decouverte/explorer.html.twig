@@ -374,7 +374,7 @@
     if (!card || !window.prismarrQl) return;
     var type = card.dataset.type === 'movie' ? 'movie' : 'tv';
     window.prismarrQl.open();
-    fetch('/tableau-de-bord/quicklook/tmdb/' + type + '/' + card.dataset.tmdbId, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+    fetch('{{ app.request.getBasePath() }}/tableau-de-bord/quicklook/tmdb/' + type + '/' + card.dataset.tmdbId, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
       .then(function(r) { return r.ok ? r.text() : ''; })
       .then(function(html) {
         var b = window.prismarrQl.body();
@@ -402,7 +402,7 @@
   var genrePills = document.getElementById('ex-genre-pills');
 
   function loadGenres(type) {
-    fetch('/decouverte/genres/' + type, { credentials: 'same-origin' })
+    fetch('{{ app.request.getBasePath() }}/decouverte/genres/' + type, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         genrePills.innerHTML = (d.genres || []).map(function(g) {
@@ -461,7 +461,7 @@
     lastParams = info;
     lastLabel = buildLabel(info);
     showSpinner();
-    fetch('/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
+    fetch('{{ app.request.getBasePath() }}/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         totalPages = d.total_pages || 1;
@@ -477,7 +477,7 @@
     loadMoreBtn.disabled = true;
     loadMoreBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>' + EX_I18N.loading;
     var info = buildParams(currentPage);
-    fetch('/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
+    fetch('{{ app.request.getBasePath() }}/decouverte/filter?' + info.params.toString(), { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         render(d.results || [], lastLabel, true);
@@ -514,7 +514,7 @@
     var q = colSearch.value.trim();
     if (q.length < 2) { colSugg.innerHTML = ''; return; }
     colTimer = setTimeout(function() {
-      fetch('/decouverte/collection/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+      fetch('{{ app.request.getBasePath() }}/decouverte/collection/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(d) {
           colSugg.innerHTML = (d.results || []).map(function(c) {
@@ -534,7 +534,7 @@
     clearCollectionActive();
     clearPersonHeader();
     showSpinner();
-    fetch('/decouverte/collection/' + s.dataset.colId, { credentials: 'same-origin' })
+    fetch('{{ app.request.getBasePath() }}/decouverte/collection/' + s.dataset.colId, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) { grid.innerHTML = '<div class="ex-empty">' + escHtml(d.error) + '</div>'; return; }
@@ -551,7 +551,7 @@
     clearPersonHeader();
     pill.classList.add('active');
     showSpinner();
-    fetch('/decouverte/collection/' + pill.dataset.colId, { credentials: 'same-origin' })
+    fetch('{{ app.request.getBasePath() }}/decouverte/collection/' + pill.dataset.colId, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) { grid.innerHTML = '<div class="ex-empty">' + escHtml(d.error) + '</div>'; return; }
@@ -576,7 +576,7 @@
     var q = personInput.value.trim();
     if (q.length < 2) { personSugg.innerHTML = ''; return; }
     personTimer = setTimeout(function() {
-      fetch('/decouverte/person/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
+      fetch('{{ app.request.getBasePath() }}/decouverte/person/search?q=' + encodeURIComponent(q), { credentials: 'same-origin' })
         .then(function(r) { return r.json(); })
         .then(function(d) {
           personSugg.innerHTML = (d.results || []).map(function(p) {
@@ -602,7 +602,7 @@
     else { photo.style.display = 'none'; }
 
     showSpinner();
-    fetch('/decouverte/person/' + s.dataset.personId, { credentials: 'same-origin' })
+    fetch('{{ app.request.getBasePath() }}/decouverte/person/' + s.dataset.personId, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) { grid.innerHTML = '<div class="ex-empty">' + escHtml(d.error) + '</div>'; return; }
@@ -614,7 +614,7 @@
   });
   // ── Watchlist ──
   window._prismarrWatchlist = window._prismarrWatchlist || {};
-  fetch('/decouverte/watchlist/status', { credentials: 'same-origin' })
+  fetch('{{ app.request.getBasePath() }}/decouverte/watchlist/status', { credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       window._prismarrWatchlist = d.index || {};
@@ -653,7 +653,7 @@
     else delete window._prismarrWatchlist[key];
     syncExWlStar(star.dataset.tmdbId, star.dataset.tmdbType, willAdd);
 
-    fetch('/decouverte/watchlist/toggle', {
+    fetch('{{ app.request.getBasePath() }}/decouverte/watchlist/toggle', {
       method: 'POST', credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

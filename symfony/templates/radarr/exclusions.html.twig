@@ -173,7 +173,7 @@ if (bulkBtn) {
 document.querySelectorAll('.btn-excl-delete').forEach(function(btn) {
   btn.addEventListener('click', function() {
     if (!confirm(_I18N.delete_confirm)) return;
-    fetch('/medias/' + INSTANCE_SLUG + '/radarr/exclusions/' + btn.dataset.id + '/supprimer', {
+    fetch('{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/radarr/exclusions/' + btn.dataset.id + '/supprimer', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
       body: '{}',

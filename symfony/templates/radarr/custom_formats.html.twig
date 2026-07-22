@@ -476,7 +476,7 @@
     try {
       var url = SAVE_URL;
       if (editingItem) {
-        url = '/medias/' + INSTANCE_SLUG + '/radarr/formats/' + editingItem.id + '/modifier';
+        url = '{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/radarr/formats/' + editingItem.id + '/modifier';
       }
       var r = await fetch(url, {
         method: 'POST',
@@ -504,7 +504,7 @@
     var btn = e.target.closest('.btn-cf-delete');
     if (!btn) return;
     if (!confirm(I18N.confirm_delete_tpl.replace('__NAME__', btn.dataset.name))) return;
-    fetch('/medias/' + INSTANCE_SLUG + '/radarr/formats/' + btn.dataset.id + '/supprimer', {
+    fetch('{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/radarr/formats/' + btn.dataset.id + '/supprimer', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
       body: '{}',
