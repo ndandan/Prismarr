@@ -75,6 +75,11 @@ class AdminSettingsController extends AbstractController
             ['key' => 'deluge_url',      'type' => 'text',     'label' => 'admin.field.url',      'placeholder' => 'http://host.docker.internal:8112'],
             ['key' => 'deluge_password', 'type' => 'password', 'label' => 'admin.field.password', 'clearable' => true],
         ],
+        'transmission' => [
+            ['key' => 'transmission_url',      'type' => 'text',     'label' => 'admin.field.url',             'placeholder' => 'http://host.docker.internal:9091'],
+            ['key' => 'transmission_user',     'type' => 'text',     'label' => 'admin.field.username',  'clearable' => true],
+            ['key' => 'transmission_password', 'type' => 'password', 'label' => 'admin.field.password',  'clearable' => true],
+        ],
         'sabnzbd' => [
             ['key' => 'sabnzbd_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8080'],
             ['key' => 'sabnzbd_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
@@ -152,6 +157,7 @@ class AdminSettingsController extends AbstractController
         'jellyseerr'  => 'Seerr',
         'qbittorrent' => 'qBittorrent',
         'deluge'      => 'Deluge',
+        'transmission' => 'Transmission',
         'sabnzbd'     => 'SABnzbd',
         'nzbget'      => 'NZBGet',
         'gluetun'     => 'Gluetun',
@@ -297,6 +303,19 @@ class AdminSettingsController extends AbstractController
                 '0'  => 'admin.display.qbit_refresh.options.0',
             ],
             'help' => 'admin.display.deluge_refresh.help',
+        ],
+        'display_transmission_refresh' => [
+            'label'   => 'admin.display.transmission_refresh.label',
+            'type'    => 'select',
+            'default' => '2',
+            'options' => [
+                '1'  => 'admin.display.transmission_refresh.options.1',
+                '2'  => 'admin.display.transmission_refresh.options.2',
+                '5'  => 'admin.display.transmission_refresh.options.5',
+                '10' => 'admin.display.transmission_refresh.options.10',
+                '0'  => 'admin.display.transmission_refresh.options.0',
+            ],
+            'help' => 'admin.display.transmission_refresh.help',
         ],
         'display_ui_density' => [
             'label'   => 'admin.display.ui_density.label',
@@ -546,6 +565,7 @@ class AdminSettingsController extends AbstractController
             'tmdb'                                       => ['tmdb_api_key'],
             'qbittorrent'                                => ['qbittorrent_url', 'qbittorrent_user', 'qbittorrent_password'],
             'deluge'                                     => ['deluge_url', 'deluge_password'],
+            'transmission'                               => ['transmission_url', 'transmission_user', 'transmission_password'],
             'sabnzbd'                                    => ['sabnzbd_url', 'sabnzbd_api_key'],
             'nzbget'                                     => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
             'tautulli'                                   => ['tautulli_url', 'tautulli_api_key'],
@@ -600,7 +620,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr'];
+        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr'];
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }
