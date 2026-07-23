@@ -434,6 +434,7 @@
             'jellyseerr':  { icon_bg: '#6366f1', subtitle: 'admin.services.subtitle.jellyseerr'|trans },
             'qbittorrent': { icon_bg: '#2f67ba', subtitle: 'admin.services.subtitle.qbittorrent'|trans },
             'deluge':      { icon_bg: '#3e7bbf', subtitle: 'admin.services.subtitle.deluge'|trans },
+            'transmission': { icon_bg: '#d7302f', subtitle: 'admin.services.subtitle.transmission'|trans },
             'sabnzbd':     { icon_bg: '#ffa000', subtitle: 'admin.services.subtitle.sabnzbd'|trans },
             'nzbget':      { icon_bg: '#1f9c3a', subtitle: 'admin.services.subtitle.nzbget'|trans },
             'gluetun':     { icon_bg: '#10b981', subtitle: 'admin.services.subtitle.gluetun'|trans },
@@ -447,7 +448,7 @@
             ('admin.services.group.discovery'|trans):  ['tmdb'],
             ('admin.services.group.managers'|trans):   ['radarr', 'sonarr'],
             ('admin.services.group.indexers'|trans):   ['prowlarr', 'jellyseerr'],
-            ('admin.services.group.downloads'|trans):  ['qbittorrent', 'deluge', 'gluetun', 'sabnzbd', 'nzbget'],
+            ('admin.services.group.downloads'|trans):  ['qbittorrent', 'deluge', 'transmission', 'gluetun', 'sabnzbd', 'nzbget'],
             ('admin.services.group.monitoring'|trans): ['tautulli', 'unraid', 'unifi', 'houndarr'],
           } %}
 
@@ -489,7 +490,7 @@
                       {# Issue #15 — per-service kill switch. Only the flat-config
                          services have it; radarr/sonarr enable/disable per
                          instance. Unchecked box isn't POSTed → disabled. #}
-                      {% if service_id in ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr'] %}
+                      {% if service_id in ['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr'] %}
                         <label class="form-check form-switch m-0 me-2" style="padding-left:2.4em;"
                                title="{{ 'admin.services.enabled_title'|trans }}">
                           <input class="form-check-input" type="checkbox"
@@ -1310,6 +1311,7 @@
         tmdb:        ['tmdb_api_key'],
         qbittorrent: ['qbittorrent_url', 'qbittorrent_user', 'qbittorrent_password'],
         deluge:      ['deluge_url', 'deluge_password'],
+        transmission: ['transmission_url', 'transmission_user', 'transmission_password'],
         sabnzbd:     ['sabnzbd_url', 'sabnzbd_api_key'],
         nzbget:      ['nzbget_url', 'nzbget_user', 'nzbget_password'],
         unifi:       ['unifi_url', 'unifi_api_key', 'unifi_site'],

@@ -865,7 +865,6 @@ class DashboardController extends AbstractController implements ResetInterface
         return $out;
     }
 
-
     private function recommendations(): array
     {
         $payload = $this->safeFetch(
