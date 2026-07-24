@@ -120,7 +120,7 @@
       var id = this.dataset.id;
       btn.disabled = true;
       btn.textContent = '…';
-      fetch('/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/' + id + '/search', {
+      fetch('{{ app.request.getBasePath() }}/medias/' + (INSTANCE_SLUG || DEFAULT_RADARR_SLUG) + '/films/' + id + '/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
         body: '{}',

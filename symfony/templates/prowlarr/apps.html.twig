@@ -194,12 +194,12 @@
 {% block javascripts %}
 <script>
 (function () {
-    var SCHEMA_URL = '/prowlarr/application/schema';
-    var GET_URL = '/prowlarr/application/{id}';
-    var ADD_URL = '/prowlarr/application/add';
-    var UPDATE_URL = '/prowlarr/application/{id}/update';
-    var DELETE_URL = '/prowlarr/application/{id}/delete';
-    var TEST_URL = '/prowlarr/application/test';
+    var SCHEMA_URL = '{{ app.request.getBasePath() }}/prowlarr/application/schema';
+    var GET_URL = '{{ app.request.getBasePath() }}/prowlarr/application/{id}';
+    var ADD_URL = '{{ app.request.getBasePath() }}/prowlarr/application/add';
+    var UPDATE_URL = '{{ app.request.getBasePath() }}/prowlarr/application/{id}/update';
+    var DELETE_URL = '{{ app.request.getBasePath() }}/prowlarr/application/{id}/delete';
+    var TEST_URL = '{{ app.request.getBasePath() }}/prowlarr/application/test';
 
     var _I18N = {
         name: {{ 'prowlarr.common.name'|trans|json_encode|raw }},
@@ -305,7 +305,7 @@
     // Sync Profiles
     var profilesData = [];
     function loadProfiles() {
-        fetch('/prowlarr/app-profiles').then(function(r){return r.json();}).then(function(profiles) {
+        fetch('{{ app.request.getBasePath() }}/prowlarr/app-profiles').then(function(r){return r.json();}).then(function(profiles) {
             profilesData = profiles;
             var body = document.getElementById('sync-profiles-body');
             if (!profiles.length) { body.innerHTML = '<div class="text-center text-secondary small">' + esc(_I18N.profilesEmpty) + '</div>'; return; }
@@ -359,7 +359,7 @@
             enableInteractiveSearch: document.getElementById('profile-interactive').checked,
             minimumSeeders: parseInt(document.getElementById('profile-seeders').value) || 1,
         };
-        var url = editingProfileId ? '/prowlarr/app-profile/' + editingProfileId + '/update' : '/prowlarr/app-profile/add';
+        var url = editingProfileId ? '{{ app.request.getBasePath() }}/prowlarr/app-profile/' + editingProfileId + '/update' : '{{ app.request.getBasePath() }}/prowlarr/app-profile/add';
         if (editingProfileId) payload.id = editingProfileId;
         btn.disabled = true; btn.textContent = _I18N.saving;
         fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
@@ -374,7 +374,7 @@
 
     document.getElementById('profile-delete').addEventListener('click', function() {
         if (!editingProfileId || !confirm(_I18N.confirmDeleteProfile)) return;
-        fetch('/prowlarr/app-profile/' + editingProfileId + '/delete', { method: 'POST' })
+        fetch('{{ app.request.getBasePath() }}/prowlarr/app-profile/' + editingProfileId + '/delete', { method: 'POST' })
             .then(function(r) { return r.json(); })
             .then(function(d) { if (d.ok) { closeModal('pw-modal-profile'); loadProfiles(); } });
     });

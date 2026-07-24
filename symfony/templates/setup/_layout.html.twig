@@ -276,7 +276,7 @@
           if (input) fd.append(f, input.value || '');
         });
 
-        fetch('/setup/test/' + svc, {
+        fetch('{{ app.request.getBasePath() }}/setup/test/' + svc, {
           method: 'POST',
           body: fd,
           credentials: 'same-origin',

@@ -141,7 +141,7 @@
     document.querySelectorAll('.btn-tag-delete').forEach(function (btn) {
         btn.addEventListener('click', function () {
             if (!confirm(_I18N.confirmDeleteTpl.replace('__LABEL__', btn.dataset.label))) return;
-            fetch('/prowlarr/tags/' + btn.dataset.id + '/supprimer', { method: 'POST', credentials: 'same-origin' })
+            fetch('{{ app.request.getBasePath() }}/prowlarr/tags/' + btn.dataset.id + '/supprimer', { method: 'POST', credentials: 'same-origin' })
                 .then(function (r) { return r.json(); })
                 .then(function (d) {
                     if (d.ok) {

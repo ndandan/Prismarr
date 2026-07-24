@@ -953,12 +953,12 @@
         var url = null, fallback = null;
         if (ev.type === 'film' && ev.id) {
             var radarrSlug = ev._instanceSlug || DEFAULT_RADARR_SLUG;
-            url = '/tableau-de-bord/quicklook/movie/' + radarrSlug + '/' + ev.id;
-            fallback = '/medias/' + radarrSlug + '/films?open=' + ev.id;
+            url = '{{ app.request.getBasePath() }}/tableau-de-bord/quicklook/movie/' + radarrSlug + '/' + ev.id;
+            fallback = '{{ app.request.getBasePath() }}/medias/' + radarrSlug + '/films?open=' + ev.id;
         } else if (ev.type === 'episode' && ev.seriesId) {
             var sonarrSlug = ev._instanceSlug || DEFAULT_SONARR_SLUG;
-            url = '/tableau-de-bord/quicklook/series/' + sonarrSlug + '/' + ev.seriesId;
-            fallback = '/medias/' + sonarrSlug + '/series?open=' + ev.seriesId;
+            url = '{{ app.request.getBasePath() }}/tableau-de-bord/quicklook/series/' + sonarrSlug + '/' + ev.seriesId;
+            fallback = '{{ app.request.getBasePath() }}/medias/' + sonarrSlug + '/series?open=' + ev.seriesId;
         }
         if (url) {
             e.preventDefault();

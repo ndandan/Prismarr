@@ -109,7 +109,7 @@ if (movieSelect) {
     document.getElementById('proposals-loading').classList.remove('d-none');
     document.getElementById('btn-rename-all').classList.add('d-none');
 
-    fetch('/medias/' + INSTANCE_SLUG + '/radarr/renommer/' + id + '/propositions', {
+    fetch('{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/radarr/renommer/' + id + '/propositions', {
       headers: {'X-Requested-With': 'XMLHttpRequest'}
     }).then(function(r){ return r.json(); }).then(function(proposals){
       document.getElementById('proposals-loading').classList.add('d-none');
@@ -149,7 +149,7 @@ if (btnRenameAll) {
     progress.classList.remove('d-none');
     msg.textContent = _I18N.progress_starting;
 
-    fetch('/medias/' + INSTANCE_SLUG + '/radarr/renommer/' + currentMovieId + '/executer', {
+    fetch('{{ app.request.getBasePath() }}/medias/' + INSTANCE_SLUG + '/radarr/renommer/' + currentMovieId + '/executer', {
       method: 'POST',
       headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
       body: '{}'

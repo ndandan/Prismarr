@@ -207,7 +207,7 @@
 
         saveBtn.disabled = true; var orig = saveBtn.innerHTML;
         saveBtn.innerHTML = '<div class="spinner-border spinner-border-sm" style="width:16px;height:16px;"></div>';
-        fetch('/jellyseerr/parametres/save', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'}, body:JSON.stringify(payload) })
+        fetch('{{ app.request.getBasePath() }}/jellyseerr/parametres/save', { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json','X-Requested-With':'XMLHttpRequest'}, body:JSON.stringify(payload) })
         .then(function(r){ return r.json(); })
         .then(function(d){ saveBtn.disabled=false; saveBtn.innerHTML=orig; statusEl.innerHTML=d.ok?'<span class="text-success">'+SU_I18N.saved+'</span>':'<span class="text-danger">'+SU_I18N.error+'</span>'; setTimeout(function(){statusEl.innerHTML='';},3000); })
         .catch(function(){ saveBtn.disabled=false; saveBtn.innerHTML=orig; statusEl.innerHTML='<span class="text-danger">'+SU_I18N.error+'</span>'; });
