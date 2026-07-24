@@ -8,6 +8,7 @@ use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\QBittorrentClient;
+use App\Service\Media\TransmissionClient;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
@@ -86,6 +87,9 @@ class HealthService implements ResetInterface
         // UniFi (network monitoring widget) — nullable + last, same
         // legacy-positional-constructor stance as Unraid/Houndarr.
         private readonly ?UnifiClient      $unifi = null,
+        // Transmission — nullable + last for the same legacy-test-constructor
+        // reason as the clients above.
+        private readonly ?TransmissionClient $transmission = null,
     ) {}
 
     /**
@@ -259,6 +263,7 @@ class HealthService implements ResetInterface
             'unraid'      => $this->unraid?->ping() ?? false,
             'houndarr'    => $this->houndarr?->ping() ?? false,
             'unifi'       => $this->unifi?->ping() ?? false,
+            'transmission' => $this->transmission?->ping() ?? false,
             default       => true,
         };
     }
@@ -275,7 +280,7 @@ class HealthService implements ResetInterface
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'];
 
     /** Brand colors for the health chips — single source for dashboard + topbar. */
     private const SERVICE_COLORS = [
@@ -285,6 +290,7 @@ class HealthService implements ResetInterface
         'jellyseerr'  => '#a259ff',
         'qbittorrent' => '#2f67ba',
         'deluge'      => '#3e7bbf',
+        'transmission' => '#d7302f',
         'sabnzbd'     => '#fbc531',
         'nzbget'      => '#54c754',
         'tmdb'        => '#01B4E4',
@@ -318,7 +324,7 @@ class HealthService implements ResetInterface
             }
         }
 
-        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr'];
+        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'transmission' => 'Transmission', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr'];
         if ($includeUnraid) {
             $labels['unraid'] = 'Unraid';
             $labels['unifi']  = 'UniFi';
@@ -393,6 +399,10 @@ class HealthService implements ResetInterface
             // UniFi needs the console URL and a local API key (Network 9.0+).
             'unifi' =>
                 $this->config->has('unifi_url') && $this->config->has('unifi_api_key'),
+            // Transmission — URL-only, same reverse-proxy-friendly stance as
+            // qBittorrent/Deluge (empty user/password is a legitimate setup).
+            'transmission' =>
+                $this->config->has('transmission_url'),
             default => true,
         };
     }
@@ -419,7 +429,7 @@ class HealthService implements ResetInterface
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -552,6 +562,13 @@ class HealthService implements ResetInterface
             if ($result !== 'success') {
                 return ['ok' => false, 'category' => 'auth', 'http' => $http];
             }
+            return ['ok' => true, 'category' => 'ok', 'http' => $http];
+        }
+        // Transmission: a fresh/expired session always answers 409 with the
+        // real X-Transmission-Session-Id in the response header — that IS a
+        // healthy, reachable daemon, not a failure. A bad RPC password is a
+        // separate 401, independent of the session-id handshake.
+        if ($service === 'transmission' && $http === 409) {
             return ['ok' => true, 'category' => 'ok', 'http' => $http];
         }
         if ($http !== null && $http >= 200 && $http < 300) {
@@ -771,6 +788,26 @@ class HealthService implements ResetInterface
                     'headers'  => ['X-API-KEY: ' . $key, 'Accept: application/json'],
                     // UniFi OS consoles ship a self-signed cert by default.
                     'insecure' => $get('unifi_skip_tls_verify') === '1',
+                ];
+            }
+            case 'transmission': {
+                $url  = $get('transmission_url');
+                $user = $get('transmission_user');
+                $pass = $get('transmission_password');
+                if ($url === '') return null;
+                // Deliberately no X-Transmission-Session-Id header: a fresh
+                // client always gets HTTP 409 back with the real token, and
+                // that 409 IS the "reachable" signal diagnoseFromResponse()
+                // is looking for — no retry needed just to test connectivity.
+                $headers = ['Content-Type: application/json'];
+                if ($user !== '') {
+                    $headers[] = 'Authorization: Basic ' . base64_encode($user . ':' . $pass);
+                }
+                return [
+                    'url'     => rtrim($url, '/') . '/transmission/rpc',
+                    'headers' => $headers,
+                    'method'  => 'POST',
+                    'body'    => (string) json_encode(['method' => 'session-get', 'arguments' => ['fields' => ['version']], 'tag' => 1]),
                 ];
             }
             default:

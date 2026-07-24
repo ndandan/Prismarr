@@ -26,6 +26,7 @@ class ConfigExtension extends AbstractExtension
         'jellyseerr'  => 'jellyseerr_api_key',
         'qbittorrent' => 'qbittorrent_url',
         'deluge'      => 'deluge_url',
+        'transmission' => 'transmission_url',
         'sabnzbd'     => 'sabnzbd_url',
         'nzbget'      => 'nzbget_url',
         'gluetun'     => 'gluetun_url',

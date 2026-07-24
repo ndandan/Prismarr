@@ -45,6 +45,8 @@ class ServiceRouteGuardSubscriber implements EventSubscriberInterface
         'app_qbittorrent'   => ['service' => 'qBittorrent', 'service_id' => 'qbittorrent', 'keys' => ['qbittorrent_url', 'qbittorrent_user'],  'wizard' => 'app_setup_downloads', 'index' => 'app_qbittorrent_index'],
         'deluge_'           => ['service' => 'Deluge',      'service_id' => 'deluge',      'keys' => ['deluge_url'],                            'wizard' => 'app_setup_downloads', 'index' => 'app_deluge_index'],
         'app_deluge'        => ['service' => 'Deluge',      'service_id' => 'deluge',      'keys' => ['deluge_url'],                            'wizard' => 'app_setup_downloads', 'index' => 'app_deluge_index'],
+        'transmission_'     => ['service' => 'Transmission', 'service_id' => 'transmission', 'keys' => ['transmission_url'],                   'wizard' => 'app_setup_downloads', 'index' => 'app_transmission_index'],
+        'app_transmission'  => ['service' => 'Transmission', 'service_id' => 'transmission', 'keys' => ['transmission_url'],                   'wizard' => 'app_setup_downloads', 'index' => 'app_transmission_index'],
         'tmdb_'             => ['service' => 'TMDb',        'service_id' => 'tmdb',        'keys' => ['tmdb_api_key'],                         'wizard' => 'app_setup_tmdb',      'index' => 'tmdb_index'],
         'app_tautulli_index' => ['service' => 'Tautulli',   'service_id' => 'tautulli',    'keys' => ['tautulli_url', 'tautulli_api_key'],      'wizard' => 'admin_settings_index', 'index' => 'app_tautulli_index'],
     ];
