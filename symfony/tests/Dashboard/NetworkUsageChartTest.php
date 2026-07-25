@@ -70,4 +70,49 @@ class NetworkUsageChartTest extends TestCase
         $this->assertSame('2.5 MB', NetworkUsageChart::bytes(2500000.0));
         $this->assertSame('1.9 GB', NetworkUsageChart::bytes(1.85e9));
     }
+
+    /** Two hourly buckets one hour apart. */
+    private function series(): array
+    {
+        return [
+            ['ts' => 1751738400, 'downBytes' => 1.0e9, 'upBytes' => 5.0e7],
+            ['ts' => 1751742000, 'downBytes' => 2.0e9, 'upBytes' => 1.0e8],
+        ];
+    }
+
+    public function testDefaultFormatOutputIsUnchanged(): void
+    {
+        $c = NetworkUsageChart::build($this->series());
+
+        // Geometry: 2 points across WIDTH=600, peak = 2e9 → the peak sits at
+        // PAD_TOP=8 and an idle value sits at HEIGHT=120.
+        $this->assertSame('0,64 600,8', $c['downLine']);
+        $this->assertSame('0,120 0,64 600,8 600,120', $c['downArea']);
+        $this->assertSame('0,117.2 600,114.4', $c['upLine']);
+        $this->assertSame('3 GB', $c['downTotal']);
+        $this->assertSame('150 MB', $c['upTotal']);
+        // Default labels are hour-of-day in the server timezone.
+        $this->assertSame(date('H:i', 1751738400), $c['startLabel']);
+        $this->assertSame(date('H:i', 1751742000), $c['endLabel']);
+        $this->assertStringContainsString(date('H:i', 1751738400), $c['points'][0]['label']);
+    }
+
+    public function testLabelFormatAppliesToPointsAndAxis(): void
+    {
+        $c = NetworkUsageChart::build($this->series(), 'D');
+
+        $this->assertSame(date('D', 1751738400), $c['startLabel']);
+        $this->assertSame(date('D', 1751742000), $c['endLabel']);
+        $this->assertStringStartsWith(date('D', 1751738400) . ' — ', $c['points'][0]['label']);
+    }
+
+    public function testGeometryDoesNotDependOnLabelFormat(): void
+    {
+        $a = NetworkUsageChart::build($this->series());
+        $b = NetworkUsageChart::build($this->series(), 'D');
+
+        foreach (['downArea', 'downLine', 'upLine', 'downTotal', 'upTotal'] as $k) {
+            $this->assertSame($a[$k], $b[$k], "$k must not depend on the label format");
+        }
+    }
 }

@@ -620,6 +620,75 @@ tautulli:
     items: '{count, plural, one {# item} other {# items}}'
     episodes: '{count, plural, one {# episode} other {# episodes}}'
 
+unifi:
+  title: Network
+  subtitle: 'Live network operations'
+  updated: 'Updated {seconds}s ago'
+  unreachable: 'UniFi console unreachable — check the URL and API key in settings.'
+  empty: 'No data for this section'
+  retry: Retry
+  tiles:
+    wan: Internet
+    cpu: Gateway CPU
+    memory: Gateway memory
+    clients: Clients
+    throughput: Throughput
+    latency: latency
+    drops: drops
+    wired: wired
+    wireless: wireless
+    guest: guest
+  history:
+    traffic: 'WAN traffic — last 7 days'
+    speedtests: 'Speedtest history — last 30 days'
+    speedtests_sparse: 'Only {count} runs in the window — enable scheduled speedtests on the console for a trend.'
+    # down/up/latency and peak arrive pre-formatted from SpeedtestChart — no units here.
+    latest: 'Latest: ↓{down} ↑{up} · {latency}'
+    latency_range: 'Latency {min} / {avg} / {max} ms'
+    peak: 'peak {peak}'
+  infra:
+    title: Infrastructure
+    device: Device
+    hidden_ssid: hidden
+    untagged: untagged
+    kind_gateway: gateway
+    kind_switch: switch
+    kind_ap: access point
+    kind_other: device
+    summary: '{devices} devices · {online} online · {upgradable} upgradable'
+    radios: 'Access points'
+    neighbors: 'Neighbor networks'
+    neighbors_unavailable: 'Neighbor scan not available on this console'
+    networks: Networks
+    network_name: Network
+    vlan: VLAN
+    subnet: Subnet
+    channel: Channel
+    power: TX power
+    utilization: Utilization
+    retry_pct: Retry
+    signal: Signal
+    vendor: Vendor
+    temperature: Temp
+    uptime: Uptime
+    upgradable: 'Update available'
+  clients:
+    wireless: 'Wireless clients'
+    device: Device
+    ssid: SSID
+    band: Band
+    access_point: 'Access point'
+    avg_signal: 'Avg signal'
+    talkers: 'Live talkers'
+    top: 'Top clients (total)'
+    reservations: 'DHCP reservations'
+    reservations_summary: '{total} reservations · {mismatched} mismatched'
+    reserved_ip: 'Reserved IP'
+    live_ip: 'Current IP'
+    status_ok: Match
+    status_mismatch: Mismatch
+    status_offline: Offline
+
 profile:
   title: My profile
   identity:

@@ -47,6 +47,7 @@ class ServiceRouteGuardSubscriber implements EventSubscriberInterface
         'app_deluge'        => ['service' => 'Deluge',      'service_id' => 'deluge',      'keys' => ['deluge_url'],                            'wizard' => 'app_setup_downloads', 'index' => 'app_deluge_index'],
         'tmdb_'             => ['service' => 'TMDb',        'service_id' => 'tmdb',        'keys' => ['tmdb_api_key'],                         'wizard' => 'app_setup_tmdb',      'index' => 'tmdb_index'],
         'app_tautulli_index' => ['service' => 'Tautulli',   'service_id' => 'tautulli',    'keys' => ['tautulli_url', 'tautulli_api_key'],      'wizard' => 'admin_settings_index', 'index' => 'app_tautulli_index'],
+        'app_unifi_'        => ['service' => 'UniFi',        'service_id' => 'unifi',       'keys' => ['unifi_url', 'unifi_api_key'],            'wizard' => 'admin_settings_index', 'index' => 'app_unifi_index'],
     ];
 
     public function __construct(

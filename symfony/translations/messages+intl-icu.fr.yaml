@@ -619,6 +619,74 @@ tautulli:
     items: '{count, plural, one {# élément} other {# éléments}}'
     episodes: '{count, plural, one {# épisode} other {# épisodes}}'
 
+unifi:
+  title: Réseau
+  subtitle: "Supervision réseau en direct"
+  updated: 'Mis à jour il y a {seconds} s'
+  unreachable: "Console UniFi inaccessible — vérifiez l'URL et la clé API dans les paramètres."
+  empty: 'Aucune donnée pour cette section'
+  retry: Réessayer
+  tiles:
+    wan: Internet
+    cpu: 'Processeur passerelle'
+    memory: 'Mémoire passerelle'
+    clients: Clients
+    throughput: Débit
+    latency: latence
+    drops: pertes
+    wired: filaire
+    wireless: 'sans fil'
+    guest: invité
+  history:
+    traffic: 'Trafic WAN — 7 derniers jours'
+    speedtests: 'Historique des tests de débit — 30 derniers jours'
+    speedtests_sparse: "Seulement {count} tests sur la période — activez les tests planifiés sur la console pour obtenir une tendance."
+    latest: 'Dernier : ↓{down} ↑{up} · {latency}'
+    latency_range: 'Latence {min} / {avg} / {max} ms'
+    peak: 'pic {peak}'
+  infra:
+    title: Infrastructure
+    device: Équipement
+    hidden_ssid: masqué
+    untagged: 'non balisé'
+    kind_gateway: passerelle
+    kind_switch: commutateur
+    kind_ap: "point d'accès"
+    kind_other: équipement
+    summary: '{devices} équipements · {online} en ligne · {upgradable} à mettre à jour'
+    radios: "Points d'accès"
+    neighbors: 'Réseaux voisins'
+    neighbors_unavailable: "Analyse des réseaux voisins indisponible sur cette console"
+    networks: Réseaux
+    network_name: Réseau
+    vlan: VLAN
+    subnet: 'Sous-réseau'
+    channel: Canal
+    power: 'Puissance TX'
+    utilization: Utilisation
+    retry_pct: Réémissions
+    signal: Signal
+    vendor: Fabricant
+    temperature: Temp.
+    uptime: 'Temps de fonctionnement'
+    upgradable: 'Mise à jour disponible'
+  clients:
+    wireless: 'Clients sans fil'
+    device: Équipement
+    ssid: SSID
+    band: Bande
+    access_point: "Point d'accès"
+    avg_signal: 'Signal moyen'
+    talkers: 'Débits en direct'
+    top: 'Principaux clients (total)'
+    reservations: 'Réservations DHCP'
+    reservations_summary: '{total} réservations · {mismatched} incohérentes'
+    reserved_ip: 'IP réservée'
+    live_ip: 'IP actuelle'
+    status_ok: Conforme
+    status_mismatch: Incohérente
+    status_offline: 'Hors ligne'
+
 profile:
   title: Mon profil
   identity:
