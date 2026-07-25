@@ -1,0 +1,215 @@
+{# Physical topology + RF. 60s cadence. One stat/device call feeds the cards and
+   the radio table; stat/rogueap and rest/networkconf feed the other two. Each
+   panel owns its empty state, so one missing endpoint costs one panel. #}
+{% if infra is null %}
+  <div class="card">
+    <div class="card-body">
+      <div class="empty">
+        <p class="empty-title">{{ 'unifi.unreachable'|trans }}</p>
+        <div class="empty-action">
+          <button type="button" class="btn btn-primary" data-dash-retry>{{ 'unifi.retry'|trans }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% else %}
+<div class="row row-deck row-cards">
+
+  {# ── Infrastructure cards ── #}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">{{ 'unifi.infra.title'|trans }}</h3>
+        <div class="card-subtitle ms-auto text-secondary small">
+          {{ 'unifi.infra.summary'|trans({
+               devices: infra.counts.devices,
+               online: infra.counts.online,
+               upgradable: infra.counts.upgradable
+             }) }}
+        </div>
+      </div>
+      <div class="card-body">
+        {% if infra.devices %}
+          <div class="row row-cards">
+            {% for d in infra.devices %}
+              <div class="col-sm-6 col-lg-4 col-xxl-3">
+                <div class="card card-sm">
+                  <div class="card-body">
+                    <div class="d-flex align-items-center mb-2">
+                      <span class="status-dot {{ d.online ? 'status-dot-animated bg-green' : 'bg-red' }} me-2"></span>
+                      <span class="fw-bold text-truncate">{{ d.name ?? '—' }}</span>
+                      {% if d.upgradable %}
+                        <span class="badge bg-yellow-lt ms-auto">{{ 'unifi.infra.upgradable'|trans }}</span>
+                      {% endif %}
+                    </div>
+                    <div class="datagrid">
+                      <div class="datagrid-item">
+                        <div class="datagrid-title">{{ 'unifi.infra.model'|trans }}</div>
+                        <div class="datagrid-content">{{ d.model ?? '—' }}</div>
+                      </div>
+                      <div class="datagrid-item">
+                        <div class="datagrid-title">IP</div>
+                        <div class="datagrid-content font-monospace">{{ d.ip ?? '—' }}</div>
+                      </div>
+                      <div class="datagrid-item">
+                        <div class="datagrid-title">{{ 'unifi.tiles.clients'|trans }}</div>
+                        <div class="datagrid-content">{{ d.clients ?? '—' }}</div>
+                      </div>
+                      <div class="datagrid-item">
+                        <div class="datagrid-title">{{ 'unifi.infra.uptime'|trans }}</div>
+                        <div class="datagrid-content">
+                          {{ d.uptimeSeconds is null ? '—' : (d.uptimeSeconds // 86400) ~ 'd' }}
+                        </div>
+                      </div>
+                      <div class="datagrid-item">
+                        <div class="datagrid-title">CPU</div>
+                        <div class="datagrid-content">{{ d.cpuPercent is null ? '—' : d.cpuPercent|round ~ '%' }}</div>
+                      </div>
+                      <div class="datagrid-item">
+                        <div class="datagrid-title">RAM</div>
+                        <div class="datagrid-content">{{ d.memPercent is null ? '—' : d.memPercent|round ~ '%' }}</div>
+                      </div>
+                      {# Gateway-only: no other device reports a temperature, so a
+                         dash here is normal, not a failed read. #}
+                      <div class="datagrid-item">
+                        <div class="datagrid-title">{{ 'unifi.infra.temperature'|trans }}</div>
+                        <div class="datagrid-content">{{ d.tempC is null ? '—' : d.tempC|round ~ ' °C' }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            {% endfor %}
+          </div>
+        {% else %}
+          <div class="empty"><p class="empty-title">{{ 'unifi.empty'|trans }}</p></div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  {# ── RF environment: radios left, neighbors right ── #}
+  <div class="col-12 col-xl-7">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">{{ 'unifi.infra.radios'|trans }}</h3></div>
+      {% if infra.radios %}
+        <div class="table-responsive">
+          <table class="table table-sm table-vcenter card-table">
+            <thead>
+              <tr>
+                <th>{{ 'unifi.clients.access_point'|trans }}</th>
+                <th>{{ 'unifi.clients.band'|trans }}</th>
+                <th>{{ 'unifi.infra.channel'|trans }}</th>
+                <th>{{ 'unifi.infra.power'|trans }}</th>
+                <th style="min-width:7rem">{{ 'unifi.infra.utilization'|trans }}</th>
+                <th>{{ 'unifi.infra.retry_pct'|trans }}</th>
+                <th>{{ 'unifi.infra.satisfaction'|trans }}</th>
+                <th>{{ 'unifi.tiles.clients'|trans }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for r in infra.radios %}
+                <tr>
+                  <td class="text-truncate">{{ r.device ?? '—' }}</td>
+                  <td>{{ r.band }}</td>
+                  <td>{{ r.channel ?? '—' }}{% if r.widthMhz %} <span class="text-secondary">/ {{ r.widthMhz }}</span>{% endif %}</td>
+                  <td>{{ r.txPowerDbm is null ? '—' : r.txPowerDbm ~ ' dBm' }}</td>
+                  <td>
+                    {% if r.utilizationPercent is null %}—{% else %}
+                      <div class="d-flex align-items-center">
+                        <div class="progress progress-sm flex-fill me-2">
+                          <div class="progress-bar {{ r.utilizationPercent >= 70 ? 'bg-red' : (r.utilizationPercent >= 40 ? 'bg-yellow' : 'bg-green') }}"
+                               style="width: {{ min(r.utilizationPercent, 100) }}%"></div>
+                        </div>
+                        <span class="text-secondary small">{{ r.utilizationPercent|round }}%</span>
+                      </div>
+                    {% endif %}
+                  </td>
+                  <td>{{ r.retryPercent is null ? '—' : r.retryPercent|round(1) ~ '%' }}</td>
+                  {# Always a dash on current firmware: the per-radio figure is
+                     -1 and the mapper nulls it. Column kept for when it isn't. #}
+                  <td>{{ r.satisfaction is null ? '—' : r.satisfaction ~ '%' }}</td>
+                  <td>{{ r.clients ?? '—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body"><div class="empty"><p class="empty-title">{{ 'unifi.empty'|trans }}</p></div></div>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-12 col-xl-5">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">{{ 'unifi.infra.neighbors'|trans }}</h3></div>
+      {% if infra.neighbors %}
+        <div class="table-responsive" style="max-height: 22rem; overflow-y: auto">
+          <table class="table table-sm table-vcenter card-table">
+            <thead>
+              <tr>
+                <th>{{ 'unifi.clients.ssid'|trans }}</th>
+                <th>{{ 'unifi.infra.channel'|trans }}</th>
+                <th>{{ 'unifi.infra.signal'|trans }}</th>
+                <th>{{ 'unifi.infra.vendor'|trans }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for n in infra.neighbors %}
+                <tr>
+                  <td class="text-truncate">{{ n.ssid ?? '—' }}</td>
+                  <td>{{ n.channel ?? '—' }}</td>
+                  <td>{{ n.signalDbm is null ? '—' : n.signalDbm ~ ' dBm' }}</td>
+                  <td class="text-secondary text-truncate">{{ n.vendor ?? '—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        {# Expected state if stat/rogueap is unavailable on this firmware —
+           see plan Task 5 Step 1b. Not a bug, so say why rather than showing
+           a bare "no data". #}
+        <div class="card-body">
+          <div class="empty">
+            <p class="empty-title">{{ 'unifi.infra.neighbors_unavailable'|trans }}</p>
+          </div>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Networks / VLANs ── #}
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header"><h3 class="card-title">{{ 'unifi.infra.networks'|trans }}</h3></div>
+      {% if infra.networks %}
+        <div class="table-responsive">
+          <table class="table table-sm table-vcenter card-table">
+            <thead>
+              <tr>
+                <th>{{ 'unifi.infra.network_name'|trans }}</th>
+                <th>{{ 'unifi.infra.vlan'|trans }}</th>
+                <th>{{ 'unifi.infra.subnet'|trans }}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for n in infra.networks %}
+                <tr>
+                  <td>{{ n.name ?? '—' }}</td>
+                  <td>{{ n.vlan ?? '—' }}</td>
+                  <td class="font-monospace">{{ n.subnet ?? '—' }}</td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      {% else %}
+        <div class="card-body"><div class="empty"><p class="empty-title">{{ 'unifi.empty'|trans }}</p></div></div>
+      {% endif %}
+    </div>
+  </div>
+
+</div>
+{% endif %}
