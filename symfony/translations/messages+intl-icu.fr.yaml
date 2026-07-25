@@ -646,7 +646,13 @@ unifi:
     peak: 'pic {peak}'
   infra:
     title: Infrastructure
+    device: Équipement
     model: Modèle
+    hidden_ssid: masqué
+    kind_gateway: passerelle
+    kind_switch: commutateur
+    kind_ap: "point d'accès"
+    kind_other: équipement
     summary: '{devices} équipements · {online} en ligne · {upgradable} à mettre à jour'
     radios: "Points d'accès"
     neighbors: 'Réseaux voisins'

@@ -173,7 +173,12 @@ final class UnifiInfraReader implements ResetInterface
                 'name'          => self::str($d['name'] ?? null),
                 'model'         => self::str($d['model'] ?? null),
                 'kind'          => self::kindOf(strtolower((string) ($d['type'] ?? ''))),
-                'ip'            => self::str($d['ip'] ?? null),
+                // Gateways report their WAN address in `ip`, which is the wrong
+                // answer in a LAN inventory (and needless exposure in a
+                // screenshot), so prefer a LAN address when the payload carries
+                // one. Switches and APs have no `lan_ip` and fall through to
+                // `ip` unchanged.
+                'ip'            => self::str($d['lan_ip'] ?? null) ?? self::str($d['ip'] ?? null),
                 'online'        => is_numeric($d['state'] ?? null) && (int) $d['state'] === 1,
                 'uptimeSeconds' => $uptime === null ? null : (int) $uptime,
                 'cpuPercent'    => $stats === null ? null : self::num($stats['cpu'] ?? null),

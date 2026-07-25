@@ -51,6 +51,25 @@ class UnifiInfraReaderTest extends TestCase
                 'rest/networkconf' => self::NETWORKS];
     }
 
+    /**
+     * A gateway reports its WAN address in `ip`, which is the wrong answer in a
+     * LAN device inventory — the console showed a public address next to four
+     * 192.168.x ones. Prefer `lan_ip` when present; everything without it (every
+     * switch and AP) must keep using `ip`.
+     */
+    public function testGatewayPrefersItsLanAddressOverTheWanAddress(): void
+    {
+        [$reader] = $this->reader(['stat/device' => [
+            ['name' => 'GW', 'type' => 'ucg', 'state' => 1,
+             'ip' => '203.0.113.9', 'lan_ip' => '192.0.2.1'],
+            ['name' => 'AP', 'type' => 'uap', 'state' => 1, 'ip' => '192.0.2.20'],
+        ]]);
+        $d = $reader->read()['devices'];
+
+        $this->assertSame('192.0.2.1', $d[0]['ip']);  // gateway → LAN, not WAN
+        $this->assertSame('192.0.2.20', $d[1]['ip']); // no lan_ip → unchanged
+    }
+
     public function testDevicesMappedAndSortedOfflineFirst(): void
     {
         [$reader] = $this->reader($this->all());

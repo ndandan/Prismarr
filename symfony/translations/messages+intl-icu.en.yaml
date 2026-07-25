@@ -648,7 +648,13 @@ unifi:
     peak: 'peak {peak}'
   infra:
     title: Infrastructure
+    device: Device
     model: Model
+    hidden_ssid: hidden
+    kind_gateway: gateway
+    kind_switch: switch
+    kind_ap: access point
+    kind_other: device
     summary: '{devices} devices · {online} online · {upgradable} upgradable'
     radios: 'Access points'
     neighbors: 'Neighbor networks'
