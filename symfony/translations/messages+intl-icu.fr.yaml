@@ -648,6 +648,7 @@ unifi:
     title: Infrastructure
     device: Équipement
     hidden_ssid: masqué
+    untagged: 'non balisé'
     kind_gateway: passerelle
     kind_switch: commutateur
     kind_ap: "point d'accès"

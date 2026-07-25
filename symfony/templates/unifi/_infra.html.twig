@@ -99,9 +99,12 @@
   </div>
 
   {# ── RF environment: radios left, neighbors right ──
-     8/4 rather than 7/5: the radio table carries nearly twice the columns, and
-     the neighbor table only needs enough width to stop `-60 dBm` wrapping. #}
-  <div class="col-12 col-xl-8">
+     7/5. An earlier 8/4 split clipped the neighbor table's Vendor column clean
+     off at desktop width (live-verified): the reasoning was backwards, since the
+     radio table had just LOST its satisfaction column and so needed less room,
+     not more. 7 columns fit comfortably in 7, and 5 gives the neighbor table
+     enough width for Vendor plus a non-wrapping `-60 dBm`. #}
+  <div class="col-12 col-xl-7">
     <div class="card">
       <div class="card-header"><h3 class="card-title">{{ 'unifi.infra.radios'|trans }}</h3></div>
       {% if infra.radios %}
@@ -160,7 +163,7 @@
     </div>
   </div>
 
-  <div class="col-12 col-xl-4">
+  <div class="col-12 col-xl-5">
     <div class="card">
       <div class="card-header"><h3 class="card-title">{{ 'unifi.infra.neighbors'|trans }}</h3></div>
       {% if infra.neighbors %}
@@ -226,7 +229,15 @@
               {% for n in infra.networks %}
                 <tr>
                   <td>{{ n.name ?? '—' }}</td>
-                  <td>{{ n.vlan ?? '—' }}</td>
+                  {# No vlan id means the untagged/default network — a fact, not a
+                     missing value, so say it rather than showing a bare dash. #}
+                  <td>
+                    {%- if n.vlan is null -%}
+                      <span class="text-secondary fst-italic">{{ 'unifi.infra.untagged'|trans }}</span>
+                    {%- else -%}
+                      {{ n.vlan }}
+                    {%- endif -%}
+                  </td>
                   <td class="font-monospace">{{ n.subnet ?? '—' }}</td>
                 </tr>
               {% endfor %}

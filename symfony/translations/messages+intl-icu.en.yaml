@@ -650,6 +650,7 @@ unifi:
     title: Infrastructure
     device: Device
     hidden_ssid: hidden
+    untagged: untagged
     kind_gateway: gateway
     kind_switch: switch
     kind_ap: access point

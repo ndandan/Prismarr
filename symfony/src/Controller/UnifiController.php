@@ -144,9 +144,13 @@ class UnifiController extends AbstractController
 
         return [
             'history' => $data,
-            // 'D' = day-name axis labels for the 7-day view (Task 2). The
-            // widget's 24h chart keeps the default 'H:i'.
-            'usageChart' => NetworkUsageChart::build($data['usage7d'] ?? null, 'D'),
+            // Day name + date + hour for the 7-day view; the widget's 24h chart
+            // keeps the default 'H:i'. One format feeds both the per-point hover
+            // labels and the two axis labels, which rules out a bare 'D': seven
+            // days apart is the same weekday, so the axis read "Sat … Sat" and
+            // all 24 points in a day shared one tooltip (live-verified). The date
+            // disambiguates the axis; the hour makes hovering a spike informative.
+            'usageChart' => NetworkUsageChart::build($data['usage7d'] ?? null, 'D j H:i'),
             'speedChart' => SpeedtestChart::build($data['speedtests'] ?? null),
         ];
     }
