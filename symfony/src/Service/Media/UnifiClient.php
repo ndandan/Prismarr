@@ -3,6 +3,7 @@
 namespace App\Service\Media;
 
 use App\Service\ConfigService;
+use App\Service\Unifi\UnifiFetcher;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
@@ -32,7 +33,7 @@ use Symfony\Contracts\Service\ResetInterface;
  * Direction convention: the site's wan-RX is data received FROM the internet,
  * i.e. download; wan-TX is upload. Report timestamps are epoch MILLISECONDS.
  */
-class UnifiClient implements ResetInterface
+class UnifiClient implements ResetInterface, UnifiFetcher
 {
     /** Trivial read used by ping(), the widget and HealthService::probeFor(). */
     public const PATH_HEALTH = '/stat/health';
@@ -94,6 +95,22 @@ class UnifiClient implements ResetInterface
     public function ping(): bool
     {
         return $this->request(self::PATH_HEALTH) !== null;
+    }
+
+    /**
+     * UnifiFetcher — raw single-call access for the App\Service\Unifi readers.
+     * Deliberately thin: no caching and no mapping here, because each reader
+     * owns a TTL matching its own poll cadence and its own normalized shape.
+     */
+    public function fetch(string $path, ?array $body = null): ?array
+    {
+        return $this->request($path, $body);
+    }
+
+    /** UnifiFetcher — see the interface: state of the LAST fetch() only. */
+    public function transportFailed(): bool
+    {
+        return $this->transportDown;
     }
 
     public function overview(): ?array
@@ -286,6 +303,10 @@ class UnifiClient implements ResetInterface
         if (!$this->enabled || $this->baseUrl === null || $this->baseUrl === '' || $this->apiKey === '') {
             return null;
         }
+        // Per-call semantics for transportFailed(). overview() is unaffected:
+        // it clears the flag before its first call and checks it after, and
+        // this reset runs at the start of that same call.
+        $this->transportDown = false;
         $url = rtrim($this->baseUrl, '/') . '/proxy/network/api/s/' . rawurlencode($this->site) . $path;
 
         $ch = curl_init($url);

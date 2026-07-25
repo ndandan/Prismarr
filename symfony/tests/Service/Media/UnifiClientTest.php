@@ -205,4 +205,35 @@ class UnifiClientTest extends TestCase
         $this->assertTrue($this->makeClient($this->allEndpoints())->ping());
         $this->assertFalse($this->makeClient(['stat/health' => null])->ping());
     }
+
+    public function testFetchDelegatesToRequestAndReturnsData(): void
+    {
+        $client = $this->makeClient($this->allEndpoints());
+
+        $this->assertSame(self::DEVICE_DATA, $client->fetch('/stat/device'));
+        $this->assertContains('/stat/device', $client->pathsRequested);
+        $this->assertFalse($client->transportFailed());
+    }
+
+    public function testFetchReportsTransportFailureButNotApplicationMiss(): void
+    {
+        $failing = $this->makeClient([], failTransport: true);
+        $this->assertNull($failing->fetch('/stat/device'));
+        $this->assertTrue($failing->transportFailed());
+
+        // An application-level miss (no such payload) is NOT a transport
+        // failure — readers must keep trying their remaining endpoints.
+        $ok = $this->makeClient($this->allEndpoints());
+        $this->assertNull($ok->fetch('/stat/nonexistent'));
+        $this->assertFalse($ok->transportFailed());
+    }
+
+    public function testFetchPassesJsonBodyThrough(): void
+    {
+        $client = $this->makeClient($this->allEndpoints());
+        $client->fetch('/stat/report/hourly.site', ['attrs' => ['time']]);
+
+        $i = array_search('/stat/report/hourly.site', $client->pathsRequested, true);
+        $this->assertSame(['attrs' => ['time']], $client->bodiesSent[$i]);
+    }
 }
