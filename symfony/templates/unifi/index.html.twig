@@ -2,6 +2,42 @@
 
 {% block title %}{{ 'unifi.title'|trans }}{% endblock %}
 
+{% block stylesheets %}
+{{ parent() }}
+<style>
+  /* Chart styling for the history panel. Lives here rather than inline in the
+     fragment for two reasons: a media query is impossible in a style attribute
+     (and the axis labels break this project's sub-11px mobile floor without
+     one), and the fragment is re-injected on every 300s poll, so a <style> tag
+     inside it would accumulate duplicates.
+
+     Deliberately NOT reusing the dashboard's .net-chart* classes: those live in
+     an inline <style> in dashboard/index.html.twig and are scoped to that page,
+     so /unifi never loads them. These mirror them 1:1 under a page-local name.
+     No new CSS file — same pattern the dashboard itself uses. */
+  .unifi-chart { display: block; width: 100%; height: 120px; margin-top: .35rem; }
+  .unifi-chart-fill { fill: rgba(var(--tblr-primary-rgb, 99,102,241), .22); stroke: none; }
+  .unifi-chart-down { fill: none; stroke: var(--tblr-primary); stroke-width: 1.5; }
+  /* Upload is a fixed sky blue, not the theme primary: green-primary presets
+     otherwise render download and upload in near-identical greens. Carried over
+     from the widget, where it was live-verified across the 17 presets. */
+  .unifi-chart-up { fill: none; stroke: #38bdf8; stroke-width: 1.5; }
+  .unifi-chart-latency { fill: none; stroke: var(--tblr-orange); stroke-width: 2; stroke-dasharray: 4 3; }
+  .unifi-chart-axis { display: flex; justify-content: space-between; font-size: .62rem; color: var(--tblr-secondary); margin-top: .2rem; }
+
+  /* Lining figures so digits align down a column — these tables exist to be
+     compared vertically (which box is hot, which radio is retrying). */
+  .unifi-nums { font-variant-numeric: tabular-nums; }
+
+  /* Mobile readability floor (responsive audit 2026-06-29): nothing below 11px
+     under the lg breakpoint. .62rem is ~9.9px, so bump it exactly as the
+     dashboard does for its own axis. */
+  @media (max-width: 991.98px) {
+    .unifi-chart-axis { font-size: .6875rem; }
+  }
+</style>
+{% endblock %}
+
 {% block body %}
 <div class="page-header d-print-none">
   <div class="row align-items-center">

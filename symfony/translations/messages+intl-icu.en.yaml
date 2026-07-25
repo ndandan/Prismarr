@@ -649,7 +649,6 @@ unifi:
   infra:
     title: Infrastructure
     device: Device
-    model: Model
     hidden_ssid: hidden
     kind_gateway: gateway
     kind_switch: switch
@@ -667,7 +666,6 @@ unifi:
     power: TX power
     utilization: Utilization
     retry_pct: Retry
-    satisfaction: Satisfaction
     signal: Signal
     vendor: Vendor
     temperature: Temp

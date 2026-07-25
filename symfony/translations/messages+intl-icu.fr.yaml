@@ -647,7 +647,6 @@ unifi:
   infra:
     title: Infrastructure
     device: Équipement
-    model: Modèle
     hidden_ssid: masqué
     kind_gateway: passerelle
     kind_switch: commutateur
@@ -665,7 +664,6 @@ unifi:
     power: 'Puissance TX'
     utilization: Utilisation
     retry_pct: Réémissions
-    satisfaction: Satisfaction
     signal: Signal
     vendor: Fabricant
     temperature: Temp.

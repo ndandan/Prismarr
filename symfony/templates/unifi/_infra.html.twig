@@ -1,6 +1,12 @@
-{# Physical topology + RF. 60s cadence. One stat/device call feeds the cards and
-   the radio table; stat/rogueap and rest/networkconf feed the other two. Each
-   panel owns its empty state, so one missing endpoint costs one panel. #}
+{# Physical topology + RF. 60s cadence. One stat/device call feeds both the
+   device table and the radio table; stat/rogueap and rest/networkconf feed the
+   other two. Each panel owns its empty state, so one missing endpoint costs one
+   panel, never the region.
+
+   Styling note: the tabular-figure and chart classes used here live in a
+   page-scoped <style> block in unifi/index.html.twig, not in this fragment —
+   this file is re-injected on every 60s poll, so a <style> tag inside it would
+   accumulate duplicates. #}
 {% if infra is null %}
   <div class="card">
     <div class="card-body">
@@ -15,7 +21,7 @@
 {% else %}
 <div class="row row-deck row-cards">
 
-  {# ── Infrastructure cards ── #}
+  {# ── Infrastructure ── #}
   <div class="col-12">
     <div class="card">
       <div class="card-header">
@@ -36,7 +42,7 @@
          whole region speaks one vocabulary. #}
       {% if infra.devices %}
         <div class="table-responsive">
-          <table class="table table-sm table-vcenter card-table" style="font-variant-numeric: tabular-nums">
+          <table class="table table-sm table-vcenter card-table unifi-nums">
             <thead>
               <tr>
                 <th>{{ 'unifi.infra.device'|trans }}</th>
@@ -100,7 +106,7 @@
       <div class="card-header"><h3 class="card-title">{{ 'unifi.infra.radios'|trans }}</h3></div>
       {% if infra.radios %}
         <div class="table-responsive">
-          <table class="table table-sm table-vcenter card-table" style="font-variant-numeric: tabular-nums">
+          <table class="table table-sm table-vcenter card-table unifi-nums">
             <thead>
               <tr>
                 <th>{{ 'unifi.clients.access_point'|trans }}</th>
@@ -138,8 +144,10 @@
                   {# The Satisfaction column is deliberately gone. The console
                      reports -1 per radio on this firmware, so it was a permanently
                      empty column paying for itself in width on the widest table
-                     of the page. The reader still maps the field, so restoring
-                     the column is a one-line change if firmware ever fixes it. #}
+                     of the page. UnifiInfraReader still maps `satisfaction`, so
+                     restoring it means adding a th/td pair here plus a
+                     `unifi.infra.satisfaction` key back to both locale files —
+                     the key was removed with the column rather than left dead. #}
                   <td class="text-end">{{ r.clients ?? '—' }}</td>
                 </tr>
               {% endfor %}
@@ -157,7 +165,7 @@
       <div class="card-header"><h3 class="card-title">{{ 'unifi.infra.neighbors'|trans }}</h3></div>
       {% if infra.neighbors %}
         <div class="table-responsive" style="max-height: 22rem; overflow-y: auto">
-          <table class="table table-sm table-vcenter card-table" style="font-variant-numeric: tabular-nums">
+          <table class="table table-sm table-vcenter card-table unifi-nums">
             <thead>
               <tr>
                 <th>{{ 'unifi.clients.ssid'|trans }}</th>
