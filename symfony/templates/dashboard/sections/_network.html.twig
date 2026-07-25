@@ -14,6 +14,10 @@
           {{ 'dashboard.network.title'|trans }}
         </h3>
         <div class="card-actions">
+          {# The widget is the glance; /unifi is the detail. Same admin gate as
+             the card itself, so this link is only ever rendered to someone who
+             can follow it. #}
+          <a href="{{ path('app_unifi_index') }}" class="dash-action-btn">{{ 'common.action.view_all'|trans }}</a>
           <a href="{{ path('admin_settings_index') }}" class="dash-action-btn">{{ 'dashboard.network.settings_cta'|trans }}</a>
         </div>
       </div>
