@@ -308,8 +308,8 @@ class SetupController extends AbstractController
         }
 
         $fields = [
-            'qbittorrent_url' => '',
-            'qbittorrent_user' => '',
+            'qbittorrent_url' => 'http://host.docker.internal:8080',
+            'qbittorrent_user' => 'admin',
             'qbittorrent_password' => '',
             'deluge_url' => '',
             'deluge_password' => '',
