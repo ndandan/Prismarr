@@ -976,7 +976,7 @@ admin:
       help: How often the Deluge page and sidebar badge poll for changes. 0 disables polling.
     transmission_refresh:
       label: Transmission refresh
-      help: Auto-polling frequency on the Downloads page.
+      help: How often the sidebar badge and completion toasts poll Transmission. 0 disables polling.
       options:
         '1': '1 second (real-time)'
         '2': '2 seconds (default)'
@@ -3910,7 +3910,7 @@ deluge:
     empty_location: Destination path is required
 
 transmission:
-  page_title: Downloads
+  page_title: Transmission
   modal_detail:
     trackers:
       status_announcing: Announcing

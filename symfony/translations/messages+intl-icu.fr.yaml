@@ -974,7 +974,7 @@ admin:
       help: Fréquence de mise à jour de la page Deluge et du badge. 0 désactive le polling.
     transmission_refresh:
       label: Rafraîchissement Transmission
-      help: Fréquence du polling automatique sur la page Téléchargements.
+      help: Fréquence de mise à jour du badge et des notifications de fin. 0 désactive le polling.
       options:
         '1': '1 seconde (temps réel)'
         '2': '2 secondes (défaut)'
@@ -3908,7 +3908,7 @@ deluge:
     empty_location: Le chemin de destination est requis
 
 transmission:
-  page_title: Téléchargements
+  page_title: Transmission
   modal_detail:
     trackers:
       status_announcing: Annonce
