@@ -6,8 +6,12 @@ namespace App\Dashboard;
  * Turns UnifiClient::overview()['usage24h'] (hourly wan byte buckets) into
  * ready-to-render coordinate strings so the Twig fragment stays dumb. No
  * I/O, no state; null when fewer than 2 usable points (nothing to chart).
- * Hour labels use the server timezone via date() — same convention as the
- * rest of the app's server-rendered times.
+ * Also serves the Network tab's 7-day traffic chart, which passes a
+ * $labelFormat of 'D' for day-of-week labels instead of hour-of-day.
+ * Labels use the server timezone via date() — same convention as the
+ * rest of the app's server-rendered times. $labelFormat is a date()
+ * format string applied to the per-point hover labels and the two axis
+ * labels only; it has no effect on geometry.
  */
 final class NetworkUsageChart
 {
@@ -17,12 +21,13 @@ final class NetworkUsageChart
 
     /**
      * @param ?list<array{ts: int, downBytes: float, upBytes: float}> $series
+     * @param string $labelFormat date() format for hover/axis labels only
      * @return ?array{downArea: string, downLine: string, upLine: string,
      *                points: list<array{x: float, w: float, label: string}>,
      *                downTotal: string, upTotal: string,
      *                startLabel: string, endLabel: string}
      */
-    public static function build(?array $series): ?array
+    public static function build(?array $series, string $labelFormat = 'H:i'): ?array
     {
         $rows = [];
         foreach ((array) ($series ?? []) as $r) {
@@ -54,7 +59,7 @@ final class NetworkUsageChart
             $points[]  = [
                 'x'     => round(max(0.0, $x - $stepX / 2), 1),
                 'w'     => round($stepX, 1),
-                'label' => date('H:i', $r['ts'])
+                'label' => date($labelFormat, $r['ts'])
                     . ' — ↓ ' . self::bytes($r['down'])
                     . ' · ↑ ' . self::bytes($r['up']),
             ];
@@ -70,8 +75,8 @@ final class NetworkUsageChart
             'points'     => $points,
             'downTotal'  => self::bytes(array_sum(array_column($rows, 'down'))),
             'upTotal'    => self::bytes(array_sum(array_column($rows, 'up'))),
-            'startLabel' => date('H:i', $rows[0]['ts']),
-            'endLabel'   => date('H:i', $rows[$n - 1]['ts']),
+            'startLabel' => date($labelFormat, $rows[0]['ts']),
+            'endLabel'   => date($labelFormat, $rows[$n - 1]['ts']),
         ];
     }
 
