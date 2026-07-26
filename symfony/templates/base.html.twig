@@ -2354,7 +2354,11 @@
     if (!window._prismarrQbtCleanupBound) {
       window._prismarrQbtCleanupBound = true;
       document.addEventListener('turbo:before-render', function () {
-        ['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer', '_prismarrDelugePollTimer', '_prismarrUnifiPollTimer', '_prismarrTransmissionPollTimer'].forEach(function (key) {
+        // _prismarrTorrentPagePollTimer : le poller 3s des pages qBittorrent /
+        // Deluge / Transmission. Un seul nom pour les trois (une seule page de
+        // client torrent est montée à la fois) ; sans cette purge, naviguer vers
+        // une page NON-torrent laisse l'intervalle tourner indéfiniment.
+        ['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer', '_prismarrDelugePollTimer', '_prismarrUnifiPollTimer', '_prismarrTransmissionPollTimer', '_prismarrTorrentPagePollTimer'].forEach(function (key) {
           if (window[key]) { clearInterval(window[key]); window[key] = null; }
         });
         // Usenet page uses a setTimeout poll chain — kill it on navigation so

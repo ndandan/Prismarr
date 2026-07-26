@@ -792,7 +792,6 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
 (function(){
     var BASE = '{{ path("app_deluge_index") }}';
     var LOCALE = {{ app.request.locale|default('fr')|json_encode|raw }};
-    var refreshTimer = null;
     var currentFilter = 'all';
     var selectedHashes = {};
     var deleteTarget = { hashes: [], mode: 'single' };
@@ -1105,13 +1104,28 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     // ── Refresh temps réel ──────────────────────────────────────────────────
     var REFRESH_INTERVAL = 3000; // 3s — compromis entre fluidité et charge qBit
 
+    // Le handle du timer vit sur window et NON dans cette closure : Turbo Drive
+    // ré-exécute le script de la page entrante avec une closure neuve, tandis que
+    // celle de la page sortante survit, son setInterval toujours vivant. Les trois
+    // pages de clients torrent (qBittorrent, Deluge, Transmission) partagent ce
+    // nom — une seule est montée à la fois — et rendent les MÊMES ids d'éléments :
+    // sans ce global, le poller orphelin de la page sortante continuerait d'écrire
+    // ses torrents par-dessus ceux de la page entrante. base.html.twig le purge
+    // aussi sur turbo:before-render, pour la navigation vers une page non-torrent.
+    function clearPollTimer() {
+        if (window._prismarrTorrentPagePollTimer) {
+            clearInterval(window._prismarrTorrentPagePollTimer);
+            window._prismarrTorrentPagePollTimer = null;
+        }
+    }
+
     function startRefresh() {
-        if (refreshTimer) clearInterval(refreshTimer);
+        clearPollTimer();
         if (document.hidden) return;  // pas de poll si onglet masqué
-        refreshTimer = setInterval(refreshData, REFRESH_INTERVAL);
+        window._prismarrTorrentPagePollTimer = setInterval(refreshData, REFRESH_INTERVAL);
     }
     function stopRefresh() {
-        if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+        clearPollTimer();
         if (refreshCtrl) { refreshCtrl.abort(); refreshCtrl = null; }
     }
 
