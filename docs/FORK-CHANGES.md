@@ -5,13 +5,13 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-07-11 (covers 2026-06-13 → 2026-07-11).*
+*Last updated: 2026-07-25 (covers 2026-06-13 → 2026-07-25).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
 mergeable both ways), and everything general-purpose is offered back as an
 upstream PR. Every change lands through the same quality gate as upstream —
-PHP lint, Twig lint and the full PHPUnit suite (~700 tests) green in CI, plus
+PHP lint, Twig lint and the full PHPUnit suite (~970 tests) green in CI, plus
 a live test on a real Unraid deployment — before an image is published.
 
 ---
@@ -328,6 +328,82 @@ polish round (merge `5e62504`); all additive, several upstream-worthy:
   one CSS vocabulary; the infinite `dl-pulse` sidebar animation retired for a
   static glow + reduced-motion-guarded pulse-on-increase.
 
+### Transmission tab (2026-07-25)
+
+A third download client alongside qBittorrent and Deluge (merge `79e8ce3`),
+reworked from **jeromelefeuvre's fork PR #18** with the contributor's
+authorship preserved. Feature parity with the Deluge tab: list/table/compact
+views, filtering, search, sort, server-side pagination, bulk actions
+(pause/resume/delete/recheck plus pause-all/resume-all), a per-torrent detail
+modal (general/files/trackers/peers), add-by-URL and add-by-file, and a
+read-only category filter derived from Transmission's own labels. Registered
+everywhere a service must be: setup-wizard step, admin settings card with
+kill switch, sidebar entry, topbar poll and health circuit breaker.
+
+- **RPC session handshake handled transparently.** Transmission answers a
+  request without a valid `X-Transmission-Session-Id` with HTTP `409` carrying
+  the real token; the client caches it and retries. The wizard's Test button
+  and the health check both treat that `409` as *reachable*, while a genuine
+  `401` (bad RPC password) is reported as an auth failure. User/password are
+  optional, matching qBittorrent's reverse-proxy-friendly config shape.
+- **Reused the qBittorrent translation namespace.** `templates/deluge/` already
+  referenced 224 `qbittorrent.*` keys against 5 `deluge.*`, so the fork's real
+  convention for a second torrent client is to reuse that namespace rather than
+  carve out a private one — which cut the contribution's `transmission:` block
+  from 208 keys per locale to 15.
+- **Test gap it exposed.** Nothing in CI rendered *any* torrent template:
+  `ServiceRouteGuardSubscriber` redirects the torrent routes to the setup
+  wizard whenever the service URL is unset (always true under the web test
+  case), and the smoke test only asserts `status < 500`, so the 302 passed and
+  the body was never parsed — four nonexistent `transmission.*` keys nearly
+  shipped as raw dotted strings. `TransmissionRenderTest` now seeds the URL,
+  injects a mock client, renders both locales and fails on any leaked
+  `qbittorrent.*` / `deluge.*` / `transmission.*` key. qBittorrent and Deluge
+  still have no equivalent gate.
+
+Candidate to offer upstream — nothing about it is fork-specific.
+
+### Cross-page torrent poller fix (2026-07-25)
+
+All three torrent pages leaked their 3-second refresh poller across Turbo
+navigations. The `setInterval` handle lived in each page script's closure, and
+Turbo Drive re-executes the incoming page's `<script>` with a *fresh* closure
+while the outgoing page's closure and its live interval survive — so
+`clearInterval` could only ever reach the caller's own timer, never the orphan.
+Because all three templates render the same element ids (`qbt-list`,
+`qbt-stat-total`, …), the orphan's existence guards still passed against its
+successor's DOM, so it kept writing its own client's torrents over the page the
+user was looking at, two pollers overwriting each other at 3 s apiece. The
+`turbo:before-render` cleanup in `base.html.twig` could not help: it clears
+named globals, and a closure variable has no name to clear.
+
+Fix: hoist the handle to one shared global, `window._prismarrTorrentPagePollTimer`
+(a single name serves all three, since only one torrent page is ever mounted),
+routed through a `clearPollTimer()` helper that both `startRefresh()` and
+`stopRefresh()` call, and add that name to the `turbo:before-render` cleanup
+array so navigating to a **non**-torrent page — which re-executes no torrent
+script — stops the interval too. `TorrentPagePollerTest` (11 cases) pins both
+halves across all three templates and fails if a closure-scoped `refreshTimer`
+ever returns; `TransmissionRegistrationTest` pins the cleanup array literal.
+
+Pre-existing between qBittorrent and Deluge; the Transmission tab added a third
+page to the cycle, which is what surfaced it. Live-verified on `:beta` with the
+two clients holding distinguishable data — Deluge 54 torrents, Transmission 0:
+Deluge → Transmission gave 18 Transmission polls at a clean 3.0 s and **zero**
+Deluge polls over 51 s with the count holding at 0 (the bug would have painted
+54), the reverse direction held 54, and a torrent page → dashboard nulled the
+handle with zero torrent polls in 52 s. Known residue: `refreshCtrl` and
+`refreshSeq` are still closure-scoped, so a fetch already in flight when
+navigation starts can apply once to the incoming page before its own poller
+corrects it on the next beat — a single self-correcting frame, not observable in
+the live run. Namespacing the shared element ids per page is the deeper cause
+and remains unaddressed.
+
+Applies to an upstream-origin file (`templates/qbittorrent/index.html.twig`) as
+well as the two fork-added ones, so the qBittorrent half is an upstream bug —
+milder there, since with one torrent page there is no second page to corrupt,
+but the poller still survives into every other page. Good upstream PR candidate.
+
 ---
 
 ## 4. Fork-only — declined upstream
@@ -401,7 +477,7 @@ Gluetun `X-API-Key` fix.
 ## Verification
 
 - Full gate green in CI on `main`: PHP lint, Twig lint, and the PHPUnit suite
-  (~700 tests as of July 2026). GHCR `:latest` rebuilds automatically on every
+  (967 tests as of 2026-07-25). GHCR `:latest` rebuilds automatically on every
   push to `main`; CI runs independently, so tests are verified green *before*
   pushing.
 - Every feature above was live-verified on a real Unraid deployment (usually

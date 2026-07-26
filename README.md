@@ -124,8 +124,17 @@ part of the original project:
 - Plex items open the app-global quick-look modal — [#75](https://github.com/Shoshuo/Prismarr/pull/75)
 - Deluge tab: full torrent management via deluge-web JSON-RPC — [#76](https://github.com/Shoshuo/Prismarr/pull/76)
 
-**Fork-only** — outside upstream's scope, only available here:
+**Fork-only** — only available here:
 
+- **Transmission tab:** a third download client alongside qBittorrent and
+  Deluge — list/table/compact views, filtering, search, sort and pagination,
+  bulk actions (pause/resume/delete/recheck plus pause-all/resume-all), a
+  per-torrent detail modal (general/files/trackers/peers), add-by-URL and
+  add-by-file, and a read-only filter over Transmission's own labels. Talks the
+  Transmission RPC API and handles its session handshake transparently (the
+  expected `409` that carries the session token is treated as "reachable"; a
+  real `401` is reported as an auth failure). Reworked from a community fork
+  PR — a candidate to offer upstream rather than deliberately fork-bound.
 - **FrankenPHP/Symfony worker mode (opt-in):** an env-gated flag
   (`PRISMARR_WORKER`) that boots the kernel once and keeps it resident instead
   of rebuilding it per request. Off by default. On a real homelab it cut a
@@ -160,7 +169,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Dashboard:** hero spotlight, upcoming releases, pending Seerr requests, live service health, watchlist, trending and latest additions. Paints instantly, each widget hydrates on its own.
 - **Dashboard customization (fork):** an admin can reorder and hide/show every dashboard section, and pick one of 17 theme presets.
 - **Quick-look everywhere (fork):** clicking any media tile — dashboard, top-bar search result, Explorer, Plex activity — opens one rich in-place detail modal (poster, synopsis, ratings, release/air dates, watchlist, Add/Manage deep-links) instead of navigating away.
-- **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload), a full Deluge tab (live table, labels, seeding columns, detail panel, add/limits — via deluge-web JSON-RPC), plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
+- **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload), a full Deluge tab (live table, labels, seeding columns, detail panel, add/limits — via deluge-web JSON-RPC), a full Transmission tab (same list/table/compact views, bulk actions, detail modal and add-by-URL/file, with a read-only filter over Transmission's own labels — via the Transmission RPC API), plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
 - **Discovery:** TMDb landing page with recommendations and trending, watchlist, an explorer with filters, and deep-links into your library.
 - **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs with a per-user filter, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
@@ -176,9 +185,10 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 ### Requirements
 
 - Docker and Docker Compose
-- At least one of: qBittorrent, Deluge, Radarr, Sonarr, Prowlarr, Seerr
+- At least one of: qBittorrent, Deluge, Transmission, Radarr, Sonarr, Prowlarr, Seerr
 - Optional: Gluetun if qBittorrent runs behind a VPN
 - Optional: a Deluge instance (deluge-web URL + password) for the Deluge tab
+- Optional: a Transmission instance (RPC URL; user/password only if the daemon requires them) for the Transmission tab
 - Optional: a TMDb API key (free) to enable the Discovery page
 - Optional: a Tautulli instance (URL + API key) for the Plex activity page and widget
 - Optional: an Unraid 7 server (GraphQL API key) for the server monitoring widget
@@ -246,7 +256,7 @@ will guide you through:
 - admin account creation
 - TMDb API key (optional)
 - Radarr / Sonarr / Prowlarr / Seerr URLs and keys
-- qBittorrent + Gluetun, Deluge (optional)
+- qBittorrent + Gluetun, Deluge, Transmission (optional)
 
 Tautulli, Unraid and Houndarr are configured later from
 **Settings → Services** (each with its own enable toggle and Test-connection
@@ -275,7 +285,8 @@ Everything is configured from the UI:
 - **Later**: the Settings page at `/admin/settings` (admin only)
 
 External service credentials (TMDb / Radarr / Sonarr / Prowlarr / Seerr /
-Tautulli / Unraid / Houndarr API keys, qBittorrent and Deluge passwords, service URLs),
+Tautulli / Unraid / Houndarr API keys, qBittorrent, Deluge and Transmission
+passwords, service URLs),
 display preferences and language are stored in the SQLite database
 (`setting` table). They never appear in environment variables or in any
 committable file.

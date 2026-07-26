@@ -66,8 +66,11 @@ class TransmissionRegistrationTest extends TestCase
         // (and keeps firing) into the next page. Assert the exact array
         // literal so a resolution that keeps the poller's own code but
         // drops it from THIS cleanup list still fails loudly.
+        // The trailing '_prismarrTorrentPagePollTimer' is the shared handle for
+        // the qBittorrent/Deluge/Transmission *page* pollers — distinct from the
+        // topbar handles before it. See TorrentPagePollerTest for why it exists.
         self::assertStringContainsString(
-            "['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer', '_prismarrDelugePollTimer', '_prismarrUnifiPollTimer', '_prismarrTransmissionPollTimer']",
+            "['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer', '_prismarrDelugePollTimer', '_prismarrUnifiPollTimer', '_prismarrTransmissionPollTimer', '_prismarrTorrentPagePollTimer']",
             $tpl,
         );
     }
