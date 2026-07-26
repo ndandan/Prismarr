@@ -151,6 +151,17 @@ part of the original project:
   Network API — live WAN up/download bandwidth, client counts
   (wired/wireless/guest), a 24-hour usage graph, and per-device infrastructure
   status (gateway/switches/APs) with gateway CPU/RAM.
+- **UniFi Network tab (`/unifi`):** a full admin-only network-operations page
+  over the classic UniFi Network API — WAN/gateway/client tiles, 7-day traffic
+  and 30-day speedtest trends as server-rendered SVG (no charting library on the
+  wire), device inventory, RF environment (per-AP radios plus a neighbouring-AP
+  scan), VLAN inventory, wireless clients, live talkers, top clients and
+  DHCP-reservation mismatches. Three readers own their own endpoint group and
+  cadence (live 10 s / infrastructure 60 s / history 300 s) and a coalescing
+  poller batches every due region into one request per tick, so each endpoint is
+  hit once per cycle however many panels use it. Read-only, and every panel
+  degrades to an empty state instead of letting a sick console break the page.
+  Reuses the widget's UniFi settings — no extra configuration.
 
 The full details live in [docs/FORK-CHANGES.md](docs/FORK-CHANGES.md) and the
 [CHANGELOG](CHANGELOG.md). The fork is run daily on a real homelab (Unraid),
@@ -174,7 +185,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs with a per-user filter, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
 - **Houndarr (fork):** optional dashboard stat tile with backlog-search totals and a health chip.
-- **UniFi network monitoring (fork):** optional admin-only dashboard section — live WAN up/download, client counts (wired/wireless/guest), a 24-hour usage graph and gateway/switch/AP status, via the UniFi OS Network API.
+- **UniFi network monitoring (fork):** optional admin-only dashboard section — live WAN up/download, client counts (wired/wireless/guest), a 24-hour usage graph and gateway/switch/AP status, via the UniFi OS Network API. Plus a full **UniFi Network tab** (`/unifi`, admin-only): 7-day traffic and 30-day speedtest trends, device inventory, RF environment (AP radios and neighbouring APs), VLANs, wireless clients, live talkers, top clients and DHCP-reservation mismatches — read-only, and every panel falls back to an empty state rather than breaking the page.
 - **Preferences:** theme, UI density, timezone, date format, English / French UI, settings export / import (credentials always stripped).
 - **Security:** Symfony auth with login rate-limiter, non-root container, dynamic CSP, SSRF protection on user-provided URLs, CSRF on every mutation.
 
