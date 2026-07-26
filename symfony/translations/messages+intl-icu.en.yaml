@@ -67,6 +67,7 @@ sidebar:
     dashboard: Dashboard
     qbittorrent: qBittorrent
     deluge: Deluge
+    transmission: Transmission
     discovery: Discover
     calendar: Calendar
     radarr: Radarr
@@ -297,6 +298,12 @@ setup:
         subtitle: 'Torrent client (Web UI) — used for the Deluge tab.'
         password: Web UI password
         reverse_proxy_hint: 'Leave the password empty if Deluge sits behind an authenticating reverse proxy that injects the session for you.'
+      transmission:
+        section: '⬇️ Transmission'
+        subtitle: Authentication through the Transmission RPC interface.
+        user: Username
+        password: Password
+        reverse_proxy_hint: 'Leave the username and password empty if Transmission sits behind a reverse proxy that injects authentication itself, or if RPC authentication is disabled.'
       usenet_optional: 'Usenet — optional'
       sabnzbd:
         section: 'SABnzbd'
@@ -803,6 +810,7 @@ admin:
       jellyseerr: Request platform
       qbittorrent: Torrent client
       deluge: Torrent client (Web UI)
+      transmission: Torrent client
       sabnzbd: Usenet downloader
       nzbget: Usenet downloader
       gluetun: 'VPN / port forwarding'
@@ -966,6 +974,15 @@ admin:
     deluge_refresh:
       label: Deluge refresh interval
       help: How often the Deluge page and sidebar badge poll for changes. 0 disables polling.
+    transmission_refresh:
+      label: Transmission refresh
+      help: How often the sidebar badge and completion toasts poll Transmission. 0 disables polling.
+      options:
+        '1': '1 second (real-time)'
+        '2': '2 seconds (default)'
+        '5': '5 seconds'
+        '10': '10 seconds (low load)'
+        '0': Disabled
     ui_density:
       label: UI density
       options:
@@ -3891,6 +3908,27 @@ deluge:
     completed: Completed
   api:
     empty_location: Destination path is required
+
+transmission:
+  page_title: Transmission
+  modal_detail:
+    trackers:
+      status_announcing: Announcing
+      status_queued: Queued
+      status_active: Active
+      status_idle: Idle
+  upload:
+    invalid_url: 'Only http(s) and magnet: links are accepted'
+    forbidden_host: 'This URL points to a forbidden host (cloud metadata)'
+    no_file: 'No file received'
+    invalid_format: 'Only .torrent files are accepted'
+    too_large: 'File too large (>10 MB)'
+    unreadable: 'Unreadable file'
+  api:
+    no_valid_hash: No valid hash
+    no_valid_file: No valid file
+    torrent_not_found: Torrent not found
+    empty_location: 'Location cannot be empty'
 
 usenet:
   page_title: 'Usenet downloads'

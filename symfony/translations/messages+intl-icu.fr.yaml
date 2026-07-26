@@ -66,6 +66,7 @@ sidebar:
     dashboard: Tableau de bord
     qbittorrent: qBittorrent
     deluge: Deluge
+    transmission: Transmission
     discovery: Découverte
     calendar: Calendrier
     radarr: Radarr
@@ -296,6 +297,12 @@ setup:
         subtitle: "Client torrent (Web UI) — utilisé pour l'onglet Deluge."
         password: Mot de passe Web UI
         reverse_proxy_hint: 'Laissez le mot de passe vide si Deluge est derrière un reverse proxy authentifiant qui injecte la session.'
+      transmission:
+        section: '⬇️ Transmission'
+        subtitle: Authentification via l'interface RPC de Transmission.
+        user: Utilisateur
+        password: Mot de passe
+        reverse_proxy_hint: 'Laissez l''utilisateur et le mot de passe vides si Transmission est derrière un reverse proxy qui injecte lui-même l''authentification, ou si l''authentification RPC est désactivée.'
       usenet_optional: 'Usenet — optionnel'
       sabnzbd:
         section: 'SABnzbd'
@@ -801,6 +808,7 @@ admin:
       jellyseerr: Plateforme de requêtes
       qbittorrent: Client torrent
       deluge: Client torrent (Web UI)
+      transmission: Client torrent
       sabnzbd: Téléchargeur Usenet
       nzbget: Téléchargeur Usenet
       gluetun: 'VPN / port forwarding'
@@ -964,6 +972,15 @@ admin:
     deluge_refresh:
       label: Intervalle de rafraîchissement Deluge
       help: Fréquence de mise à jour de la page Deluge et du badge. 0 désactive le polling.
+    transmission_refresh:
+      label: Rafraîchissement Transmission
+      help: Fréquence de mise à jour du badge et des notifications de fin. 0 désactive le polling.
+      options:
+        '1': '1 seconde (temps réel)'
+        '2': '2 secondes (défaut)'
+        '5': '5 secondes'
+        '10': '10 secondes (économe)'
+        '0': Désactivé
     ui_density:
       label: Densité de l'interface
       options:
@@ -3889,6 +3906,27 @@ deluge:
     completed: Terminé le
   api:
     empty_location: Le chemin de destination est requis
+
+transmission:
+  page_title: Transmission
+  modal_detail:
+    trackers:
+      status_announcing: Annonce
+      status_queued: En file
+      status_active: Actif
+      status_idle: Inactif
+  upload:
+    invalid_url: 'Seuls les liens http(s) et magnet: sont acceptés'
+    forbidden_host: 'Cette URL pointe vers un hôte interdit (métadonnées cloud)'
+    no_file: 'Aucun fichier reçu'
+    invalid_format: 'Seuls les fichiers .torrent sont acceptés'
+    too_large: 'Fichier trop volumineux (>10 Mo)'
+    unreadable: 'Fichier illisible'
+  api:
+    no_valid_hash: Aucun hash valide
+    no_valid_file: Aucun fichier valide
+    torrent_not_found: Torrent introuvable
+    empty_location: 'L''emplacement ne peut pas être vide'
 
 usenet:
   page_title: 'Téléchargements Usenet'
