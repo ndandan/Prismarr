@@ -328,6 +328,42 @@ polish round (merge `5e62504`); all additive, several upstream-worthy:
   one CSS vocabulary; the infinite `dl-pulse` sidebar animation retired for a
   static glow + reduced-motion-guarded pulse-on-increase.
 
+### UniFi Network tab — `/unifi` (2026-07-25)
+
+A full network-operations page over the **classic** UniFi Network API (merge
+`a7daffe`), going well beyond the dashboard widget above. `#[IsGranted('ROLE_ADMIN')]`
+gates the whole controller: network topology and per-client detail are not for
+regular users. Reuses the widget's existing UniFi settings — no new config keys.
+
+- **Panels.** WAN / gateway / client tiles; 7-day traffic and 30-day speedtest
+  trends as **server-rendered SVG** (no charting library shipped to the browser);
+  device inventory; RF environment (per-AP radio table plus a neighbouring-AP
+  scan); VLAN inventory; wireless clients; live talkers; top clients; and a
+  DHCP-reservation mismatch list.
+- **Three readers, three cadences.** Each reader owns one endpoint group and its
+  own interval — live 10 s, infrastructure 60 s, history 300 s — so every
+  upstream endpoint is hit **once per cycle** regardless of how many panels
+  consume it. A page-scoped coalescing poller then batches every region due on a
+  tick into a single `/unifi/api/panels` request (`/unifi/api/{panel}` with
+  `panel ∈ live|infra|history` remains addressable individually).
+- **Fail-soft and read-only.** No endpoint mutates anything, and every panel
+  answers `200` with an empty state rather than letting a sick console 500 the
+  page.
+- **Built on a seam so the widget can't regress.** A two-method `UnifiFetcher`
+  abstraction sits under both surfaces, so the already-shipped dashboard widget
+  is insulated from the tab's much wider endpoint surface.
+- **Field map verified against a live console**, not the docs: gateway-only
+  `temperatures[]`, radio width from `bw`, a radio `satisfaction` of `-1`
+  normalised to `null`, neighbours via `POST stat/rogueap`, and the gateway's
+  `lan_ip` preferred over the WAN address in `ip`.
+
+Live-verified on `:beta` in dark and light, desktop and 390 px, with poller
+coalescing confirmed and polling confirmed to stop after a Turbo navigation.
+
+Fork-only in practice — it is deep infrastructure monitoring rather than media
+management, so it is a poor upstream fit (same reasoning as the Unraid widget in
+§4), but nothing in it is fork-specific if upstream ever wants it.
+
 ### Transmission tab (2026-07-25)
 
 A third download client alongside qBittorrent and Deluge (merge `79e8ce3`),
@@ -362,6 +398,20 @@ kill switch, sidebar entry, topbar poll and health circuit breaker.
   still have no equivalent gate.
 
 Candidate to offer upstream — nothing about it is fork-specific.
+
+### qBittorrent stale-pagination guard (2026-07-25)
+
+Contributed by **[@jeromelefeuvre](https://github.com/jeromelefeuvre)** (fork PR
+[#17](https://github.com/ndandan/Prismarr/pull/17), merge `48d30f3`). The 3 s
+poll aborts an in-flight request, but `abort()` is a no-op once the response has
+already arrived — common against a fast local qBittorrent, where the round-trip
+beats the click-to-JS-execution delay. A poll issued for the *previous* page
+could then land after the click's own response and repaint the list with stale
+rows. Each request now carries a sequence number and only the newest may apply.
+
+Touches the upstream-origin `templates/qbittorrent/index.html.twig`, so it is an
+upstream fix as much as a fork one — a good PR candidate alongside the poller fix
+below.
 
 ### Cross-page torrent poller fix (2026-07-25)
 
