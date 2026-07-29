@@ -12,6 +12,7 @@ use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\TransmissionClient;
 use App\Service\Media\Usenet\NzbgetClient;
 use App\Service\Media\Usenet\SabnzbdClient;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -73,6 +74,9 @@ class HealthService
         // Deluge — nullable + last, same legacy-test-constructor
         // reason as the clients above.
         private readonly ?DelugeClient     $deluge = null,
+        // Transmission — nullable + last for the same legacy-test-constructor
+        // reason as the clients above.
+        private readonly ?TransmissionClient $transmission = null,
     ) {}
 
     /**
@@ -243,6 +247,7 @@ class HealthService
             'sabnzbd'     => $this->sabnzbd?->ping() ?? false,
             'nzbget'      => $this->nzbget?->ping() ?? false,
             'tautulli'    => $this->tautulli?->ping() ?? false,
+            'transmission' => $this->transmission?->ping() ?? false,
             default       => true,
         };
     }
@@ -259,7 +264,7 @@ class HealthService
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'];
 
     public function isConfigured(string $service): bool
     {
@@ -298,6 +303,10 @@ class HealthService
             // session" setup, not a misconfiguration.
             'deluge' =>
                 $this->config->has('deluge_url'),
+            // Transmission — URL-only, same reverse-proxy-friendly stance as
+            // qBittorrent (empty user/password is a legitimate setup).
+            'transmission' =>
+                $this->config->has('transmission_url'),
             // SABnzbd needs URL + API key. NZBGet only needs the URL — user /
             // password are optional (reverse-proxy or auth-disabled LAN setup),
             // mirroring qBittorrent's reverse-proxy stance.
@@ -335,7 +344,7 @@ class HealthService
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -452,6 +461,13 @@ class HealthService
             if ($result !== 'success') {
                 return ['ok' => false, 'category' => 'auth', 'http' => $http];
             }
+            return ['ok' => true, 'category' => 'ok', 'http' => $http];
+        }
+        // Transmission: a fresh/expired session always answers 409 with the
+        // real X-Transmission-Session-Id in the response header — that IS a
+        // healthy, reachable daemon, not a failure. A bad RPC password is a
+        // separate 401, independent of the session-id handshake.
+        if ($service === 'transmission' && $http === 409) {
             return ['ok' => true, 'category' => 'ok', 'http' => $http];
         }
         if ($http !== null && $http >= 200 && $http < 300) {
@@ -590,6 +606,26 @@ class HealthService
                     'headers' => ['Content-Type: application/json', 'Accept: application/json'],
                     'method'  => 'POST',
                     'body'    => json_encode(['method' => $method, 'params' => $params, 'id' => 1]),
+                ];
+            }
+            case 'transmission': {
+                $url  = $get('transmission_url');
+                $user = $get('transmission_user');
+                $pass = $get('transmission_password');
+                if ($url === '') return null;
+                // Deliberately no X-Transmission-Session-Id header: a fresh
+                // client always gets HTTP 409 back with the real token, and
+                // that 409 IS the "reachable" signal diagnoseFromResponse()
+                // is looking for — no retry needed just to test connectivity.
+                $headers = ['Content-Type: application/json'];
+                if ($user !== '') {
+                    $headers[] = 'Authorization: Basic ' . base64_encode($user . ':' . $pass);
+                }
+                return [
+                    'url'     => rtrim($url, '/') . '/transmission/rpc',
+                    'headers' => $headers,
+                    'method'  => 'POST',
+                    'body'    => (string) json_encode(['method' => 'session-get', 'arguments' => ['fields' => ['version']], 'tag' => 1]),
                 ];
             }
             case 'sabnzbd': {

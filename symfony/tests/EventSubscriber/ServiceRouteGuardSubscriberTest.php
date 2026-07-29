@@ -223,12 +223,34 @@ class ServiceRouteGuardSubscriberTest extends TestCase
         $this->assertStringContainsString('app_setup_downloads', $response->getTargetUrl());
     }
 
+    public function testTransmissionUnconfiguredRedirectsToDownloadsWizard(): void
+    {
+        $event = $this->event('app_transmission_add');
+        ($this->subscriber())->onKernelRequest($event);
+
+        $response = $event->getResponse();
+        $this->assertInstanceOf(RedirectResponse::class, $response);
+        $this->assertStringContainsString('app_setup_downloads', $response->getTargetUrl());
+    }
+
     public function testDelugeConfiguredLetsThrough(): void
     {
         $event = $this->event('app_deluge_index');
         $sub = $this->subscriber(
             configuredKeys: ['deluge_url'],
             healthy: ['deluge'],
+        );
+        $sub->onKernelRequest($event);
+
+        $this->assertFalse($event->hasResponse());
+    }
+
+    public function testTransmissionConfiguredAndHealthyLetsThrough(): void
+    {
+        $event = $this->event('app_transmission_index');
+        $sub = $this->subscriber(
+            configuredKeys: ['transmission_url'],
+            healthy: ['transmission'],
         );
         $sub->onKernelRequest($event);
 
