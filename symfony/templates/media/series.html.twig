@@ -4910,14 +4910,20 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
   // page has rendered. The controller has already switched to the page that
   // holds this id, so the card is guaranteed to be in the DOM. Only the
   // `open` param is stripped afterwards so a refresh re-renders the same
-  // filter view without re-triggering the modal.
+  // filter view without re-triggering the modal — but not before the modal
+  // is up, and never when the card was missing. Clearing the URL while the
+  // deep link is still pending hides it from library-filter-memory.js, which
+  // then reads a bare URL and reloads into the saved filters, cancelling the
+  // click below.
   var openParam = new URLSearchParams(window.location.search).get('open');
   if (openParam) {
     var target = document.querySelector('.media-card[data-id="' + openParam + '"]') || document.querySelector('.series-table-row[data-id="' + openParam + '"]');
-    if (target) setTimeout(function() { target.click(); }, 300);
-    var cleanUrl = new URL(window.location.href);
-    cleanUrl.searchParams.delete('open');
-    history.replaceState(null, '', cleanUrl.pathname + (cleanUrl.search ? cleanUrl.search : '') + cleanUrl.hash);
+    if (target) setTimeout(function() {
+      target.click();
+      var cleanUrl = new URL(window.location.href);
+      cleanUrl.searchParams.delete('open');
+      history.replaceState(null, '', cleanUrl.pathname + cleanUrl.search + cleanUrl.hash);
+    }, 300);
   }
 
 })();
