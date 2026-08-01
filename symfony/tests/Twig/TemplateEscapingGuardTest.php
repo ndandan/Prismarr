@@ -297,6 +297,80 @@ class TemplateEscapingGuardTest extends TestCase
             "/\\+\\s*\\(msg\\s*\\|\\|/",
             'jsonClientError relaie le message renvoyé par Jellyseerr',
         ];
+
+        yield 'calendar: month cell title' => [
+            'calendrier/index.html.twig',
+            "/data-ev-idx=\"' \\+ evIdx \\+ '\">' \\+ title \\+ line2/",
+            'titres Radarr/Sonarr bruts dans la vue mois',
+        ];
+
+        yield 'calendar: month cell episode subtitle' => [
+            'calendrier/index.html.twig',
+            "/cal-block-line2\">' \\+ ev\\.title \\+ '/",
+            'titre d\'épisode brut dans la vue mois',
+        ];
+
+        yield 'calendar: day row title' => [
+            'calendrier/index.html.twig',
+            "/cal-day-row-title\">' \\+ title \\+ '/",
+            'titres bruts dans la vue jour',
+        ];
+
+        // Balayage du 2026-07-31 : les puits restants des quatre chemins de
+        // rendu du calendrier, trouvés en relisant chaque affectation innerHTML.
+        yield 'calendar: week cell title' => [
+            'calendrier/index.html.twig',
+            "/'\">' \\+ evTitle\\(ev\\) \\+ line2/",
+            'mêmes titres Radarr/Sonarr dans la vue semaine',
+        ];
+
+        yield 'calendar: half-escaped aria-label ternary' => [
+            'calendrier/index.html.twig',
+            "/window\\.escHtml \\? window\\.escHtml\\(/",
+            "n'échapper que l'aria-label laissait le corps du bloc brut",
+        ];
+
+        yield 'calendar: poster src' => [
+            'calendrier/index.html.twig',
+            "/\\+\\s*ev\\.poster\\s*\\+/",
+            "l'URL d'affiche atterrit dans un src",
+        ];
+
+        yield 'calendar: day row studio' => [
+            'calendrier/index.html.twig',
+            "/\\+ ev\\.studio\\b/",
+            'le studio est relayé par Radarr',
+        ];
+
+        yield 'calendar: day row episode subtitle' => [
+            'calendrier/index.html.twig',
+            "/sxe \\+ \\(ev\\.title \\? '[^']*' \\+ ev\\.title/",
+            "le titre d'épisode est relayé par Sonarr",
+        ];
+
+        yield 'calendar: day row network' => [
+            'calendrier/index.html.twig',
+            "/\\+ ev\\.network\\b/",
+            'la chaîne est relayée par Sonarr',
+        ];
+
+        yield 'calendar: day popup metas' => [
+            'calendrier/index.html.twig',
+            "/\\+ metas\\.join\\(/",
+            'studio, chaîne et genres viennent de Radarr/Sonarr',
+        ];
+
+        yield 'calendar: day popup episode subtitle' => [
+            'calendrier/index.html.twig',
+            "/cal-day-popup-ev-sub[^\\n]*' \\+ ev\\.title \\+/",
+            "même titre d'épisode dans le popup du jour",
+        ];
+
+        yield 'calendar: day popup title' => [
+            'calendrier/index.html.twig',
+            "/cal-day-popup-ev-title\">' \\+ title \\+/",
+            'titres bruts dans le popup du jour',
+        ];
     }
 
     #[DataProvider('forbiddenPatterns')]

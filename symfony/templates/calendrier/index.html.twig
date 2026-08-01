@@ -534,6 +534,11 @@
         unknown:  {{ 'calendar.event.release_unknown'|trans|json_encode|raw }},
     };
 
+    // Tous les champs ev.* proviennent de Radarr/Sonarr/TMDb. Rien ne doit
+    // entrer dans innerHTML sans passer par esc() — cf. le XSS confirmé le
+    // 2026-07-31 dans cell()/renderWeek()/renderDay()/openDayPopup().
+    var esc = window.escHtml || function (s) { return s == null ? '' : String(s); };
+
     // Counts
     var cAll = allEvents.length, cCinema = 0, cDigital = 0, cPhysical = 0, cEp = 0;
     allEvents.forEach(function(ev) {
@@ -616,13 +621,13 @@
             if (ev.hasFile) blockCls += ' is-available';
             var line2 = '';
             if (ev.type === 'film' && ev.releaseType && ev.releaseType !== 'unknown') {
-                line2 = '<div class="cal-block-line2">' + (releaseLabels[ev.releaseType] || '') + (ev.runtime ? ' · ' + ev.runtime + 'min' : '') + '</div>';
+                line2 = '<div class="cal-block-line2">' + (releaseLabels[ev.releaseType] || '') + (ev.runtime ? ' · ' + esc(ev.runtime) + 'min' : '') + '</div>';
             } else if (ev.type === 'episode' && ev.title) {
-                line2 = '<div class="cal-block-line2">' + ev.title + '</div>';
+                line2 = '<div class="cal-block-line2">' + esc(ev.title) + '</div>';
             }
             // data-ev-idx pour tooltip hover
             var evIdx = allEvents.indexOf(ev);
-            h += '<div class="' + blockCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(title) : title) + '" data-ev-idx="' + evIdx + '">' + title + line2 + '</div>';
+            h += '<div class="' + blockCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + esc(title) + '" data-ev-idx="' + evIdx + '">' + esc(title) + line2 + '</div>';
         });
         if (evs.length > max) h += '<div class="cal-block-more" data-date-detail="' + ds + '">' + CAL_I18N.day_overflow.replace('__N__', evs.length-max) + '</div>';
         h += '</div></div>';
@@ -698,9 +703,9 @@
                     if (ev.type === 'film' && ev.releaseType && ev.releaseType !== 'unknown') {
                         line2 = '<div class="cal-block-line2">' + (releaseLabels[ev.releaseType] || '') + '</div>';
                     } else if (ev.type === 'episode' && ev.title) {
-                        line2 = '<div class="cal-block-line2">' + ev.title + '</div>';
+                        line2 = '<div class="cal-block-line2">' + esc(ev.title) + '</div>';
                     }
-                    h += '<div class="' + blockCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(evTitle(ev)) : evTitle(ev)) + '" data-ev-idx="' + evIdx + '">' + evTitle(ev) + line2 + '</div>';
+                    h += '<div class="' + blockCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + esc(evTitle(ev)) + '" data-ev-idx="' + evIdx + '">' + esc(evTitle(ev)) + line2 + '</div>';
                 });
             }
             h += '</div></div>';
@@ -754,22 +759,24 @@
                     ? (releaseLabels[ev.releaseType] || CAL_I18N.event_film)
                     : CAL_I18N.event_series;
                 var poster = ev.poster
-                    ? '<img src="' + ev.poster + '" alt="" class="cal-day-row-poster" loading="lazy">'
+                    ? '<img src="' + esc(ev.poster) + '" alt="" class="cal-day-row-poster" loading="lazy">'
                     : '<div class="cal-day-row-placeholder">' + (ev.type === 'film' ? {{ ico.icon('movie', '', 18)|json_encode|raw }} : {{ ico.icon('device-tv', '', 18)|json_encode|raw }}) + '</div>';
                 var title = evTitle(ev);
                 var sub = '';
                 if (ev.type === 'film') {
-                    sub = (ev.year || '') + (ev.runtime ? ' · ' + ev.runtime + ' min' : '') + (ev.studio ? ' · ' + ev.studio : '');
+                    sub = esc(ev.year || '') + (ev.runtime ? ' · ' + esc(ev.runtime) + ' min' : '') + (ev.studio ? ' · ' + esc(ev.studio) : '');
                 } else {
-                    var sxe = 'S' + String(ev.season).padStart(2,'0') + 'E' + String(ev.episode).padStart(2,'0');
-                    sub = sxe + (ev.title ? ' · ' + ev.title : '') + (ev.network ? ' · ' + ev.network : '');
+                    // esc() n'entoure que les valeurs amont : le 'S'/'E' généré n'est
+                    // pas touché par l'encodage, le séparateur ' · ' reste hors chaîne.
+                    var sxe = esc('S' + String(ev.season).padStart(2,'0') + 'E' + String(ev.episode).padStart(2,'0'));
+                    sub = sxe + (ev.title ? ' · ' + esc(ev.title) : '') + (ev.network ? ' · ' + esc(ev.network) : '');
                 }
 
-                h += '<div class="cal-day-row" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(title) : title) + '" data-ev-idx="' + evIdx + '">';
+                h += '<div class="cal-day-row" tabindex="0" role="button" data-kb-activate aria-label="' + esc(title) + '" data-ev-idx="' + evIdx + '">';
                 h += poster;
                 h += '<div class="cal-day-row-body">';
                 h += '<span class="' + typeCls + '" style="' + typeBg + '">' + typeLbl + '</span>';
-                h += '<div class="cal-day-row-title">' + title + '</div>';
+                h += '<div class="cal-day-row-title">' + esc(title) + '</div>';
                 h += '<div class="cal-day-row-sub">' + sub + '</div>';
                 h += '</div>';
                 h += '</div>';
@@ -860,8 +867,8 @@
         // genres, overview, fanart URL) ultimately come from Radarr/Sonarr/TMDb
         // metadata. Even though the writers are admin-trusted today, splicing
         // them raw into innerHTML risks XSS the day a guest role is added.
-        // window.escHtml is hoisted in base.html.twig.
-        var esc = window.escHtml || function (s) { return s == null ? '' : String(s); };
+        // window.escHtml is hoisted in base.html.twig; esc() is declared at the
+        // top of this block and shared by all five render paths.
         var fanartHtml = ev.fanart ? '<img src="' + esc(ev.fanart) + '" class="cal-tooltip-fanart">' : '<div class="cal-tooltip-fanart-ph"></div>';
 
         var typeLabel = ev.type === 'film' ? (releaseLabels[ev.releaseType] || CAL_I18N.event_film) : CAL_I18N.event_episode;
@@ -1051,7 +1058,7 @@
 
         evs.forEach(function(ev) {
             var evIdx = allEvents.indexOf(ev);
-            var poster = ev.poster ? '<img src="' + ev.poster + '" class="cal-day-popup-poster" loading="lazy">' : '<div class="cal-day-popup-poster-ph"></div>';
+            var poster = ev.poster ? '<img src="' + esc(ev.poster) + '" class="cal-day-popup-poster" loading="lazy">' : '<div class="cal-day-popup-poster-ph"></div>';
             var title = evTitle(ev);
             var relCls = 'rel-' + (ev.releaseType || 'unknown');
 
@@ -1068,12 +1075,14 @@
             if (ev.runtime) metas.push(ev.runtime + ' min');
             if (ev.genres && ev.genres.length) metas.push(ev.genres.slice(0,2).join(', '));
 
-            var sub = ev.type === 'episode' && ev.title ? '<div class="cal-day-popup-ev-sub" style="color:rgba(255,255,255,.6);">' + ev.title + '</div>' : '';
-            var meta = metas.length ? '<div class="cal-day-popup-ev-meta">' + metas.join(' · ') + '</div>' : '';
+            var sub = ev.type === 'episode' && ev.title ? '<div class="cal-day-popup-ev-sub" style="color:rgba(255,255,255,.6);">' + esc(ev.title) + '</div>' : '';
+            // Même traitement que le tooltip : on échappe au rendu, pas au push,
+            // pour que le séparateur ' · ' reste hors de la chaîne échappée.
+            var meta = metas.length ? '<div class="cal-day-popup-ev-meta">' + metas.map(function(m) { return esc(m); }).join(' · ') + '</div>' : '';
 
-            h += '<div class="cal-day-popup-event ' + relCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + (window.escHtml ? window.escHtml(title) : title) + '" data-ev-idx="' + evIdx + '">' + poster + '<div class="overflow-hidden flex-grow-1">'
+            h += '<div class="cal-day-popup-event ' + relCls + '" tabindex="0" role="button" data-kb-activate aria-label="' + esc(title) + '" data-ev-idx="' + evIdx + '">' + poster + '<div class="overflow-hidden flex-grow-1">'
               + '<div class="d-flex align-items-center gap-1 mb-1">' + relLabel + ' ' + statusBadge + '</div>'
-              + '<div class="cal-day-popup-ev-title">' + title + '</div>'
+              + '<div class="cal-day-popup-ev-title">' + esc(title) + '</div>'
               + sub + meta
               + '</div></div>';
         });
