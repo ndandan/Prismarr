@@ -1056,7 +1056,11 @@
 
 <script>
 (function() {
-  function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  // Escapes &, < and > (text-node serialisation) plus the double quote: the
+  // helper is also used inside quoted attributes (data-tmdb-title, title,
+  // aria-label), where a bare " would close the attribute and let the rest of
+  // the TMDb string be parsed as markup.
+  function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
 
   // Localized strings used by the detail modal + toasts. Built server-side
   // so every label stays in sync with the current request locale.
@@ -1441,7 +1445,7 @@
     // Bouton watchlist dans la modal
     var wlKey = d.type + '_' + d.id;
     var isInWl = window._prismarrWatchlist && window._prismarrWatchlist[wlKey];
-    actions.push('<button class="btn ' + (isInWl ? 'btn-warning' : 'btn-outline-warning') + ' tmdb-wl-modal-btn" data-tmdb-id="' + d.id + '" data-tmdb-type="' + d.type + '" data-tmdb-title="' + safeTitle + '" data-poster-path="' + (d.poster_path || '') + '" data-vote="' + (d.vote || '') + '" data-year="' + (d.year || '') + '">'
+    actions.push('<button class="btn ' + (isInWl ? 'btn-warning' : 'btn-outline-warning') + ' tmdb-wl-modal-btn" data-tmdb-id="' + d.id + '" data-tmdb-type="' + d.type + '" data-tmdb-title="' + safeTitle + '" data-poster-path="' + escHtml(d.poster_path || '') + '" data-vote="' + (d.vote || '') + '" data-year="' + (d.year || '') + '">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="' + (isInWl ? '#fff' : 'none') + '" stroke="currentColor" stroke-width="2" class="me-1"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4-6.2-4.5h7.6z"/></svg>'
       + (isInWl ? TMDB_I18N.in_watchlist : TMDB_I18N.watchlist) + '</button>');
 
@@ -1450,8 +1454,11 @@
     // External links
     var ext = [];
     ext.push('<a href="https://www.themoviedb.org/' + d.type + '/' + d.id + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">TMDb ↗</a>');
-    if (d.imdb_id) ext.push('<a href="https://www.imdb.com/title/' + d.imdb_id + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">IMDb ↗</a>');
-    if (d.homepage && /^https?:\/\//.test(d.homepage)) ext.push('<a href="' + d.homepage + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Site ↗</a>');
+    if (d.imdb_id) ext.push('<a href="https://www.imdb.com/title/' + encodeURIComponent(d.imdb_id) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">IMDb ↗</a>');
+    // escHtml, not encodeURI: the homepage is an arbitrary third-party URL that
+    // may already carry percent-escapes, and encodeURI would double-encode them.
+    // The scheme is already pinned to http(s) by the test above.
+    if (d.homepage && /^https?:\/\//.test(d.homepage)) ext.push('<a href="' + escHtml(d.homepage) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Site ↗</a>');
     document.getElementById('td-external-links').innerHTML = ext.join('');
 
     // Synopsis
@@ -1471,7 +1478,7 @@
     var galWrap   = document.getElementById('td-video-gallery');
 
     function playVideo(key, name) {
-      trWrap.innerHTML = '<iframe src="https://www.youtube.com/embed/' + key + '?rel=0&cc_lang_pref=fr&hl=fr" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>';
+      trWrap.innerHTML = '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(key) + '?rel=0&cc_lang_pref=fr&hl=fr" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>';
       trName.textContent = name ? '— ' + name : '';
       trYtLink.href = 'https://www.youtube.com/watch?v=' + key;
       // Marquer le bouton actif
@@ -1486,7 +1493,7 @@
       var videos = [d.trailer].concat(d.video_gallery || []);
       if (videos.length > 1) {
         galWrap.innerHTML = videos.map(function(v, i) {
-          return '<button type="button" class="td-video-btn" data-yt-key="' + v.key + '" data-yt-name="' + (v.name||'').replace(/"/g,'&quot;') + '">' + (v.type || 'Trailer') + (i === 0 ? ' ' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} : '') + '</button>';
+          return '<button type="button" class="td-video-btn" data-yt-key="' + escHtml(v.key) + '" data-yt-name="' + escHtml(v.name || '') + '">' + escHtml(v.type || 'Trailer') + (i === 0 ? ' ' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} : '') + '</button>';
         }).join('');
         galWrap.style.display = '';
         // Re-activate the current button
@@ -1509,7 +1516,7 @@
     if (d.cast && d.cast.length) {
       document.getElementById('td-cast').innerHTML = d.cast.map(function(c) {
         var photo = c.profile
-          ? '<img src="' + c.profile + '" alt="" loading="lazy">'
+          ? '<img src="' + escHtml(c.profile) + '" alt="" loading="lazy">'
           : '<img src="data:image/svg+xml;utf8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'64\' height=\'64\' viewBox=\'0 0 24 24\' fill=\'%23888\'%3E%3Cpath d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/%3E%3C/svg%3E">';
         return '<div class="td-cast-card">' + photo
           + '<div class="cast-name">' + escHtml(c.name || '—') + '</div>'
@@ -1568,15 +1575,15 @@
         if (!list || !list.length) return '';
         var items = list.map(function(p) {
           return p.logo
-            ? '<img src="' + p.logo + '" alt="' + (p.name||'') + '" title="' + (p.name||'').replace(/"/g,'&quot;') + '">'
-            : '<span class="badge bg-secondary-lt">' + (p.name||'') + '</span>';
+            ? '<img src="' + escHtml(p.logo) + '" alt="' + escHtml(p.name || '') + '" title="' + escHtml(p.name || '') + '">'
+            : '<span class="badge bg-secondary-lt">' + escHtml(p.name || '') + '</span>';
         }).join('');
         return '<div class="provider-group"><div class="provider-group-label">' + label + '</div><div class="provider-logos">' + items + '</div></div>';
       }
       provHtml += renderProviderGroup(TMDB_I18N.provider.flatrate, d.providers.flatrate);
       provHtml += renderProviderGroup(TMDB_I18N.provider.rent, d.providers.rent);
       provHtml += renderProviderGroup(TMDB_I18N.provider.buy, d.providers.buy);
-      if (d.providers.link) provHtml += '<a href="' + d.providers.link + '" target="_blank" rel="noopener" class="small d-block mt-1">JustWatch ↗</a>';
+      if (d.providers.link) provHtml += '<a href="' + encodeURI(d.providers.link) + '" target="_blank" rel="noopener" class="small d-block mt-1">JustWatch ↗</a>';
       document.getElementById('td-providers').innerHTML = provHtml;
       provBlock.style.display = '';
     } else {
@@ -1621,7 +1628,9 @@
     var infoRows = [];
     function addRow(label, value) {
       if (value === null || value === undefined || value === '' || (Array.isArray(value) && !value.length)) return;
-      var displayed = Array.isArray(value) ? value.join(', ') : value;
+      // Every caller but the "tags" row below passes plain text straight from
+      // the TMDb payload (crew names, countries, languages…), so escape here.
+      var displayed = Array.isArray(value) ? value.map(function(v) { return escHtml(v); }).join(', ') : escHtml(value);
       infoRows.push('<tr><td class="text-muted" style="width:30%">' + label + '</td><td>' + displayed + '</td></tr>');
     }
     if (d.crew) {
@@ -1634,16 +1643,16 @@
     if (d.companies && d.companies.length) {
       var compHtml = d.companies.map(function(c) {
         return c.logo
-          ? '<img src="' + c.logo + '" alt="" title="' + (c.name||'').replace(/"/g,'&quot;') + '" style="height:20px; object-fit:contain; background:white; padding:2px 4px; border-radius:3px; margin-right:4px;">'
-          : '<span class="badge bg-secondary-lt me-1">' + c.name + '</span>';
+          ? '<img src="' + escHtml(c.logo) + '" alt="" title="' + escHtml(c.name || '') + '" style="height:20px; object-fit:contain; background:white; padding:2px 4px; border-radius:3px; margin-right:4px;">'
+          : '<span class="badge bg-secondary-lt me-1">' + escHtml(c.name) + '</span>';
       }).join('');
       infoRows.push('<tr><td class="text-muted">' + TMDB_I18N.info_row.production + '</td><td>' + compHtml + '</td></tr>');
     }
     if (d.networks && d.networks.length) {
       var netHtml = d.networks.map(function(n) {
         return n.logo
-          ? '<img src="' + n.logo + '" alt="" title="' + (n.name||'').replace(/"/g,'&quot;') + '" style="height:20px; object-fit:contain; background:white; padding:2px 4px; border-radius:3px; margin-right:4px;">'
-          : '<span class="badge bg-secondary-lt me-1">' + n.name + '</span>';
+          ? '<img src="' + escHtml(n.logo) + '" alt="" title="' + escHtml(n.name || '') + '" style="height:20px; object-fit:contain; background:white; padding:2px 4px; border-radius:3px; margin-right:4px;">'
+          : '<span class="badge bg-secondary-lt me-1">' + escHtml(n.name) + '</span>';
       }).join('');
       infoRows.push('<tr><td class="text-muted">' + TMDB_I18N.info_row.network + '</td><td>' + netHtml + '</td></tr>');
     }
@@ -1655,7 +1664,10 @@
     if (d.revenue && d.revenue > 0) addRow(TMDB_I18N.info_row.revenue, '$' + d.revenue.toLocaleString());
     if (d.episode_runtime) addRow(TMDB_I18N.info_row.episode_runtime, d.episode_runtime + ' min');
     if (d.keywords && d.keywords.length) {
-      addRow(TMDB_I18N.info_row.tags, d.keywords.map(function(k) { return '<span class="td-genre-badge me-1" style="color:var(--tblr-secondary); background:var(--tblr-bg-surface-secondary); border-color:var(--tblr-border-color);">' + escHtml(k) + '</span>'; }).join(''));
+      // Pushed directly instead of via addRow(): this row is markup, not text,
+      // so it must not go through the escaping addRow() now applies.
+      var kwHtml = d.keywords.map(function(k) { return '<span class="td-genre-badge me-1" style="color:var(--tblr-secondary); background:var(--tblr-bg-surface-secondary); border-color:var(--tblr-border-color);">' + escHtml(k) + '</span>'; }).join('');
+      infoRows.push('<tr><td class="text-muted" style="width:30%">' + TMDB_I18N.info_row.tags + '</td><td>' + kwHtml + '</td></tr>');
     }
     if (d.popularity) addRow(TMDB_I18N.info_row.popularity, d.popularity);
     var infoBlock = document.getElementById('td-info-block');
@@ -1677,13 +1689,13 @@
       });
       document.getElementById('td-seasons').innerHTML = sorted.map(function(s) {
         var poster = s.poster
-          ? '<img src="' + s.poster + '" alt="" loading="lazy">'
+          ? '<img src="' + escHtml(s.poster) + '" alt="" loading="lazy">'
           : '<div class="no-poster"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 4v16l13 -8z"/></svg></div>';
         var year = s.air_date ? s.air_date.substring(0, 4) : '—';
         var vote = s.vote ? '<span class="season-vote">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + s.vote + '</span>' : '';
-        return '<div class="td-season-card" title="' + (s.overview||'').replace(/"/g,'&quot;') + '">' + poster
+        return '<div class="td-season-card" title="' + escHtml(s.overview || '') + '">' + poster
           + '<div class="season-body">'
-          + '<div class="season-name">' + (s.name || TMDB_I18N.season_tpl.replace('__N__', s.number)) + '</div>'
+          + '<div class="season-name">' + (s.name ? escHtml(s.name) : TMDB_I18N.season_tpl.replace('__N__', s.number)) + '</div>'
           + '<div class="season-meta">' + s.episode_count + ' ' + TMDB_I18N.episode_short + ' · ' + year + ' ' + vote + '</div>'
           + '</div></div>';
       }).join('');
@@ -1696,7 +1708,7 @@
     var altBlock = document.getElementById('td-alt-titles-block');
     if (d.alt_titles && d.alt_titles.length) {
       document.getElementById('td-alt-titles').innerHTML = d.alt_titles.map(function(t) {
-        return '<span class="badge bg-secondary-lt"><span class="text-muted me-1">' + t.country + '</span>' + t.title + '</span>';
+        return '<span class="badge bg-secondary-lt"><span class="text-muted me-1">' + escHtml(t.country) + '</span>' + escHtml(t.title) + '</span>';
       }).join('');
       altBlock.style.display = '';
     } else {
@@ -1709,11 +1721,11 @@
       document.getElementById('td-reviews').innerHTML = d.reviews.map(function(r) {
         var excerpt = (r.content || '').substring(0, 300);
         if (r.content && r.content.length > 300) excerpt += '…';
-        var rating = r.rating ? ' <span class="badge bg-warning ms-2">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + r.rating + '/10</span>' : '';
-        var link = r.url ? ' <a href="' + r.url + '" target="_blank" rel="noopener" class="small">Lire ↗</a>' : '';
+        var rating = r.rating ? ' <span class="badge bg-warning ms-2">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + escHtml(r.rating) + '/10</span>' : '';
+        var link = r.url ? ' <a href="' + encodeURI(r.url) + '" target="_blank" rel="noopener" class="small">Lire ↗</a>' : '';
         return '<div class="mb-2 pb-2 border-bottom">'
           + '<div class="d-flex align-items-center gap-2 mb-1"><strong class="small">' + escHtml(r.author) + '</strong>' + rating + link + '</div>'
-          + '<div class="small text-muted" style="white-space:pre-wrap;">' + excerpt + '</div></div>';
+          + '<div class="small text-muted" style="white-space:pre-wrap;">' + escHtml(excerpt) + '</div></div>';
       }).join('');
       revBlock.style.display = '';
     } else {
@@ -1724,7 +1736,7 @@
     var backdropsBlock = document.getElementById('td-backdrops-block');
     if (d.backdrops && d.backdrops.length) {
       document.getElementById('td-backdrops').innerHTML = d.backdrops.map(function(b) {
-        return '<div class="td-backdrop-thumb" data-td-lb-open="' + b.full + '"><img src="' + b.thumb + '" alt="" loading="lazy"></div>';
+        return '<div class="td-backdrop-thumb" data-td-lb-open="' + escHtml(b.full) + '"><img src="' + escHtml(b.thumb) + '" alt="" loading="lazy"></div>';
       }).join('');
       backdropsBlock.style.display = '';
     } else {
@@ -1750,7 +1762,7 @@
     var trWrap = document.getElementById('td-trailer');
     var trName = document.getElementById('td-trailer-name');
     var trYtLink = document.getElementById('td-trailer-yt-link');
-    trWrap.innerHTML = '<iframe src="https://www.youtube.com/embed/' + key + '?rel=0&cc_lang_pref=fr&hl=fr" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>';
+    trWrap.innerHTML = '<iframe src="https://www.youtube.com/embed/' + encodeURIComponent(key) + '?rel=0&cc_lang_pref=fr&hl=fr" allowfullscreen allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"></iframe>';
     trName.textContent = name ? '— ' + name : '';
     trYtLink.href = 'https://www.youtube.com/watch?v=' + key;
     vbtn.parentNode.querySelectorAll('.td-video-btn').forEach(function(b) {
@@ -1799,7 +1811,7 @@
     var vc = item.vote >= 7 ? 'good' : (item.vote >= 5 ? 'mid' : 'bad');
     var safeTitle = escHtml(item.title || '');
     var poster = item.poster
-      ? '<img src="' + item.poster + '" alt="" loading="lazy">'
+      ? '<img src="' + escHtml(item.poster) + '" alt="" loading="lazy">'
       : '<div class="no-poster">' + {{ ico.icon('movie', '', 32)|json_encode|raw }} + '</div>';
     var statusColors = { downloaded: '#22c55e', missing: '#f59e0b', announced: '#6366f1', inCinemas: '#6366f1', partial: '#3b82f6', unmonitored: '#6b7280' };
     // Short labels (for card badges) — reuse the card.status_short keys
@@ -1853,7 +1865,7 @@
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) {
-          detailLoading.innerHTML = '<div class="alert alert-danger m-4">' + {{ 'decouverte.search.error_prefix'|trans({message: '__MSG__'})|json_encode|raw }}.replace('__MSG__', d.error) + '</div>';
+          detailLoading.innerHTML = '<div class="alert alert-danger m-4">' + {{ 'decouverte.search.error_prefix'|trans({message: '__MSG__'})|json_encode|raw }}.replace('__MSG__', escHtml(d.error)) + '</div>';
           return;
         }
         renderDetail(d);
@@ -2011,7 +2023,7 @@
     var list = genresCache[t] || [];
     var current = filterGenre.value;
     filterGenre.innerHTML = '<option value="">Tous</option>' + list.map(function(g) {
-      return '<option value="' + g.id + '">' + g.name + '</option>';
+      return '<option value="' + escHtml(g.id) + '">' + escHtml(g.name) + '</option>';
     }).join('');
     if (list.some(function(g) { return String(g.id) === current; })) filterGenre.value = current;
   }
