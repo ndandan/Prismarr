@@ -371,6 +371,19 @@ class TemplateEscapingGuardTest extends TestCase
             "/cal-day-popup-ev-title\">' \\+ title \\+/",
             'titres bruts dans le popup du jour',
         ];
+
+        // Balayage du 2026-07-31 : le jumeau escHtml de decouverte/explorer.html.twig
+        // n'avait pas reçu le même durcissement que decouverte/index.html.twig
+        // (Tâche 2) — il échappe & < > via textContent/innerHTML mais pas le
+        // guillemet double, alors que la fonction alimente une dizaine
+        // d'attributs entre guillemets (aria-label, data-tmdb-id, data-name,
+        // data-photo, src, ...) remplis de données TMDb éditables par la
+        // communauté.
+        yield 'explorer: unescaped escHtml helper (missing quote hardening)' => [
+            'decouverte/explorer.html.twig',
+            "/d\\.textContent = s; return d\\.innerHTML; \\}/",
+            "le guillemet double n'est pas échappé alors que escHtml alimente des attributs entre guillemets",
+        ];
     }
 
     #[DataProvider('forbiddenPatterns')]
