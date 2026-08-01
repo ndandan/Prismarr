@@ -10,6 +10,7 @@ use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
@@ -49,7 +50,7 @@ class CspHeaderSubscriberTest extends TestCase
             return [$instance];
         });
 
-        return new CspHeaderSubscriber($config, $instances, new CspNonceGenerator(), $frameAncestors);
+        return new CspHeaderSubscriber($config, $instances, new CspNonceGenerator(new RequestStack()), $frameAncestors);
     }
 
     public function testSetsHeaderOnMainRequest(): void
