@@ -174,7 +174,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var _I18N = {
   no_overview: {{ 'media.arr_admin.suggestions.no_overview'|trans|json_encode|raw }},

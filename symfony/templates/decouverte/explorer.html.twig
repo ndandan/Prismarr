@@ -269,7 +269,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   // Escapes &, < and > (text-node serialisation) plus the double quote: the
   // helper is also used inside quoted attributes (data-tmdb-title, title,

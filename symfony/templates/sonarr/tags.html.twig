@@ -86,7 +86,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var TAGS_I18N = {
   created_tpl: {{ 'media.arr_admin.tags.created_tpl'|trans({label: '__LABEL__'})|json_encode|raw }},

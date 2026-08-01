@@ -148,7 +148,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     var SU_I18N = {
         saved: {{ 'jellyseerr.settings.settings_users.saved'|trans|json_encode|raw }},

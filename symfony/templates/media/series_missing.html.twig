@@ -82,7 +82,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   var SM_I18N = {
     searching_all: {{ 'media.series_missing.searching_all'|trans|json_encode|raw }},

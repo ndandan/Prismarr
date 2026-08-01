@@ -123,7 +123,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var I18N = {
   starting: {{ 'media.arr_admin.backups.backup_starting'|trans|json_encode|raw }},

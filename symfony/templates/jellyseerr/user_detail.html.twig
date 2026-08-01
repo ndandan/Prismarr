@@ -521,7 +521,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     var _I18N = {
         saved: {{ 'jellyseerr.common.saved'|trans|json_encode|raw }},

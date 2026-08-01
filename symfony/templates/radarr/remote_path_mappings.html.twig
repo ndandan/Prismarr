@@ -97,7 +97,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var I18N = {
     modal_title_add: {{ 'media.arr_admin.remote_path_mappings.modal_title_add'|trans|json_encode|raw }},

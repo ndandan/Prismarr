@@ -74,7 +74,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var I18N = {
   errorPathRequired: {{ 'media.arr_admin.root_folders.error_path_required'|trans|json_encode|raw }},

@@ -173,7 +173,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     var _I18N = {
         allLanguages: {{ 'jellyseerr.settings.general.all_languages'|trans|json_encode|raw }},

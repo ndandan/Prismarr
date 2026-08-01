@@ -139,7 +139,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     // API key toggle/copy
     var jfApi = document.getElementById('js-jf-api');

@@ -414,7 +414,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
     var allEvents = {{ eventsJson|json_encode|raw }};
     // Calendar-scoped i18n (strings the JS renders on the fly).

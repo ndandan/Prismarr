@@ -70,8 +70,8 @@
           {{ _is_config ? 'error.service_banner.cta_configure'|trans({service: service}) : 'error.service_banner.cta_edit'|trans }}
         </a>
         {% if not _is_config %}
-          <button type="button" class="btn btn-sm btn-ghost-secondary"
-                  onclick="fetch('{{ path('admin_settings_health_invalidate', {service: service|lower}) }}', {method:'POST'}).finally(function(){ window.location.reload(); });">
+          <button type="button" class="btn btn-sm btn-ghost-secondary service-banner-retry-btn"
+                  data-retry-url="{{ path('admin_settings_health_invalidate', {service: service|lower}) }}">
             {{ 'error.service_banner.cta_retry'|trans }}
           </button>
         {% endif %}
@@ -79,3 +79,15 @@
     </div>
   </div>
 </div>
+
+{% if not _is_config %}
+  <script nonce="{{ csp_nonce() }}">
+    // Retry button moved off onclick= for CSP: reads its own fetch URL from
+    // data-retry-url so this partial stays a single self-contained include.
+    document.querySelectorAll('.service-banner-retry-btn').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        fetch(btn.dataset.retryUrl, {method:'POST'}).finally(function(){ window.location.reload(); });
+      });
+    });
+  </script>
+{% endif %}

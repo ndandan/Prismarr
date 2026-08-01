@@ -148,8 +148,7 @@
         <button class="btn btn-xs py-0 px-2 btn-toggle-monitor w-100"
                 style="font-size:.62rem"
                 data-id="{{ col.id }}"
-                data-monitored="{{ col.monitored ? '1' : '0' }}"
-                onclick="event.stopPropagation();">
+                data-monitored="{{ col.monitored ? '1' : '0' }}">
           {{ col.monitored ? 'media.films_collections.unfollow'|trans : 'media.films_collections.follow'|trans }}
         </button>
       </div>
@@ -182,7 +181,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
 
   var COL_I18N = {

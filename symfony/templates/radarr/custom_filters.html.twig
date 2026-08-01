@@ -107,7 +107,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var CF_I18N = {
     title_add: {{ 'media.arr_admin.custom_filters.modal_title_add'|trans|json_encode|raw }},

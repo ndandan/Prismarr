@@ -791,7 +791,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     var BASE = '{{ path("app_transmission_index") }}';
     var LOCALE = {{ app.request.locale|default('fr')|json_encode|raw }};

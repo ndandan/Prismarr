@@ -169,7 +169,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     var _I18N = {
         addTitleTpl: {{ 'jellyseerr.settings.services.modal_add_title_tpl'|trans|json_encode|raw }},
@@ -296,7 +296,7 @@
         html += makeField(_I18N.serverName, 'js-srv-name', srv.name, 'Radarr');
         html += '<div class="col-12 col-sm-6"><label class="form-label small">' + _I18N.hostnameOrIp + '</label><div class="input-group input-group-sm"><input type="text" class="form-control" id="js-srv-host" value="' + (srv.hostname||'') + '"><span class="input-group-text">:</span><input type="number" class="form-control" id="js-srv-port" value="' + (srv.port||'') + '" style="max-width:80px;"></div></div>';
         html += makeToggle(_I18N.enableSsl, 'js-srv-ssl', srv.useSsl);
-        html += '<div class="col-12 col-sm-6"><label class="form-label small">' + _I18N.apiKey + '</label><div class="input-group input-group-sm"><input type="password" class="form-control" id="js-srv-apikey" value="' + (srv.apiKey||'') + '"><button class="btn btn-outline-secondary" type="button" onclick="var e=document.getElementById(\'js-srv-apikey\');e.type=e.type===\'password\'?\'text\':\'password\';"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4-5.4 6-9 6c-3.6 0-6.6-2-9-6c2.4-4 5.4-6 9-6c3.6 0 6.6 2 9 6"/></svg></button></div></div>';
+        html += '<div class="col-12 col-sm-6"><label class="form-label small">' + _I18N.apiKey + '</label><div class="input-group input-group-sm"><input type="password" class="form-control" id="js-srv-apikey" value="' + (srv.apiKey||'') + '"><button class="btn btn-outline-secondary" type="button" id="js-srv-apikey-toggle"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 12a2 2 0 1 0 4 0a2 2 0 0 0 -4 0"/><path d="M21 12c-2.4 4-5.4 6-9 6c-3.6 0-6.6-2-9-6c2.4-4 5.4-6 9-6c3.6 0 6.6 2 9 6"/></svg></button></div></div>';
         html += makeField(_I18N.baseUrl, 'js-srv-base', srv.baseUrl, _I18N.radarrBasePlaceholder);
         html += makeField(_I18N.externalUrl, 'js-srv-exturl', srv.externalUrl, _I18N.radarrUrlPlaceholder);
 
@@ -346,6 +346,14 @@
 
         html += '</div>';
         document.getElementById('js-modal-body').innerHTML = html;
+
+        // API key visibility toggle (moved off onclick= for CSP)
+        var apiKeyToggle = document.getElementById('js-srv-apikey-toggle');
+        if (apiKeyToggle) {
+            apiKeyToggle.addEventListener('click', function(){
+                var e=document.getElementById('js-srv-apikey');e.type=e.type==='password'?'text':'password';
+            });
+        }
     });
 
     // ── Save ──

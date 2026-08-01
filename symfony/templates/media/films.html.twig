@@ -1127,7 +1127,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   /* ══════════════════════════════════════════════════════════════════════════
      i18n injection (FR source of truth ; locale bascule via ?_locale=en)

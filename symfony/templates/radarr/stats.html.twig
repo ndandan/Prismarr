@@ -170,7 +170,7 @@
 {% block javascripts %}
 {% if stats.years is defined and stats.years %}
 <script src="{{ asset('static/chart/chart.umd.min.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var _I18N = {
     chart_films_label: {{ 'media.arr_admin.stats.chart_films_label'|trans|json_encode|raw }},

@@ -115,7 +115,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   var I18N = {
     fallback_name: {{ 'media.arr_admin.download_clients.fallback_name'|trans|json_encode|raw }},

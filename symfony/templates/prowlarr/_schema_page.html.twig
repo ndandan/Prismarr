@@ -147,7 +147,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
     var SCHEMA_URL = '{{ schemaUrl }}';
     var GET_URL = '{{ getUrl }}';

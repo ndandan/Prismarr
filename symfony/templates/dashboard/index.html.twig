@@ -663,7 +663,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
   (function () {
     // Async dashboard widget hydration (#27): after first paint, fetch each
     // [data-dash-widget] fragment and swap it into its [data-dash-body].
@@ -826,7 +826,7 @@
 
   })();
 </script>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   function initLayoutEdit() {
     var toolbar = document.querySelector('.dash-layout-toolbar');

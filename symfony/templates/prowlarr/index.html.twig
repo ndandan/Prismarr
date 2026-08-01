@@ -382,7 +382,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
     var _I18N = {
         name: {{ 'prowlarr.common.name'|trans|json_encode|raw }},

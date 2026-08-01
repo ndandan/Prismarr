@@ -108,7 +108,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var META_I18N = {
     title_edit_tpl: {{ 'media.arr_admin.metadata.modal_title_edit_tpl'|trans({name: '__NAME__'})|json_encode|raw }},

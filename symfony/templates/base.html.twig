@@ -15,7 +15,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('img/prismarr/favicon-192.png') }}"/>
   <link rel="apple-touch-icon" href="{{ asset('img/prismarr/prismarr-icon-512.png') }}"/>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Pre-apply sidebar-collapsed state from localStorage before the body
     // renders, so users don't see a flash of the expanded sidebar on every
     // page load when they've chosen to keep it collapsed.
@@ -38,7 +38,7 @@
   {% set _radarr_default = service_instances('radarr')|first %}
   {% set _sonarr_default = service_instances('sonarr')|first %}
   {% set _slug = app.request.attributes.get('slug') ?: '' %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     var INSTANCE_SLUG = {{ _slug|json_encode|raw }};
     var DEFAULT_RADARR_SLUG = {{ (_radarr_default ? _radarr_default.slug : 'radarr-1')|json_encode|raw }};
     var DEFAULT_SONARR_SLUG = {{ (_sonarr_default ? _sonarr_default.slug : 'sonarr-1')|json_encode|raw }};
@@ -257,7 +257,7 @@
   </style>
 
   {# Modal and backdrop cleanup — in <head> to survive Turbo navigations #}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Backdrop and modal cleanup
     (function() {
       // Before each modal opens: clean up extra backdrops
@@ -1496,7 +1496,7 @@
   {# Strings translated server-side and exposed to inline JS. Keep this block
      small — only the strings JS actually renders dynamically (the rest lives
      in the Twig markup directly). #}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     {# Slug vars are now declared in <head> (above) so block body scripts
        can reference them during their initial IIFE. _i18n stays here
        because it's only consumed inside callbacks, not at parse time. #}
@@ -1545,7 +1545,7 @@
   </script>
 
   {% block javascripts %}{% endblock %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     function initAutohide() {
       document.querySelectorAll('.js-autohide').forEach(function (el) {
@@ -2285,7 +2285,7 @@
   })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   /* ── Collapse sidebar custom (indépendant de Bootstrap/Turbo) ── */
   (function () {
     function syncCollapses() {
@@ -2317,7 +2317,7 @@
   })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   /* ── Vidéos autoplay après navigation Turbo ou retour d'onglet ── */
   (function () {
     function resumeVideos() {
@@ -2338,7 +2338,7 @@
   })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   /* ══════════════════════════════════════════════════════════════════
      Phase 4 — UI Improvements
      ══════════════════════════════════════════════════════════════════ */
@@ -2422,7 +2422,7 @@
      or route starts with 'prowlarr_'
      or route starts with 'jellyseerr_'
      or route starts with 'tmdb_') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var QBT_POLL_URL = '{{ path('app_qbittorrent_api_poll_summary') }}';
     {# User preference drives the polling cadence — 0 disables qBit polling entirely. #}
@@ -2585,7 +2585,7 @@
      or route starts with 'prowlarr_'
      or route starts with 'jellyseerr_'
      or route starts with 'tmdb_') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var DELUGE_POLL_URL = '{{ path('app_deluge_api_poll_summary') }}';
     {# User preference drives the polling cadence — 0 disables Deluge polling entirely. #}
@@ -2747,7 +2747,7 @@
      or route starts with 'prowlarr_'
      or route starts with 'jellyseerr_'
      or route starts with 'tmdb_') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var TRANSMISSION_POLL_URL = '{{ path('app_transmission_api_poll_summary') }}';
     {# User preference drives the polling cadence — 0 disables Transmission polling entirely. #}
@@ -2912,7 +2912,7 @@
      through its route-guard redirect.
      ══════════════════════════════════════════════════════════════════════════ #}
   {% if service_configured('jellyseerr') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     // No sidebar (login / setup) → no badge → don't poke Jellyseerr.
     if (!document.getElementById('sidebar-seerr-badge')) return;
@@ -2978,7 +2978,7 @@
      disabled service every 30s).
      ══════════════════════════════════════════════════════════════════════════ #}
   {% if service_visible_in_sidebar('tautulli') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var pill = document.getElementById('sidebar-plex-pill');
     if (!pill) return;
@@ -3014,7 +3014,7 @@
      hides itself at zero and backs off when the client is unreachable.
      ══════════════════════════════════════════════════════════════════════════ #}
   {% if service_configured('sabnzbd') or service_configured('nzbget') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     // Turbo-safe singleton: one poll loop for the whole session. Re-running
     // this script on every navigation must NOT spawn a fresh poll (that would
@@ -3059,7 +3059,7 @@
   </script>
   {% endif %}
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Topbar health indicator — lazy-loaded state + auto-refresh 60s.
     (function () {
       var dot   = document.getElementById('topbar-health-dot');
@@ -3122,7 +3122,7 @@
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Sidebar collapsible toggle + tooltip setup (Turbo-safe).
     // - Click on #sidebar-toggle-btn → toggle `html.sidebar-collapsed` + persist
     // - On load/after Turbo nav: copy .nav-link-title → data-tooltip on each

@@ -120,7 +120,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var _I18N = {
     launchedTpl: {{ 'prowlarr.tasks.feedback_launched_tpl'|trans|json_encode|raw }},
