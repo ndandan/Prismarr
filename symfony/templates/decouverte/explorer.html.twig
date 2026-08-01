@@ -271,7 +271,11 @@
 
 <script>
 (function() {
-  function escHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  // Escapes &, < and > (text-node serialisation) plus the double quote: the
+  // helper is also used inside quoted attributes (data-tmdb-title, title,
+  // aria-label), where a bare " would close the attribute and let the rest of
+  // the TMDb string be parsed as markup.
+  function escHtml(s) { if (s == null) return ''; var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
 
   // Localized strings used by the dynamic JS parts of this page.
   var EX_I18N = {

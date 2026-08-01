@@ -104,7 +104,7 @@ final class UnifiLiveReader implements ResetInterface
         ];
 
         if (array_filter($result, static fn($v): bool => $v !== null) === []) {
-            $this->logger->debug('UnifiLiveReader: every endpoint returned no data');
+            $this->logger->warning('UnifiLiveReader: every endpoint returned no data');
             return null; // don't cache — retry next call
         }
 

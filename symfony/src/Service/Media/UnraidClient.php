@@ -376,14 +376,14 @@ class UnraidClient implements ResetInterface
             if (in_array($errno, [CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEOUTED, CURLE_COULDNT_RESOLVE_HOST], true)) {
                 $this->transportDown = true;
             }
-            $this->logger->debug('UnraidClient gql failed', ['code' => $code, 'errno' => $errno]);
+            $this->logger->warning('UnraidClient gql failed', ['code' => $code, 'errno' => $errno]);
             return null;
         }
         $decoded = json_decode((string) $body, true);
         if (!is_array($decoded) || !is_array($decoded['data'] ?? null)) {
             // GraphQL errors (bad field, missing scope) come back as
             // {errors:[...]} with data null/absent — treat as group-missing.
-            $this->logger->debug('UnraidClient gql returned no data', ['body' => substr((string) $body, 0, 300)]);
+            $this->logger->warning('UnraidClient gql returned no data', ['body' => substr((string) $body, 0, 300)]);
             return null;
         }
         return $decoded['data'];

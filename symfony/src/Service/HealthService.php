@@ -706,7 +706,7 @@ class HealthService implements ResetInterface
                     'url'     => rtrim($url, '/') . '/json',
                     'headers' => ['Content-Type: application/json', 'Accept: application/json'],
                     'method'  => 'POST',
-                    'body'    => json_encode(['method' => $method, 'params' => $params, 'id' => 1]),
+                    'body'    => (string) json_encode(['method' => $method, 'params' => $params, 'id' => 1]),
                 ];
             }
             case 'sabnzbd': {

@@ -58,9 +58,14 @@ lint-container:
 	docker exec prismarr php bin/console lint:container
 	docker exec prismarr php bin/console lint:yaml config
 
+# Static analysis (PHPStan). Baseline in symfony/phpstan-baseline.neon —
+# shrink it, never regenerate it to paper over a new error.
+stan:
+	docker exec prismarr vendor/bin/phpstan analyse --configuration phpstan.dist.neon --no-progress
+
 # Full pre-commit check — run this before every `git commit`.
 # Required by CONTRIBUTING.md Definition of Done.
-check: lint lint-twig test
+check: lint lint-twig stan test
 	@echo ""
 	@echo "✓ make check passed — ready to commit"
 

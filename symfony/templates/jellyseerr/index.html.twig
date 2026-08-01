@@ -412,6 +412,26 @@
     };
     function tpl(s, map) { for (var k in map) { s = s.split('__' + k + '__').join(map[k]); } return s; }
 
+    // Les modales ci-dessous concatènent dans innerHTML des champs choisis par
+    // le demandeur (displayName / jellyfinUsername / email Plex ou Jellyfin) et
+    // des métadonnées TMDb. JellyseerrController est #[IsGranted('ROLE_ADMIN')] :
+    // la charge s'exécuterait donc dans la session la plus privilégiée de
+    // l'application. window.escHtml est hoisté dans base.html.twig ; on le résout
+    // défensivement, comme calendrier/index.html.twig.
+    var esc = window.escHtml || function (s) { return s == null ? '' : String(s); };
+
+    // Les avatars atterrissent dans un url('…') CSS d'un attribut style :
+    // escHtml n'y suffit pas (le parseur HTML redécode les entités avant que le
+    // CSS soit lu). encodeURI protège l'attribut (guillemets et chevrons
+    // percent-encodés) mais laisse passer ' ( ) — les trois caractères qui
+    // referment la chaîne CSS — donc on les encode en plus.
+    function escCssUrl(u) {
+        return encodeURI(u == null ? '' : String(u))
+            .replace(/'/g, '%27')
+            .replace(/\(/g, '%28')
+            .replace(/\)/g, '%29');
+    }
+
     // ── Sort select ──
     var sortSel = document.getElementById('js-sort-select');
     if (sortSel) {
@@ -542,7 +562,7 @@
                 // ── Hero backdrop ──
                 html += '<div style="position:relative;min-height:240px;';
                 if (backdrop) {
-                    html += 'background:url(\'' + backdrop + '\') center/cover;';
+                    html += 'background:url(\'' + escCssUrl(backdrop) + '\') center/cover;';
                 } else {
                     html += 'background:linear-gradient(135deg, #1a1033 0%, #2d1b69 50%, #0f0a1a 100%);';
                 }
@@ -551,7 +571,7 @@
                 html += '<div style="position:relative;z-index:1;padding:1.5rem 1.5rem 0;display:flex;gap:1.25rem;align-items:flex-end;min-height:240px;">';
 
                 if (poster) {
-                    html += '<img src="' + poster + '" style="width:140px;border-radius:.6rem;box-shadow:0 8px 32px rgba(0,0,0,.5);margin-bottom:-50px;flex-shrink:0;" alt="">';
+                    html += '<img src="' + esc(poster) + '" style="width:140px;border-radius:.6rem;box-shadow:0 8px 32px rgba(0,0,0,.5);margin-bottom:-50px;flex-shrink:0;" alt="">';
                 }
 
                 html += '<div style="padding-bottom:10px;min-width:0;">';
@@ -559,13 +579,13 @@
                 html += ' <span class="js-type-badge ' + (req.type === 'movie' ? 'js-type-movie' : 'js-type-tv') + '" style="font-size:.7rem;padding:2px 8px;">' + (req.type === 'movie' ? _I18N.movie : _I18N.tv) + '</span>';
                 if (req.is4k) html += ' <span class="badge bg-yellow-lt text-yellow" style="font-size:.7rem;">4K</span>';
                 html += '</div>';
-                html += '<h3 style="margin:0;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5);line-height:1.2;">' + titleText + '</h3>';
+                html += '<h3 style="margin:0;font-weight:700;color:#fff;text-shadow:0 2px 8px rgba(0,0,0,.5);line-height:1.2;">' + esc(titleText) + '</h3>';
 
                 if (tmdb.releaseDate || tmdb.voteAverage) {
                     html += '<div style="color:rgba(255,255,255,.7);font-size:.85rem;margin-top:.3rem;">';
                     if (tmdb.releaseDate) html += tmdb.releaseDate.substring(0, 4);
                     if (tmdb.voteAverage) html += ' · <span style="color:#f59e0b;">' + {{ ico.icon('star-filled', '', 14)|json_encode|raw }} + '</span> ' + Number(tmdb.voteAverage).toFixed(1);
-                    if (tmdb.genres && tmdb.genres.length) html += ' · ' + tmdb.genres.join(', ');
+                    if (tmdb.genres && tmdb.genres.length) html += ' · ' + esc(tmdb.genres.join(', '));
                     html += '</div>';
                 }
                 html += '</div></div></div>';
@@ -574,7 +594,7 @@
                 html += '<div style="padding:' + (poster ? '60px' : '20px') + ' 1.5rem 1.5rem;">';
 
                 if (tmdb.overview) {
-                    html += '<p style="font-size:.88rem;line-height:1.6;color:var(--tblr-body-color);margin-bottom:1.25rem;">' + tmdb.overview + '</p>';
+                    html += '<p style="font-size:.88rem;line-height:1.6;color:var(--tblr-body-color);margin-bottom:1.25rem;">' + esc(tmdb.overview) + '</p>';
                 }
 
                 // Tableau saisons (TV)
@@ -598,12 +618,12 @@
                 html += '<div style="padding:.65rem .85rem;background:var(--tblr-bg-surface-secondary);border-radius:.5rem;margin-bottom:1rem;">';
                 html += '<div class="d-flex align-items-center gap-3">';
                 if (user.avatar) {
-                    html += '<span class="avatar avatar-sm" style="width:32px;height:32px;background-image:url(\'{{ service_url }}' + user.avatar + '\');flex-shrink:0;"></span>';
+                    html += '<span class="avatar avatar-sm" style="width:32px;height:32px;background-image:url(\'' + escCssUrl('{{ service_url }}' + user.avatar) + '\');flex-shrink:0;"></span>';
                 } else {
                     html += '<span class="avatar avatar-sm" style="width:32px;height:32px;flex-shrink:0;"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg></span>';
                 }
                 html += '<div style="font-size:.82rem;">';
-                html += '<span style="font-weight:600;">' + (user.displayName || user.jellyfinUsername || user.email || '?') + '</span>';
+                html += '<span style="font-weight:600;">' + esc(user.displayName || user.jellyfinUsername || user.email || '?') + '</span>';
                 html += '<span class="text-secondary"> · ' + (req.createdAt ? req.createdAt.substring(0, 10) : '?') + '</span>';
                 html += '</div>';
                 html += '</div>';
@@ -611,11 +631,11 @@
                 // Handled by (if not pending)
                 var modifier = req.modifiedBy || null;
                 if (req.status !== 1 && modifier) {
-                    var modName = modifier.displayName || modifier.jellyfinUsername || modifier.email || '?';
+                    var modName = esc(modifier.displayName || modifier.jellyfinUsername || modifier.email || '?');
                     var modAvatar = modifier.avatar ? '{{ service_url }}' + modifier.avatar : '';
                     html += '<div class="d-flex align-items-center gap-2 mt-2 pt-2" style="border-top:1px solid var(--tblr-border-color-translucent);font-size:.78rem;">';
                     if (modAvatar) {
-                        html += '<span class="avatar avatar-xs" style="width:22px;height:22px;background-image:url(\'' + modAvatar + '\');flex-shrink:0;"></span>';
+                        html += '<span class="avatar avatar-xs" style="width:22px;height:22px;background-image:url(\'' + escCssUrl(modAvatar) + '\');flex-shrink:0;"></span>';
                     }
                     html += '<span class="text-secondary">' + statusLabel + ' ' + tpl({{ 'jellyseerr.common.by_user_tpl'|trans|json_encode|raw }}, {NAME: '<strong>' + modName + '</strong>'}) + '</span>';
                     if (req.updatedAt) {
@@ -752,7 +772,7 @@
                 html += '<label class="form-label">' + _I18N.rootFolderLabel + '</label>';
                 html += '<select class="form-select" id="js-edit-rootfolder">';
                 rootFolders.forEach(function(rf){
-                    html += '<option value="' + rf.path + '" ' + (rf.path === req.rootFolder ? 'selected' : '') + '>' + rf.path + '</option>';
+                    html += '<option value="' + esc(rf.path) + '" ' + (rf.path === req.rootFolder ? 'selected' : '') + '>' + esc(rf.path) + '</option>';
                 });
                 html += '</select></div>';
 
@@ -761,7 +781,7 @@
                 html += '<label class="form-label">' + _I18N.qualityProfileLabel + '</label>';
                 html += '<select class="form-select" id="js-edit-profile">';
                 profiles.forEach(function(p){
-                    html += '<option value="' + p.id + '" ' + (p.id === req.profileId ? 'selected' : '') + '>' + p.name + '</option>';
+                    html += '<option value="' + p.id + '" ' + (p.id === req.profileId ? 'selected' : '') + '>' + esc(p.name) + '</option>';
                 });
                 html += '</select></div>';
 
@@ -776,22 +796,22 @@
                 html += '<div id="js-user-dropdown" style="position:relative;">';
                 html += '<div id="js-user-selected" style="cursor:pointer;padding:.5rem .75rem;border:1px solid var(--tblr-border-color);border-radius:.4rem;display:flex;align-items:center;gap:.5rem;">';
                 if (currentUserAvatar) {
-                    html += '<span class="avatar avatar-xs" style="width:24px;height:24px;background-image:url(\'' + currentUserAvatar + '\');flex-shrink:0;"></span>';
+                    html += '<span class="avatar avatar-xs" style="width:24px;height:24px;background-image:url(\'' + escCssUrl(currentUserAvatar) + '\');flex-shrink:0;"></span>';
                 }
-                html += '<span id="js-user-name" style="flex:1;">' + currentUserName + '</span>';
+                html += '<span id="js-user-name" style="flex:1;">' + esc(currentUserName) + '</span>';
                 html += '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6l6 -6"/></svg>';
                 html += '</div>';
                 html += '<div id="js-user-list" style="display:none;position:absolute;z-index:100;top:100%;left:0;right:0;max-height:200px;overflow-y:auto;background:var(--tblr-card-bg);border:1px solid var(--tblr-border-color);border-radius:.4rem;margin-top:2px;box-shadow:0 4px 12px rgba(0,0,0,.2);">';
                 users.forEach(function(u){
                     var name = u.displayName || u.jellyfinUsername || u.email || ('User #' + u.id);
                     var avatar = u.avatar ? '{{ service_url }}' + u.avatar : '';
-                    html += '<div class="js-user-option d-flex align-items-center gap-2" data-id="' + u.id + '" data-name="' + name + '" data-avatar="' + avatar + '" style="cursor:pointer;padding:.4rem .75rem;transition:background .1s;' + (u.id === currentUserId ? 'background:rgba(162,89,255,.1);' : '') + '" onmouseover="this.style.background=\'rgba(162,89,255,.1)\'" onmouseout="this.style.background=\'' + (u.id === currentUserId ? 'rgba(162,89,255,.1)' : 'transparent') + '\'">';
+                    html += '<div class="js-user-option d-flex align-items-center gap-2" data-id="' + u.id + '" data-name="' + esc(name) + '" data-avatar="' + escCssUrl(avatar) + '" style="cursor:pointer;padding:.4rem .75rem;transition:background .1s;' + (u.id === currentUserId ? 'background:rgba(162,89,255,.1);' : '') + '" onmouseover="this.style.background=\'rgba(162,89,255,.1)\'" onmouseout="this.style.background=\'' + (u.id === currentUserId ? 'rgba(162,89,255,.1)' : 'transparent') + '\'">';
                     if (avatar) {
-                        html += '<span class="avatar avatar-xs" style="width:22px;height:22px;background-image:url(\'' + avatar + '\');flex-shrink:0;"></span>';
+                        html += '<span class="avatar avatar-xs" style="width:22px;height:22px;background-image:url(\'' + escCssUrl(avatar) + '\');flex-shrink:0;"></span>';
                     } else {
-                        html += '<span class="avatar avatar-xs" style="width:22px;height:22px;flex-shrink:0;font-size:.6rem;">' + name.charAt(0).toUpperCase() + '</span>';
+                        html += '<span class="avatar avatar-xs" style="width:22px;height:22px;flex-shrink:0;font-size:.6rem;">' + esc(name.charAt(0).toUpperCase()) + '</span>';
                     }
-                    html += '<span style="font-size:.85rem;">' + name + '</span>';
+                    html += '<span style="font-size:.85rem;">' + esc(name) + '</span>';
                     if (u.id === currentUserId) html += '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#a259ff" stroke-width="2.5" class="ms-auto"><path d="M5 12l5 5l10 -10"/></svg>';
                     html += '</div>';
                 });

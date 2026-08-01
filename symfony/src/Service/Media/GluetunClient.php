@@ -184,7 +184,7 @@ class GluetunClient implements ResetInterface
         curl_close($ch);
 
         if ($body === false || $code !== 200) {
-            $this->logger->debug('GluetunClient GET failed', ['path' => $path, 'code' => $code]);
+            $this->logger->warning('GluetunClient GET failed', ['path' => $path, 'code' => $code]);
             return null;
         }
         return json_decode($body, true) ?: null;

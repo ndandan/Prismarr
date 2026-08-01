@@ -240,6 +240,22 @@
     };
     function tpl(s, map) { for (var k in map) { s = s.split('__' + k + '__').join(map[k]); } return s; }
 
+    // Mêmes puits que jellyseerr/index.html.twig : noms, e-mails et vignettes
+    // choisis par le titulaire du compte Plex/Jellyfin, rendus dans la session
+    // ROLE_ADMIN. window.escHtml est hoisté dans base.html.twig.
+    var esc = window.escHtml || function (s) { return s == null ? '' : String(s); };
+
+    // Les avatars atterrissent dans un url('…') CSS d'un attribut style :
+    // escHtml n'y suffit pas (le parseur HTML redécode les entités avant que le
+    // CSS soit lu). encodeURI protège l'attribut mais laisse passer ' ( ) — les
+    // trois caractères qui referment la chaîne CSS — donc on les encode en plus.
+    function escCssUrl(u) {
+        return encodeURI(u == null ? '' : String(u))
+            .replace(/'/g, '%27')
+            .replace(/\(/g, '%28')
+            .replace(/\)/g, '%29');
+    }
+
     // ── Recherche ──
     var searchInput = document.getElementById('js-search');
     var rows = document.querySelectorAll('.js-user-row');
@@ -321,7 +337,7 @@
                     var alert = document.createElement('div');
                     alert.className = 'alert alert-danger d-flex align-items-center gap-2 mt-2';
                     alert.style.fontSize = '.82rem';
-                    alert.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>' + msg;
+                    alert.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>' + esc(msg);
                     var card = document.querySelector('.card');
                     card.parentNode.insertBefore(alert, card);
                     setTimeout(function(){ alert.style.transition='opacity .3s'; alert.style.opacity='0'; setTimeout(function(){ alert.remove(); },300); }, 4000);
@@ -425,7 +441,7 @@
             alert.id = 'js-create-error';
             alert.className = 'alert alert-danger d-flex align-items-center gap-2 mb-3';
             alert.style.fontSize = '.82rem';
-            alert.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>' + msg;
+            alert.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>' + esc(msg);
             var body = document.getElementById('js-create-body');
             body.insertBefore(alert, body.firstChild);
             setTimeout(function(){ if (alert.parentNode) { alert.style.transition = 'opacity .3s'; alert.style.opacity = '0'; setTimeout(function(){ alert.remove(); }, 300); } }, 4000);
@@ -493,11 +509,11 @@
                     var uName = u.username || u.email || u.id;
                     var uThumb = u.thumb ? '{{ service_url }}' + u.thumb : '';
                     html += '<label class="form-check mb-2 d-flex align-items-center gap-2">';
-                    html += '<input type="checkbox" class="form-check-input js-jf-user-cb" value="' + u.id + '" style="flex-shrink:0;">';
+                    html += '<input type="checkbox" class="form-check-input js-jf-user-cb" value="' + esc(u.id) + '" style="flex-shrink:0;">';
                     if (uThumb) {
-                        html += '<span class="avatar avatar-xs" style="width:28px;height:28px;background-image:url(\'' + uThumb + '\');flex-shrink:0;"></span>';
+                        html += '<span class="avatar avatar-xs" style="width:28px;height:28px;background-image:url(\'' + escCssUrl(uThumb) + '\');flex-shrink:0;"></span>';
                     }
-                    html += '<span class="form-check-label" style="font-size:.85rem;font-weight:500;">' + uName + '</span>';
+                    html += '<span class="form-check-label" style="font-size:.85rem;font-weight:500;">' + esc(uName) + '</span>';
                     html += '</label>';
                 });
                 body.innerHTML = html;
@@ -570,7 +586,7 @@
                 // ── Backdrop + Avatar ──
                 html += '<div style="position:relative;height:180px;';
                 if (backdrop) {
-                    html += 'background:url(\'' + backdrop + '\') center/cover;';
+                    html += 'background:url(\'' + escCssUrl(backdrop) + '\') center/cover;';
                 } else {
                     html += 'background:linear-gradient(135deg, #1a1033 0%, #2d1b69 50%, #0f0a1a 100%);';
                 }
@@ -579,7 +595,7 @@
                 html += '<button type="button" class="btn-close" data-bs-dismiss="modal" style="position:absolute;top:12px;right:12px;z-index:2;filter:drop-shadow(0 1px 3px rgba(0,0,0,.6));"></button>';
                 html += '<div style="position:absolute;bottom:-45px;left:50%;transform:translateX(-50%);z-index:2;">';
                 if (avatar) {
-                    html += '<span class="avatar avatar-xl" style="width:90px;height:90px;background-image:url(\'' + avatar + '\');box-shadow:0 4px 24px rgba(0,0,0,.4);border:4px solid var(--tblr-card-bg);"></span>';
+                    html += '<span class="avatar avatar-xl" style="width:90px;height:90px;background-image:url(\'' + escCssUrl(avatar) + '\');box-shadow:0 4px 24px rgba(0,0,0,.4);border:4px solid var(--tblr-card-bg);"></span>';
                 } else {
                     html += '<span class="avatar avatar-xl" style="width:90px;height:90px;box-shadow:0 4px 24px rgba(0,0,0,.4);border:4px solid var(--tblr-card-bg);"><svg xmlns="http://www.w3.org/2000/svg" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg></span>';
                 }
@@ -588,8 +604,8 @@
 
                 // ── Name + role + info ──
                 html += '<div style="text-align:center;padding:52px 1.5rem .5rem;">';
-                html += '<h2 style="margin:0;font-weight:700;">' + name + '</h2>';
-                if (u.email) html += '<div class="text-secondary" style="font-size:.82rem;margin-top:.15rem;">' + u.email + '</div>';
+                html += '<h2 style="margin:0;font-weight:700;">' + esc(name) + '</h2>';
+                if (u.email) html += '<div class="text-secondary" style="font-size:.82rem;margin-top:.15rem;">' + esc(u.email) + '</div>';
                 html += '<div class="d-flex justify-content-center gap-2 mt-2">';
                 html += '<span class="badge bg-' + roleColor + '-lt text-' + roleColor + '" style="font-size:.72rem;">' + role + '</span>';
                 html += '<span class="text-secondary" style="font-size:.78rem;">' + tpl(_I18N.registeredOnTpl, {DATE: (u.createdAt ? u.createdAt.substring(0, 10) : '?')}) + '</span>';
@@ -660,7 +676,7 @@
                         html += '<div style="flex-shrink:0;width:120px;scroll-snap-align:start;">';
                         html += '<div style="position:relative;border-radius:.5rem;overflow:hidden;">';
                         if (poster) {
-                            html += '<img src="' + poster + '" style="width:100%;aspect-ratio:2/3;object-fit:cover;display:block;" alt="" loading="lazy">';
+                            html += '<img src="' + esc(poster) + '" style="width:100%;aspect-ratio:2/3;object-fit:cover;display:block;" alt="" loading="lazy">';
                         } else {
                             html += '<div style="width:100%;aspect-ratio:2/3;background:var(--tblr-bg-surface-secondary);display:flex;align-items:center;justify-content:center;"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity=".2"><rect x="2" y="2" width="20" height="20" rx="2"/></svg></div>';
                         }
@@ -670,7 +686,7 @@
                         html += '</div>';
                         // Title overlay at bottom
                         html += '<div style="position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent, rgba(0,0,0,.9));padding:.6rem .4rem .35rem;">';
-                        html += '<div style="font-size:.7rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + title + '</div>';
+                        html += '<div style="font-size:.7rem;font-weight:600;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + esc(title) + '</div>';
                         html += '<div style="font-size:.58rem;color:rgba(255,255,255,.5);margin-top:1px;">' + (r.type === 'movie' ? _I18N.movie : _I18N.tv) + '</div>';
                         html += '</div>';
                         html += '</div></div>';
@@ -682,10 +698,10 @@
                 // ── Info tab ──
                 html += '<div class="js-profile-panel" data-tab="profil-info" style="display:none;padding:1rem 1.5rem;">';
                 html += '<table class="table table-sm" style="font-size:.82rem;">';
-                html += '<tr><td class="text-secondary" style="width:140px;">' + _I18N.profileEmailRow + '</td><td>' + (u.email || '—') + '</td></tr>';
-                html += '<tr><td class="text-secondary">' + _I18N.profileJellyfinNameRow + '</td><td>' + (u.jellyfinUsername || '—') + '</td></tr>';
+                html += '<tr><td class="text-secondary" style="width:140px;">' + _I18N.profileEmailRow + '</td><td>' + esc(u.email || '—') + '</td></tr>';
+                html += '<tr><td class="text-secondary">' + _I18N.profileJellyfinNameRow + '</td><td>' + esc(u.jellyfinUsername || '—') + '</td></tr>';
                 html += '<tr><td class="text-secondary">' + _I18N.profileTypeRow + '</td><td>' + (u.userType === 3 ? 'Jellyfin' : (u.userType === 2 ? _I18N.infoLocal : _I18N.infoOther)) + '</td></tr>';
-                html += '<tr><td class="text-secondary">' + _I18N.profileJellyfinIdRow + '</td><td style="font-family:monospace;font-size:.72rem;">' + (u.jellyfinUserId || '—') + '</td></tr>';
+                html += '<tr><td class="text-secondary">' + _I18N.profileJellyfinIdRow + '</td><td style="font-family:monospace;font-size:.72rem;">' + esc(u.jellyfinUserId || '—') + '</td></tr>';
                 html += '<tr><td class="text-secondary">' + _I18N.profileRegisteredRow + '</td><td>' + (u.createdAt ? u.createdAt.substring(0, 10) : '—') + '</td></tr>';
                 html += '<tr><td class="text-secondary">' + _I18N.profileLastModifiedRow + '</td><td>' + (u.updatedAt ? u.updatedAt.substring(0, 10) : '—') + '</td></tr>';
                 html += '</table>';

@@ -333,14 +333,14 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             if (in_array($errno, [CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEOUTED, CURLE_COULDNT_RESOLVE_HOST], true)) {
                 $this->transportDown = true;
             }
-            $this->logger->debug('UnifiClient request failed', ['path' => $path, 'code' => $code, 'errno' => $errno]);
+            $this->logger->warning('UnifiClient request failed', ['path' => $path, 'code' => $code, 'errno' => $errno]);
             return null;
         }
         $decoded = json_decode((string) $body, true);
         // Anything but the ok-envelope (error rc, HTML login page after a
         // firmware change, …) → treat as endpoint-missing, never throw.
         if (!is_array($decoded) || ($decoded['meta']['rc'] ?? null) !== 'ok' || !is_array($decoded['data'] ?? null)) {
-            $this->logger->debug('UnifiClient request returned no data', ['path' => $path, 'body' => substr((string) $body, 0, 300)]);
+            $this->logger->warning('UnifiClient request returned no data', ['path' => $path, 'body' => substr((string) $body, 0, 300)]);
             return null;
         }
         return $decoded['data'];

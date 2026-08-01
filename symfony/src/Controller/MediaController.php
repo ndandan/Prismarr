@@ -1992,68 +1992,14 @@ class MediaController extends AbstractController
         // navigate to /medias/<slug>/films?open=X for the right instance.
         // Cache key bumped to _v2 so the v1 single-instance cache from a
         // previous build doesn't keep serving stale, untagged results.
-        $movies = $this->cache->get('prismarr_search_movies_v2', function (ItemInterface $item) {
-            $item->expiresAfter(60);
-            $out = [];
-            foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
-                try {
-                    $raw = $this->radarr->withInstance($inst)->getRawMovies();
-                } catch (\Throwable $e) {
-                    $this->logger->warning('Media globalSearch radarr failed', [
-                        'instance' => $inst->getSlug(),
-                        'exception' => $e::class,
-                        'message'   => $e->getMessage(),
-                    ]);
-                    continue;
-                }
-                foreach ($raw as $m) {
-                    $out[] = [
-                        'id'            => $m['id'] ?? null,
-                        'title'         => $m['title'] ?? '—',
-                        'originalTitle' => $m['originalTitle'] ?? null,
-                        'sortTitle'     => $m['sortTitle'] ?? '',
-                        'year'          => $m['year'] ?? null,
-                        'hasFile'       => (bool) ($m['hasFile'] ?? false),
-                        'poster'        => $this->extractPoster($m),
-                        'instance'      => ['slug' => $inst->getSlug(), 'name' => $inst->getName()],
-                    ];
-                }
-            }
-            return $out;
-        });
+        $movies = $this->cache->get('prismarr_search_movies_v2', $this->buildMovieSearchIndex(...));
 
-        $series = $this->cache->get('prismarr_search_series_v2', function (ItemInterface $item) {
-            $item->expiresAfter(60);
-            $out = [];
-            foreach ($this->instances->getEnabled(ServiceInstance::TYPE_SONARR) as $inst) {
-                try {
-                    $raw = $this->sonarr->withInstance($inst)->getRawAllSeries();
-                } catch (\Throwable $e) {
-                    $this->logger->warning('Media globalSearch sonarr failed', [
-                        'instance' => $inst->getSlug(),
-                        'exception' => $e::class,
-                        'message'   => $e->getMessage(),
-                    ]);
-                    continue;
-                }
-                foreach ($raw as $s) {
-                    $out[] = [
-                        'id'            => $s['id'] ?? null,
-                        'title'         => $s['title'] ?? '—',
-                        'originalTitle' => $s['originalTitle'] ?? null,
-                        'sortTitle'     => $s['sortTitle'] ?? '',
-                        'year'          => $s['year'] ?? null,
-                        'hasFile'       => true,
-                        'poster'        => $this->extractPoster($s),
-                        'instance'      => ['slug' => $inst->getSlug(), 'name' => $inst->getName()],
-                    ];
-                }
-            }
-            return $out;
-        });
+        $series = $this->cache->get('prismarr_search_series_v2', $this->buildSeriesSearchIndex(...));
 
-        // Local filter, case- and accent-insensitive
-        $normalize = fn(string $s) => mb_strtolower(transliterator_transliterate('Any-Latin; Latin-ASCII; Lower()', $s));
+        // Local filter, case- and accent-insensitive. transliterator_transliterate()
+        // returns false on failure; without the fallback the normalized term would
+        // become '' and str_contains() would then match the whole library.
+        $normalize = fn(string $s) => mb_strtolower(transliterator_transliterate('Any-Latin; Latin-ASCII; Lower()', $s) ?: $s);
         $termNorm = $normalize($term);
 
         foreach ($movies as $m) {
@@ -2098,11 +2044,11 @@ class MediaController extends AbstractController
         // of local ids cross-instance to make sure "already in library" is
         // truthful for users running multiple Radarr / Sonarr.
         $localMovieIds = array_column(
-            $this->cache->get('prismarr_search_movies_v2', fn(ItemInterface $item) => ($item->expiresAfter(60)) ?: []),
+            $this->cache->get('prismarr_search_movies_v2', $this->buildMovieSearchIndex(...)),
             'id'
         );
         $localSeriesIds = array_column(
-            $this->cache->get('prismarr_search_series_v2', fn(ItemInterface $item) => ($item->expiresAfter(60)) ?: []),
+            $this->cache->get('prismarr_search_series_v2', $this->buildSeriesSearchIndex(...)),
             'id'
         );
 
@@ -2148,6 +2094,82 @@ class MediaController extends AbstractController
         }
 
         return $this->json($results);
+    }
+
+    /**
+     * Construit l'index de recherche films (toutes instances Radarr activées).
+     * Partagé par `/search` et `/search/online` : les deux doivent produire
+     * ET consommer la même entrée de cache.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildMovieSearchIndex(ItemInterface $item): array
+    {
+        $item->expiresAfter(60);
+        $out = [];
+        foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
+            try {
+                $raw = $this->radarr->withInstance($inst)->getRawMovies();
+            } catch (\Throwable $e) {
+                $this->logger->warning('Media globalSearch radarr failed', [
+                    'instance' => $inst->getSlug(),
+                    'exception' => $e::class,
+                    'message'   => $e->getMessage(),
+                ]);
+                continue;
+            }
+            foreach ($raw as $m) {
+                $out[] = [
+                    'id'            => $m['id'] ?? null,
+                    'title'         => $m['title'] ?? '—',
+                    'originalTitle' => $m['originalTitle'] ?? null,
+                    'sortTitle'     => $m['sortTitle'] ?? '',
+                    'year'          => $m['year'] ?? null,
+                    'hasFile'       => (bool) ($m['hasFile'] ?? false),
+                    'poster'        => $this->extractPoster($m),
+                    'instance'      => ['slug' => $inst->getSlug(), 'name' => $inst->getName()],
+                ];
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Pendant séries de buildMovieSearchIndex().
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function buildSeriesSearchIndex(ItemInterface $item): array
+    {
+        $item->expiresAfter(60);
+        $out = [];
+        foreach ($this->instances->getEnabled(ServiceInstance::TYPE_SONARR) as $inst) {
+            try {
+                $raw = $this->sonarr->withInstance($inst)->getRawAllSeries();
+            } catch (\Throwable $e) {
+                $this->logger->warning('Media globalSearch sonarr failed', [
+                    'instance' => $inst->getSlug(),
+                    'exception' => $e::class,
+                    'message'   => $e->getMessage(),
+                ]);
+                continue;
+            }
+            foreach ($raw as $s) {
+                $out[] = [
+                    'id'            => $s['id'] ?? null,
+                    'title'         => $s['title'] ?? '—',
+                    'originalTitle' => $s['originalTitle'] ?? null,
+                    'sortTitle'     => $s['sortTitle'] ?? '',
+                    'year'          => $s['year'] ?? null,
+                    'hasFile'       => true,
+                    'poster'        => $this->extractPoster($s),
+                    'instance'      => ['slug' => $inst->getSlug(), 'name' => $inst->getName()],
+                ];
+            }
+        }
+
+        return $out;
     }
 
     // Prowlarr indexers — moved to ProwlarrController

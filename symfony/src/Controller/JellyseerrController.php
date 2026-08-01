@@ -543,7 +543,7 @@ class JellyseerrController extends AbstractController
             ];
 
             foreach ($sectionMap as $header => $key) {
-                if (preg_match('/### [^\n]*' . preg_quote($header) . '\s*\r?\n(.*?)(?=\n### |\n## |$)/s', $body, $m)) {
+                if (preg_match('/### [^\n]*' . preg_quote($header, '/') . '\s*\r?\n(.*?)(?=\n### |\n## |$)/s', $body, $m)) {
                     $items = [];
                     preg_match_all('/^- (.+)$/m', $m[1], $lines);
                     foreach ($lines[1] as $line) {

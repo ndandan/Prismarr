@@ -327,7 +327,7 @@ class TransmissionClient implements ResetInterface
     {
         $magnets = [];
         $urls = [];
-        foreach (preg_split('/[\r\n|]+/', trim($raw)) as $line) {
+        foreach ((preg_split('/[\r\n|]+/', trim($raw)) ?: []) as $line) {
             $line = trim($line);
             if ($line === '') {
                 continue;
@@ -580,7 +580,7 @@ class TransmissionClient implements ResetInterface
         $this->lastError = null;
         $this->ensureConfig();
 
-        $payload = json_encode(['method' => $method, 'arguments' => (object) $arguments, 'tag' => ++$this->tag]);
+        $payload = (string) json_encode(['method' => $method, 'arguments' => (object) $arguments, 'tag' => ++$this->tag]);
         $resp = $this->httpPost($payload);
 
         if ($resp['body'] === false) {

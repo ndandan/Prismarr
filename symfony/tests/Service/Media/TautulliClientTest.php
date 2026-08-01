@@ -8,6 +8,7 @@ use App\Service\Media\TautulliClient;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 
 /**
@@ -731,5 +732,32 @@ class TautulliClientTest extends TestCase
         self::assertSame($neutral, $client->getPlaysByStreamResolution(30));
         self::assertSame($neutral, $client->getStreamTypeByUser(30));
         self::assertSame($neutral, $client->getConcurrentStreams(30, '99'));
+    }
+
+    /**
+     * recordError() is request()'s single failure chokepoint — every branch
+     * in request() (connection failure, invalid JSON, non-success result,
+     * SSRF-blocked URL) reports through it. The app logger is pinned to
+     * minLevel: warning (services.yaml), so recordError() must itself log a
+     * warning or a dead/misconfigured Tautulli fails completely silently.
+     * An unreachable host (.invalid never resolves) drives that path without
+     * a real network dependency.
+     */
+    public function testAFailedRequestEmitsAWarning(): void
+    {
+        $logger = $this->createMock(LoggerInterface::class);
+        $logger->expects(self::atLeastOnce())
+            ->method('warning')
+            ->with(self::stringContains('Tautulli'));
+
+        $repo = $this->createMock(SettingRepository::class);
+        $repo->method('getAll')->willReturn([
+            'tautulli_enabled' => '1',
+            'tautulli_url'     => 'http://tautulli.invalid:8181',
+            'tautulli_api_key' => 'test-key',
+        ]);
+        $client = new TautulliClient(new ConfigService($repo), $logger, null);
+
+        $client->getActivity();
     }
 }

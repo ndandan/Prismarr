@@ -100,13 +100,13 @@ class HoundarrClient implements ResetInterface
             return $this->widgetCache;
         }
         if ($resp['http'] < 200 || $resp['http'] >= 300) {
-            $this->logger->debug('HoundarrClient widget non-2xx', ['http' => $resp['http']]);
+            $this->logger->warning('HoundarrClient widget non-2xx', ['http' => $resp['http']]);
             return null; // 429/5xx — unreachable-ish, don't cache
         }
 
         $decoded = json_decode($resp['body'], true);
         if (!is_array($decoded)) {
-            $this->logger->debug('HoundarrClient widget bad JSON', ['body' => substr($resp['body'], 0, 200)]);
+            $this->logger->warning('HoundarrClient widget bad JSON', ['body' => substr($resp['body'], 0, 200)]);
             return null;
         }
 
@@ -147,7 +147,7 @@ class HoundarrClient implements ResetInterface
         curl_close($ch);
 
         if ($body === false || $code === 0) {
-            $this->logger->debug('HoundarrClient request failed', ['errno' => $errno]);
+            $this->logger->warning('HoundarrClient request failed', ['errno' => $errno]);
             return null;
         }
         return ['http' => $code, 'body' => (string) $body];
