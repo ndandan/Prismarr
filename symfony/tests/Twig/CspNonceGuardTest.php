@@ -36,7 +36,13 @@ class CspNonceGuardTest extends TestCase
             preg_match_all('/<script\b[^>]*>/i', $html, $matches, PREG_OFFSET_CAPTURE);
 
             foreach ($matches[0] as [$tag, $offset]) {
-                if (preg_match('/\bsrc\s*=/i', $tag)) {
+                // Negative lookbehind, not \b: `\b` sits between `-` and `s`,
+                // so a plain word-boundary version of this regex would also
+                // exempt a future `<script data-src="...">` from the nonce
+                // requirement — the attribute isn't `src`, it just ends in
+                // it. `(?<![\w-])` refuses to match when the character right
+                // before `src` is a letter, digit, underscore or hyphen.
+                if (preg_match('/(?<![\w-])src\s*=/i', $tag)) {
                     continue;
                 }
                 if (str_contains($tag, 'csp_nonce()')) {
@@ -81,11 +87,20 @@ class CspNonceGuardTest extends TestCase
      * `var onBadge = '...'` a un espace de chaque côté. D'où `on[a-z]+=["']`
      * sans `\s*` autour du `=` : plus aucun faux positif sur `onBadge`, et
      * onClick=/onMouseOut= restent détectés.
+     *
+     * Angle mort suivant, trouvé en revue (pas par ce test) : la classe de
+     * caractères `["']` après le `=` exige un guillemet, alors que le HTML
+     * autorise une valeur d'attribut sans guillemets — `onclick=alert(1)`
+     * s'exécute très bien dans un navigateur. `["'\w]` couvre aussi ce cas
+     * (une valeur non guillemetée commence par un caractère de mot) sans
+     * réintroduire le faux positif `onBadge` : le discriminant reste
+     * l'absence d'espace autour du `=`, donc `onBadge = '...'` (espaces des
+     * deux côtés) ne matche toujours pas.
      */
     public function testNoInlineEventHandlerAttributes(): void
     {
         $offenders = [];
-        $pattern = '/\son[a-z]+=["\']/i';
+        $pattern = '/\son[a-z]+=["\'\w]/i';
 
         foreach ($this->templateFiles() as $relative => $path) {
             $html = file_get_contents($path);

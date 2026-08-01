@@ -148,7 +148,35 @@ class CspHeaderSubscriberTest extends TestCase
 
         $csp = $response->headers->get('Content-Security-Policy');
         self::assertStringContainsString("script-src 'self' 'nonce-", $csp);
-        self::assertStringNotContainsString("'unsafe-inline' data:", $csp);
+
+        // Scoped to the script-src directive itself, not the whole header:
+        // style-src legitimately keeps 'unsafe-inline' (see
+        // testStyleSrcKeepsUnsafeInline), so a whole-header substring check
+        // for "'unsafe-inline' data:" would miss a regression where
+        // script-src regains 'unsafe-inline' on its own, without the
+        // trailing "data:" that happened to make the old two-token
+        // substring unique in this header.
+        $scriptSrc = self::directive($csp, 'script-src');
+        self::assertStringNotContainsString("'unsafe-inline'", $scriptSrc);
+        self::assertStringNotContainsString('data:', $scriptSrc);
+    }
+
+    /**
+     * Extract a single directive's value out of a `;`-separated CSP header,
+     * e.g. directive($csp, 'script-src') on
+     * "default-src 'self'; script-src 'self' 'nonce-xyz'; ..." returns
+     * "script-src 'self' 'nonce-xyz'".
+     */
+    private static function directive(string $csp, string $name): string
+    {
+        foreach (explode(';', $csp) as $part) {
+            $part = trim($part);
+            if (str_starts_with($part, $name . ' ')) {
+                return $part;
+            }
+        }
+
+        self::fail(sprintf('directive "%s" not found in CSP header: %s', $name, $csp));
     }
 
     public function testStyleSrcKeepsUnsafeInline(): void
@@ -242,6 +270,23 @@ class CspHeaderSubscriberTest extends TestCase
             "script-src 'self' 'nonce-",
             (string) $response->headers->get('Content-Security-Policy'),
         );
+    }
+
+    public function testTurboStreamResponsesGetNoCspHeaders(): void
+    {
+        // text/vnd.turbo-stream.html documents governsADocument()'s boundary:
+        // a stream response's <script> fragments are activated inside the
+        // *existing* document and run under that document's own policy, not
+        // whatever this response's headers would say. Deliberate, not an
+        // oversight — see governsADocument()'s docblock.
+        $sub = $this->subscriberWithUrls([]);
+        $response = new Response('<turbo-stream></turbo-stream>');
+        $response->headers->set('Content-Type', 'text/vnd.turbo-stream.html; charset=UTF-8');
+
+        $sub->onResponse($this->event($response));
+
+        self::assertFalse($response->headers->has('Content-Security-Policy'));
+        self::assertFalse($response->headers->has('Content-Security-Policy-Report-Only'));
     }
 
     public function testXFrameOptionsSameOriginByDefault(): void
