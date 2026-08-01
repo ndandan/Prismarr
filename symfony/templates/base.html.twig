@@ -107,29 +107,26 @@
       };
     }
 
-    // One place to register a page's setup and its teardown. `init` runs on
-    // the turbo:load of the page instance that registered it; if it returns a
-    // function, that function runs at the next turbo:before-render and its
-    // listener then removes itself.
+    // One place to register a page's setup and its teardown. `init` runs
+    // immediately, at parse time — the same timing `main` has today — so a
+    // page's listeners and timers are live before Turbo fires turbo:load,
+    // which matters on a cached advance visit: Turbo paints the cached
+    // preview and re-executes body scripts well before the fresh network
+    // response lands, and turbo:load only fires once that response arrives.
+    // Deferring init to turbo:load would leave the page inert for that whole
+    // window.
     //
-    // Both halves matter. Turbo re-executes body scripts on EVERY navigation,
-    // so a registration that outlived its own page would stack one extra
-    // `init` per visit — which is the leak this helper exists to close, not a
-    // new one to introduce. Hence the second listener: it drops the turbo:load
-    // registration when the page that made it goes away.
+    // If `init` returns a function, that function runs once at the next
+    // turbo:before-render and its listener then removes itself. On a cached
+    // advance visit `init` legitimately runs twice — once for the preview,
+    // once for the fresh render — with the previous generation's teardown
+    // running in between, so exactly one generation is ever live.
     window.registerPageLifecycle = function (init) {
-      function run() {
-        var teardown = init();
-        if (typeof teardown !== 'function') return;
-        document.addEventListener('turbo:before-render', function cleanup() {
-          document.removeEventListener('turbo:before-render', cleanup);
-          teardown();
-        });
-      }
-      document.addEventListener('turbo:load', run);
-      document.addEventListener('turbo:before-render', function drop() {
-        document.removeEventListener('turbo:before-render', drop);
-        document.removeEventListener('turbo:load', run);
+      var teardown = init();
+      if (typeof teardown !== 'function') return;
+      document.addEventListener('turbo:before-render', function cleanup() {
+        document.removeEventListener('turbo:before-render', cleanup);
+        teardown();
       });
     };
   </script>

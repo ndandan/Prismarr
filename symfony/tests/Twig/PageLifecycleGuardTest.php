@@ -28,6 +28,7 @@ class PageLifecycleGuardTest extends TestCase
      */
     public static function convertedPages(): iterable
     {
+        yield 'base'     => ['base.html.twig'];
         yield 'films'    => ['media/films.html.twig'];
         yield 'series'   => ['media/series.html.twig'];
         yield 'discover' => ['decouverte/index.html.twig'];
@@ -40,6 +41,19 @@ class PageLifecycleGuardTest extends TestCase
             'registerPageLifecycle(',
             file_get_contents(self::TEMPLATE_ROOT . $template),
             sprintf('%s doit passer par le helper partagé', $template),
+        );
+    }
+
+    /**
+     * Verrou de non-régression : le poller de santé de base.html.twig ne doit
+     * plus jamais revenir au pattern qui fuyait (un listener turbo:load
+     * jamais retiré, empilé à chaque navigation).
+     */
+    public function testBaseNoLongerLeaksTheOldTurboLoadHealthPoller(): void
+    {
+        self::assertStringNotContainsString(
+            "'turbo:load', fetchHealth",
+            file_get_contents(self::TEMPLATE_ROOT . 'base.html.twig'),
         );
     }
 }
