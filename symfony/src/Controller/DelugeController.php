@@ -364,7 +364,7 @@ class DelugeController extends AbstractController
             'metadata.azure.net',
         ];
 
-        foreach (preg_split('/[\r\n|]+/', trim($raw)) as $url) {
+        foreach ((preg_split('/[\r\n|]+/', trim($raw)) ?: []) as $url) {
             $url = trim($url);
             if ($url === '') continue;
             if (stripos($url, 'magnet:') === 0) continue;
@@ -420,7 +420,7 @@ class DelugeController extends AbstractController
 
         if (empty($files)) return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.api.no_valid_file')], 400);
 
-        $savepath = $request->request->get('savepath') ?: null;
+        $savepath = $request->request->getString('savepath') ?: null;
         $paused   = $request->request->get('paused') === 'true';
 
         $ok = $this->deluge->addTorrentFromFiles($files, $savepath, $paused);

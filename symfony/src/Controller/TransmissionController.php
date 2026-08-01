@@ -365,7 +365,7 @@ class TransmissionController extends AbstractController
             'metadata.azure.net',
         ];
 
-        foreach (preg_split('/[\r\n|]+/', trim($raw)) as $url) {
+        foreach ((preg_split('/[\r\n|]+/', trim($raw)) ?: []) as $url) {
             $url = trim($url);
             if ($url === '') continue;
             if (stripos($url, 'magnet:') === 0) continue;
@@ -421,7 +421,7 @@ class TransmissionController extends AbstractController
 
         if (empty($files)) return $this->json(['ok' => false, 'error' => $this->translator->trans('transmission.api.no_valid_file')], 400);
 
-        $savepath = $request->request->get('savepath') ?: null;
+        $savepath = $request->request->getString('savepath') ?: null;
         $paused   = $request->request->get('paused') === 'true';
 
         $ok = $this->transmission->addTorrentFromFiles($files, $savepath, $paused);

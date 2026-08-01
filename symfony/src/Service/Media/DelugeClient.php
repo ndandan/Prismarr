@@ -307,7 +307,7 @@ class DelugeClient implements ResetInterface
     {
         $magnets = [];
         $urls = [];
-        foreach (preg_split('/[\r\n|]+/', trim($raw)) as $line) {
+        foreach ((preg_split('/[\r\n|]+/', trim($raw)) ?: []) as $line) {
             $line = trim($line);
             if ($line === '') {
                 continue;
@@ -556,7 +556,7 @@ class DelugeClient implements ResetInterface
             }
         }
 
-        $payload = json_encode(['method' => $method, 'params' => $params, 'id' => ++$this->rpcId]);
+        $payload = (string) json_encode(['method' => $method, 'params' => $params, 'id' => ++$this->rpcId]);
         $resp = $this->httpPost($payload, $cookie);
 
         if ($resp['body'] === false) {
@@ -655,7 +655,7 @@ class DelugeClient implements ResetInterface
             return $this->cookie;
         }
 
-        $payload = json_encode(['method' => 'auth.login', 'params' => [$this->password], 'id' => ++$this->rpcId]);
+        $payload = (string) json_encode(['method' => 'auth.login', 'params' => [$this->password], 'id' => ++$this->rpcId]);
         $resp = $this->httpPost($payload, null);
 
         if ($resp['body'] === false || $resp['code'] === 0) {

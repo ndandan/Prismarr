@@ -1,0 +1,21 @@
+includes:
+    - phpstan-baseline.neon
+    - vendor/phpstan/phpstan-symfony/extension.neon
+
+parameters:
+    level: 7
+    paths:
+        - src
+    excludePaths:
+        analyse:
+            - src/Kernel.php
+    ignoreErrors:
+        # Missing array value types (`array` instead of `array<string, mixed>`).
+        # 812 occurrences, none of them correctness bugs — this is annotation
+        # debt, deliberately deferred to the `declare(strict_types=1)` /
+        # annotation sweep. Ignored rather than baselined on purpose: a
+        # baseline would make every NEW file fail CI for the same debt while
+        # adding no safety, which is exactly the pressure that leads to
+        # regenerating baselines.
+        -
+            identifier: missingType.iterableValue

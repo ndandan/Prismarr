@@ -1996,8 +1996,10 @@ class MediaController extends AbstractController
 
         $series = $this->cache->get('prismarr_search_series_v2', $this->buildSeriesSearchIndex(...));
 
-        // Local filter, case- and accent-insensitive
-        $normalize = fn(string $s) => mb_strtolower(transliterator_transliterate('Any-Latin; Latin-ASCII; Lower()', $s));
+        // Local filter, case- and accent-insensitive. transliterator_transliterate()
+        // returns false on failure; without the fallback the normalized term would
+        // become '' and str_contains() would then match the whole library.
+        $normalize = fn(string $s) => mb_strtolower(transliterator_transliterate('Any-Latin; Latin-ASCII; Lower()', $s) ?: $s);
         $termNorm = $normalize($term);
 
         foreach ($movies as $m) {
