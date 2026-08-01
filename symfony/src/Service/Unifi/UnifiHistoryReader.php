@@ -82,7 +82,7 @@ final class UnifiHistoryReader implements ResetInterface
         ]));
 
         if ($usage === null && $speedtests === null) {
-            $this->logger->debug('UnifiHistoryReader: both report queries returned no data');
+            $this->logger->warning('UnifiHistoryReader: both report queries returned no data');
             return null; // fully unavailable — don't cache, retry next call
         }
 

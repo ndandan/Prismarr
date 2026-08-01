@@ -1156,5 +1156,10 @@ class TautulliClient implements ResetInterface
             'path'    => '/api/v2?cmd=' . $cmd,
             'message' => $message,
         ];
+        $this->logger->warning('Tautulli request failed', [
+            'cmd'     => $cmd,
+            'code'    => $code,
+            'message' => $message,
+        ]);
     }
 }

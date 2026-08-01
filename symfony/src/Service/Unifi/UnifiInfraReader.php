@@ -102,7 +102,7 @@ final class UnifiInfraReader implements ResetInterface
         $networks  = $this->mapNetworks($this->unifi->fetch(self::PATH_NETWORKS));
 
         if ($devices === null && $neighbors === null && $networks === null) {
-            $this->logger->debug('UnifiInfraReader: every endpoint returned no data');
+            $this->logger->warning('UnifiInfraReader: every endpoint returned no data');
             return null; // don't cache — retry next call
         }
 
