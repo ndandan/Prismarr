@@ -68,7 +68,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   var _I18N = {
     delete_confirm: {{ 'media.arr_admin.exclusions.delete_confirm'|trans|json_encode|raw }}

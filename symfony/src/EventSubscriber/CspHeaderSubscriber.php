@@ -4,15 +4,24 @@ namespace App\EventSubscriber;
 
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
+use App\Service\CspNonceGenerator;
 use App\Service\ServiceInstanceProvider;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Sets the Content-Security-Policy + X-Frame-Options headers on every
- * HTML response. (X-Frame-Options used to be a static Caddy header — it
+ * HTML response. The CSP header is skipped on non-HTML responses (JSON
+ * API, binary): a CSP only governs document contexts, and since the nonce
+ * lives in a session attribute, computing one for a JSON response would
+ * start a session on cookieless API traffic — the Docker healthcheck alone
+ * polls /api/health every 30s. X-Frame-Options is still set on every
+ * response: it is not a CSP header and needs no nonce, so gating it would
+ * drop a security header for no benefit.
+ * (X-Frame-Options used to be a static Caddy header — it
  * moved here so the iframe-embedding opt-in below can control both in one
  * place; static assets served straight by Caddy no longer carry it, which
  * is harmless since clickjacking needs an interactive HTML page.)
@@ -52,6 +61,7 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly ConfigService $config,
         private readonly ServiceInstanceProvider $instances,
+        private readonly CspNonceGenerator $nonce,
         // `default::VAR` yields null (not '') when the env is unset, so accept
         // ?string and coalesce in onResponse().
         #[Autowire(env: 'default::PRISMARR_FRAME_ANCESTORS')]
@@ -87,6 +97,16 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             $response->headers->remove('X-Frame-Options');
         }
 
+        // CSP only governs document contexts, so a JSON/binary response gains
+        // nothing from either header. Skipping them is also what keeps the
+        // nonce unread on those responses: the nonce lives in a session
+        // attribute, and reading it starts a session — so the cookieless
+        // Docker healthcheck polling /api/health every 30s would otherwise
+        // leave one orphan session per poll in var/data/sessions.
+        if (!$this->governsADocument($response)) {
+            return;
+        }
+
         if ($response->headers->has('Content-Security-Policy')) {
             return;
         }
@@ -114,12 +134,12 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
         }
         $imgHosts = array_unique($imgHosts);
 
-        $csp = sprintf(
+        $policy = fn(string $scriptSrc): string => sprintf(
             "default-src 'self'; "
             . "img-src 'self' data: blob: %s; "
             . "style-src 'self' 'unsafe-inline' https://rsms.me; "
             . "font-src 'self' https://rsms.me; "
-            . "script-src 'self' 'unsafe-inline' data:; "
+            . "script-src %s; "
             . "connect-src 'self'; "
             . "frame-src https://www.youtube.com https://www.youtube-nocookie.com; "
             . "frame-ancestors %s; "
@@ -127,10 +147,37 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             . "form-action 'self'; "
             . "object-src 'none'",
             implode(' ', $imgHosts),
+            $scriptSrc,
             $frameAncestors,
         );
 
-        $response->headers->set('Content-Security-Policy', $csp);
+        // script-src carries a session-stable nonce instead of 'unsafe-inline':
+        // an injected <script> or on*= attribute cannot execute, which is the
+        // structural fix for the XSS class Phase 1 patched sink-by-sink.
+        // style-src keeps 'unsafe-inline' deliberately — inline style= is
+        // pervasive here and style injection cannot execute script.
+        $response->headers->set(
+            'Content-Security-Policy',
+            $policy("'self' 'nonce-" . $this->nonce->get() . "'"),
+        );
+    }
+
+    /**
+     * Whether this response is an HTML document, i.e. something a CSP can
+     * actually govern.
+     *
+     * A missing Content-Type counts as HTML: Response::prepare() fills in
+     * text/html when nothing set one, and this subscriber can also see
+     * responses built by hand in tests. Turbo Stream responses
+     * (text/vnd.turbo-stream.html) deliberately do not match — their scripts
+     * are activated inside the existing document and are governed by *that*
+     * document's policy, not by the stream response's headers.
+     */
+    private function governsADocument(Response $response): bool
+    {
+        $type = $response->headers->get('Content-Type');
+
+        return $type === null || $type === '' || str_starts_with(strtolower($type), 'text/html');
     }
 
     /**

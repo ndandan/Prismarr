@@ -109,7 +109,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var I18N = {
     launched: {{ 'media.films_cutoff.launched'|trans|json_encode|raw }},

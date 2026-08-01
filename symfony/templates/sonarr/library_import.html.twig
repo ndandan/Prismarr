@@ -117,7 +117,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   var _I18N = {
     btn_scan: {{ 'media.arr_admin.library_import.btn_scan'|trans|json_encode|raw }},

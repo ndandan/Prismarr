@@ -280,7 +280,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     // ── Run job ──
     document.querySelectorAll('.js-run-job').forEach(function(btn){

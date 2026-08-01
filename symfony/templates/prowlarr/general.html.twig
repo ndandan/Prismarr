@@ -176,7 +176,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
     var _I18N = {
         saveBtn: {{ 'prowlarr.general.save_btn'|trans|json_encode|raw }},

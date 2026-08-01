@@ -126,7 +126,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var BL_I18N = {
     confirm_delete: {{ 'media.films_blocklist.confirm_delete'|trans|json_encode|raw }},

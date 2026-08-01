@@ -117,7 +117,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var _I18N = {
   bulk_confirm_tpl: {{ 'media.arr_admin.exclusions.bulk_confirm_tpl'|trans({count: '__COUNT__'})|json_encode|raw }},

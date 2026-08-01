@@ -184,7 +184,7 @@
       </div>
       <button class="btn btn-ghost-primary btn-icon btn-sm btn-search-season ms-auto"
               data-series-id="{{ serie.id }}" data-season="{{ seasonNum }}"
-              onclick="event.stopPropagation();" title="{{ 'media.series_detail.season.search_season'|trans }}">
+              title="{{ 'media.series_detail.season.search_season'|trans }}">
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
       </button>
     </div>
@@ -217,7 +217,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var SD_I18N = {
     search_launched: {{ 'media.series_detail.feedback.search_launched'|trans|json_encode|raw }},
@@ -301,7 +301,8 @@
 
   // ── Rechercher une saison ─────────────────────────────────────────
   document.querySelectorAll('.btn-search-season').forEach(function(btn) {
-    btn.addEventListener('click', function() {
+    btn.addEventListener('click', function(e) {
+      e.stopPropagation();
       var seriesId = btn.dataset.seriesId;
       var season = btn.dataset.season;
       btn.disabled = true;

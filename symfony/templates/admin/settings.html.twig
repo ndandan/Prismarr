@@ -1043,7 +1043,7 @@
               <form action="{{ path('admin_settings_import') }}" method="post" enctype="multipart/form-data" class="d-flex gap-2 align-items-center">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('admin_settings_import') }}">
                 <input type="file" name="config" accept="application/json,.json" class="form-control form-control-sm" required>
-                <button type="submit" class="btn btn-sm btn-primary" onclick="return confirm('{{ 'admin.backup.import.confirm'|trans|e('js') }}')">{{ 'admin.backup.import.cta'|trans }}</button>
+                <button type="submit" class="btn btn-sm btn-primary" id="btn-backup-import">{{ 'admin.backup.import.cta'|trans }}</button>
               </form>
             </div>
 
@@ -1063,8 +1063,7 @@
               </div>
               <form action="{{ path('admin_settings_reset_display') }}" method="post">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token('admin_settings_reset_display') }}">
-                <button type="submit" class="btn btn-sm btn-outline-danger"
-                        onclick="return confirm('{{ 'admin.backup.reset.confirm'|trans|e('js') }}')">
+                <button type="submit" class="btn btn-sm btn-outline-danger" id="btn-backup-reset">
                   {{ 'admin.backup.reset.cta'|trans }}
                 </button>
               </form>
@@ -1251,7 +1250,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     (function () {
       // Turbo-safe: IIFE + var + .then()
 
@@ -1263,6 +1262,20 @@
           input.type = input.type === 'password' ? 'text' : 'password';
         };
       });
+
+      // ── Backup import/reset confirmations (moved off onclick= for CSP) ──
+      var btnBackupImport = document.getElementById('btn-backup-import');
+      if (btnBackupImport) {
+        btnBackupImport.addEventListener('click', function (e) {
+          if (!confirm('{{ 'admin.backup.import.confirm'|trans|e('js') }}')) e.preventDefault();
+        });
+      }
+      var btnBackupReset = document.getElementById('btn-backup-reset');
+      if (btnBackupReset) {
+        btnBackupReset.addEventListener('click', function (e) {
+          if (!confirm('{{ 'admin.backup.reset.confirm'|trans|e('js') }}')) e.preventDefault();
+        });
+      }
 
       // ── Clear field (issue #10 — qBit user/password trash button) ──
       // Wipes the visible input AND raises the hidden _clear_<key>=1
@@ -1569,7 +1582,7 @@
       activate(initial);
     })();
   </script>
-  <script>
+  <script nonce="{{ csp_nonce() }}">
 (function () {
   function initDashboardLayoutSort() {
     var list = document.getElementById('dashboard-layout-list');

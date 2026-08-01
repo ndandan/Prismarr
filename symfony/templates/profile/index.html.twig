@@ -141,14 +141,14 @@
           <label class="avatar-upload-btn">
             <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M17 21h-10a2 2 0 0 1 -2 -2v-14a2 2 0 0 1 2 -2h7l5 5v11a2 2 0 0 1 -2 2z"/><path d="M12 17v-6"/><path d="M9.5 13.5l2.5 -2.5l2.5 2.5"/></svg>
             {{ 'profile.avatar.upload_button'|trans }}
-            <input type="file" name="avatar" accept="image/jpeg,image/png,image/webp,image/gif" onchange="this.form.submit()">
+            <input type="file" name="avatar" id="profile-avatar-input" accept="image/jpeg,image/png,image/webp,image/gif">
           </label>
         </form>
 
         {% if user.avatarPath %}
           <form action="{{ path('app_profile_avatar_delete') }}" method="post" style="margin-top: .5rem;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token('profile_avatar') }}">
-            <button type="submit" class="avatar-delete-btn" onclick="return confirm('{{ 'profile.avatar.delete_confirm'|trans|e('js') }}')">{{ 'profile.avatar.delete'|trans }}</button>
+            <button type="submit" class="avatar-delete-btn" id="profile-avatar-delete-btn">{{ 'profile.avatar.delete'|trans }}</button>
           </form>
         {% endif %}
 
@@ -288,4 +288,24 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block javascripts %}
+<script nonce="{{ csp_nonce() }}">
+  // Avatar upload/delete handlers (moved off onchange=/onclick= for CSP)
+  (function () {
+    var avatarInput = document.getElementById('profile-avatar-input');
+    if (avatarInput) {
+      avatarInput.addEventListener('change', function () {
+        this.form.submit();
+      });
+    }
+    var avatarDeleteBtn = document.getElementById('profile-avatar-delete-btn');
+    if (avatarDeleteBtn) {
+      avatarDeleteBtn.addEventListener('click', function (e) {
+        if (!confirm('{{ 'profile.avatar.delete_confirm'|trans|e('js') }}')) e.preventDefault();
+      });
+    }
+  })();
+</script>
 {% endblock %}

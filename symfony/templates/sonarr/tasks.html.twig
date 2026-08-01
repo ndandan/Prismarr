@@ -47,7 +47,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var I18N = {
   launchedTpl: {{ 'media.arr_admin.tasks.launched_tpl'|trans({name: '__NAME__'})|json_encode|raw }},

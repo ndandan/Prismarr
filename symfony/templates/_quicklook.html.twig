@@ -93,7 +93,7 @@
 
 {% include 'dashboard/_quicklook_modal.html.twig' with {} only %}
 
-<script>
+<script nonce="{{ csp_nonce() }}">
   (function () {
     // ── Quick-look modal: delegated open + fetch + manual show/hide.
     // Tiles carry [data-ql-trigger] + data-ql-source/type/slug/id and keep

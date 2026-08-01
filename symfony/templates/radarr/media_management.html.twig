@@ -217,7 +217,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var I18N = {
     save: {{ 'media.arr_admin.media_management.save'|trans|json_encode|raw }},

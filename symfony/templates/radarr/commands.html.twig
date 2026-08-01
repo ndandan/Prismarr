@@ -110,7 +110,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var I18N = {
   confirmCancelTpl: {{ 'media.arr_admin.commands.confirm_cancel_tpl'|trans({id: '__ID__'})|json_encode|raw }},

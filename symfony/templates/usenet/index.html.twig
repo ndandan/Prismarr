@@ -346,7 +346,7 @@ body[data-bs-theme="dark"] .usenet-tmini { background:rgba(255,255,255,.08); }
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var root = document.querySelector('[data-usenet-client]');
   if (!root) return;

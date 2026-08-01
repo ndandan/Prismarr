@@ -23,7 +23,7 @@
     <form method="post" action="{{ path('app_setup_locale') }}" class="welcome-locale-form" data-locale-form>
       <input type="hidden" name="_csrf_token" value="{{ csrf_token('setup_locale') }}"/>
       <label for="setup-locale-select">{{ 'setup.step.welcome.language_label'|trans }}</label>
-      <select id="setup-locale-select" name="locale" class="form-select form-select-sm w-auto" onchange="this.form.submit()">
+      <select id="setup-locale-select" name="locale" class="form-select form-select-sm w-auto">
         {% for code in supported_locales %}
           <option value="{{ code }}" {% if code == current_locale %}selected{% endif %}>
             {{ ('setup.step.welcome.language.' ~ code)|trans }}
@@ -67,4 +67,18 @@
       {{ 'setup.step.welcome.cta'|trans }}
     </a>
   </div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce() }}">
+  // Locale select auto-submit (moved off onchange= for CSP)
+  (function () {
+    var localeSelect = document.getElementById('setup-locale-select');
+    if (localeSelect) {
+      localeSelect.addEventListener('change', function () {
+        this.form.submit();
+      });
+    }
+  })();
+</script>
 {% endblock %}

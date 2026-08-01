@@ -169,7 +169,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var _I18N = {
     modal_title_new: {{ 'media.arr_admin.auto_tags.modal_title_new'|trans|json_encode|raw }},

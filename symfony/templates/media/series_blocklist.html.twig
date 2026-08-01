@@ -78,7 +78,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   var SB_I18N = {
     bulk_delete_tpl: {{ 'media.series_blocklist.bulk_delete_tpl'|trans({count: '__COUNT__'})|json_encode|raw }},

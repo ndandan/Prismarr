@@ -145,7 +145,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var FM_I18N = {
     searching: {{ 'media.films_missing.searching'|trans|json_encode|raw }},

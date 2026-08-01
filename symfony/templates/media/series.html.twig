@@ -1031,7 +1031,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   /* ══════════════════════════════════════════════════════════════════════════
      i18n injection (FR source of truth ; locale bascule via ?_locale=en)
@@ -1364,12 +1364,25 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     if (shelfView) shelfView.classList.add('library-loading');
   }
   if (filterForm) filterForm.addEventListener('submit', markLibraryLoading);
-  document.addEventListener('click', function(e) {
+  // Capture-phase document listeners: bound per page instance and removed on
+  // the way out, because Turbo re-runs this script on every visit and an
+  // un-removed document listener stacks one copy per visit. filterForm's own
+  // listener just above needs no teardown — it lives on an element inside
+  // <body>, which Turbo throws away wholesale.
+  function markLoadingOnPageLink(e) {
     if (e.target.closest('.library-pagination-card a.page-link')) markLibraryLoading();
-  }, true);
-  document.addEventListener('submit', function(e) {
+  }
+  function markLoadingOnPageForm(e) {
     if (e.target.closest('.library-pagination-card')) markLibraryLoading();
-  }, true);
+  }
+  window.registerPageLifecycle(function () {
+    document.addEventListener('click', markLoadingOnPageLink, true);
+    document.addEventListener('submit', markLoadingOnPageForm, true);
+    return function () {
+      document.removeEventListener('click', markLoadingOnPageLink, true);
+      document.removeEventListener('submit', markLoadingOnPageForm, true);
+    };
+  });
 
   // Build a query string from the form so the bulk-filtered endpoints can
   // re-apply the same filter server-side.
@@ -2196,16 +2209,24 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
 
   // Initial render from server data
   renderQueue({{ queue|json_encode|raw }});
-  // Auto-refresh queue every 3s
-  setInterval(refreshQueue, 2000);
-  // RefreshMonitoredDownloads every 8s (tells Sonarr to check qBittorrent)
-  setInterval(function() {
-    fetch('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/queue/refresh', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-      body: '{}',
-    });
-  }, 6000);
+  // Auto-refresh queue every 3s, plus RefreshMonitoredDownloads every 8s
+  // (tells Sonarr to check qBittorrent). Both are torn down on navigation —
+  // the second one POSTs, so left running it kept writing to Sonarr from a
+  // page the user had already left.
+  window.registerPageLifecycle(function () {
+    var queueTimer = setInterval(refreshQueue, 2000);
+    var monitoredTimer = setInterval(function() {
+      fetch('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/queue/refresh', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: '{}',
+      });
+    }, 6000);
+    return function () {
+      clearInterval(queueTimer);
+      clearInterval(monitoredTimer);
+    };
+  });
 
   // ── Modal ──────────────────────────────────────────────────────────────────
   var currentId        = null;
@@ -2336,13 +2357,13 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
         html += '<div class="card-header d-flex align-items-center gap-2 px-3 py-2 season-toggle" data-sn="' + sn + '" style="cursor:pointer;background:rgba(0,0,0,.15);border-bottom:1px solid var(--tblr-border-color);' + (sn === 0 ? 'opacity:.6;' : '') + '">';
         // Monitor toggle
         var monDisabled = !currentMonitored ? ' disabled style="flex-shrink:0;opacity:.3;pointer-events:none;"' : ' style="flex-shrink:0;"';
-        html += '<button class="btn btn-ghost-secondary btn-icon btn-sm btn-season-monitor" data-series-id="' + currentId + '" data-season="' + sn + '" data-monitored="' + (seasonMonitored ? '1' : '0') + '" onclick="event.stopPropagation();" title="' + esc(seasonMonitored ? SERIES_I18N.d_unmonitor : SERIES_I18N.d_monitor) + '"' + monDisabled + '>' + (seasonMonitored ? SVG_MONITOR_ON : SVG_MONITOR_OFF) + '</button>';
+        html += '<button class="btn btn-ghost-secondary btn-icon btn-sm btn-season-monitor" data-series-id="' + currentId + '" data-season="' + sn + '" data-monitored="' + (seasonMonitored ? '1' : '0') + '" title="' + esc(seasonMonitored ? SERIES_I18N.d_unmonitor : SERIES_I18N.d_monitor) + '"' + monDisabled + '>' + (seasonMonitored ? SVG_MONITOR_ON : SVG_MONITOR_OFF) + '</button>';
         html += '<svg class="s-chev' + (isFirst ? ' open' : '') + '" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="transition:transform .2s;flex-shrink:0;' + (isFirst ? 'transform:rotate(90deg);' : '') + '"><path d="m9 18 6-6-6-6"/></svg>';
         html += '<span class="fw-medium" style="min-width:90px;">' + (sn === 0 ? esc(SERIES_I18N.d_season_specials) : esc(tpl(SERIES_I18N.d_season_tpl, { N: sn }))) + '</span>';
         html += '<div style="flex:1;max-width:200px;height:5px;border-radius:3px;background:rgba(255,255,255,.1);overflow:hidden;"><div style="height:100%;width:' + sPct + '%;background:' + (sPct === 100 ? '#22c55e' : '#6366f1') + ';border-radius:3px;"></div></div>';
         html += '<span class="text-muted" style="font-size:.78rem;min-width:60px;">' + files + '/' + total + '</span>';
         // Season actions
-        html += '<div class="ms-auto d-flex gap-1" onclick="event.stopPropagation();">';
+        html += '<div class="ms-auto d-flex gap-1">';
         html += '<button class="btn btn-ghost-primary btn-icon btn-sm btn-search-season-modal" data-series-id="' + currentId + '" data-season="' + sn + '" title="' + esc(SERIES_I18N.d_search_season_title) + '">' + SVG_SEARCH_SM + '</button>';
         html += '<button class="btn btn-ghost-secondary btn-icon btn-sm btn-season-interactive" data-series-id="' + currentId + '" data-season="' + sn + '" title="' + esc(SERIES_I18N.d_season_interactive_search) + '">' + SVG_INTERACTIVE + '</button>';
         html += '<button class="btn btn-ghost-secondary btn-icon btn-sm btn-season-files" data-series-id="' + currentId + '" data-season="' + sn + '" title="' + esc(SERIES_I18N.d_manage_files) + '">' + SVG_FILES + '</button>';
@@ -2886,7 +2907,10 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     }).catch(function(){});
   }
   refreshSeriesWarnings();
-  setInterval(refreshSeriesWarnings, 10000);
+  window.registerPageLifecycle(function () {
+    var warningsTimer = setInterval(refreshSeriesWarnings, 10000);
+    return function () { clearInterval(warningsTimer); };
+  });
 
   // Check for active commands on page load (only user-initiated ones)
   var POLL_COMMANDS = {'SeriesSearch':1,'SeasonSearch':1,'EpisodeSearch':1,'RenameFiles':1,'MissingEpisodeSearch':1};

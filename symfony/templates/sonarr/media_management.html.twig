@@ -135,7 +135,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   var I18N = {
     namingSaved: {{ 'media.arr_admin.media_management.naming_saved'|trans|json_encode|raw }},

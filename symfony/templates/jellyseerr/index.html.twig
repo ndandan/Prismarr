@@ -126,6 +126,12 @@
 
 /* Stats */
 .js-stat { font-size:1.5rem; font-weight:700; line-height:1; }
+
+/* Edit-modal requester option row (moved off onmouseover/onmouseout for CSP —
+   the current-user row gets the same background permanently via .is-current,
+   so :hover alone reproduces the old JS toggle for every row). */
+.js-user-option:hover { background:rgba(162,89,255,.1); }
+.js-user-option.is-current { background:rgba(162,89,255,.1); }
 </style>
 {% endblock %}
 
@@ -377,7 +383,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
     var _I18N = {
         movie: {{ 'jellyseerr.common.movie'|trans|json_encode|raw }},
@@ -805,7 +811,7 @@
                 users.forEach(function(u){
                     var name = u.displayName || u.jellyfinUsername || u.email || ('User #' + u.id);
                     var avatar = u.avatar ? '{{ service_url }}' + u.avatar : '';
-                    html += '<div class="js-user-option d-flex align-items-center gap-2" data-id="' + u.id + '" data-name="' + esc(name) + '" data-avatar="' + escCssUrl(avatar) + '" style="cursor:pointer;padding:.4rem .75rem;transition:background .1s;' + (u.id === currentUserId ? 'background:rgba(162,89,255,.1);' : '') + '" onmouseover="this.style.background=\'rgba(162,89,255,.1)\'" onmouseout="this.style.background=\'' + (u.id === currentUserId ? 'rgba(162,89,255,.1)' : 'transparent') + '\'">';
+                    html += '<div class="js-user-option d-flex align-items-center gap-2' + (u.id === currentUserId ? ' is-current' : '') + '" data-id="' + u.id + '" data-name="' + esc(name) + '" data-avatar="' + escCssUrl(avatar) + '" style="cursor:pointer;padding:.4rem .75rem;transition:background .1s;">';
                     if (avatar) {
                         html += '<span class="avatar avatar-xs" style="width:22px;height:22px;background-image:url(\'' + escCssUrl(avatar) + '\');flex-shrink:0;"></span>';
                     } else {

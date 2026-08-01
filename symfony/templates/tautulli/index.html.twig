@@ -185,7 +185,7 @@
 {% block javascripts %}
 {{ parent() }}
 <script src="{{ asset('static/chart/chart.umd.min.js') }}"></script>
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var HISTORY_PAGE = 25;
   var state = { range: 30, metric: 'plays', userId: '' };

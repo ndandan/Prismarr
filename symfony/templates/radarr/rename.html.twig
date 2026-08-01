@@ -73,7 +73,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
 var _I18N = {
   select_movie_hint: {{ 'media.arr_admin.rename.select_movie_hint'|trans|json_encode|raw }},

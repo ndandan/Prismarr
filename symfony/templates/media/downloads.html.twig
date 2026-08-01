@@ -163,7 +163,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
   var cards     = Array.from(document.querySelectorAll('.torrent-card'));
   var filterBtns = Array.from(document.querySelectorAll('.filter-btn'));

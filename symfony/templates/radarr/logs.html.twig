@@ -99,7 +99,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var search = document.getElementById('log-search');
   var levelFilter = document.getElementById('log-level-filter');

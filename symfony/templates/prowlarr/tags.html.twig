@@ -96,7 +96,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function () {
     var _I18N = {
         created: {{ 'prowlarr.tags.feedback_created'|trans|json_encode|raw }},

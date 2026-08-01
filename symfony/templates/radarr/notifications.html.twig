@@ -112,7 +112,7 @@
 {% endblock %}
 
 {% block javascripts %}
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function(){
   var I18N = {
     error_test: {{ 'media.arr_admin.notifications.error_test'|trans|json_encode|raw }},

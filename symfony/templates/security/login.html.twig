@@ -9,7 +9,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('img/prismarr/favicon-192.png') }}"/>
   <link rel="apple-touch-icon" href="{{ asset('img/prismarr/prismarr-icon-512.png') }}"/>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     (function () {
       var t = localStorage.getItem('tablerTheme') || 'dark';
       document.documentElement.setAttribute('data-bs-theme', t);
@@ -283,7 +283,7 @@
     </div>
   </div>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     document.getElementById('toggle-password').addEventListener('click', function(e) {
       e.preventDefault();
       var input = document.getElementById('password');

@@ -251,7 +251,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce() }}">
 (function() {
   var grid = document.getElementById('wl-grid');
   var cards = grid ? Array.from(grid.querySelectorAll('.wl-card')) : [];

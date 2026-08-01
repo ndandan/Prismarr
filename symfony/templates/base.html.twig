@@ -2,6 +2,10 @@
 <!doctype html>
 <html lang="{{ app.request.locale|default('fr') }}" data-bs-theme="{{ theme().light ? 'light' : 'dark' }}">
 <head>
+  {# Turbo reads this to nonce the scripts it re-injects during navigation.
+     Without it the app works on a hard refresh and silently loses its
+     scripts on every in-app link click. #}
+  <meta name="csp-nonce" content="{{ csp_nonce() }}">
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
@@ -11,7 +15,7 @@
   <link rel="icon" type="image/png" sizes="192x192" href="{{ asset('img/prismarr/favicon-192.png') }}"/>
   <link rel="apple-touch-icon" href="{{ asset('img/prismarr/prismarr-icon-512.png') }}"/>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Pre-apply sidebar-collapsed state from localStorage before the body
     // renders, so users don't see a flash of the expanded sidebar on every
     // page load when they've chosen to keep it collapsed.
@@ -34,7 +38,7 @@
   {% set _radarr_default = service_instances('radarr')|first %}
   {% set _sonarr_default = service_instances('sonarr')|first %}
   {% set _slug = app.request.attributes.get('slug') ?: '' %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     var INSTANCE_SLUG = {{ _slug|json_encode|raw }};
     var DEFAULT_RADARR_SLUG = {{ (_radarr_default ? _radarr_default.slug : 'radarr-1')|json_encode|raw }};
     var DEFAULT_SONARR_SLUG = {{ (_sonarr_default ? _sonarr_default.slug : 'sonarr-1')|json_encode|raw }};
@@ -102,6 +106,29 @@
           .replace(/'/g, '&#39;');
       };
     }
+
+    // One place to register a page's setup and its teardown. `init` runs
+    // immediately, at parse time — the same timing `main` has today — so a
+    // page's listeners and timers are live before Turbo fires turbo:load,
+    // which matters on a cached advance visit: Turbo paints the cached
+    // preview and re-executes body scripts well before the fresh network
+    // response lands, and turbo:load only fires once that response arrives.
+    // Deferring init to turbo:load would leave the page inert for that whole
+    // window.
+    //
+    // If `init` returns a function, that function runs once at the next
+    // turbo:before-render and its listener then removes itself. On a cached
+    // advance visit `init` legitimately runs twice — once for the preview,
+    // once for the fresh render — with the previous generation's teardown
+    // running in between, so exactly one generation is ever live.
+    window.registerPageLifecycle = function (init) {
+      var teardown = init();
+      if (typeof teardown !== 'function') return;
+      document.addEventListener('turbo:before-render', function cleanup() {
+        document.removeEventListener('turbo:before-render', cleanup);
+        teardown();
+      });
+    };
   </script>
 
   {% block head_meta %}{% endblock %}
@@ -253,7 +280,7 @@
   </style>
 
   {# Modal and backdrop cleanup — in <head> to survive Turbo navigations #}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Backdrop and modal cleanup
     (function() {
       // Before each modal opens: clean up extra backdrops
@@ -290,6 +317,15 @@
 
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler.min.css') }}"/>
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler-themes.min.css') }}"/>
+
+  {# Was previously pulled in via `import './styles/app.css'` in assets/app.js,
+     which the importmap loader injected AFTER these two static links — kept
+     here, in the same position, so the cascade order is unchanged. It can no
+     longer be a JS import: under the enforcing script-src CSP, AssetMapper
+     turns a CSS import into a `data:application/javascript,` stub module,
+     which the browser refuses to load and which aborts the whole `app`
+     module graph (see CspNonceGuardTest). #}
+  <link rel="stylesheet" href="{{ asset('styles/app.css') }}"/>
 
   {# Library filter memory: loaded once in <head> so Turbo runs it a single
      time; it binds its own turbo:load/DOMContentLoaded listeners. #}
@@ -747,7 +783,7 @@
   </style>
 
   {% block stylesheets %}{% endblock %}
-  {{ importmap('app') }}
+  {{ importmap('app', {'nonce': csp_nonce()}) }}
 </head>
 <body class="density-{{ display_pref('ui_density') }} toasts-{{ display_pref('toasts') ? 'on' : 'off' }}">
 
@@ -1492,7 +1528,7 @@
   {# Strings translated server-side and exposed to inline JS. Keep this block
      small — only the strings JS actually renders dynamically (the rest lives
      in the Twig markup directly). #}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     {# Slug vars are now declared in <head> (above) so block body scripts
        can reference them during their initial IIFE. _i18n stays here
        because it's only consumed inside callbacks, not at parse time. #}
@@ -1541,7 +1577,7 @@
   </script>
 
   {% block javascripts %}{% endblock %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     function initAutohide() {
       document.querySelectorAll('.js-autohide').forEach(function (el) {
@@ -2281,7 +2317,7 @@
   })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   /* ── Collapse sidebar custom (indépendant de Bootstrap/Turbo) ── */
   (function () {
     function syncCollapses() {
@@ -2313,7 +2349,7 @@
   })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   /* ── Vidéos autoplay après navigation Turbo ou retour d'onglet ── */
   (function () {
     function resumeVideos() {
@@ -2334,7 +2370,7 @@
   })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   /* ══════════════════════════════════════════════════════════════════
      Phase 4 — UI Improvements
      ══════════════════════════════════════════════════════════════════ */
@@ -2418,7 +2454,7 @@
      or route starts with 'prowlarr_'
      or route starts with 'jellyseerr_'
      or route starts with 'tmdb_') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var QBT_POLL_URL = '{{ path('app_qbittorrent_api_poll_summary') }}';
     {# User preference drives the polling cadence — 0 disables qBit polling entirely. #}
@@ -2581,7 +2617,7 @@
      or route starts with 'prowlarr_'
      or route starts with 'jellyseerr_'
      or route starts with 'tmdb_') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var DELUGE_POLL_URL = '{{ path('app_deluge_api_poll_summary') }}';
     {# User preference drives the polling cadence — 0 disables Deluge polling entirely. #}
@@ -2743,7 +2779,7 @@
      or route starts with 'prowlarr_'
      or route starts with 'jellyseerr_'
      or route starts with 'tmdb_') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var TRANSMISSION_POLL_URL = '{{ path('app_transmission_api_poll_summary') }}';
     {# User preference drives the polling cadence — 0 disables Transmission polling entirely. #}
@@ -2908,7 +2944,7 @@
      through its route-guard redirect.
      ══════════════════════════════════════════════════════════════════════════ #}
   {% if service_configured('jellyseerr') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     // No sidebar (login / setup) → no badge → don't poke Jellyseerr.
     if (!document.getElementById('sidebar-seerr-badge')) return;
@@ -2974,7 +3010,7 @@
      disabled service every 30s).
      ══════════════════════════════════════════════════════════════════════════ #}
   {% if service_visible_in_sidebar('tautulli') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     var pill = document.getElementById('sidebar-plex-pill');
     if (!pill) return;
@@ -2997,9 +3033,15 @@
         })
         .catch(function () { pill.style.display = 'none'; });
     }
-    tick();
-    if (window._plexPillTimer) { clearInterval(window._plexPillTimer); }
-    window._plexPillTimer = setInterval(tick, INTERVAL);
+    window.registerPageLifecycle(function () {
+      tick();
+      if (window._plexPillTimer) { clearInterval(window._plexPillTimer); }
+      window._plexPillTimer = setInterval(tick, INTERVAL);
+      return function () {
+        clearInterval(window._plexPillTimer);
+        window._plexPillTimer = null;
+      };
+    });
   })();
   </script>
   {% endif %}
@@ -3010,7 +3052,7 @@
      hides itself at zero and backs off when the client is unreachable.
      ══════════════════════════════════════════════════════════════════════════ #}
   {% if service_configured('sabnzbd') or service_configured('nzbget') %}
-  <script>
+  <script nonce="{{ csp_nonce() }}">
   (function () {
     // Turbo-safe singleton: one poll loop for the whole session. Re-running
     // this script on every navigation must NOT spawn a fresh poll (that would
@@ -3055,7 +3097,7 @@
   </script>
   {% endif %}
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Topbar health indicator — lazy-loaded state + auto-refresh 60s.
     (function () {
       var dot   = document.getElementById('topbar-health-dot');
@@ -3109,16 +3151,22 @@
           .catch(function () {});
       }
 
-      fetchHealth();
-      // Auto refresh every 60s — HealthService already caches 10s server-side.
-      if (!window._prismarrHealthTimer) {
+      // One refresh per page instance, then auto refresh every 60s —
+      // HealthService already caches 10s server-side. The interval is torn
+      // down on navigation instead of being kept as a session-long singleton,
+      // so it can never outlive the topbar it writes into.
+      window.registerPageLifecycle(function () {
+        fetchHealth();
         window._prismarrHealthTimer = setInterval(fetchHealth, 60000);
-      }
-      document.addEventListener('turbo:load', fetchHealth);
+        return function () {
+          clearInterval(window._prismarrHealthTimer);
+          window._prismarrHealthTimer = null;
+        };
+      });
     })();
   </script>
 
-  <script>
+  <script nonce="{{ csp_nonce() }}">
     // Sidebar collapsible toggle + tooltip setup (Turbo-safe).
     // - Click on #sidebar-toggle-btn → toggle `html.sidebar-collapsed` + persist
     // - On load/after Turbo nav: copy .nav-link-title → data-tooltip on each
