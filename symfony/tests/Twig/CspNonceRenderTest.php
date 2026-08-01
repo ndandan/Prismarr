@@ -20,6 +20,7 @@ use App\Tests\AbstractWebTestCase;
  *    recopié tel quel dans le *corps* du script de chargement du polyfill
  *    es-module-shims, que Turbo ne peut pas neutraliser avant de comparer
  *    les signatures de <head>, donc chaque navigation devenait un reload.
+ *  - une réponse JSON ne reçoit aucune CSP et ne démarre aucune session.
  */
 class CspNonceRenderTest extends AbstractWebTestCase
 {
@@ -71,6 +72,25 @@ class CspNonceRenderTest extends AbstractWebTestCase
         $other = $this->metaNonce($this->client->getResponse()->getContent());
 
         self::assertNotSame($first, $other, 'a nonce shared by every session is a fixed public value');
+    }
+
+    public function testAnAnonymousJsonEndpointServesNoCspAndStartsNoSession(): void
+    {
+        // Le healthcheck Docker interroge /api/health toutes les 30 s, sans
+        // cookie (`curl -fsS`). Le nonce vit dans un attribut de session et
+        // le lire démarre la session : sans le filtrage HTML, chaque sondage
+        // laisserait une session orpheline dans var/data/sessions (le seul
+        // volume monté en production).
+        self::ensureKernelShutdown();
+        $client = static::createClient();
+
+        $client->request('GET', '/api/health');
+        $response = $client->getResponse();
+
+        self::assertSame(200, $response->getStatusCode());
+        self::assertSame([], $response->headers->all('set-cookie'), 'no session may be started');
+        self::assertFalse($response->headers->has('Content-Security-Policy'));
+        self::assertFalse($response->headers->has('Content-Security-Policy-Report-Only'));
     }
 
     private function metaNonce(string $html): string

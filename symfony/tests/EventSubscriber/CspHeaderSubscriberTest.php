@@ -9,9 +9,12 @@ use App\Service\CspNonceGenerator;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
+use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\RequestStack;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpFoundation\Session\Session;
+use Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\HttpKernelInterface;
 
@@ -157,6 +160,79 @@ class CspHeaderSubscriberTest extends TestCase
         self::assertStringContainsString(
             "script-src 'self' 'unsafe-inline' data:",
             $response->headers->get('Content-Security-Policy'),
+        );
+    }
+
+    public function testNonHtmlResponsesGetNoCspHeadersAtAll(): void
+    {
+        // CSP only governs document contexts, so a JSON API response has
+        // nothing to gain from it — and computing the nonce for one is what
+        // used to start a session (see the next test).
+        $sub = $this->subscriberWithUrls([]);
+        $response = new JsonResponse(['status' => 'ok']);
+        $sub->onResponse($this->event($response));
+
+        self::assertFalse($response->headers->has('Content-Security-Policy'));
+        self::assertFalse($response->headers->has('Content-Security-Policy-Report-Only'));
+        // X-Frame-Options is not a CSP header and costs no nonce, so it stays
+        // exactly as it was before the gate — no security header is lost.
+        self::assertSame('SAMEORIGIN', $response->headers->get('X-Frame-Options'));
+    }
+
+    public function testAJsonResponseNeverTouchesTheSessionToMintANonce(): void
+    {
+        // The point of the gate. The nonce lives in a session attribute, and
+        // reading it starts the session; the Docker healthcheck polls the
+        // JSON /api/health every 30s without a cookie, so an ungated read
+        // left one orphan session behind per poll.
+        $session = new Session(new MockArraySessionStorage());
+        $request = new Request();
+        $request->setSession($session);
+
+        $stack = new RequestStack();
+        $stack->push($request);
+
+        $sub = new CspHeaderSubscriber(
+            $this->createMock(ConfigService::class),
+            $this->createMock(ServiceInstanceProvider::class),
+            new CspNonceGenerator($stack),
+        );
+
+        $sub->onResponse($this->event(new JsonResponse(['status' => 'ok'])));
+
+        // Order matters: has() would start the session itself, so assert
+        // isStarted() first.
+        self::assertFalse($session->isStarted(), 'a JSON response must not start a session');
+        self::assertFalse($session->has('_csp_nonce'));
+    }
+
+    public function testAResponseWithoutAContentTypeIsTreatedAsHtml(): void
+    {
+        // Symfony's Response defaults to text/html, and our own subscriber
+        // runs after ResponseListener::prepare() — but a bare Response (what
+        // most cases in this class build) must still get the full policy.
+        $sub = $this->subscriberWithUrls([]);
+        $response = new Response('<html></html>');
+        self::assertNull($response->headers->get('Content-Type'));
+
+        $sub->onResponse($this->event($response));
+
+        self::assertTrue($response->headers->has('Content-Security-Policy'));
+        self::assertTrue($response->headers->has('Content-Security-Policy-Report-Only'));
+    }
+
+    public function testAnHtmlContentTypeWithACharsetStillGetsThePolicy(): void
+    {
+        // What ResponseListener::prepare() actually leaves on a rendered page.
+        $sub = $this->subscriberWithUrls([]);
+        $response = new Response('<html></html>');
+        $response->headers->set('Content-Type', 'text/html; charset=UTF-8');
+
+        $sub->onResponse($this->event($response));
+
+        self::assertStringContainsString(
+            "script-src 'self' 'nonce-",
+            (string) $response->headers->get('Content-Security-Policy-Report-Only'),
         );
     }
 

@@ -8,12 +8,20 @@ use App\Service\CspNonceGenerator;
 use App\Service\ServiceInstanceProvider;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Event\ResponseEvent;
 use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Sets the Content-Security-Policy + X-Frame-Options headers on every
- * HTML response. (X-Frame-Options used to be a static Caddy header — it
+ * HTML response. Both CSP headers are skipped on non-HTML responses (JSON
+ * API, binary): a CSP only governs document contexts, and since the nonce
+ * lives in a session attribute, computing one for a JSON response would
+ * start a session on cookieless API traffic — the Docker healthcheck alone
+ * polls /api/health every 30s. X-Frame-Options is still set on every
+ * response: it is not a CSP header and needs no nonce, so gating it would
+ * drop a security header for no benefit.
+ * (X-Frame-Options used to be a static Caddy header — it
  * moved here so the iframe-embedding opt-in below can control both in one
  * place; static assets served straight by Caddy no longer carry it, which
  * is harmless since clickjacking needs an interactive HTML page.)
@@ -89,6 +97,16 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             $response->headers->remove('X-Frame-Options');
         }
 
+        // CSP only governs document contexts, so a JSON/binary response gains
+        // nothing from either header. Skipping them is also what keeps the
+        // nonce unread on those responses: the nonce lives in a session
+        // attribute, and reading it starts a session — so the cookieless
+        // Docker healthcheck polling /api/health every 30s would otherwise
+        // leave one orphan session per poll in var/data/sessions.
+        if (!$this->governsADocument($response)) {
+            return;
+        }
+
         if ($response->headers->has('Content-Security-Policy')) {
             return;
         }
@@ -144,6 +162,24 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             'Content-Security-Policy-Report-Only',
             $policy("'self' 'nonce-" . $this->nonce->get() . "'"),
         );
+    }
+
+    /**
+     * Whether this response is an HTML document, i.e. something a CSP can
+     * actually govern.
+     *
+     * A missing Content-Type counts as HTML: Response::prepare() fills in
+     * text/html when nothing set one, and this subscriber can also see
+     * responses built by hand in tests. Turbo Stream responses
+     * (text/vnd.turbo-stream.html) deliberately do not match — their scripts
+     * are activated inside the existing document and are governed by *that*
+     * document's policy, not by the stream response's headers.
+     */
+    private function governsADocument(Response $response): bool
+    {
+        $type = $response->headers->get('Content-Type');
+
+        return $type === null || $type === '' || str_starts_with(strtolower($type), 'text/html');
     }
 
     /**
