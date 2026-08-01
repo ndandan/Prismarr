@@ -140,27 +140,36 @@ class CspHeaderSubscriberTest extends TestCase
         $this->assertStringContainsString("form-action 'self'", $csp);
     }
 
-    public function testReportOnlyHeaderCarriesTheStrictPolicy(): void
+    public function testEnforcingHeaderCarriesTheNonceAndNoInlineEscape(): void
     {
         $sub = $this->subscriberWithUrls([]);
         $response = new Response('<html></html>');
         $sub->onResponse($this->event($response));
 
-        $reportOnly = $response->headers->get('Content-Security-Policy-Report-Only');
-        self::assertStringContainsString("script-src 'self' 'nonce-", $reportOnly);
-        self::assertStringNotContainsString("'unsafe-inline' data:", $reportOnly);
+        $csp = $response->headers->get('Content-Security-Policy');
+        self::assertStringContainsString("script-src 'self' 'nonce-", $csp);
+        self::assertStringNotContainsString("'unsafe-inline' data:", $csp);
     }
 
-    public function testEnforcingHeaderStaysPermissiveUntilTheFlip(): void
+    public function testStyleSrcKeepsUnsafeInline(): void
     {
         $sub = $this->subscriberWithUrls([]);
         $response = new Response('<html></html>');
         $sub->onResponse($this->event($response));
 
         self::assertStringContainsString(
-            "script-src 'self' 'unsafe-inline' data:",
+            "style-src 'self' 'unsafe-inline' https://rsms.me",
             $response->headers->get('Content-Security-Policy'),
         );
+    }
+
+    public function testReportOnlyHeaderIsGone(): void
+    {
+        $sub = $this->subscriberWithUrls([]);
+        $response = new Response('<html></html>');
+        $sub->onResponse($this->event($response));
+
+        self::assertFalse($response->headers->has('Content-Security-Policy-Report-Only'));
     }
 
     public function testNonHtmlResponsesGetNoCspHeadersAtAll(): void
@@ -218,7 +227,6 @@ class CspHeaderSubscriberTest extends TestCase
         $sub->onResponse($this->event($response));
 
         self::assertTrue($response->headers->has('Content-Security-Policy'));
-        self::assertTrue($response->headers->has('Content-Security-Policy-Report-Only'));
     }
 
     public function testAnHtmlContentTypeWithACharsetStillGetsThePolicy(): void
@@ -232,7 +240,7 @@ class CspHeaderSubscriberTest extends TestCase
 
         self::assertStringContainsString(
             "script-src 'self' 'nonce-",
-            (string) $response->headers->get('Content-Security-Policy-Report-Only'),
+            (string) $response->headers->get('Content-Security-Policy'),
         );
     }
 

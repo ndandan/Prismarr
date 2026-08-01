@@ -14,7 +14,7 @@ use Symfony\Component\HttpKernel\KernelEvents;
 
 /**
  * Sets the Content-Security-Policy + X-Frame-Options headers on every
- * HTML response. Both CSP headers are skipped on non-HTML responses (JSON
+ * HTML response. The CSP header is skipped on non-HTML responses (JSON
  * API, binary): a CSP only governs document contexts, and since the nonce
  * lives in a session attribute, computing one for a JSON response would
  * start a session on cookieless API traffic — the Docker healthcheck alone
@@ -151,15 +151,13 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             $frameAncestors,
         );
 
-        // Two-stage rollout (Phase 2). The enforcing policy still allows
-        // inline script while the templates are being nonced — anything else
-        // would break the app on deploy. The strict policy rides along in
-        // Report-Only so a missed <script> shows up as a console violation
-        // instead of a silently dead page. Both collapse to one enforcing
-        // strict policy once the report-only round is clean.
-        $response->headers->set('Content-Security-Policy', $policy("'self' 'unsafe-inline' data:"));
+        // script-src carries a session-stable nonce instead of 'unsafe-inline':
+        // an injected <script> or on*= attribute cannot execute, which is the
+        // structural fix for the XSS class Phase 1 patched sink-by-sink.
+        // style-src keeps 'unsafe-inline' deliberately — inline style= is
+        // pervasive here and style injection cannot execute script.
         $response->headers->set(
-            'Content-Security-Policy-Report-Only',
+            'Content-Security-Policy',
             $policy("'self' 'nonce-" . $this->nonce->get() . "'"),
         );
     }

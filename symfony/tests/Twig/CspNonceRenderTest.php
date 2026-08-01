@@ -12,9 +12,9 @@ use App\Tests\AbstractWebTestCase;
  *
  * Deux couplages supplémentaires sont vérifiés ici, et seulement ici,
  * parce qu'ils ne se manifestent qu'à travers le conteneur réel :
- *  - l'en-tête Content-Security-Policy-Report-Only doit annoncer
- *    exactement le nonce présent dans le HTML (une page dont le nonce ne
- *    correspond pas à sa propre politique n'exécute plus rien) ;
+ *  - l'en-tête Content-Security-Policy (la politique appliquée) doit
+ *    annoncer exactement le nonce présent dans le HTML (une page dont le
+ *    nonce ne correspond pas à sa propre politique n'exécute plus rien) ;
  *  - la valeur est stable dans une session et change d'une session à
  *    l'autre. La rotation par requête tuait Turbo Drive : le nonce est
  *    recopié tel quel dans le *corps* du script de chargement du polyfill
@@ -39,7 +39,7 @@ class CspNonceRenderTest extends AbstractWebTestCase
         );
     }
 
-    public function testTheReportOnlyHeaderAnnouncesTheNonceRenderedInThePage(): void
+    public function testTheEnforcingHeaderAnnouncesTheNonceRenderedInThePage(): void
     {
         $this->client->request('GET', '/tableau-de-bord');
         $response = $this->client->getResponse();
@@ -48,7 +48,7 @@ class CspNonceRenderTest extends AbstractWebTestCase
 
         self::assertStringContainsString(
             "'nonce-" . $nonce . "'",
-            (string) $response->headers->get('Content-Security-Policy-Report-Only'),
+            (string) $response->headers->get('Content-Security-Policy'),
             'the governing policy and the page must carry the same nonce',
         );
     }
