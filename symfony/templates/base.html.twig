@@ -318,6 +318,15 @@
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler.min.css') }}"/>
   <link rel="stylesheet" href="{{ asset('static/tabler/css/tabler-themes.min.css') }}"/>
 
+  {# Was previously pulled in via `import './styles/app.css'` in assets/app.js,
+     which the importmap loader injected AFTER these two static links — kept
+     here, in the same position, so the cascade order is unchanged. It can no
+     longer be a JS import: under the enforcing script-src CSP, AssetMapper
+     turns a CSS import into a `data:application/javascript,` stub module,
+     which the browser refuses to load and which aborts the whole `app`
+     module graph (see CspNonceGuardTest). #}
+  <link rel="stylesheet" href="{{ asset('styles/app.css') }}"/>
+
   {# Library filter memory: loaded once in <head> so Turbo runs it a single
      time; it binds its own turbo:load/DOMContentLoaded listeners. #}
   <script defer src="{{ asset('static/js/library-filter-memory.js') }}"></script>

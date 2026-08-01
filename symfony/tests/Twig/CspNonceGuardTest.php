@@ -17,6 +17,7 @@ use PHPUnit\Framework\TestCase;
 class CspNonceGuardTest extends TestCase
 {
     private const TEMPLATE_ROOT = __DIR__ . '/../../templates/';
+    private const ASSETS_ROOT = __DIR__ . '/../../assets/';
 
     /**
      * Occurrences de `<script` qui ne sont pas une vraie balise ouvrante
@@ -114,6 +115,65 @@ class CspNonceGuardTest extends TestCase
     }
 
     /**
+     * AssetMapper transforme un `import '....css'` en un module JS stub
+     * `data:application/javascript,...` (vendor/symfony/asset-mapper/ImportMap/
+     * ImportMapRenderer.php, constantes LOADER_CSS/LOADER_JSON et le
+     * `data:application/javascript,` vide du cas préchargé). Sous la politique
+     * stricte `script-src 'self' 'nonce-...'` (sans `data:`), le navigateur
+     * refuse ce module — et cet échec fait échouer TOUT le graphe de modules
+     * qui l'importe : Turbo, Stimulus (donc csrf_protection_controller.js et
+     * son cookie CSRF sans état), Alpine et Chart.js ne démarrent plus
+     * (`window.Turbo === undefined`, vérifié en direct).
+     *
+     * `assets/vendor/` est exclu : c'est du code tiers vendored par
+     * AssetMapper, pas du code que nous écrivons, et il n'importe pas de CSS
+     * aujourd'hui de toute façon.
+     *
+     * La feuille de style correspondante doit être liée directement par un
+     * <link> dans un template (voir base.html.twig, juste après les feuilles
+     * Tabler, et le test ci-dessous).
+     */
+    public function testNoJavaScriptModuleImportsCss(): void
+    {
+        $offenders = [];
+
+        foreach ($this->assetJsFiles() as $relative => $path) {
+            $js = file_get_contents($path);
+            preg_match_all('/^\s*import\b[^;\n]*[\'"][^\'"]*\.css[\'"]/mi', $js, $matches, PREG_OFFSET_CAPTURE);
+
+            foreach ($matches[0] as [, $offset]) {
+                $line = substr_count(substr($js, 0, $offset), "\n") + 1;
+                $offenders[] = $relative . ':' . $line;
+            }
+        }
+
+        self::assertSame(
+            [],
+            $offenders,
+            "import ... '*.css' dans un module JS — bloqué par le script-src strict, voir docblock",
+        );
+    }
+
+    /**
+     * Le lien direct est le remplacement du `import './styles/app.css'`
+     * retiré de assets/app.js (test ci-dessus) : sans lui, styles/app.css ne
+     * serait plus jamais chargé nulle part — disparu silencieusement de la
+     * page, puisque rien ne signale l'absence d'un <link> qu'on a oublié
+     * d'ajouter.
+     */
+    public function testBaseTemplateStillLinksTheAppStylesheet(): void
+    {
+        $html = file_get_contents(self::TEMPLATE_ROOT . 'base.html.twig');
+        self::assertIsString($html);
+
+        self::assertStringContainsString(
+            "asset('styles/app.css')",
+            $html,
+            'base.html.twig doit lier styles/app.css directement (plus via import JS)',
+        );
+    }
+
+    /**
      * @return iterable<string, string> chemin relatif => chemin absolu
      */
     private function templateFiles(): iterable
@@ -126,6 +186,29 @@ class CspNonceGuardTest extends TestCase
             if ($file->isFile() && str_ends_with($file->getFilename(), '.twig')) {
                 yield str_replace('\\', '/', substr($file->getPathname(), strlen($root) + 1)) => $file->getPathname();
             }
+        }
+    }
+
+    /**
+     * @return iterable<string, string> chemin relatif (depuis assets/) => chemin absolu
+     */
+    private function assetJsFiles(): iterable
+    {
+        $root = realpath(self::ASSETS_ROOT);
+        self::assertIsString($root);
+
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $file) {
+            if (!$file->isFile() || !str_ends_with($file->getFilename(), '.js')) {
+                continue;
+            }
+
+            $relative = str_replace('\\', '/', substr($file->getPathname(), strlen($root) + 1));
+            if (str_starts_with($relative, 'vendor/')) {
+                continue;
+            }
+
+            yield $relative => $file->getPathname();
         }
     }
 }
