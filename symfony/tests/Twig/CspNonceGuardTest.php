@@ -67,19 +67,25 @@ class CspNonceGuardTest extends TestCase
      * trou existerait pour ondblclick, oncontextmenu, onpaste, ontoggle, etc.
      * et pour toute valeur entre guillemets simples.
      *
-     * Volontairement sensible à la casse (pas de /i) : les attributs HTML
-     * on*= réels sont toujours en minuscules dans ce dépôt (onclick,
-     * onmouseover, ...). Un /i sur `[a-z]+` fait remonter un faux positif
-     * vérifié sur l'arbre actuel — `var onBadge = '...'` dans
-     * prowlarr/apps.html.twig:314, une variable JS, pas un attribut — car
-     * `onBadge` matche `on[A-Za-z]+` juste avant le `= '`. Rester sensible à
-     * la casse élimine ce faux positif sans rouvrir l'angle mort ci-dessus :
-     * tout event handler HTML réel est en minuscules.
+     * Insensible à la casse (/i) — les attributs HTML sont insensibles à la
+     * casse : onClick="..." ou onMouseOut="..." sont du HTML valide, honoré
+     * par le navigateur et bloqué par la CSP stricte comme n'importe quel
+     * on*= en minuscules. Une première version avait retiré le /i pour
+     * éliminer un faux positif (`var onBadge = '...'` dans
+     * prowlarr/apps.html.twig:314, une variable JS) mais ce raisonnement —
+     * « ce dépôt écrit tout en minuscules aujourd'hui » — est exactement ce
+     * qui avait rendu l'énumération aveugle à onmouseout au départ.
+     *
+     * Le vrai discriminant n'est pas la casse mais l'espace autour du `=` :
+     * un attribut HTML s'écrit on*="..." (aucun espace), alors que
+     * `var onBadge = '...'` a un espace de chaque côté. D'où `on[a-z]+=["']`
+     * sans `\s*` autour du `=` : plus aucun faux positif sur `onBadge`, et
+     * onClick=/onMouseOut= restent détectés.
      */
     public function testNoInlineEventHandlerAttributes(): void
     {
         $offenders = [];
-        $pattern = '/\son[a-z]+\s*=\s*["\']/';
+        $pattern = '/\son[a-z]+=["\']/i';
 
         foreach ($this->templateFiles() as $relative => $path) {
             $html = file_get_contents($path);
