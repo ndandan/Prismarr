@@ -2,6 +2,10 @@
 <!doctype html>
 <html lang="{{ app.request.locale|default('fr') }}" data-bs-theme="{{ theme().light ? 'light' : 'dark' }}">
 <head>
+  {# Turbo reads this to nonce the scripts it re-injects during navigation.
+     Without it the app works on a hard refresh and silently loses its
+     scripts on every in-app link click. #}
+  <meta name="csp-nonce" content="{{ csp_nonce() }}">
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <meta http-equiv="X-UA-Compatible" content="ie=edge"/>
@@ -747,7 +751,7 @@
   </style>
 
   {% block stylesheets %}{% endblock %}
-  {{ importmap('app') }}
+  {{ importmap('app', {'nonce': csp_nonce()}) }}
 </head>
 <body class="density-{{ display_pref('ui_density') }} toasts-{{ display_pref('toasts') ? 'on' : 'off' }}">
 

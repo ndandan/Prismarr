@@ -4,6 +4,7 @@ namespace App\EventSubscriber;
 
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
+use App\Service\CspNonceGenerator;
 use App\Service\ServiceInstanceProvider;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -52,6 +53,7 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
     public function __construct(
         private readonly ConfigService $config,
         private readonly ServiceInstanceProvider $instances,
+        private readonly CspNonceGenerator $nonce,
         // `default::VAR` yields null (not '') when the env is unset, so accept
         // ?string and coalesce in onResponse().
         #[Autowire(env: 'default::PRISMARR_FRAME_ANCESTORS')]
@@ -114,12 +116,12 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
         }
         $imgHosts = array_unique($imgHosts);
 
-        $csp = sprintf(
+        $policy = fn(string $scriptSrc): string => sprintf(
             "default-src 'self'; "
             . "img-src 'self' data: blob: %s; "
             . "style-src 'self' 'unsafe-inline' https://rsms.me; "
             . "font-src 'self' https://rsms.me; "
-            . "script-src 'self' 'unsafe-inline' data:; "
+            . "script-src %s; "
             . "connect-src 'self'; "
             . "frame-src https://www.youtube.com https://www.youtube-nocookie.com; "
             . "frame-ancestors %s; "
@@ -127,10 +129,21 @@ final class CspHeaderSubscriber implements EventSubscriberInterface
             . "form-action 'self'; "
             . "object-src 'none'",
             implode(' ', $imgHosts),
+            $scriptSrc,
             $frameAncestors,
         );
 
-        $response->headers->set('Content-Security-Policy', $csp);
+        // Two-stage rollout (Phase 2). The enforcing policy still allows
+        // inline script while the templates are being nonced — anything else
+        // would break the app on deploy. The strict policy rides along in
+        // Report-Only so a missed <script> shows up as a console violation
+        // instead of a silently dead page. Both collapse to one enforcing
+        // strict policy once the report-only round is clean.
+        $response->headers->set('Content-Security-Policy', $policy("'self' 'unsafe-inline' data:"));
+        $response->headers->set(
+            'Content-Security-Policy-Report-Only',
+            $policy("'self' 'nonce-" . $this->nonce->get() . "'"),
+        );
     }
 
     /**

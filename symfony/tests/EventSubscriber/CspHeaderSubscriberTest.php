@@ -5,6 +5,7 @@ namespace App\Tests\EventSubscriber;
 use App\Entity\ServiceInstance;
 use App\EventSubscriber\CspHeaderSubscriber;
 use App\Service\ConfigService;
+use App\Service\CspNonceGenerator;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -48,7 +49,7 @@ class CspHeaderSubscriberTest extends TestCase
             return [$instance];
         });
 
-        return new CspHeaderSubscriber($config, $instances, $frameAncestors);
+        return new CspHeaderSubscriber($config, $instances, new CspNonceGenerator(), $frameAncestors);
     }
 
     public function testSetsHeaderOnMainRequest(): void
@@ -133,6 +134,29 @@ class CspHeaderSubscriberTest extends TestCase
         $this->assertStringContainsString("object-src 'none'", $csp);
         $this->assertStringContainsString("base-uri 'self'", $csp);
         $this->assertStringContainsString("form-action 'self'", $csp);
+    }
+
+    public function testReportOnlyHeaderCarriesTheStrictPolicy(): void
+    {
+        $sub = $this->subscriberWithUrls([]);
+        $response = new Response('<html></html>');
+        $sub->onResponse($this->event($response));
+
+        $reportOnly = $response->headers->get('Content-Security-Policy-Report-Only');
+        self::assertStringContainsString("script-src 'self' 'nonce-", $reportOnly);
+        self::assertStringNotContainsString("'unsafe-inline' data:", $reportOnly);
+    }
+
+    public function testEnforcingHeaderStaysPermissiveUntilTheFlip(): void
+    {
+        $sub = $this->subscriberWithUrls([]);
+        $response = new Response('<html></html>');
+        $sub->onResponse($this->event($response));
+
+        self::assertStringContainsString(
+            "script-src 'self' 'unsafe-inline' data:",
+            $response->headers->get('Content-Security-Policy'),
+        );
     }
 
     public function testXFrameOptionsSameOriginByDefault(): void
