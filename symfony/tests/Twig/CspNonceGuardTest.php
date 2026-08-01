@@ -58,11 +58,28 @@ class CspNonceGuardTest extends TestCase
      * Les attributs on*= ne peuvent pas porter de nonce : la politique
      * stricte les bloque sans exception. Ils doivent être convertis en
      * addEventListener.
+     *
+     * Le motif couvre TOUT attribut on<lettres>=, entre guillemets simples
+     * ou doubles — pas une liste fermée d'événements. Une énumération
+     * explicite (click|change|submit|...) a un angle mort démontré : elle a
+     * laissé passer un onmouseout="..." (Tâche 2, trouvé à l'œil, pas par ce
+     * test) juste à côté d'un onmouseover="..." qu'elle attrapait. Le même
+     * trou existerait pour ondblclick, oncontextmenu, onpaste, ontoggle, etc.
+     * et pour toute valeur entre guillemets simples.
+     *
+     * Volontairement sensible à la casse (pas de /i) : les attributs HTML
+     * on*= réels sont toujours en minuscules dans ce dépôt (onclick,
+     * onmouseover, ...). Un /i sur `[a-z]+` fait remonter un faux positif
+     * vérifié sur l'arbre actuel — `var onBadge = '...'` dans
+     * prowlarr/apps.html.twig:314, une variable JS, pas un attribut — car
+     * `onBadge` matche `on[A-Za-z]+` juste avant le `= '`. Rester sensible à
+     * la casse élimine ce faux positif sans rouvrir l'angle mort ci-dessus :
+     * tout event handler HTML réel est en minuscules.
      */
     public function testNoInlineEventHandlerAttributes(): void
     {
         $offenders = [];
-        $pattern = '/\son(?:click|change|submit|input|load|error|keyup|keydown|mouseover|focus|blur)\s*=\s*"/i';
+        $pattern = '/\son[a-z]+\s*=\s*["\']/';
 
         foreach ($this->templateFiles() as $relative => $path) {
             $html = file_get_contents($path);
