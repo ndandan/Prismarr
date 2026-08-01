@@ -84,7 +84,15 @@
   <script nonce="{{ csp_nonce() }}">
     // Retry button moved off onclick= for CSP: reads its own fetch URL from
     // data-retry-url so this partial stays a single self-contained include.
+    // Bound guard: querySelectorAll below is document-wide, so if a page
+    // ever rendered two banners, each include of this script would also
+    // find the other banner's button already in the DOM and attach another
+    // listener to it -> N POSTs and N racing location.reload() calls per
+    // click. The dataset flag makes binding idempotent per button no matter
+    // how many times this script runs.
     document.querySelectorAll('.service-banner-retry-btn').forEach(function (btn) {
+      if (btn.dataset.retryBound) return;
+      btn.dataset.retryBound = '1';
       btn.addEventListener('click', function () {
         fetch(btn.dataset.retryUrl, {method:'POST'}).finally(function(){ window.location.reload(); });
       });

@@ -42,13 +42,15 @@ use Symfony\Contracts\Service\ResetInterface;
  * The nonce is an independent random value held in a session attribute; it
  * is never derived from the session id, which would publish a session
  * identifier in every page's HTML. Symfony migrates the session id on login
- * but keeps the attributes, so the nonce survives the privilege change.
- * That is acceptable: reading the pre-auth value requires an XSS foothold,
- * which is the very thing this CSP exists to prevent.
+ * but keeps the attributes, so left alone the nonce would survive the
+ * privilege change — CspNonceLoginSubscriber removes this attribute on
+ * LoginSuccessEvent so the authenticated session mints a fresh one instead
+ * (see that class's docblock for the fixation-attack rationale).
  */
 final class CspNonceGenerator implements ResetInterface
 {
-    private const SESSION_KEY = '_csp_nonce';
+    /** Also referenced by CspNonceLoginSubscriber, which clears it on login. */
+    public const SESSION_KEY = '_csp_nonce';
 
     private ?string $nonce = null;
 
