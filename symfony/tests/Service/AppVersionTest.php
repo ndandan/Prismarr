@@ -234,6 +234,32 @@ class AppVersionTest extends TestCase
         self::assertSame(['tag' => '1.1.1', 'published_at' => '2026-06-10T00:00:00Z', 'html_url' => 'https://gh/rel'], $v->upstream());
     }
 
+    public function testCachedCompareFailureMarkerIsRespectedWithoutResaving(): void
+    {
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn(['behind' => null, 'commits' => []]);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::never())->method('save');
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3', str_repeat('a', 40));
+        self::assertNull($v->commitsBehind());
+        self::assertSame([], $v->recentForkCommits());
+        self::assertFalse($v->isUpdateAvailable());
+    }
+
+    public function testChangelogCachedFailureMarkerReturnsNullWithoutRefetching(): void
+    {
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn('');
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::never())->method('save');
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3');
+        self::assertNull($v->changelogHtml());
+    }
+
     /**
      * @param list<array{tag:string,name:string,body:string,published_at:string,html_url:string}> $cached
      */

@@ -38,6 +38,9 @@ class AppVersion implements ResetInterface
     // entries are simply ignored; they expire on their own after 1 h.
     private const CACHE_KEY      = 'app_version.releases.v2';
     private const CACHE_TTL      = 3600; // 1 hour
+    // A GitHub outage costs at most one slow render per 2-minute window;
+    // success entries keep the 1h TTL above.
+    private const FAILURE_CACHE_TTL = 120;
 
     private const FORK_REPO          = 'ndandan/Prismarr';
     private const FORK_COMPARE_URL   = 'https://api.github.com/repos/' . self::FORK_REPO . '/compare/%s...main';
@@ -55,7 +58,7 @@ class AppVersion implements ResetInterface
     /** @var array{behind: int|null, commits: array<int, array{sha7: string, subject: string, date: string, html_url: string}>}|null */
     private ?array $compareInProcess = null;
 
-    /** Rendered changelog HTML; '' = fetch failed this request (not cached). */
+    /** Rendered changelog HTML; '' = unavailable (fetch failed, cached briefly under FAILURE_CACHE_TTL). */
     private ?string $changelogInProcess = null;
 
     private readonly string $gitSha;
@@ -156,12 +159,18 @@ class AppVersion implements ResetInterface
         }
 
         $item = $this->cacheApp->getItem(self::CHANGELOG_CACHE_KEY);
-        if ($item->isHit() && is_string($item->get()) && $item->get() !== '') {
-            return $this->changelogInProcess = $item->get();
+        if ($item->isHit() && is_string($item->get())) {
+            $this->changelogInProcess = $item->get();
+            return $this->changelogInProcess === '' ? null : $this->changelogInProcess;
         }
 
         $md = $this->httpGet(self::FORK_CHANGELOG_URL, 'text/plain');
         if ($md === null) {
+            // Cache the failure briefly so a GitHub outage costs at most one
+            // slow render per FAILURE_CACHE_TTL window, not one per request.
+            $item->set('');
+            $item->expiresAfter(self::FAILURE_CACHE_TTL);
+            $this->cacheApp->save($item);
             $this->changelogInProcess = '';
             return null;
         }
@@ -200,7 +209,11 @@ class AppVersion implements ResetInterface
         $body   = $this->httpGet(sprintf(self::FORK_COMPARE_URL, $sha), 'application/vnd.github+json');
         $parsed = $body === null ? null : self::parseComparePayload(json_decode($body, true));
         if ($parsed === null) {
-            // Don't poison the cache with a failure (same pattern as releases()).
+            // Cache the failure briefly so a GitHub outage costs at most one
+            // slow render per FAILURE_CACHE_TTL window, not one per request.
+            $item->set($unavailable);
+            $item->expiresAfter(self::FAILURE_CACHE_TTL);
+            $this->cacheApp->save($item);
             return $this->compareInProcess = $unavailable;
         }
 
@@ -289,8 +302,11 @@ class AppVersion implements ResetInterface
 
         $fetched = $this->fetchFromGithub();
         if ($fetched === null) {
-            // Don't poison the cache with a failure — let the next request
-            // try again (network may be intermittent). Return empty list.
+            // Cache the failure briefly so a GitHub outage costs at most one
+            // slow render per FAILURE_CACHE_TTL window, not one per request.
+            $item->set([]);
+            $item->expiresAfter(self::FAILURE_CACHE_TTL);
+            $this->cacheApp->save($item);
             return $this->releasesInProcess = [];
         }
 
@@ -301,7 +317,11 @@ class AppVersion implements ResetInterface
         return $this->releasesInProcess = $fetched;
     }
 
-    /** GET a URL with the class's standard timeouts; null on any failure. */
+    /**
+     * GET a URL with the class's standard timeouts; null on any failure.
+     *
+     * @param non-empty-string $url
+     */
     private function httpGet(string $url, string $accept): ?string
     {
         $ch = curl_init();
