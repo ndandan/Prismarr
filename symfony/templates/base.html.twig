@@ -106,6 +106,32 @@
           .replace(/'/g, '&#39;');
       };
     }
+
+    // One place to register a page's setup and its teardown. `init` runs on
+    // the turbo:load of the page instance that registered it; if it returns a
+    // function, that function runs at the next turbo:before-render and its
+    // listener then removes itself.
+    //
+    // Both halves matter. Turbo re-executes body scripts on EVERY navigation,
+    // so a registration that outlived its own page would stack one extra
+    // `init` per visit — which is the leak this helper exists to close, not a
+    // new one to introduce. Hence the second listener: it drops the turbo:load
+    // registration when the page that made it goes away.
+    window.registerPageLifecycle = function (init) {
+      function run() {
+        var teardown = init();
+        if (typeof teardown !== 'function') return;
+        document.addEventListener('turbo:before-render', function cleanup() {
+          document.removeEventListener('turbo:before-render', cleanup);
+          teardown();
+        });
+      }
+      document.addEventListener('turbo:load', run);
+      document.addEventListener('turbo:before-render', function drop() {
+        document.removeEventListener('turbo:before-render', drop);
+        document.removeEventListener('turbo:load', run);
+      });
+    };
   </script>
 
   {% block head_meta %}{% endblock %}
@@ -3001,9 +3027,15 @@
         })
         .catch(function () { pill.style.display = 'none'; });
     }
-    tick();
-    if (window._plexPillTimer) { clearInterval(window._plexPillTimer); }
-    window._plexPillTimer = setInterval(tick, INTERVAL);
+    window.registerPageLifecycle(function () {
+      tick();
+      if (window._plexPillTimer) { clearInterval(window._plexPillTimer); }
+      window._plexPillTimer = setInterval(tick, INTERVAL);
+      return function () {
+        clearInterval(window._plexPillTimer);
+        window._plexPillTimer = null;
+      };
+    });
   })();
   </script>
   {% endif %}
@@ -3113,12 +3145,18 @@
           .catch(function () {});
       }
 
-      fetchHealth();
-      // Auto refresh every 60s — HealthService already caches 10s server-side.
-      if (!window._prismarrHealthTimer) {
+      // One refresh per page instance, then auto refresh every 60s —
+      // HealthService already caches 10s server-side. The interval is torn
+      // down on navigation instead of being kept as a session-long singleton,
+      // so it can never outlive the topbar it writes into.
+      window.registerPageLifecycle(function () {
+        fetchHealth();
         window._prismarrHealthTimer = setInterval(fetchHealth, 60000);
-      }
-      document.addEventListener('turbo:load', fetchHealth);
+        return function () {
+          clearInterval(window._prismarrHealthTimer);
+          window._prismarrHealthTimer = null;
+        };
+      });
     })();
   </script>
 

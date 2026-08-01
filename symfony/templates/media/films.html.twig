@@ -1454,12 +1454,25 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     if (filmsShelfView) filmsShelfView.classList.add('library-loading');
   }
   if (filterForm) filterForm.addEventListener('submit', markLibraryLoading);
-  document.addEventListener('click', function(e) {
+  // Capture-phase document listeners: bound per page instance and removed on
+  // the way out, because Turbo re-runs this script on every visit and an
+  // un-removed document listener stacks one copy per visit. filterForm's own
+  // listener just above needs no teardown — it lives on an element inside
+  // <body>, which Turbo throws away wholesale.
+  function markLoadingOnPageLink(e) {
     if (e.target.closest('.library-pagination-card a.page-link')) markLibraryLoading();
-  }, true);
-  document.addEventListener('submit', function(e) {
+  }
+  function markLoadingOnPageForm(e) {
     if (e.target.closest('.library-pagination-card')) markLibraryLoading();
-  }, true);
+  }
+  window.registerPageLifecycle(function () {
+    document.addEventListener('click', markLoadingOnPageLink, true);
+    document.addEventListener('submit', markLoadingOnPageForm, true);
+    return function () {
+      document.removeEventListener('click', markLoadingOnPageLink, true);
+      document.removeEventListener('submit', markLoadingOnPageForm, true);
+    };
+  });
 
   // Build a query string from the form so the bulk-filtered endpoints can
   // re-apply the same filter server-side.
@@ -2178,6 +2191,11 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   function stopPoll() {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
   }
+
+  // The modal's command poll is user-triggered, so it has no interval at page
+  // load — but if the user navigates away mid-poll it would keep hitting
+  // Radarr from a page that no longer exists.
+  window.registerPageLifecycle(function () { return stopPoll; });
 
   function refreshMonitorBtn() {
     var icon = document.getElementById('monitor-icon');
@@ -3455,9 +3473,12 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     }).catch(function(){});
   }
 
-  // Rendu initial + refresh 10s
+  // Rendu initial + refresh 10s (l'intervalle meurt avec la page)
   refreshWarnings();
-  setInterval(refreshWarnings, 10000);
+  window.registerPageLifecycle(function () {
+    var warningsTimer = setInterval(refreshWarnings, 10000);
+    return function () { clearInterval(warningsTimer); };
+  });
 
   /* ══════════════════════════════════════════════════════════════════════════
      Queue auto-refresh (2s)
@@ -3847,7 +3868,13 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   var initialQueue = {{ queue|json_encode|raw }};
   (initialQueue || []).forEach(function(q) { if (q.movieId) previousQueueIds.add(q.movieId); });
   renderQueue(initialQueue);
-  queueRefreshTimer = setInterval(refreshQueue, 2000);
+  window.registerPageLifecycle(function () {
+    queueRefreshTimer = setInterval(refreshQueue, 2000);
+    return function () {
+      clearInterval(queueRefreshTimer);
+      queueRefreshTimer = null;
+    };
+  });
 
   /* ══════════════════════════════════════════════════════════════════════════
      Modal ajout film (inchangé)

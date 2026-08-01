@@ -1364,12 +1364,25 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     if (shelfView) shelfView.classList.add('library-loading');
   }
   if (filterForm) filterForm.addEventListener('submit', markLibraryLoading);
-  document.addEventListener('click', function(e) {
+  // Capture-phase document listeners: bound per page instance and removed on
+  // the way out, because Turbo re-runs this script on every visit and an
+  // un-removed document listener stacks one copy per visit. filterForm's own
+  // listener just above needs no teardown — it lives on an element inside
+  // <body>, which Turbo throws away wholesale.
+  function markLoadingOnPageLink(e) {
     if (e.target.closest('.library-pagination-card a.page-link')) markLibraryLoading();
-  }, true);
-  document.addEventListener('submit', function(e) {
+  }
+  function markLoadingOnPageForm(e) {
     if (e.target.closest('.library-pagination-card')) markLibraryLoading();
-  }, true);
+  }
+  window.registerPageLifecycle(function () {
+    document.addEventListener('click', markLoadingOnPageLink, true);
+    document.addEventListener('submit', markLoadingOnPageForm, true);
+    return function () {
+      document.removeEventListener('click', markLoadingOnPageLink, true);
+      document.removeEventListener('submit', markLoadingOnPageForm, true);
+    };
+  });
 
   // Build a query string from the form so the bulk-filtered endpoints can
   // re-apply the same filter server-side.
@@ -2196,16 +2209,24 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
 
   // Initial render from server data
   renderQueue({{ queue|json_encode|raw }});
-  // Auto-refresh queue every 3s
-  setInterval(refreshQueue, 2000);
-  // RefreshMonitoredDownloads every 8s (tells Sonarr to check qBittorrent)
-  setInterval(function() {
-    fetch('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/queue/refresh', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
-      body: '{}',
-    });
-  }, 6000);
+  // Auto-refresh queue every 3s, plus RefreshMonitoredDownloads every 8s
+  // (tells Sonarr to check qBittorrent). Both are torn down on navigation —
+  // the second one POSTs, so left running it kept writing to Sonarr from a
+  // page the user had already left.
+  window.registerPageLifecycle(function () {
+    var queueTimer = setInterval(refreshQueue, 2000);
+    var monitoredTimer = setInterval(function() {
+      fetch('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/queue/refresh', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+        body: '{}',
+      });
+    }, 6000);
+    return function () {
+      clearInterval(queueTimer);
+      clearInterval(monitoredTimer);
+    };
+  });
 
   // ── Modal ──────────────────────────────────────────────────────────────────
   var currentId        = null;
@@ -2886,7 +2907,10 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     }).catch(function(){});
   }
   refreshSeriesWarnings();
-  setInterval(refreshSeriesWarnings, 10000);
+  window.registerPageLifecycle(function () {
+    var warningsTimer = setInterval(refreshSeriesWarnings, 10000);
+    return function () { clearInterval(warningsTimer); };
+  });
 
   // Check for active commands on page load (only user-initiated ones)
   var POLL_COMMANDS = {'SeriesSearch':1,'SeasonSearch':1,'EpisodeSearch':1,'RenameFiles':1,'MissingEpisodeSearch':1};

@@ -1062,6 +1062,16 @@
   // the TMDb string be parsed as markup.
   function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
 
+  // Every document-level listener below is declared through this collector
+  // instead of being bound straight away, so the shared page lifecycle helper
+  // (see base.html.twig) can bind them on turbo:load and take them all back
+  // off at turbo:before-render. Turbo re-runs this script on every visit, so
+  // without the removal each visit left another live copy behind: after K
+  // visits the watchlist star fired K POSTs (add, then remove, then add…) and
+  // the star silently reverted.
+  var pageDocListeners = [];
+  function onDoc(type, handler) { pageDocListeners.push([type, handler]); }
+
   // Localized strings used by the detail modal + toasts. Built server-side
   // so every label stays in sync with the current request locale.
   var TMDB_I18N = {
@@ -1267,7 +1277,7 @@
       });
   }
 
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     var addBtn = e.target.closest('.tmdb-add-btn');
     if (addBtn) {
       e.preventDefault();
@@ -1322,7 +1332,7 @@
       closeDetailModal();
     }
   });
-  document.addEventListener('keydown', function(e) {
+  onDoc('keydown', function(e) {
     if (e.key === 'Escape' && detailModal.classList.contains('show')) {
       closeDetailModal();
     }
@@ -1754,7 +1764,7 @@
   }
 
   // Switch video in the gallery
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     var vbtn = e.target.closest('.td-video-btn');
     if (!vbtn) return;
     var key = vbtn.dataset.ytKey;
@@ -1771,7 +1781,7 @@
   });
 
   // Scroll arrows for similar + seasons + backdrops (in the modal)
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     var btn = e.target.closest('[data-td-scroll], [data-seasons-scroll], [data-backdrops-scroll]');
     if (!btn) return;
     var rowId, dirAttr;
@@ -1787,7 +1797,7 @@
   // Lightbox backdrops
   var lb = document.getElementById('td-lightbox');
   var lbImg = document.getElementById('td-lightbox-img');
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     var open = e.target.closest('[data-td-lb-open]');
     if (open) {
       lbImg.src = open.dataset.tdLbOpen;
@@ -1799,7 +1809,7 @@
       lbImg.src = '';
     }
   });
-  document.addEventListener('keydown', function(e) {
+  onDoc('keydown', function(e) {
     if (!document.getElementById('td-lightbox')) return;
     if (e.key === 'Escape' && lb.classList.contains('show')) {
       lb.classList.remove('show');
@@ -1875,7 +1885,7 @@
       });
   }
 
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     if (e.target.closest('.tmdb-add-btn') || e.target.closest('.h-actions') || e.target.closest('a') || e.target.closest('.wl-star')) return;
     var card = e.target.closest('.media-card[data-tmdb-id]');
     if (!card) return;
@@ -1926,7 +1936,7 @@
   }
 
   // Hero "View details" button → opens Prismarr modal (not external TMDb)
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     var btn = e.target.closest('.tmdb-hero-details-btn');
     if (!btn) return;
     e.preventDefault();
@@ -2204,7 +2214,7 @@
   }
 
   // Star click on cards (only .media-card, not .ex-card)
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     var star = e.target.closest('.wl-star');
     if (!star) return;
     if (!star.closest('.media-card[data-tmdb-id]')) return;
@@ -2229,7 +2239,7 @@
   });
 
   // Clic bouton watchlist dans la modal
-  document.addEventListener('click', function(e) {
+  onDoc('click', function(e) {
     var btn = e.target.closest('.tmdb-wl-modal-btn');
     if (!btn) return;
     e.stopPropagation();
@@ -2257,6 +2267,15 @@
       history.replaceState(null, '', window.location.pathname);
     }
   }
+
+  // Bind the collected document listeners for this page instance, and unbind
+  // every one of them when the user navigates away.
+  window.registerPageLifecycle(function () {
+    pageDocListeners.forEach(function (l) { document.addEventListener(l[0], l[1]); });
+    return function () {
+      pageDocListeners.forEach(function (l) { document.removeEventListener(l[0], l[1]); });
+    };
+  });
 })();
 </script>
 {% endblock %}
