@@ -127,6 +127,176 @@ class TemplateEscapingGuardTest extends TestCase
             "/'__MSG__',\\s*d\\.error\\s*\\)/",
             "d.error est figé aujourd'hui, mais le puits doit rester échappé",
         ];
+
+        yield 'jellyseerr: requester display name' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*\\(user\\.displayName\\s*\\|\\|/",
+            'le nom affiché vient de Plex/Jellyfin et est choisi par le demandeur',
+        ];
+
+        yield 'jellyseerr: moderator display name' => [
+            'jellyseerr/index.html.twig',
+            "/modName\\s*=\\s*modifier\\.displayName\\s*\\|\\|/",
+            'même source que le demandeur, rendu dans la session ROLE_ADMIN',
+        ];
+
+        yield 'jellyseerr: TMDb overview' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*tmdb\\.overview\\s*\\+/",
+            'synopsis TMDb concaténé dans innerHTML',
+        ];
+
+        // Balayage du 2026-07-31 : les puits restants des trois templates
+        // Jellyseerr, trouvés en relisant chaque affectation innerHTML.
+        yield 'jellyseerr: TMDb title in the hero' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*titleText\\s*\\+/",
+            'le titre TMDb est éditable par la communauté',
+        ];
+
+        yield 'jellyseerr: TMDb genres' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*tmdb\\.genres\\.join/",
+            'les libellés de genre viennent de TMDb',
+        ];
+
+        yield 'jellyseerr: TMDb backdrop in a CSS url()' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*backdrop\\s*\\+/",
+            "un ') referme la chaîne CSS : encoder, pas échapper",
+        ];
+
+        yield 'jellyseerr: TMDb poster src' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*poster\\s*\\+/",
+            "le chemin d'affiche atterrit dans un src",
+        ];
+
+        yield 'jellyseerr: requester avatar in a CSS url()' => [
+            'jellyseerr/index.html.twig',
+            "/url\\(\\\\'\\{\\{ service_url \\}\\}/",
+            "l'avatar du demandeur atterrit dans un url('…') CSS",
+        ];
+
+        yield 'jellyseerr: moderator avatar in a CSS url()' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*modAvatar\\s*\\+/",
+            'même puits CSS que le demandeur',
+        ];
+
+        yield 'jellyseerr: edit modal requester name' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*currentUserName\\s*\\+/",
+            'la modale d\'édition rend le même nom choisi par le demandeur',
+        ];
+
+        yield 'jellyseerr: edit modal requester avatar' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*currentUserAvatar\\s*\\+/",
+            'même puits CSS que la modale de détail',
+        ];
+
+        yield 'jellyseerr: edit modal user list names' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*name\\s*\\+/",
+            'la liste déroulante rend le nom de chaque compte Jellyseerr',
+        ];
+
+        yield 'jellyseerr: edit modal user list avatars' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*avatar\\s*\\+/",
+            "l'avatar sert dans un url('…') CSS et dans data-avatar",
+        ];
+
+        yield 'jellyseerr: *arr quality profile name' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*p\\.name\\s*\\+/",
+            'le nom de profil est relayé depuis Radarr/Sonarr',
+        ];
+
+        yield 'jellyseerr: *arr root folder path' => [
+            'jellyseerr/index.html.twig',
+            "/\\+\\s*rf\\.path\\s*\\+/",
+            'le chemin racine est relayé depuis Radarr/Sonarr',
+        ];
+
+        yield 'jellyseerr users: upstream error message' => [
+            'jellyseerr/users.html.twig',
+            "/'\\s*\\+\\s*msg;/",
+            'jsonClientError relaie le message renvoyé par Jellyseerr',
+        ];
+
+        yield 'jellyseerr users: Jellyfin import username' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*uName\\s*\\+/",
+            "le nom de compte Jellyfin est choisi côté serveur média",
+        ];
+
+        yield 'jellyseerr users: Jellyfin import thumb' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*uThumb\\s*\\+/",
+            "la vignette atterrit dans un url('…') CSS",
+        ];
+
+        yield 'jellyseerr users: Jellyfin import id' => [
+            'jellyseerr/users.html.twig',
+            "/js-jf-user-cb\" value=\"'\\s*\\+\\s*u\\.id\\s*\\+/",
+            "l'identifiant vient du serveur média et atterrit dans un attribut",
+        ];
+
+        yield 'jellyseerr users: profile display name' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*name\\s*\\+/",
+            'même nom choisi par le demandeur, rendu dans la modale profil',
+        ];
+
+        yield 'jellyseerr users: profile email' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*\\(?u\\.email\\s*(?:\\+|\\|\\|)/",
+            "l'adresse e-mail est saisie par le demandeur",
+        ];
+
+        yield 'jellyseerr users: profile Jellyfin username' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*\\(u\\.jellyfinUsername\\s*\\|\\|/",
+            'même source que le nom affiché',
+        ];
+
+        yield 'jellyseerr users: profile Jellyfin id' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*\\(u\\.jellyfinUserId\\s*\\|\\|/",
+            "l'identifiant vient du serveur média",
+        ];
+
+        yield 'jellyseerr users: profile avatar in a CSS url()' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*avatar\\s*\\+/",
+            "l'avatar atterrit dans un url('…') CSS",
+        ];
+
+        yield 'jellyseerr users: profile backdrop in a CSS url()' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*backdrop\\s*\\+/",
+            'même puits CSS, alimenté par TMDb',
+        ];
+
+        yield 'jellyseerr users: request poster src' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*poster\\s*\\+/",
+            "le chemin d'affiche atterrit dans un src",
+        ];
+
+        yield 'jellyseerr users: request title' => [
+            'jellyseerr/users.html.twig',
+            "/\\+\\s*title\\s*\\+/",
+            'le titre TMDb est éditable par la communauté',
+        ];
+
+        yield 'jellyseerr user detail: upstream error message' => [
+            'jellyseerr/user_detail.html.twig',
+            "/\\+\\s*\\(msg\\s*\\|\\|/",
+            'jsonClientError relaie le message renvoyé par Jellyseerr',
+        ];
     }
 
     #[DataProvider('forbiddenPatterns')]

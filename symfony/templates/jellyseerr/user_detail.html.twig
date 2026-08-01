@@ -563,8 +563,13 @@
         });
     });
 
+    // msg vient de d.error : jsonClientError() y recopie le message renvoyé par
+    // Jellyseerr, donc une chaîne tierce dans un innerHTML de session ROLE_ADMIN.
+    // window.escHtml est hoisté dans base.html.twig.
+    var esc = window.escHtml || function (s) { return s == null ? '' : String(s); };
+
     function feedback(el, ok, msg) {
-        el.innerHTML = ok ? '<span class="text-success">' + (msg || _I18N.saved) + '</span>' : '<span class="text-danger">' + (msg || _I18N.error) + '</span>';
+        el.innerHTML = ok ? '<span class="text-success">' + esc(msg || _I18N.saved) + '</span>' : '<span class="text-danger">' + esc(msg || _I18N.error) + '</span>';
         setTimeout(function(){ el.innerHTML = ''; }, 3000);
     }
 
