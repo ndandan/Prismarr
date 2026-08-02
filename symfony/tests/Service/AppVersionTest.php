@@ -30,22 +30,6 @@ class AppVersionTest extends TestCase
         $this->assertSame(AppVersion::VERSION, (new AppVersion($this->emptyCache(), new NullLogger(), 'dev'))->current());
     }
 
-    public function testBetaBuildIsNudgedToStableButNotToOlderLine(): void
-    {
-        // A 1.1.0 beta sees the 1.1.0 stable as an update…
-        $beta = $this->withCachedReleases([
-            ['tag' => '1.1.0', 'name' => '', 'body' => '', 'published_at' => '', 'html_url' => ''],
-            ['tag' => '1.0.6', 'name' => '', 'body' => '', 'published_at' => '', 'html_url' => ''],
-        ], '1.1.0-beta.2');
-        $this->assertTrue($beta->isUpdateAvailable());
-
-        // …but not a 1.0.x patch released after the beta line started.
-        $beta2 = $this->withCachedReleases([
-            ['tag' => '1.0.6', 'name' => '', 'body' => '', 'published_at' => '', 'html_url' => ''],
-        ], '1.1.0-beta.2');
-        $this->assertFalse($beta2->isUpdateAvailable());
-    }
-
     public function testReleasesReadsFromCacheWhenHit(): void
     {
         $cached = [
@@ -73,32 +57,16 @@ class AppVersionTest extends TestCase
         $this->assertSame('9.9.9', $svc->latest());
     }
 
-    public function testIsUpdateAvailableTrueWhenLatestHigher(): void
+    public function testUpstreamReleasesNoLongerDriveIsUpdateAvailable(): void
     {
-        // Build a tag strictly higher than current — works regardless of constant value.
-        $current = AppVersion::VERSION;
-        $parts = array_map('intval', explode('.', $current));
-        $parts[0]++;
-        $higher = implode('.', $parts);
-
-        $svc = $this->withCachedReleases([
-            ['tag' => $higher, 'name' => '', 'body' => '', 'published_at' => '', 'html_url' => ''],
-        ]);
-        $this->assertTrue($svc->isUpdateAvailable());
-    }
-
-    public function testIsUpdateAvailableFalseWhenSame(): void
-    {
-        $svc = $this->withCachedReleases([
-            ['tag' => AppVersion::VERSION, 'name' => '', 'body' => '', 'published_at' => '', 'html_url' => ''],
-        ]);
-        $this->assertFalse($svc->isUpdateAvailable());
-    }
-
-    public function testIsUpdateAvailableFalseWhenNoLatest(): void
-    {
-        $svc = $this->withCachedReleases([]);
-        $this->assertFalse($svc->isUpdateAvailable());
+        $releases = [['tag' => '99.0.0', 'name' => 'v99', 'body' => '', 'body_html' => '', 'published_at' => '', 'html_url' => '']];
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn($releases);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3'); // no SHA → behind unknown
+        self::assertFalse($v->isUpdateAvailable());
     }
 
     public function testRenderBodyEmptyReturnsEmpty(): void
@@ -154,6 +122,195 @@ class AppVersionTest extends TestCase
         $svc->reset();
         // Should not throw — pool still returns the same cached payload.
         $this->assertSame('1.0.0', $svc->latest());
+    }
+
+    public function testParseComparePayloadReadsAheadBy(): void
+    {
+        // `commits` still arrives on the real payload but the parser no
+        // longer extracts it — the history feed reads it from a separate
+        // endpoint now, so only `behind` survives.
+        $payload = [
+            'ahead_by' => 3,
+            'commits'  => [
+                ['sha' => str_repeat('a', 40), 'html_url' => 'https://x/a', 'commit' => ['message' => "first subject\n\nbody", 'committer' => ['date' => '2026-08-01T10:00:00Z']]],
+            ],
+        ];
+        $parsed = AppVersion::parseComparePayload($payload);
+        self::assertSame(['behind' => 3], $parsed);
+    }
+
+    public function testParseComparePayloadRejectsGarbage(): void
+    {
+        self::assertNull(AppVersion::parseComparePayload(null));
+        self::assertNull(AppVersion::parseComparePayload('nope'));
+        self::assertNull(AppVersion::parseComparePayload(['commits' => []])); // no ahead_by
+    }
+
+    public function testParseCommitListHappyPath(): void
+    {
+        $data = [
+            ['sha' => str_repeat('a', 40), 'html_url' => 'https://x/a', 'commit' => ['message' => "first subject\n\nbody", 'committer' => ['date' => '2026-08-01T10:00:00Z']]],
+            ['sha' => str_repeat('b', 40), 'html_url' => 'https://x/b', 'commit' => ['message' => 'second subject', 'committer' => ['date' => '2026-08-01T11:00:00Z']]],
+        ];
+        $parsed = AppVersion::parseCommitList($data);
+        self::assertCount(2, $parsed);
+        // No reversal: the list-commits API already returns newest-first, so
+        // index 0 stays the API's first element.
+        self::assertSame('aaaaaaa', $parsed[0]['sha7']);
+        self::assertSame('first subject', $parsed[0]['subject']);
+        self::assertSame('2026-08-01T10:00:00Z', $parsed[0]['date']);
+        self::assertSame('https://x/a', $parsed[0]['html_url']);
+        self::assertSame('bbbbbbb', $parsed[1]['sha7']);
+        self::assertSame('second subject', $parsed[1]['subject']);
+        self::assertSame('https://x/b', $parsed[1]['html_url']);
+    }
+
+    public function testParseCommitListCapsAtThirtyCommits(): void
+    {
+        $commits = [];
+        for ($i = 0; $i < 40; $i++) {
+            $commits[] = ['sha' => sprintf('%040d', $i), 'html_url' => 'https://x/' . $i, 'commit' => ['message' => 'c' . $i, 'committer' => ['date' => '']]];
+        }
+        $parsed = AppVersion::parseCommitList($commits);
+        self::assertCount(30, $parsed);
+        // No reversal: the first element of the (newest-first) input stays first.
+        self::assertSame('c0', $parsed[0]['subject']);
+        self::assertSame('c29', $parsed[29]['subject']);
+    }
+
+    public function testParseCommitListRejectsGarbage(): void
+    {
+        self::assertSame([], AppVersion::parseCommitList(null));
+        self::assertSame([], AppVersion::parseCommitList('nope'));
+        // Non-array entries mixed into an otherwise-valid array are skipped,
+        // not fatal.
+        $parsed = AppVersion::parseCommitList([
+            null,
+            'nope',
+            ['sha' => str_repeat('c', 40), 'html_url' => 'https://x/c', 'commit' => ['message' => 'ok', 'committer' => ['date' => '']]],
+        ]);
+        self::assertCount(1, $parsed);
+        self::assertSame('ccccccc', $parsed[0]['sha7']);
+    }
+
+    public function testRecentMainHistoryReadsFromCacheWhenHit(): void
+    {
+        $cached = [['sha7' => 'abc1234', 'subject' => 's', 'date' => '2026-08-01T10:00:00Z', 'html_url' => 'https://x']];
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn($cached);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::never())->method('save');
+        $v = new AppVersion($pool, new NullLogger());
+        self::assertSame($cached, $v->recentMainHistory());
+    }
+
+    public function testRecentMainHistoryCachedFailureMarkerReturnsEmptyWithoutRefetching(): void
+    {
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn([]);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::never())->method('save');
+        $v = new AppVersion($pool, new NullLogger());
+        self::assertSame([], $v->recentMainHistory());
+    }
+
+    public function testSliceChangelogKeepsUnreleasedPlusTwoSections(): void
+    {
+        $md = "# Changelog\n\nintro\n\n## [Unreleased]\n\n- a\n\n## [1.1.0]\n\n- b\n\n## [1.0.0]\n\n- c\n\n## [0.9.0]\n\n- d\n";
+        $sliced = AppVersion::sliceChangelog($md);
+        self::assertStringContainsString('[Unreleased]', $sliced);
+        self::assertStringContainsString('[1.0.0]', $sliced);
+        self::assertStringNotContainsString('[0.9.0]', $sliced);
+        self::assertStringNotContainsString('# Changelog', $sliced); // prelude dropped
+    }
+
+    public function testSliceChangelogWithFewerSectionsKeepsWhatExists(): void
+    {
+        $md = "## [Unreleased]\n\n- a\n\n## [1.0.0]\n\n- b\n";
+        self::assertSame($md, AppVersion::sliceChangelog($md));
+    }
+
+    public function testSliceChangelogWithoutSectionsReturnsInputUnchanged(): void
+    {
+        self::assertSame("just text\n", AppVersion::sliceChangelog("just text\n"));
+    }
+
+    public function testCommitsBehindIsNullWithoutBuiltSha(): void
+    {
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->expects(self::never())->method('getItem'); // no SHA → no fetch, no cache
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3', '');
+        self::assertNull($v->commitsBehind());
+        self::assertFalse($v->isUpdateAvailable());
+        self::assertNull($v->builtSha());
+        self::assertNull($v->builtShaShort());
+    }
+
+    public function testCommitsBehindReadsFromCacheWhenHit(): void
+    {
+        $cached = ['behind' => 5];
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn($cached);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3', str_repeat('a', 40));
+        self::assertSame(5, $v->commitsBehind());
+        self::assertTrue($v->isUpdateAvailable());
+        self::assertSame('aaaaaaa', $v->builtShaShort());
+    }
+
+    public function testZeroBehindMeansUpToDate(): void
+    {
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn(['behind' => 0]);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3', str_repeat('a', 40));
+        self::assertSame(0, $v->commitsBehind());
+        self::assertFalse($v->isUpdateAvailable());
+    }
+
+    public function testUpstreamExposesFirstReleaseOrNull(): void
+    {
+        $releases = [['tag' => '1.1.1', 'name' => 'v1.1.1', 'body' => '', 'body_html' => '', 'published_at' => '2026-06-10T00:00:00Z', 'html_url' => 'https://gh/rel']];
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn($releases);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3');
+        self::assertSame(['tag' => '1.1.1', 'published_at' => '2026-06-10T00:00:00Z', 'html_url' => 'https://gh/rel'], $v->upstream());
+    }
+
+    public function testCachedCompareFailureMarkerIsRespectedWithoutResaving(): void
+    {
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn(['behind' => null]);
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::never())->method('save');
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3', str_repeat('a', 40));
+        self::assertNull($v->commitsBehind());
+        self::assertFalse($v->isUpdateAvailable());
+    }
+
+    public function testChangelogCachedFailureMarkerReturnsNullWithoutRefetching(): void
+    {
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn('');
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::never())->method('save');
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3');
+        self::assertNull($v->changelogHtml());
     }
 
     /**

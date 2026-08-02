@@ -9,6 +9,11 @@ FROM dunglas/frankenphp:1.3.6-php8.4-alpine
 ARG PRISMARR_VERSION=dev
 ENV PRISMARR_VERSION=${PRISMARR_VERSION}
 
+# Full git commit SHA of the build; empty on local builds. AppVersion uses it
+# to compute "commits behind fork main" on /admin/settings.
+ARG PRISMARR_GIT_SHA=
+ENV PRISMARR_GIT_SHA=${PRISMARR_GIT_SHA}
+
 # ── OCI metadata (surfaced on Docker Hub and `docker inspect`) ──────────
 LABEL org.opencontainers.image.title="Prismarr" \
       org.opencontainers.image.description="Self-hosted media stack dashboard — Radarr, Sonarr, Prowlarr, Jellyseerr, qBittorrent, TMDb in one Symfony UI." \
@@ -17,7 +22,8 @@ LABEL org.opencontainers.image.title="Prismarr" \
       org.opencontainers.image.url="https://github.com/Shoshuo/Prismarr" \
       org.opencontainers.image.documentation="https://github.com/Shoshuo/Prismarr#readme" \
       org.opencontainers.image.vendor="Prismarr" \
-      org.opencontainers.image.version="${PRISMARR_VERSION}"
+      org.opencontainers.image.version="${PRISMARR_VERSION}" \
+      org.opencontainers.image.revision="${PRISMARR_GIT_SHA}"
 
 # ── s6-overlay (multi-process init system) ──────────────────────────────
 ARG S6_OVERLAY_VERSION=3.2.0.2

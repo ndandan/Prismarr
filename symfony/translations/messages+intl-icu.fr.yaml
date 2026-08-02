@@ -1072,6 +1072,9 @@ admin:
       bug: 'Signaler un bug ↗'
       docs: 'Documentation ↗'
       roadmap: 'Roadmap ↗'
+      fork_source: Code source (ce fork)
+      fork_bug: Signaler un bug
+      upstream_label: 'Projet d''origine (cette application est un fork de Shoshuo/Prismarr) :'
   support:
     title: Soutien & Communauté
     donate: Soutenir Prismarr
@@ -1108,19 +1111,24 @@ admin:
     result: '{applied, plural, =0 {Aucun réglage importé} one {# réglage importé} other {# réglages importés}}, {skipped, plural, one {# ignoré.} other {# ignorés.}} {instances_applied, plural, =0 {} one {# instance restaurée.} other {# instances restaurées.}}'
   updates:
     title: Mises à jour
-    description: 'Suivez la version que vous utilisez et consultez les notes de version publiées sur GitHub. Prismarr ne se met pas à jour automatiquement — vous gardez le contrôle.'
+    description: 'Suivez la version que vous exécutez par rapport à la branche main de ce fork. Prismarr ne se met pas à jour tout seul — vous gardez la main.'
     current_version: Version actuelle
-    update_available: '{version} disponible'
     badge_available: Mise à jour
-    up_to_date: À jour
-    no_remote_info: 'Pas d''info distante (GitHub injoignable)'
-    view_on_github: Releases GitHub
-    docker_hub: Docker Hub
-    roadmap: 'Roadmap (projet GitHub)'
-    upgrade_hint_html: 'Pour mettre à jour : <code>docker compose pull &amp;&amp; docker compose up -d</code>. Lisez les notes ci-dessous pour repérer une éventuelle rupture.'
-    release_notes: Notes de version
-    no_releases: 'Aucune information de release disponible pour le moment (API GitHub injoignable).'
-    installed: Installée
+    behind: '{count, plural, one {# commit de retard sur le fork} other {# commits de retard sur le fork}}'
+    up_to_date: À jour avec le fork
+    no_remote_info: SHA de build inconnu — comparaison indisponible
+    comparison_unavailable: GitHub injoignable — comparaison indisponible
+    fork_commits: Commits
+    ghcr_package: Image conteneur
+    fork_issues: Tickets
+    upgrade_hint_html: 'Pour mettre à jour : <code>docker pull ghcr.io/ndandan/prismarr:latest &amp;&amp; docker compose up -d</code>. Sur Unraid, utilisez <strong>Force Update</strong> — Apply seul ne retélécharge pas l''image.'
+    whats_new: Nouveautés sur le fork
+    recent_commits: Commits récents
+    notes_unavailable: Impossible de charger les notes de version pour le moment.
+    upstream_title: Projet d'origine (Shoshuo/Prismarr)
+    upstream_last_release: 'Dernière release v{version} · {date}'
+    upstream_releases: Releases
+    roadmap: Feuille de route
 
 decouverte:
   title: Découverte

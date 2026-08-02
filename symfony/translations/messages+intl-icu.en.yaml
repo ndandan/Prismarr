@@ -1074,6 +1074,9 @@ admin:
       bug: 'Report a bug ↗'
       docs: 'Documentation ↗'
       roadmap: 'Roadmap ↗'
+      fork_source: Source code (this fork)
+      fork_bug: Report a bug
+      upstream_label: 'Upstream project (this app is a fork of Shoshuo/Prismarr):'
   support:
     title: Support & Community
     donate: Support Prismarr
@@ -1110,19 +1113,24 @@ admin:
     result: '{applied, plural, =0 {No settings imported} one {# setting imported} other {# settings imported}}, {skipped, plural, one {# skipped.} other {# skipped.}} {instances_applied, plural, =0 {} one {# instance restored.} other {# instances restored.}}'
   updates:
     title: Updates
-    description: 'Track the version you are running and review release notes published on GitHub. Prismarr does not auto-update — you stay in control.'
+    description: 'Track the build you are running against this fork''s main branch. Prismarr does not auto-update — you stay in control.'
     current_version: Current version
-    update_available: '{version} available'
     badge_available: Update
-    up_to_date: Up to date
-    no_remote_info: 'No remote info (GitHub unreachable)'
-    view_on_github: GitHub releases
-    docker_hub: Docker Hub
-    roadmap: 'Roadmap (GitHub project)'
-    upgrade_hint_html: 'To upgrade: <code>docker compose pull &amp;&amp; docker compose up -d</code>. Read the release notes below for any breaking change.'
-    release_notes: Release notes
-    no_releases: 'No release information available right now (GitHub API unreachable).'
-    installed: Installed
+    behind: '{count, plural, one {# commit behind fork main} other {# commits behind fork main}}'
+    up_to_date: Up to date with fork main
+    no_remote_info: Build SHA unknown — comparison unavailable
+    comparison_unavailable: GitHub unreachable — comparison unavailable
+    fork_commits: Commits
+    ghcr_package: Container image
+    fork_issues: Issues
+    upgrade_hint_html: 'To upgrade: <code>docker pull ghcr.io/ndandan/prismarr:latest &amp;&amp; docker compose up -d</code>. On Unraid, use <strong>Force Update</strong> — Apply alone does not repull the image.'
+    whats_new: What's new on fork main
+    recent_commits: Recent commits
+    notes_unavailable: Could not load release notes right now.
+    upstream_title: Upstream (Shoshuo/Prismarr)
+    upstream_last_release: 'Last release v{version} · {date}'
+    upstream_releases: Releases
+    roadmap: Roadmap
 
 decouverte:
   title: Discover
