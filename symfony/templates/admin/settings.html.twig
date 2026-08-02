@@ -1130,11 +1130,11 @@
                 <div class="d-flex flex-column gap-3">
                   {% set prevDay = '' %}
                   {% for c in app_main_history %}
-                    {% set day = c.date ? c.date|date('Y-m-d') : '' %}
-                    {% if day != prevDay %}
+                    {% set day = c.date ? c.date|date('Y-m-d', display_pref('timezone')) : '' %}
+                    {% if loop.first or day != prevDay %}
                       {% if not loop.first %}</div></article>{% endif %}
                       <article style="border-left: 3px solid var(--tblr-primary); padding-left: .75rem;">
-                        <div style="font-weight:600;margin-bottom:.35rem;">{{ day ? day|prismarr_date : '—' }}</div>
+                        <div style="font-weight:600;margin-bottom:.35rem;">{{ c.date ? c.date|prismarr_date : '—' }}</div>
                         <div class="d-flex flex-column gap-1">
                       {% set prevDay = day %}
                     {% endif %}
