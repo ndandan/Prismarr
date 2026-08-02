@@ -426,10 +426,14 @@ class AdminSettingsController extends AbstractController
             'export_counts'      => $this->exportCounts(),
             'languages'          => $this->loadServiceLanguages(),
             'errors'             => $errors,
-            'app_current'        => $this->appVersion->current(),
-            'app_latest'         => $this->appVersion->latest(),
+            'app_current'          => $this->appVersion->current(),
+            'app_built_sha'        => $this->appVersion->builtSha(),
+            'app_built_sha_short'  => $this->appVersion->builtShaShort(),
+            'app_commits_behind'   => $this->appVersion->commitsBehind(),
             'app_update_available' => $this->appVersion->isUpdateAvailable(),
-            'app_releases'       => $this->appVersion->releases(),
+            'app_fork_commits'     => $this->appVersion->recentForkCommits(),
+            'app_changelog_html'   => $this->appVersion->changelogHtml(),
+            'app_upstream'         => $this->appVersion->upstream(),
             'dashboard_layout'   => $this->loadDashboardLayout(),
             // v1.1.0 — instance lists for the multi-instance card UI.
             'instances_by_type'  => [

@@ -1079,26 +1079,31 @@
               <div class="d-flex align-items-center justify-content-between gap-3 flex-wrap">
                 <div>
                   <p class="service-card-title" style="margin-bottom:.25rem;">{{ 'admin.updates.current_version'|trans }}</p>
-                  <div class="d-flex align-items-baseline gap-2">
-                    <span style="font-family:monospace;font-size:1.4rem;font-weight:600;">v{{ app_current }}</span>
-                    {% if app_update_available %}
-                      <span class="badge bg-orange">{{ 'admin.updates.update_available'|trans({version: 'v' ~ app_latest}) }}</span>
-                    {% elseif app_latest %}
-                      <span class="badge bg-green-lt">{{ 'admin.updates.up_to_date'|trans }}</span>
-                    {% else %}
+                  <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                    <span style="font-family:monospace;font-size:1.4rem;font-weight:600;">{{ app_current }}</span>
+                    {% if app_built_sha_short %}
+                      <span class="text-secondary small" style="font-family:monospace;">{{ app_built_sha_short }}</span>
+                    {% endif %}
+                    {% if app_commits_behind is null %}
                       <span class="text-secondary small">{{ 'admin.updates.no_remote_info'|trans }}</span>
+                    {% elseif app_commits_behind > 0 %}
+                      <a href="https://github.com/ndandan/Prismarr/compare/{{ app_built_sha|e('html_attr') }}...main" target="_blank" rel="noopener" class="badge bg-orange" style="text-decoration:none;">
+                        {{ 'admin.updates.behind'|trans({count: app_commits_behind}) }}
+                      </a>
+                    {% else %}
+                      <span class="badge bg-green-lt">{{ 'admin.updates.up_to_date'|trans }}</span>
                     {% endif %}
                   </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
-                  <a href="https://github.com/Shoshuo/Prismarr/releases" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                    {{ ico.icon('brand-github', '', 16) }} {{ 'admin.updates.view_on_github'|trans }}
+                  <a href="https://github.com/ndandan/Prismarr/commits/main" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
+                    {{ ico.icon('brand-github', '', 16) }} {{ 'admin.updates.fork_commits'|trans }}
                   </a>
-                  <a href="https://hub.docker.com/r/shoshuo/prismarr/tags" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                    {{ ico.icon('brand-docker', '', 16) }} {{ 'admin.updates.docker_hub'|trans }}
+                  <a href="https://github.com/ndandan/Prismarr/pkgs/container/prismarr" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
+                    {{ ico.icon('download', '', 16) }} {{ 'admin.updates.ghcr_package'|trans }}
                   </a>
-                  <a href="https://github.com/users/Shoshuo/projects/4" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
-                    {{ ico.icon('map', '', 16) }} {{ 'admin.updates.roadmap'|trans }}
+                  <a href="https://github.com/ndandan/Prismarr/issues" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
+                    {{ ico.icon('bug', '', 16) }} {{ 'admin.updates.fork_issues'|trans }}
                   </a>
                 </div>
               </div>
@@ -1110,34 +1115,43 @@
             </div>
 
             <div class="service-card">
-              <p class="service-card-title">{{ 'admin.updates.release_notes'|trans }}</p>
+              <p class="service-card-title">{{ 'admin.updates.whats_new'|trans }}</p>
 
-              {% if app_releases is empty %}
-                <p class="text-secondary">{{ 'admin.updates.no_releases'|trans }}</p>
-              {% else %}
-                <div class="d-flex flex-column gap-3">
-                  {% for r in app_releases %}
-                    <article style="border-left: 3px solid var(--tblr-primary); padding-left: .75rem;">
-                      <div class="d-flex align-items-baseline gap-2 flex-wrap" style="margin-bottom:.4rem;">
-                        <a href="{{ r.html_url|e('html_attr') }}" target="_blank" rel="noopener" style="font-family:monospace;font-weight:600;text-decoration:none;">
-                          v{{ r.tag }}
-                        </a>
-                        {% if r.tag == app_current %}
-                          <span class="badge bg-blue-lt">{{ 'admin.updates.installed'|trans }}</span>
-                        {% endif %}
-                        {% if r.published_at %}
-                          <span class="text-secondary small">{{ r.published_at|prismarr_date }}</span>
-                        {% endif %}
-                      </div>
-                      {% if r.body_html is defined and r.body_html %}
-                        <div class="release-body" style="font-size:.88rem;line-height:1.5;padding:.5rem .75rem;background:var(--tblr-bg-surface-secondary);border-radius:4px;max-height:340px;overflow-y:auto;">
-                          {{ r.body_html|raw }}
-                        </div>
-                      {% elseif r.body %}
-                        <div class="release-body" style="font-size:.88rem;line-height:1.5;padding:.5rem .75rem;background:var(--tblr-bg-surface-secondary);border-radius:4px;max-height:340px;overflow-y:auto;white-space:pre-wrap;">{{ r.body }}</div>
-                      {% endif %}
-                    </article>
+              {% if app_changelog_html %}
+                <div class="release-body" style="font-size:.88rem;line-height:1.5;padding:.5rem .75rem;background:var(--tblr-bg-surface-secondary);border-radius:4px;max-height:420px;overflow-y:auto;">
+                  {{ app_changelog_html|raw }}
+                </div>
+              {% elseif app_fork_commits is empty %}
+                <p class="text-secondary">{{ 'admin.updates.notes_unavailable'|trans }}</p>
+              {% endif %}
+
+              {% if app_update_available and app_fork_commits is not empty %}
+                <p class="service-card-title" style="margin-top:.9rem;margin-bottom:.4rem;">{{ 'admin.updates.recent_commits'|trans }}</p>
+                <div class="d-flex flex-column gap-1">
+                  {% for c in app_fork_commits %}
+                    <div class="d-flex align-items-baseline gap-2 small">
+                      <a href="{{ c.html_url|e('html_attr') }}" target="_blank" rel="noopener" style="font-family:monospace;text-decoration:none;">{{ c.sha7 }}</a>
+                      <span>{{ c.subject }}</span>
+                      {% if c.date %}<span class="text-secondary">{{ c.date|prismarr_date }}</span>{% endif %}
+                    </div>
                   {% endfor %}
+                </div>
+              {% endif %}
+
+              {% if app_upstream %}
+                <div class="border-top" style="margin-top:1rem;padding-top:.75rem;">
+                  <p class="service-card-title" style="margin-bottom:.25rem;">{{ 'admin.updates.upstream_title'|trans }}</p>
+                  <div class="d-flex align-items-baseline gap-2 flex-wrap">
+                    <span class="text-secondary small">
+                      {{ 'admin.updates.upstream_last_release'|trans({version: app_upstream.tag, date: app_upstream.published_at|prismarr_date}) }}
+                    </span>
+                    <a href="https://github.com/Shoshuo/Prismarr/releases" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary">
+                      {{ ico.icon('brand-github', '', 16) }} {{ 'admin.updates.upstream_releases'|trans }}
+                    </a>
+                    <a href="https://github.com/users/Shoshuo/projects/4" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-secondary">
+                      {{ ico.icon('map', '', 16) }} {{ 'admin.updates.roadmap'|trans }}
+                    </a>
+                  </div>
                 </div>
               {% endif %}
             </div>
@@ -1217,6 +1231,15 @@
 
             <div class="service-card" style="margin-top:1rem;">
               <p class="service-card-title" style="margin-bottom:.4rem;">{{ 'admin.about.links.title'|trans }}</p>
+              <div class="d-flex flex-wrap gap-2">
+                <a href="https://github.com/ndandan/Prismarr" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
+                  {{ ico.icon('brand-github', '', 16) }} {{ 'admin.about.links.fork_source'|trans }}
+                </a>
+                <a href="https://github.com/ndandan/Prismarr/issues" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
+                  {{ ico.icon('bug', '', 16) }} {{ 'admin.about.links.fork_bug'|trans }}
+                </a>
+              </div>
+              <p class="text-secondary small" style="margin:.6rem 0 .3rem;">{{ 'admin.about.links.upstream_label'|trans }}</p>
               <div class="d-flex flex-wrap gap-2">
                 <a href="https://github.com/Shoshuo/Prismarr" target="_blank" rel="noopener" class="btn btn-sm btn-ghost-primary">
                   {{ ico.icon('brand-github', '', 16) }} {{ 'admin.about.links.source'|trans }}

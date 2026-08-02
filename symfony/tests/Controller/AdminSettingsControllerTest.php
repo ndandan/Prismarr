@@ -28,9 +28,13 @@ class AdminSettingsControllerTest extends TestCase
     ): AdminSettingsController {
         $appVersion = $this->createMock(\App\Service\AppVersion::class);
         $appVersion->method('current')->willReturn('test');
-        $appVersion->method('latest')->willReturn(null);
+        $appVersion->method('builtSha')->willReturn(null);
+        $appVersion->method('builtShaShort')->willReturn(null);
+        $appVersion->method('commitsBehind')->willReturn(null);
         $appVersion->method('isUpdateAvailable')->willReturn(false);
-        $appVersion->method('releases')->willReturn([]);
+        $appVersion->method('recentForkCommits')->willReturn([]);
+        $appVersion->method('changelogHtml')->willReturn(null);
+        $appVersion->method('upstream')->willReturn(null);
 
         $controller = new AdminSettingsController(
             $settings,
