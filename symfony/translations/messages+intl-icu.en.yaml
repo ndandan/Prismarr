@@ -1119,10 +1119,11 @@ admin:
     behind: '{count, plural, one {# commit behind fork main} other {# commits behind fork main}}'
     up_to_date: Up to date with fork main
     no_remote_info: Build SHA unknown — comparison unavailable
+    comparison_unavailable: GitHub unreachable — comparison unavailable
     fork_commits: Commits
     ghcr_package: Container image
     fork_issues: Issues
-    upgrade_hint_html: 'To upgrade: <code>docker pull ghcr.io/ndandan/prismarr:latest && docker compose up -d</code>. On Unraid, use <strong>Force Update</strong> — Apply alone does not repull the image.'
+    upgrade_hint_html: 'To upgrade: <code>docker pull ghcr.io/ndandan/prismarr:latest &amp;&amp; docker compose up -d</code>. On Unraid, use <strong>Force Update</strong> — Apply alone does not repull the image.'
     whats_new: What's new on fork main
     recent_commits: Recent commits
     notes_unavailable: Could not load release notes right now.

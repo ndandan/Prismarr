@@ -51,8 +51,8 @@ class UpdatesSectionGuardTest extends TestCase
     public function testEveryNewTranslationKeyExistsInBothLocales(): void
     {
         $keys = [
-            'behind', 'up_to_date', 'no_remote_info', 'fork_commits', 'ghcr_package',
-            'fork_issues', 'upgrade_hint_html', 'whats_new', 'recent_commits',
+            'behind', 'up_to_date', 'no_remote_info', 'comparison_unavailable', 'fork_commits',
+            'ghcr_package', 'fork_issues', 'upgrade_hint_html', 'whats_new', 'recent_commits',
             'notes_unavailable', 'upstream_title', 'upstream_last_release',
             'upstream_releases', 'roadmap',
         ];
@@ -62,6 +62,7 @@ class UpdatesSectionGuardTest extends TestCase
                 self::assertArrayHasKey($key, $catalog['admin']['updates'] ?? [], "admin.updates.$key missing in $locale");
             }
             self::assertArrayHasKey('fork_source', $catalog['admin']['about']['links'] ?? [], "admin.about.links.fork_source missing in $locale");
+            self::assertArrayHasKey('fork_bug', $catalog['admin']['about']['links'] ?? [], "admin.about.links.fork_bug missing in $locale");
             self::assertArrayHasKey('upstream_label', $catalog['admin']['about']['links'] ?? [], "admin.about.links.upstream_label missing in $locale");
         }
     }

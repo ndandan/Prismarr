@@ -1085,7 +1085,7 @@
                       <span class="text-secondary small" style="font-family:monospace;">{{ app_built_sha_short }}</span>
                     {% endif %}
                     {% if app_commits_behind is null %}
-                      <span class="text-secondary small">{{ 'admin.updates.no_remote_info'|trans }}</span>
+                      <span class="text-secondary small">{{ (app_built_sha ? 'admin.updates.comparison_unavailable' : 'admin.updates.no_remote_info')|trans }}</span>
                     {% elseif app_commits_behind > 0 %}
                       <a href="https://github.com/ndandan/Prismarr/compare/{{ app_built_sha|e('html_attr') }}...main" target="_blank" rel="noopener" class="badge bg-orange" style="text-decoration:none;">
                         {{ 'admin.updates.behind'|trans({count: app_commits_behind}) }}

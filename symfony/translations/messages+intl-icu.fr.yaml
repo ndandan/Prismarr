@@ -1117,10 +1117,11 @@ admin:
     behind: '{count, plural, one {# commit de retard sur le fork} other {# commits de retard sur le fork}}'
     up_to_date: À jour avec le fork
     no_remote_info: SHA de build inconnu — comparaison indisponible
+    comparison_unavailable: GitHub injoignable — comparaison indisponible
     fork_commits: Commits
     ghcr_package: Image conteneur
     fork_issues: Tickets
-    upgrade_hint_html: 'Pour mettre à jour : <code>docker pull ghcr.io/ndandan/prismarr:latest && docker compose up -d</code>. Sur Unraid, utilisez <strong>Force Update</strong> — Apply seul ne retélécharge pas l''image.'
+    upgrade_hint_html: 'Pour mettre à jour : <code>docker pull ghcr.io/ndandan/prismarr:latest &amp;&amp; docker compose up -d</code>. Sur Unraid, utilisez <strong>Force Update</strong> — Apply seul ne retélécharge pas l''image.'
     whats_new: Nouveautés sur le fork
     recent_commits: Commits récents
     notes_unavailable: Impossible de charger les notes de version pour le moment.
