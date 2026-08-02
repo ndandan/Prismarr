@@ -32,7 +32,7 @@ class AdminSettingsControllerTest extends TestCase
         $appVersion->method('builtShaShort')->willReturn(null);
         $appVersion->method('commitsBehind')->willReturn(null);
         $appVersion->method('isUpdateAvailable')->willReturn(false);
-        $appVersion->method('recentForkCommits')->willReturn([]);
+        $appVersion->method('recentMainHistory')->willReturn([]);
         $appVersion->method('changelogHtml')->willReturn(null);
         $appVersion->method('upstream')->willReturn(null);
 

@@ -431,7 +431,7 @@ class AdminSettingsController extends AbstractController
             'app_built_sha_short'  => $this->appVersion->builtShaShort(),
             'app_commits_behind'   => $this->appVersion->commitsBehind(),
             'app_update_available' => $this->appVersion->isUpdateAvailable(),
-            'app_fork_commits'     => $this->appVersion->recentForkCommits(),
+            'app_main_history'     => $this->appVersion->recentMainHistory(),
             'app_changelog_html'   => $this->appVersion->changelogHtml(),
             'app_upstream'         => $this->appVersion->upstream(),
             'dashboard_layout'   => $this->loadDashboardLayout(),

@@ -13,9 +13,10 @@ use Symfony\Contracts\Service\ResetInterface;
  * The page tracks the *fork's* `main` branch: the build stamps the exact git
  * SHA it was built from (the `PRISMARR_GIT_SHA` env), and this service compares
  * that SHA against fork `main` via GitHub's compare API to report how many
- * commits behind the running build is, plus a bounded feed of recent fork
- * commits and the fork's CHANGELOG. Upstream (Shoshuo/Prismarr) releases are
- * fetched too, but purely informational — they no longer drive
+ * commits behind the running build is. Separately, it fetches a bounded,
+ * newest-first feed of fork `main`'s commit history (for the date-grouped
+ * "What's new" feed) and the fork's CHANGELOG. Upstream (Shoshuo/Prismarr)
+ * releases are fetched too, but purely informational — they no longer drive
  * {@see isUpdateAvailable()}.
  *
  * The running version is whatever the build stamped into the `PRISMARR_VERSION`
@@ -45,9 +46,14 @@ class AppVersion implements ResetInterface
     private const FORK_REPO          = 'ndandan/Prismarr';
     private const FORK_COMPARE_URL   = 'https://api.github.com/repos/' . self::FORK_REPO . '/compare/%s...main';
     private const FORK_CHANGELOG_URL = 'https://raw.githubusercontent.com/' . self::FORK_REPO . '/main/CHANGELOG.md';
+    private const FORK_HISTORY_URL   = 'https://api.github.com/repos/' . self::FORK_REPO . '/commits?sha=main&per_page=30';
 
-    private const COMPARE_CACHE_KEY   = 'app_version.fork_compare.v1';
+    // v2: schema bump (dropped the `commits` key — the history feed below
+    // replaced it). Old v1 cache entries are simply ignored; they expire on
+    // their own after 1 h.
+    private const COMPARE_CACHE_KEY   = 'app_version.fork_compare.v2';
     private const CHANGELOG_CACHE_KEY = 'app_version.fork_changelog.v1';
+    private const HISTORY_CACHE_KEY   = 'app_version.fork_history.v1';
 
     /** Resolved once in the constructor: PRISMARR_VERSION, or the constant. */
     private readonly string $version;
@@ -55,11 +61,14 @@ class AppVersion implements ResetInterface
     /** @var array<int, array{tag:string,name:string,body:string,body_html:string,published_at:string,html_url:string}>|null */
     private ?array $releasesInProcess = null;
 
-    /** @var array{behind: int|null, commits: array<int, array{sha7: string, subject: string, date: string, html_url: string}>}|null */
+    /** @var array{behind: int|null}|null */
     private ?array $compareInProcess = null;
 
     /** Rendered changelog HTML; '' = unavailable (fetch failed, cached briefly under FAILURE_CACHE_TTL). */
     private ?string $changelogInProcess = null;
+
+    /** @var array<int, array{sha7: string, subject: string, date: string, html_url: string}>|null */
+    private ?array $historyInProcess = null;
 
     private readonly string $gitSha;
 
@@ -87,6 +96,7 @@ class AppVersion implements ResetInterface
         $this->releasesInProcess  = null;
         $this->compareInProcess   = null;
         $this->changelogInProcess = null;
+        $this->historyInProcess   = null;
     }
 
     public function current(): string
@@ -121,10 +131,39 @@ class AppVersion implements ResetInterface
         return $this->compare()['behind'];
     }
 
-    /** @return array<int, array{sha7: string, subject: string, date: string, html_url: string}> */
-    public function recentForkCommits(): array
+    /**
+     * Bounded, newest-first feed of fork `main`'s commit history, for the
+     * date-grouped "What's new" feed. `[]` = unavailable.
+     *
+     * @return array<int, array{sha7: string, subject: string, date: string, html_url: string}>
+     */
+    public function recentMainHistory(): array
     {
-        return $this->compare()['commits'];
+        if ($this->historyInProcess !== null) {
+            return $this->historyInProcess;
+        }
+
+        $item = $this->cacheApp->getItem(self::HISTORY_CACHE_KEY);
+        if ($item->isHit()) {
+            $cached = $item->get();
+            if (is_array($cached)) {
+                /** @var array<int, array{sha7: string, subject: string, date: string, html_url: string}> $cached */
+                return $this->historyInProcess = $cached;
+            }
+        }
+
+        $body   = $this->httpGet(self::FORK_HISTORY_URL, 'application/vnd.github+json');
+        $parsed = $body === null ? [] : self::parseCommitList(json_decode($body, true));
+
+        // Same failure-marker pattern as releases()/changelogHtml(): an
+        // empty result (fetch failed, or a genuinely empty list) is cached
+        // briefly rather than at the full TTL, so a GitHub outage costs at
+        // most one slow render per FAILURE_CACHE_TTL window.
+        $item->set($parsed);
+        $item->expiresAfter($parsed === [] ? self::FAILURE_CACHE_TTL : self::CACHE_TTL);
+        $this->cacheApp->save($item);
+
+        return $this->historyInProcess = $parsed;
     }
 
     /** @return bool true when the running build is strictly behind fork main. */
@@ -183,14 +222,14 @@ class AppVersion implements ResetInterface
         return $this->changelogInProcess = $html;
     }
 
-    /** @return array{behind: int|null, commits: array<int, array{sha7: string, subject: string, date: string, html_url: string}>} */
+    /** @return array{behind: int|null} */
     private function compare(): array
     {
         if ($this->compareInProcess !== null) {
             return $this->compareInProcess;
         }
 
-        $unavailable = ['behind' => null, 'commits' => []];
+        $unavailable = ['behind' => null];
 
         $sha = $this->builtSha();
         if ($sha === null) {
@@ -200,8 +239,8 @@ class AppVersion implements ResetInterface
         $item = $this->cacheApp->getItem(self::COMPARE_CACHE_KEY);
         if ($item->isHit()) {
             $cached = $item->get();
-            if (is_array($cached) && array_key_exists('behind', $cached) && array_key_exists('commits', $cached)) {
-                /** @var array{behind: int|null, commits: array<int, array{sha7: string, subject: string, date: string, html_url: string}>} $cached */
+            if (is_array($cached) && array_key_exists('behind', $cached)) {
+                /** @var array{behind: int|null} $cached */
                 return $this->compareInProcess = $cached;
             }
         }
@@ -226,12 +265,14 @@ class AppVersion implements ResetInterface
 
     /**
      * Parse a GitHub compare-API payload (base = the built SHA, head = main).
-     * `ahead_by` = commits main has that the build does not. Commits arrive
-     * oldest→newest; we keep the newest 15, newest first.
+     * `ahead_by` = commits main has that the build does not. The payload also
+     * carries a `commits` array, but the date-grouped history feed reads that
+     * from a separate endpoint now ({@see recentMainHistory()}), so this only
+     * extracts the count.
      *
      * Public + static so it can be unit-tested without booting the cache.
      *
-     * @return array{behind: int, commits: array<int, array{sha7: string, subject: string, date: string, html_url: string}>}|null
+     * @return array{behind: int}|null
      */
     public static function parseComparePayload(mixed $data): ?array
     {
@@ -239,9 +280,29 @@ class AppVersion implements ResetInterface
             return null;
         }
 
+        return ['behind' => $data['ahead_by']];
+    }
+
+    /**
+     * Parse a GitHub list-commits payload (`GET /repos/:owner/:repo/commits`)
+     * into the bounded shape the "What's new" feed renders. The API already
+     * returns commits newest→oldest, so — unlike the old compare-derived
+     * list — this does NOT reverse; index 0 stays the API's first (newest)
+     * element. Caps at 30. Non-array input or a non-array `$data` returns
+     * `[]`; non-array entries within the list are skipped rather than fatal.
+     *
+     * Public + static so it can be unit-tested without booting the cache.
+     *
+     * @return array<int, array{sha7: string, subject: string, date: string, html_url: string}>
+     */
+    public static function parseCommitList(mixed $data): array
+    {
+        if (!is_array($data)) {
+            return [];
+        }
+
         $commits = [];
-        $raw     = is_array($data['commits'] ?? null) ? array_reverse($data['commits']) : [];
-        foreach (array_slice($raw, 0, 15) as $c) {
+        foreach (array_slice($data, 0, 30) as $c) {
             if (!is_array($c)) {
                 continue;
             }
@@ -256,7 +317,7 @@ class AppVersion implements ResetInterface
             ];
         }
 
-        return ['behind' => $data['ahead_by'], 'commits' => $commits];
+        return $commits;
     }
 
     /**
