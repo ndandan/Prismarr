@@ -187,7 +187,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Houndarr (fork):** optional dashboard stat tile with backlog-search totals and a health chip.
 - **UniFi network monitoring (fork):** optional admin-only dashboard section — live WAN up/download, client counts (wired/wireless/guest), a 24-hour usage graph and gateway/switch/AP status, via the UniFi OS Network API. Plus a full **UniFi Network tab** (`/unifi`, admin-only): 7-day traffic and 30-day speedtest trends, device inventory, RF environment (AP radios and neighbouring APs), VLANs, wireless clients, live talkers, top clients and DHCP-reservation mismatches — read-only, and every panel falls back to an empty state rather than breaking the page.
 - **Preferences:** theme, UI density, timezone, date format, English / French UI, settings export / import (credentials always stripped).
-- **Security:** Symfony auth with login rate-limiter, non-root container, dynamic CSP, SSRF protection on user-provided URLs, CSRF on every mutation.
+- **Security:** Symfony auth with login rate-limiter, non-root container, a strict nonce-based CSP (`script-src` with no `'unsafe-inline'`, enforced), SSRF protection on user-provided URLs, CSRF on every mutation.
 
 ---
 
@@ -356,8 +356,10 @@ volume is preserved.
 The fork publishes two tags to GHCR, built by GitHub Actions:
 
 - **`ghcr.io/ndandan/prismarr:latest`** — rebuilt from `main`. This is the
-  stable fork build; nothing reaches `main` without green CI (lint + full
-  PHPUnit suite) and a live test.
+  stable fork build; nothing reaches `main` without green CI (lint + PHPStan +
+  full PHPUnit suite) and a live test. Each build reports its own commit
+  (`main-<sha>`), and **Settings → Updates** tells you how many commits behind
+  fork `main` you are, with the fork changelog as the release notes.
 - **`ghcr.io/ndandan/prismarr:beta`** — pre-release builds of in-progress
   feature branches, used to test on a real deployment before merging.
 

@@ -5,14 +5,15 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-07-25 (covers 2026-06-13 → 2026-07-25).*
+*Last updated: 2026-08-01 (covers 2026-06-13 → 2026-08-01).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
 mergeable both ways), and everything general-purpose is offered back as an
 upstream PR. Every change lands through the same quality gate as upstream —
-PHP lint, Twig lint and the full PHPUnit suite (~970 tests) green in CI, plus
+PHP lint, Twig lint and the full PHPUnit suite (~1,080 tests) green in CI, plus
 a live test on a real Unraid deployment — before an image is published.
+Since 2026-07-31 that gate also includes PHPStan at level 7.
 
 ---
 
@@ -454,6 +455,175 @@ well as the two fork-added ones, so the qBittorrent half is an upstream bug —
 milder there, since with one torrent page there is no second page to corrupt,
 but the poller still survives into every other page. Good upstream PR candidate.
 
+### Code-review remediation, Phase 1 (2026-07-31)
+
+The first phase of a whole-codebase review (merge `9d469ff`) — the ship-blockers
+and the systemic findings, ahead of the CSP work below:
+
+- **`/search/online` 500'd on a cold cache.** The action passed a fake cache
+  callback, `fn(ItemInterface $item) => ($item->expiresAfter(60)) ?: []`.
+  `expiresAfter()` is fluent and returns `$this`, so the `?:` fallback is
+  unreachable: a miss returned the cache item itself, `array_column()` got a
+  non-array and threw, and the `ItemInterface` was written into the pool for
+  60 s. The repro is mundane — save any admin setting (which clears
+  `cache.app`), then `Ctrl+K`. Both search actions now share one real index
+  builder.
+- **Three XSS escaping sweeps.** 14 sinks in the Discover detail modal
+  (TMDb-supplied strings), 28 across the three Jellyseerr templates
+  (requester-controlled names), 17 across the calendar's four render paths
+  (Radarr/Sonarr titles), plus the Explorer's `escHtml` hardened to match its
+  Discover sibling. A 58-row `TemplateEscapingGuardTest` pins every site. These
+  stop the *injection*; the CSP phase below stops the *execution*.
+- **SABnzbd `action()` failed open.** An absent `status` key defaulted to
+  `true`, so any unrecognised `200` — a reverse proxy's page, a different
+  SABnzbd version — was reported as a successful pause/resume/delete/add. Pure
+  actions always carry `status`; its absence is now a logged failure, matching
+  `NzbgetClient`'s existing `=== true` strictness.
+- **A logging blackout on four integrations.** `TautulliClient::recordError()`
+  swallowed the failure it is named for, and the Gluetun, Unraid, UniFi and
+  Houndarr clients logged transport and decode failures at `debug` — which
+  production Monolog never writes. A misconfigured integration therefore
+  rendered its muted offline state with nothing to triage from. `recordError()`
+  warns, and 11 `debug` calls become `warning`, all still behind the existing
+  enabled/configured guards so an unconfigured service stays quiet.
+- **PHPStan level 7 added to `make check`** (and so to CI, with no workflow
+  edit). Level 6 is strictly dominated — 812 missing-iterable-annotation errors
+  over level 5, zero correctness findings — so the jump is to 7, with the
+  annotation debt ignored *by identifier* rather than baselined so new files
+  don't inherit it. 17 real bugs were fixed before the 160-entry baseline was
+  taken, which is now shrink-only. Headline: `transliterator_transliterate()`
+  returns `false` on failure, coerced to `''`, which made the library search's
+  `str_contains()` match every item — one bad transliteration silently turned
+  search into "match everything". Also an undefined-method call in
+  `TmdbController` (the watchlist repository lacked the
+  `@extends ServiceEntityRepository<…>` generic its three siblings declare, so
+  `find()` analysed as bare `object`), five `foreach` loops over
+  `preg_split()`'s `list<string>|false`, and a `preg_quote()` with no delimiter
+  argument.
+
+Almost all of it applies to upstream-origin code, so most of this phase is an
+upstream fix as much as a fork one — a good PR candidate once the later phases
+settle. Phases 3 and 4 (client abstraction and the duplication findings; CSRF
+and the avatar IDOR) are still open.
+
+### Enforcing CSP with a session-stable nonce (2026-08-01)
+
+Phase 2 of the same review (merge `de7540e`): `script-src` drops
+`'unsafe-inline'` **and** `data:` for a nonce policy, enforced — Report-Only
+retired. Phase 1 escaped the sinks; this stops execution, which is the durable
+fix for the class. Every inline `<script>` the app emits (118) carries a nonce
+and all 18 inline `on*=` handlers were converted to `addEventListener`
+registrations, since a nonce cannot rescue an attribute handler — CSP blocks
+those unconditionally. `style-src 'unsafe-inline'` deliberately stays: inline
+`style=` is pervasive here and style injection is the strictly lower-severity
+class.
+
+The approach was chosen over the ES-module migration upstream issue #32 asks
+for: nonce-first is a mechanical diff across 96 templates instead of a
+months-scale rewrite with maximal merge-conflict surface, and it reaches the
+same security outcome.
+
+- **The nonce is session-stable, and that is the load-bearing design
+  decision.** One random value per session (`_csp_nonce`), rotated at the login
+  boundary by a `LoginSuccessEvent` subscriber, with a per-request value when
+  there is no session. Per-request rotation — the textbook answer — breaks
+  Hotwire Turbo two independent ways. (1) The importmap polyfill loader is an
+  inline script inside a `data-turbo-track="reload"` head element, so a
+  changing nonce changes that element's *body text*; Turbo reads the tracked
+  head as changed and forces a full reload on every navigation. (2) Turbo
+  re-stamps the scripts it re-injects with the newest
+  `<meta name="csp-nonce">` value, which the original document's policy — still
+  the one being enforced — has never heard of, so they are blocked. Both are
+  invisible on a hard refresh, which is why the `:beta` sweeps navigated in-app
+  only.
+- **CSP headers are gated to HTML responses** (`governsADocument()`). JSON and
+  API responses carry no policy — and stop minting an orphan session per
+  cookieless poll: the 30 s Docker healthcheck alone was creating ~2,880
+  session files a day.
+- **One shared page-lifecycle helper.** `window.registerPageLifecycle(init)`
+  runs `init` at parse time and invokes the teardown it returns from a
+  self-removing `turbo:before-render` listener. It replaced the leaky
+  registrations on the base health poller, the Plex pill, Films, Series and
+  Discover, which stacked one handler per visit: visiting Discover *K* times
+  and then clicking the watchlist star fired *K* POSTs — add, remove, add — and
+  the star silently reverted. Exactly one POST now. This promotes a pattern
+  thirteen templates already hand-rolled correctly; the duplicated badge
+  pollers and the ~198 cross-template duplicate element ids remain deferred.
+- **`app.js` no longer imports its CSS from JavaScript.** AssetMapper compiles
+  a CSS import into a `data:application/javascript` stub module, and
+  `script-src` no longer allows `data:` — so the browser refused the stub and
+  with it the entire module graph hanging off it: Turbo, Stimulus (including
+  the stateless-CSRF cookie controller), Alpine, Chart.js. The page rendered
+  and every piece of scripted behaviour was gone. The stylesheet loads via
+  `<link>`; a guard test prevents the regression.
+
+Verified in three layers, because PHPUnit executes no JavaScript and
+`lint:twig` does not parse script bodies: `CspNonceGuardTest`,
+`PageLifecycleGuardTest` and `CspNonceRenderTest` in CI (1063 tests / 2855
+assertions), then a Report-Only `:beta` round, then an enforcing `:beta` round —
+two live confirmation cycles, worker mode on, navigating in-app throughout.
+
+Fork-only for now. It is a different (and better) answer to upstream's #32
+rather than a drop-in PR, so offering it upstream is a later decision, not a
+planned one.
+
+### Fork-aware Updates settings page (2026-08-01)
+
+`/admin/settings#section-updates` tracked **upstream** (merge `5042601`):
+`AppVersion` polled Shoshuo/Prismarr's releases feed, whose newest tag predates
+most of what this fork ships. So the page told fork users that a two-month-old
+release was an "available upgrade" over their strictly newer build, rendered
+upstream's release notes as if they described the running software, and printed
+Docker Hub upgrade instructions for an image the fork does not publish. A
+related wart: `ghcr.yml` stamped every main build with the hardcoded
+`1.1.0-tautulli`, so `:latest` misreported its own version no matter what was
+in it.
+
+Approach A of three — **SHA-anchored compare**, over date comparison and
+registry-digest comparison:
+
+- **Builds stamp their commit.** Main images report `main-<short sha>` and
+  carry the full SHA as `PRISMARR_GIT_SHA` (also the OCI
+  `org.opencontainers.image.revision` label). Branch dispatches keep
+  `beta-<branch>`. A local build leaves it empty and the app hides the
+  behind-check entirely — no error, no badge, no guess.
+- **A truthful badge.** `AppVersion::commitsBehind()` reads `ahead_by` from
+  GitHub's compare API (`<built sha>...main` on the fork), yielding
+  *N commits behind fork main* (links to the compare view) or *Up to date with
+  fork main*. `isUpdateAvailable()` is redefined as `(commitsBehind() ?? 0) > 0`;
+  the old `version_compare` against upstream tags — the actual bug — is gone. A
+  SHA GitHub doesn't know (rebased, pruned) returns null and hides the badge
+  rather than reporting zero.
+- **The fork CHANGELOG is the release notes.** Raw-fetched and bounded to
+  `## [Unreleased]` plus the two most recent released sections, through the
+  existing `renderBody()` markdown renderer (which escapes first).
+- **A date-grouped commit feed** from the same compare payload — one article
+  per day, newest first. Both the bucketing *and* the header label run in the
+  viewer's timezone; doing the bucketing in UTC and labelling locally (or the
+  reverse) puts a commit under a header that contradicts its own displayed
+  timestamp.
+- **Upgrade instructions that apply:** the `ghcr.io/ndandan/prismarr:latest`
+  pull, plus the Unraid **Force Update** note, because Apply alone does not
+  re-pull.
+- **Upstream demoted** to an informational "last release" block with no
+  "available" phrasing anywhere in it, and in the About card the fork
+  source/issues rows sit above the retained upstream rows, now explicitly
+  labelled *Upstream* — provenance and credit, not an update source.
+- **Resilience.** Three GitHub reads, each cached 1 h, each writing a 120 s
+  failure marker on a miss. Without the marker a GitHub outage costs stacked
+  8 s timeouts on *every* request; with it, one slow render per two-minute
+  window. Every block degrades to an honest "unavailable" state — the page
+  always renders at least the current version string, and nothing thrown
+  escapes `AppVersion`. At most 3 unauthenticated calls per cache hour against
+  a 60/hr budget, so no token and no configuration.
+
+Full EN + FR strings; `UpdatesSectionGuardTest` asserts no `Shoshuo` URL
+survives outside the labeled upstream block and that both locales carry every
+new key. 1079 tests / 2941 assertions; live-verified on `:beta`.
+
+Fork-only by nature — the whole point is that it tracks *this* repository — so
+no upstream PR is planned.
+
 ---
 
 ## 4. Fork-only — declined upstream
@@ -526,10 +696,11 @@ Gluetun `X-API-Key` fix.
 
 ## Verification
 
-- Full gate green in CI on `main`: PHP lint, Twig lint, and the PHPUnit suite
-  (967 tests as of 2026-07-25). GHCR `:latest` rebuilds automatically on every
-  push to `main`; CI runs independently, so tests are verified green *before*
-  pushing.
+- Full gate green in CI on `main`: PHP lint, Twig lint, PHPStan level 7
+  (baseline shrink-only, added 2026-07-31) and the PHPUnit suite (1,079 tests /
+  2,941 assertions as of 2026-08-01). GHCR `:latest` rebuilds automatically on
+  every push to `main`; CI runs independently, so tests are verified green
+  *before* pushing.
 - Every feature above was live-verified on a real Unraid deployment (usually
   via a `:beta` build of its branch) before merging: themes across presets and
   light/dark, layout edit-mode end-to-end (reorder, hide, persist, cancel),
