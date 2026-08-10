@@ -11,7 +11,7 @@ final class ThemeServiceTest extends TestCase
     private function serviceFor(?string $stored): ThemeService
     {
         $config = $this->createMock(ConfigService::class);
-        $config->method('get')->with('display_theme')->willReturn($stored);
+        $config->expects(self::atLeastOnce())->method('get')->with('display_theme')->willReturn($stored);
         return new ThemeService($config);
     }
 
