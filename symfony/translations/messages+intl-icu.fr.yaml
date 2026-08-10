@@ -773,8 +773,9 @@ admin:
       label: Couleur principale
     theme:
       label: Thème
-      help: "Palette de couleurs de toute l'interface."
+      help: "Palette de couleurs de toute l'interface. « Classique » garde la bascule clair/sombre manuelle dans la barre du haut ; choisir un thème nommé la remplace par une palette fixe pour tout le monde."
       preset:
+        classic: Classique (bascule clair/sombre manuelle)
         midnight: Minuit
         nord: Nord
         catppuccin_latte: Catppuccin Latte

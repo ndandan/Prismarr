@@ -1,6 +1,6 @@
 {% import '_icons.html.twig' as ico %}
 <!doctype html>
-<html lang="{{ app.request.locale|default('fr') }}" data-bs-theme="{{ theme().light ? 'light' : 'dark' }}">
+<html lang="{{ app.request.locale|default('fr') }}" data-bs-theme="{{ theme().active ? (theme().light ? 'light' : 'dark') : 'dark' }}">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
@@ -182,6 +182,54 @@
     :root[data-bs-theme="light"] .btn-ghost-secondary:hover { background: rgba(0,0,0,.05) !important; }
   </style>
 
+  {% if not theme().active %}
+    {# Light/dark theme handling — classic mode only. A named preset fixes
+       the palette for everyone, so there's nothing left to toggle.
+       All in <head> to survive Turbo navigations. #}
+    <script>
+      (function () {
+        // 1. Apply the theme immediately (before CSS) to avoid any flash
+        var t = localStorage.getItem('tablerTheme') || 'dark';
+        document.documentElement.setAttribute('data-bs-theme', t);
+
+        // 2. Sync moon/sun icons after each load/navigation
+        var THEME_LABEL_LIGHT = {{ 'topbar.theme.label_light'|trans|json_encode|raw }};
+        var THEME_LABEL_DARK  = {{ 'topbar.theme.label_dark'|trans|json_encode|raw }};
+        function syncIcons() {
+          var theme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+          var isDark = theme === 'dark';
+          var moon  = document.getElementById('icon-moon');
+          var sun   = document.getElementById('icon-sun');
+          var label = document.getElementById('theme-label');
+          if (moon) moon.style.display = isDark ? '' : 'none';
+          if (sun)  sun.style.display  = isDark ? 'none' : '';
+          if (label) label.textContent = isDark ? THEME_LABEL_LIGHT : THEME_LABEL_DARK;
+          var moonT = document.getElementById('icon-moon-top');
+          var sunT  = document.getElementById('icon-sun-top');
+          if (moonT) moonT.style.display = isDark ? '' : 'none';
+          if (sunT)  sunT.style.display  = isDark ? 'none' : '';
+        }
+
+        // 3. Click handler via event delegation on document
+        //    → survives Turbo navigations, never duplicated since it's in the <head>
+        document.addEventListener('click', function (e) {
+          if (e.target.closest('#theme-toggle') || e.target.closest('#theme-toggle-top')) {
+            e.preventDefault();
+            var next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-bs-theme', next);
+            localStorage.setItem('tablerTheme', next);
+            syncIcons();
+          }
+        });
+
+        // 4. Sync icons on first load and after each Turbo navigation
+        document.addEventListener('DOMContentLoaded', syncIcons);
+        document.addEventListener('turbo:load', syncIcons);
+
+      })();
+    </script>
+  {% endif %}
+
   {# Modal and backdrop cleanup — in <head> to survive Turbo navigations #}
   <script>
     // Backdrop and modal cleanup
@@ -233,11 +281,25 @@
      sticks, leaving text colours unreadable until a manual refresh. #}
   <style data-turbo-track="reload">
     :root {
+      {% if theme().active %}
       {% for _name, _value in theme().css %}{{ _name }}: {{ _value }};
       {% endfor %}
+      {% endif %}
       --tblr-primary: {{ display_pref('theme_color_hex') }};
       --tblr-primary-rgb: {{ display_pref('theme_color_rgb') }};
     }
+    {% if not theme().active %}
+    {# Classic mode: vars are attribute-scoped so the manual toggle can
+       switch between them, instead of a single fixed preset palette. #}
+    [data-bs-theme="dark"] {
+      {% for _name, _value in theme().css_dark %}{{ _name }}: {{ _value }};
+      {% endfor %}
+    }
+    [data-bs-theme="light"] {
+      {% for _name, _value in theme().css_light %}{{ _name }}: {{ _value }};
+      {% endfor %}
+    }
+    {% endif %}
   </style>
 
   {# Override Tabler dark blue background + visual tweaks #}
@@ -1108,6 +1170,21 @@
                     </div>
                   </div>
                 </div>
+
+                {% if not theme().active %}
+                  {# Theme #}
+                  <a href="#" id="theme-toggle-top" class="btn btn-icon btn-ghost-secondary" title="{{ 'topbar.theme.toggle'|trans }}">
+                    <svg id="icon-moon-top" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
+                    </svg>
+                    <svg id="icon-sun-top" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                      <circle cx="12" cy="12" r="4"/>
+                      <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                    </svg>
+                  </a>
+                {% endif %}
 
                 {# Profile #}
                 <div class="dropdown" style="position:relative;">

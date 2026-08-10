@@ -774,8 +774,9 @@ admin:
       label: Primary colour
     theme:
       label: Theme
-      help: Colour scheme for the whole interface.
+      help: 'Colour scheme for the whole interface. "Classic" keeps the manual light/dark toggle in the topbar; picking a named preset replaces it with a fixed palette for everyone.'
       preset:
+        classic: Classic (manual light/dark toggle)
         midnight: Midnight
         nord: Nord
         catppuccin_latte: Catppuccin Latte

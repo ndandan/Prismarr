@@ -88,9 +88,11 @@ class DisplayPreferencesService implements ResetInterface
         $chosen = $this->getThemeColor();
 
         // 'theme_default' (and any unknown value, which resolves to the
-        // default = theme_default) follows the active theme's primary.
+        // default = theme_default) follows the active theme's primary. In
+        // classic mode there's no active preset (no primary_hex), so fall
+        // back to the original indigo accent instead.
         if ($chosen === 'theme_default' || !isset($spec['options'][$chosen])) {
-            return $this->theme->resolve()['primary_hex'];
+            return $this->theme->resolve()['primary_hex'] ?? $spec['options']['indigo'];
         }
 
         return $spec['options'][$chosen];
@@ -105,7 +107,7 @@ class DisplayPreferencesService implements ResetInterface
         $chosen = $this->getThemeColor();
 
         if ($chosen === 'theme_default' || !isset(self::THEME_RGB[$chosen])) {
-            return $this->theme->resolve()['primary_rgb'];
+            return $this->theme->resolve()['primary_rgb'] ?? self::THEME_RGB['indigo'];
         }
 
         return self::THEME_RGB[$chosen];

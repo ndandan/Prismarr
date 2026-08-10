@@ -29,7 +29,34 @@ final class ThemeService implements ResetInterface
     }
 
     /**
-     * @return array{key:string,light:bool,primary_hex:string,primary_rgb:string,css:array<string,string>}
+     * Restricted to the 7 variables classic mode ever touched pre-themes —
+     * unlike a preset's full css map, it must NOT set --tblr-body-color /
+     * --tblr-secondary-color / --tblr-success / --tblr-danger, so Tabler's
+     * own per-scheme defaults keep applying exactly as before this feature.
+     */
+    private const CLASSIC_CSS_KEYS = [
+        '--tblr-body-bg',
+        '--prismarr-surface',
+        '--prismarr-surface-2',
+        '--prismarr-sidebar',
+        '--prismarr-topbar-bg',
+        '--tblr-border-color',
+        '--prismarr-border',
+    ];
+
+    /** Hand-authored: classic light mode was never routed through the HSL engine. */
+    private const CLASSIC_LIGHT_CSS = [
+        '--tblr-body-bg'       => '#f4f6fb',
+        '--prismarr-surface'   => '#ffffff',
+        '--prismarr-surface-2' => '#ffffff',
+        '--prismarr-sidebar'   => '#ffffff',
+        '--prismarr-topbar-bg' => 'rgba(250, 250, 252, 0.97)',
+        '--tblr-border-color'  => 'rgba(0, 0, 0, 0.08)',
+        '--prismarr-border'    => 'rgba(0, 0, 0, 0.08)',
+    ];
+
+    /**
+     * @return array{key:string,active:bool,light:?bool,primary_hex:?string,primary_rgb:?string,css:array<string,string>,css_dark?:array<string,string>,css_light?:array<string,string>}
      */
     public function resolve(): array
     {
@@ -38,11 +65,35 @@ final class ThemeService implements ResetInterface
         }
 
         $stored = $this->config->get('display_theme');
-        $key = is_string($stored) && isset(ThemePresets::PRESETS[$stored])
-            ? $stored
-            : ThemePresets::DEFAULT_KEY;
 
-        $p = ThemePresets::PRESETS[$key];
+        // Un-set / explicit "classic" / a stale key from a removed preset all
+        // fall back to classic — the manual light/dark toggle, not a preset.
+        if (!is_string($stored) || $stored === ThemePresets::CLASSIC_KEY || !isset(ThemePresets::PRESETS[$stored])) {
+            $dark = $this->resolvePreset(ThemePresets::PRESETS[ThemePresets::DEFAULT_KEY]);
+            $this->cache = [
+                'key'         => ThemePresets::CLASSIC_KEY,
+                'active'      => false,
+                'light'       => null,
+                'primary_hex' => null,
+                'primary_rgb' => null,
+                'css'         => [],
+                'css_dark'    => array_intersect_key($dark['css'], array_flip(self::CLASSIC_CSS_KEYS)),
+                'css_light'   => self::CLASSIC_LIGHT_CSS,
+            ];
+            return $this->cache;
+        }
+
+        $this->cache = ['key' => $stored, 'active' => true] + $this->resolvePreset(ThemePresets::PRESETS[$stored]);
+
+        return $this->cache;
+    }
+
+    /**
+     * @param array{light:bool,bg:array{0:int,1:float,2:float},primary:array{0:int,1:float,2:float},positive:array{0:int,1:float,2:float},negative:array{0:int,1:float,2:float},contrast:float,textSaturation:float} $p
+     * @return array{light:bool,primary_hex:string,primary_rgb:string,css:array<string,string>}
+     */
+    private function resolvePreset(array $p): array
+    {
         $light = $p['light'];
 
         [$bh, $bs, $bl] = $p['bg'];
@@ -80,8 +131,7 @@ final class ThemeService implements ResetInterface
         [$poh, $pos, $pol] = $p['positive'];
         [$neh, $nes, $nel] = $p['negative'];
 
-        $this->cache = [
-            'key'         => $key,
+        return [
             'light'       => $light,
             'primary_hex' => ColorMath::hslToHex($ph, $ps, $pl),
             'primary_rgb' => ColorMath::hslToRgbTuple($ph, $ps, $pl),
@@ -103,8 +153,6 @@ final class ThemeService implements ResetInterface
                 '--tblr-danger'         => $this->hsl($neh, $nes, $nel),
             ],
         ];
-
-        return $this->cache;
     }
 
     private function hsl(int $h, float $s, float $l): string

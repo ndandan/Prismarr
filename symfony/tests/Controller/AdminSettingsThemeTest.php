@@ -12,13 +12,15 @@ final class AdminSettingsThemeTest extends TestCase
         $opts = AdminSettingsController::DISPLAY_OPTIONS;
         self::assertArrayHasKey('display_theme', $opts);
         self::assertSame('select', $opts['display_theme']['type']);
-        self::assertSame('midnight', $opts['display_theme']['default']);
+        self::assertSame(ThemePresets::CLASSIC_KEY, $opts['display_theme']['default']);
     }
 
     public function testDisplayThemeOptionsMatchPresets(): void
     {
         $opts = AdminSettingsController::DISPLAY_OPTIONS['display_theme']['options'];
-        self::assertSame(ThemePresets::keys(), array_keys($opts));
+        self::assertSame(array_merge([ThemePresets::CLASSIC_KEY], ThemePresets::keys()), array_keys($opts));
+        self::assertSame('admin.display.theme.preset.classic', $opts[ThemePresets::CLASSIC_KEY]);
+        unset($opts[ThemePresets::CLASSIC_KEY]);
         self::assertSame(ThemePresets::optionLabels(), $opts);
     }
 
