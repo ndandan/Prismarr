@@ -851,11 +851,17 @@
                   </li>
                 {% endfor %}
               {% else %}
+                {% set _radarr_active_name = null %}
+                {% if _radarr_active %}
+                  {% for _inst in _radarr_instances %}
+                    {% if _inst.slug == _radarr_slug %}{% set _radarr_active_name = _inst.name %}{% endif %}
+                  {% endfor %}
+                {% endif %}
                 <li class="nav-item dropdown">
                   <a class="nav-link dropdown-toggle {{ _radarr_active ? 'active' }}"
                      href="#" data-prismarr-dropdown="radarr-instances-menu" role="button" aria-expanded="false">
                     {{ _radarr_icon|raw }}
-                    <span class="nav-link-title">Radarr</span>
+                    <span class="nav-link-title">{{ _radarr_active_name ?? 'Radarr' }}</span>
                   </a>
                   <div class="dropdown-menu" id="radarr-instances-menu">
                     {% for _inst in _radarr_instances %}
@@ -902,11 +908,17 @@
                   </li>
                 {% endfor %}
               {% else %}
+                {% set _sonarr_active_name = null %}
+                {% if _sonarr_active %}
+                  {% for _inst in _sonarr_instances %}
+                    {% if _inst.slug == _sonarr_slug %}{% set _sonarr_active_name = _inst.name %}{% endif %}
+                  {% endfor %}
+                {% endif %}
                 <li class="nav-item dropdown">
                   <a class="nav-link dropdown-toggle {{ _sonarr_active ? 'active' }}"
                      href="#" data-prismarr-dropdown="sonarr-instances-menu" role="button" aria-expanded="false">
                     {{ _sonarr_icon|raw }}
-                    <span class="nav-link-title">Sonarr</span>
+                    <span class="nav-link-title">{{ _sonarr_active_name ?? 'Sonarr' }}</span>
                   </a>
                   <div class="dropdown-menu" id="sonarr-instances-menu">
                     {% for _inst in _sonarr_instances %}
