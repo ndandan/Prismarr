@@ -2195,6 +2195,11 @@
       document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-prismarr-dropdown]');
         if (btn) {
+          // Existing triggers are <button>, harmless no-op there. The sidebar
+          // instance-picker trigger is an <a href="#"> though — without this,
+          // the click navigates to "#", Turbo intercepts it as a visit, and
+          // the just-added .show class gets wiped on the re-render.
+          e.preventDefault();
           var menuId = btn.getAttribute('data-prismarr-dropdown');
           var menu = document.getElementById(menuId);
           if (!menu) return;
