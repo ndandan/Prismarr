@@ -2320,7 +2320,7 @@
         // Deluge / Transmission. Un seul nom pour les trois (une seule page de
         // client torrent est montée à la fois) ; sans cette purge, naviguer vers
         // une page NON-torrent laisse l'intervalle tourner indéfiniment.
-        ['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer', '_prismarrDelugePollTimer', '_prismarrTorrentPagePollTimer'].forEach(function (key) {
+        ['_prismarrQbtPollTimer', '_prismarrQbtVpnTimer', '_prismarrDelugePollTimer', '_prismarrTransmissionPollTimer', '_prismarrTorrentPagePollTimer'].forEach(function (key) {
           if (window[key]) { clearInterval(window[key]); window[key] = null; }
         });
         // Usenet page uses a setTimeout poll chain — kill it on navigation so
