@@ -853,11 +853,11 @@
               {% else %}
                 <li class="nav-item dropdown">
                   <a class="nav-link dropdown-toggle {{ _radarr_active ? 'active' }}"
-                     href="#" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+                     href="#" data-prismarr-dropdown="radarr-instances-menu" role="button" aria-expanded="false">
                     {{ _radarr_icon|raw }}
                     <span class="nav-link-title">Radarr</span>
                   </a>
-                  <div class="dropdown-menu">
+                  <div class="dropdown-menu" id="radarr-instances-menu">
                     {% for _inst in _radarr_instances %}
                       <a class="dropdown-item {{ _radarr_active and _radarr_slug == _inst.slug ? 'active' }}"
                          href="{{ instance_path('app_media_films', { slug: _inst.slug }) }}">
@@ -904,11 +904,11 @@
               {% else %}
                 <li class="nav-item dropdown">
                   <a class="nav-link dropdown-toggle {{ _sonarr_active ? 'active' }}"
-                     href="#" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+                     href="#" data-prismarr-dropdown="sonarr-instances-menu" role="button" aria-expanded="false">
                     {{ _sonarr_icon|raw }}
                     <span class="nav-link-title">Sonarr</span>
                   </a>
-                  <div class="dropdown-menu">
+                  <div class="dropdown-menu" id="sonarr-instances-menu">
                     {% for _inst in _sonarr_instances %}
                       <a class="dropdown-item {{ _sonarr_active and _sonarr_slug == _inst.slug ? 'active' }}"
                          href="{{ instance_path('app_media_series', { slug: _inst.slug }) }}">
