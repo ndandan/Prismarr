@@ -5,6 +5,7 @@ namespace App\Tests\Controller;
 use App\Controller\DashboardController;
 use App\Entity\ServiceInstance;
 use App\Repository\Media\WatchlistItemRepository;
+use App\Service\ConfigService;
 use App\Service\DashboardLayoutService;
 use App\Service\HealthService;
 use App\Service\Media\JellyseerrClient;
@@ -90,7 +91,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(HealthService::class), $radarr,
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $this->createMock(TmdbClient::class), $this->createMock(WatchlistItemRepository::class),
-            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
         $this->attachRouter($controller);
 
@@ -135,7 +136,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
             $sonarr, $this->createMock(JellyseerrClient::class), $this->createMock(TmdbClient::class),
             $this->createMock(WatchlistItemRepository::class), $instances, new NullLogger(),
-            $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
         $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
@@ -185,7 +186,7 @@ class DashboardControllerTest extends TestCase
             new NullLogger(),
             $this->createMock(TranslatorInterface::class),
             $this->createMock(CacheInterface::class),
-            $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
 
         $m = new ReflectionMethod(DashboardController::class, 'servicesHealth');
@@ -229,7 +230,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $tmdb, $this->createMock(WatchlistItemRepository::class),
             $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
-            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
         $this->attachRouter($controller); // quickLookTmdb calls generateUrl('tmdb_index')
         $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
@@ -284,7 +285,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $tmdb, $this->createMock(WatchlistItemRepository::class),
             $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
-            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
         $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
@@ -346,7 +347,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(HealthService::class), $radarr,
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $tmdb, $this->createMock(WatchlistItemRepository::class),
-            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
         $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
@@ -374,7 +375,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $this->createMock(TmdbClient::class), $this->createMock(WatchlistItemRepository::class),
-            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
         $this->attachRouter($controller); // pickHeroSpotlight calls generateUrl
         $m = new ReflectionMethod(DashboardController::class, 'pickHeroSpotlight');
@@ -418,7 +419,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(HealthService::class), $radarr,
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $this->createMock(TmdbClient::class), $this->createMock(WatchlistItemRepository::class),
-            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),        );
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),        );
         $this->attachRouter($controller);
 
         $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
@@ -457,7 +458,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $tmdb, $this->createMock(WatchlistItemRepository::class),
             $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
-            $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),        );
+            $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),        );
         $this->attachRouter($controller);
 
         $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
@@ -489,7 +490,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $tmdb, $this->createMock(WatchlistItemRepository::class),
             $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
-            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
         );
         $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
@@ -528,7 +529,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
             $sonarr, $this->createMock(JellyseerrClient::class), $this->createMock(TmdbClient::class),
             $this->createMock(WatchlistItemRepository::class), $instances, new NullLogger(),
-            $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),        );
+            $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),        );
         $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
         $m->setAccessible(true);
@@ -570,7 +571,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
             $sonarr, $this->createMock(JellyseerrClient::class), $this->createMock(TmdbClient::class),
             $this->createMock(WatchlistItemRepository::class), $instances, new NullLogger(),
-            $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),        );
+            $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),        );
         $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
         $m->setAccessible(true);
@@ -604,7 +605,7 @@ class DashboardControllerTest extends TestCase
             $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
             $tmdb, $this->createMock(WatchlistItemRepository::class),
             $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
-            $translator, $cache, $this->createMock(TautulliClient::class), $this->createMock(DashboardLayoutService::class),        );
+            $translator, $cache, $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),        );
         $this->attachRouter($controller);
         $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
         $m->setAccessible(true);
