@@ -19,6 +19,10 @@ on:
         description: "Beta build number (1, 2, 3, …) — reset to 1 for each new version"
         required: true
         default: "1"
+      version_base:
+        description: "Override the target version (e.g. 1.2.0 for a minor bump). Leave empty to auto-derive (last stable tag + 1 patch)."
+        required: false
+        default: ""
 
 jobs:
   beta:
@@ -52,12 +56,17 @@ jobs:
         # it (after v1.1.2, betas become 1.1.3-beta.N), so this never needs hand
         # editing. version_compare ranks the beta above the last stable but below
         # the target, nudging testers to stable once it ships. For a minor/major
-        # bump just tag it directly and the next betas follow from there.
+        # bump, pass version_base explicitly (e.g. 1.2.0) instead of tagging
+        # stable early just to steer this calculation.
         run: |
-          last=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 | sed 's/^v//')
-          last=${last:-1.1.1}
-          IFS=. read -r major minor patch <<< "$last"
-          base="${major}.${minor}.$((patch + 1))"
+          if [ -n "${{ inputs.version_base }}" ]; then
+            base="${{ inputs.version_base }}"
+          else
+            last=$(git tag -l | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -n1 | sed 's/^v//')
+            last=${last:-1.1.1}
+            IFS=. read -r major minor patch <<< "$last"
+            base="${major}.${minor}.$((patch + 1))"
+          fi
           echo "version=${base}-beta.${{ inputs.beta_number }}" >> "$GITHUB_OUTPUT"
 
       - name: Log in to Docker Hub
