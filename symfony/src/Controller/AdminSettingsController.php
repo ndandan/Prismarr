@@ -256,8 +256,9 @@ class AdminSettingsController extends AbstractController
         'display_theme' => [
             'label'   => 'admin.display.theme.label',
             'type'    => 'select',
-            'default' => 'midnight',
+            'default' => 'classic',
             'options' => [
+                'classic'              => 'admin.display.theme.preset.classic',
                 'midnight'             => 'admin.display.theme.preset.midnight',
                 'nord'                 => 'admin.display.theme.preset.nord',
                 'catppuccin_latte'     => 'admin.display.theme.preset.catppuccin_latte',

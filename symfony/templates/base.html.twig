@@ -1,6 +1,6 @@
 {% import '_icons.html.twig' as ico %}
 <!doctype html>
-<html lang="{{ app.request.locale|default('fr') }}" data-bs-theme="{{ theme().light ? 'light' : 'dark' }}">
+<html lang="{{ app.request.locale|default('fr') }}" data-bs-theme="{{ theme().active ? (theme().light ? 'light' : 'dark') : 'dark' }}">
 <head>
   {# Turbo reads this to nonce the scripts it re-injects during navigation.
      Without it the app works on a hard refresh and silently loses its
@@ -279,6 +279,54 @@
     }
   </style>
 
+  {% if not theme().active %}
+    {# Light/dark theme handling — classic mode only. A named preset fixes
+       the palette for everyone, so there's nothing left to toggle.
+       All in <head> to survive Turbo navigations. #}
+    <script nonce="{{ csp_nonce() }}">
+      (function () {
+        // 1. Apply the theme immediately (before CSS) to avoid any flash
+        var t = localStorage.getItem('tablerTheme') || 'dark';
+        document.documentElement.setAttribute('data-bs-theme', t);
+
+        // 2. Sync moon/sun icons after each load/navigation
+        var THEME_LABEL_LIGHT = {{ 'topbar.theme.label_light'|trans|json_encode|raw }};
+        var THEME_LABEL_DARK  = {{ 'topbar.theme.label_dark'|trans|json_encode|raw }};
+        function syncIcons() {
+          var theme = document.documentElement.getAttribute('data-bs-theme') || 'dark';
+          var isDark = theme === 'dark';
+          var moon  = document.getElementById('icon-moon');
+          var sun   = document.getElementById('icon-sun');
+          var label = document.getElementById('theme-label');
+          if (moon) moon.style.display = isDark ? '' : 'none';
+          if (sun)  sun.style.display  = isDark ? 'none' : '';
+          if (label) label.textContent = isDark ? THEME_LABEL_LIGHT : THEME_LABEL_DARK;
+          var moonT = document.getElementById('icon-moon-top');
+          var sunT  = document.getElementById('icon-sun-top');
+          if (moonT) moonT.style.display = isDark ? '' : 'none';
+          if (sunT)  sunT.style.display  = isDark ? 'none' : '';
+        }
+
+        // 3. Click handler via event delegation on document
+        //    → survives Turbo navigations, never duplicated since it's in the <head>
+        document.addEventListener('click', function (e) {
+          if (e.target.closest('#theme-toggle') || e.target.closest('#theme-toggle-top')) {
+            e.preventDefault();
+            var next = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? 'light' : 'dark';
+            document.documentElement.setAttribute('data-bs-theme', next);
+            localStorage.setItem('tablerTheme', next);
+            syncIcons();
+          }
+        });
+
+        // 4. Sync icons on first load and after each Turbo navigation
+        document.addEventListener('DOMContentLoaded', syncIcons);
+        document.addEventListener('turbo:load', syncIcons);
+
+      })();
+    </script>
+  {% endif %}
+
   {# Modal and backdrop cleanup — in <head> to survive Turbo navigations #}
   <script nonce="{{ csp_nonce() }}">
     // Backdrop and modal cleanup
@@ -343,11 +391,25 @@
      sticks, leaving text colours unreadable until a manual refresh. #}
   <style data-turbo-track="reload">
     :root {
+      {% if theme().active %}
       {% for _name, _value in theme().css %}{{ _name }}: {{ _value }};
       {% endfor %}
+      {% endif %}
       --tblr-primary: {{ display_pref('theme_color_hex') }};
       --tblr-primary-rgb: {{ display_pref('theme_color_rgb') }};
     }
+    {% if not theme().active %}
+    {# Classic mode: vars are attribute-scoped so the manual toggle can
+       switch between them, instead of a single fixed preset palette. #}
+    [data-bs-theme="dark"] {
+      {% for _name, _value in theme().css_dark %}{{ _name }}: {{ _value }};
+      {% endfor %}
+    }
+    [data-bs-theme="light"] {
+      {% for _name, _value in theme().css_light %}{{ _name }}: {{ _value }};
+      {% endfor %}
+    }
+    {% endif %}
   </style>
 
   {# Override Tabler dark blue background + visual tweaks #}
@@ -928,13 +990,14 @@
                   </li>
                 {% endfor %}
               {% else %}
+                {% set _radarr_active_inst = _radarr_active ? _radarr_instances|filter(i => i.slug == _radarr_slug)|first : null %}
                 <li class="nav-item dropdown">
                   <a class="nav-link dropdown-toggle {{ _radarr_active ? 'active' }}"
-                     href="#" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+                     href="#" data-prismarr-dropdown="radarr-instances-menu" role="button" aria-expanded="false">
                     {{ _radarr_icon|raw }}
-                    <span class="nav-link-title">Radarr</span>
+                    <span class="nav-link-title">{{ _radarr_active_inst ? _radarr_active_inst.name : 'Radarr' }}</span>
                   </a>
-                  <div class="dropdown-menu">
+                  <div class="dropdown-menu" id="radarr-instances-menu">
                     {% for _inst in _radarr_instances %}
                       <a class="dropdown-item {{ _radarr_active and _radarr_slug == _inst.slug ? 'active' }} js-libfilter-link"
                          href="{{ instance_path('app_media_films', { slug: _inst.slug }) }}">
@@ -979,13 +1042,14 @@
                   </li>
                 {% endfor %}
               {% else %}
+                {% set _sonarr_active_inst = _sonarr_active ? _sonarr_instances|filter(i => i.slug == _sonarr_slug)|first : null %}
                 <li class="nav-item dropdown">
                   <a class="nav-link dropdown-toggle {{ _sonarr_active ? 'active' }}"
-                     href="#" data-bs-toggle="dropdown" role="button" aria-expanded="false">
+                     href="#" data-prismarr-dropdown="sonarr-instances-menu" role="button" aria-expanded="false">
                     {{ _sonarr_icon|raw }}
-                    <span class="nav-link-title">Sonarr</span>
+                    <span class="nav-link-title">{{ _sonarr_active_inst ? _sonarr_active_inst.name : 'Sonarr' }}</span>
                   </a>
-                  <div class="dropdown-menu">
+                  <div class="dropdown-menu" id="sonarr-instances-menu">
                     {% for _inst in _sonarr_instances %}
                       <a class="dropdown-item {{ _sonarr_active and _sonarr_slug == _inst.slug ? 'active' }} js-libfilter-link"
                          href="{{ instance_path('app_media_series', { slug: _inst.slug }) }}">
@@ -1303,6 +1367,21 @@
                   </div>
                 </div>
 
+                {% if not theme().active %}
+                  {# Theme #}
+                  <a href="#" id="theme-toggle-top" class="btn btn-icon btn-ghost-secondary" title="{{ 'topbar.theme.toggle'|trans }}">
+                    <svg id="icon-moon-top" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 0 0 7.92 12.446a9 9 0 1 1 -8.313 -12.454z"/>
+                    </svg>
+                    <svg id="icon-sun-top" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none;">
+                      <circle cx="12" cy="12" r="4"/>
+                      <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+                    </svg>
+                  </a>
+                {% endif %}
+
                 {# Profile #}
                 <div class="dropdown" style="position:relative;">
                   <button type="button" class="btn btn-icon btn-ghost-secondary" data-prismarr-dropdown="profile-menu">
@@ -1547,6 +1626,8 @@
       'search.not_added_badge':  'topbar.search.not_added_badge'|trans,
       'search.add':              'topbar.search.add'|trans,
       'dashboard.quicklook.manage': 'dashboard.quicklook.manage'|trans,
+      'theme.label_light':     'topbar.theme.label_light'|trans,
+      'theme.label_dark':      'topbar.theme.label_dark'|trans,
       'health.all_ok':         'topbar.health.summary_ok'|trans,
       'health.loading':        'topbar.health.loading'|trans,
       'health.unknown':        'topbar.health.summary_unknown'|trans,
@@ -2294,6 +2375,11 @@
       document.addEventListener('click', function (e) {
         var btn = e.target.closest('[data-prismarr-dropdown]');
         if (btn) {
+          // Existing triggers are <button>, harmless no-op there. The sidebar
+          // instance-picker trigger is an <a href="#"> though — without this,
+          // the click navigates to "#", Turbo intercepts it as a visit, and
+          // the just-added .show class gets wiped on the re-render.
+          e.preventDefault();
           var menuId = btn.getAttribute('data-prismarr-dropdown');
           var menu = document.getElementById(menuId);
           if (!menu) return;
@@ -2594,6 +2680,352 @@
           if (window._prismarrQbtPollTimer) { clearTimeout(window._prismarrQbtPollTimer); window._prismarrQbtPollTimer = null; }
         } else {
           pollQbt();
+        }
+      });
+    }
+  })();
+  </script>
+  {% endif %}
+
+
+  {# ══════════════════════════════════════════════════════════════════════════
+     Global Deluge poll — DL completion / error toasts + sidebar badge
+     Active only on media pages (avoids hitting Deluge everywhere). Also skipped
+     when Deluge is disabled (#15) — otherwise the poll endpoint would chase a
+     route-guard redirect every few seconds and turn `r.json()` into a JS
+     SyntaxError that the circuit breaker then backs off for two minutes.
+     ══════════════════════════════════════════════════════════════════════════ #}
+  {% set route = app.request.attributes.get('_route') ?? '' %}
+  {% if service_configured('deluge') and (
+        route starts with 'app_deluge_'
+     or route starts with 'app_media'
+     or route starts with 'radarr_'
+     or route starts with 'sonarr_'
+     or route starts with 'prowlarr_'
+     or route starts with 'jellyseerr_'
+     or route starts with 'tmdb_') %}
+  <script nonce="{{ csp_nonce() }}">
+  (function () {
+    var DELUGE_POLL_URL = '{{ path('app_deluge_api_poll_summary') }}';
+    {# User preference drives the polling cadence — 0 disables Deluge polling entirely. #}
+    var DELUGE_POLL_INTERVAL_SECONDS = {{ display_pref('deluge_refresh_seconds') }};
+    if (DELUGE_POLL_INTERVAL_SECONDS <= 0) return;  // poll disabled via /admin/settings
+    var DELUGE_POLL_INTERVAL = DELUGE_POLL_INTERVAL_SECONDS * 1000;
+    var STATE_KEY = 'prismarr_deluge_last_state';
+    var NOTIFIED_KEY = 'prismarr_deluge_notified';  // hashes already notified (cross-tab dedup)
+    var NOTIFIED_TTL = 60 * 60 * 1000; // 1h — beyond that we re-allow the notification (e.g. torrent re-DL)
+
+    // Cross-tab channel to sync notifications across multiple open tabs
+    var bchan = null;
+    try { if (typeof BroadcastChannel !== 'undefined') bchan = new BroadcastChannel('prismarr-deluge-toasts'); } catch (e) {}
+    if (bchan && !window._prismarrDelugeBchanBound) {
+      window._prismarrDelugeBchanBound = true;
+      bchan.onmessage = function (e) {
+        // Another tab already notified this hash → mark locally to skip
+        if (e.data && e.data.type === 'notified' && e.data.hash) markNotified(e.data.hash);
+      };
+    }
+
+    function loadNotified() { try { return JSON.parse(localStorage.getItem(NOTIFIED_KEY) || '{}'); } catch (e) { return {}; } }
+    function markNotified(hash) {
+      var n = loadNotified();
+      n[hash] = Date.now();
+      // Purge entries that are too old to avoid bloat
+      var cutoff = Date.now() - NOTIFIED_TTL;
+      Object.keys(n).forEach(function (k) { if (n[k] < cutoff) delete n[k]; });
+      try { localStorage.setItem(NOTIFIED_KEY, JSON.stringify(n)); } catch (e) {}
+      if (bchan) try { bchan.postMessage({ type: 'notified', hash: hash }); } catch (e) {}
+    }
+    function alreadyNotified(hash) {
+      var n = loadNotified();
+      return n[hash] && (Date.now() - n[hash]) < NOTIFIED_TTL;
+    }
+
+    function loadPrev() { try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { return {}; } }
+    function savePrev(map) { try { localStorage.setItem(STATE_KEY, JSON.stringify(map)); } catch (e) {} }
+
+    // window.prismarrBytes is defined in the head script at the top of
+    // base.html.twig so child templates' javascripts block can rely on it
+    // during initial render. Local fmtGo wrapper kept for the Deluge poll
+    // block below.
+    function fmtGo(bytes) { return window.prismarrBytes(bytes); }
+
+    function updateBadge(active) {
+      var label = active > 99 ? '99+' : String(active);
+      ['sidebar-deluge-badge'].forEach(function (id) {
+        var badge = document.getElementById(id);
+        if (!badge) return;
+        if (active > 0) {
+          badge.textContent = label;
+          badge.style.display = '';
+        } else {
+          badge.style.display = 'none';
+        }
+      });
+    }
+
+    // Circuit breaker: when Deluge is unreachable we back off exponentially
+    // from 15s up to 2min between polls instead of hammering the NAS every
+    // 15s. A single successful poll resets the backoff to the base interval.
+    var DELUGE_POLL_INTERVAL_MAX = 120000; // 2 min
+    window._prismarrDelugeFailCount = 0;
+
+    function delugeNextDelay() {
+      if (window._prismarrDelugeFailCount === 0) return DELUGE_POLL_INTERVAL;
+      var scaled = DELUGE_POLL_INTERVAL * Math.pow(2, window._prismarrDelugeFailCount - 1);
+      return Math.min(scaled, DELUGE_POLL_INTERVAL_MAX);
+    }
+
+    function schedulePoll() {
+      if (window._prismarrDelugePollTimer) clearTimeout(window._prismarrDelugePollTimer);
+      window._prismarrDelugePollTimer = setTimeout(pollDeluge, delugeNextDelay());
+    }
+
+    function pollDeluge() {
+      fetch(DELUGE_POLL_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (d) {
+          if (!d || d.error) {
+            // Server says Deluge is unreachable — count it as a failure.
+            window._prismarrDelugeFailCount++;
+            schedulePoll();
+            return;
+          }
+
+          // Success: reset backoff and resume base interval.
+          window._prismarrDelugeFailCount = 0;
+          updateBadge(d.active || 0);
+
+          // Detect transitions (vs previous snapshot)
+          var prev = loadPrev();
+          var next = {};
+          var justCompleted = [];
+          var justErrored = [];
+          (d.items || []).forEach(function (it) {
+            next[it.hash] = it.state;
+            var was = prev[it.hash];
+            if (was === 'downloading' && (it.state === 'completed' || it.state === 'seeding')) {
+              justCompleted.push(it);
+            }
+            if (was && was !== 'error' && it.state === 'error') {
+              justErrored.push(it);
+            }
+          });
+
+          if (window._prismarrToast) {
+            justCompleted.forEach(function (it) {
+              if (alreadyNotified(it.hash)) return;
+              var truncated = (it.name || '').length > 60 ? it.name.substring(0, 60) + '…' : it.name;
+              window._prismarrToast(truncated + ' — ' + fmtGo(it.size), 'success', 6000);
+              markNotified(it.hash);
+            });
+            justErrored.forEach(function (it) {
+              if (alreadyNotified(it.hash)) return;
+              var truncated = (it.name || '').length > 60 ? it.name.substring(0, 60) + '…' : it.name;
+              window._prismarrToast('Erreur sur : ' + truncated, 'danger', 8000);
+              markNotified(it.hash);
+            });
+          }
+
+          savePrev(next);
+          schedulePoll();
+        })
+        .catch(function () {
+          // Network error / fetch rejected → back off.
+          window._prismarrDelugeFailCount++;
+          schedulePoll();
+        });
+    }
+
+    // Turbo-safe singleton pattern: a single global poll even with re-exec
+    if (window._prismarrDelugePollTimer) clearTimeout(window._prismarrDelugePollTimer);
+    pollDeluge();
+
+    // Pause when tab is hidden, resume when it returns
+    if (!window._prismarrDelugeVisibilityBound) {
+      window._prismarrDelugeVisibilityBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          if (window._prismarrDelugePollTimer) { clearTimeout(window._prismarrDelugePollTimer); window._prismarrDelugePollTimer = null; }
+        } else {
+          pollDeluge();
+        }
+      });
+    }
+  })();
+  </script>
+  {% endif %}
+
+
+  {# ══════════════════════════════════════════════════════════════════════════
+     Global Transmission poll — DL completion / error toasts + sidebar badge
+     Active only on media pages (avoids hitting Transmission everywhere). Also
+     skipped when Transmission is disabled (#15) — otherwise the poll endpoint
+     would chase a route-guard redirect every few seconds and turn `r.json()`
+     into a JS SyntaxError that the circuit breaker then backs off for two
+     minutes.
+     ══════════════════════════════════════════════════════════════════════════ #}
+  {% set route = app.request.attributes.get('_route') ?? '' %}
+  {% if service_configured('transmission') and (
+        route starts with 'app_transmission_'
+     or route starts with 'app_media'
+     or route starts with 'radarr_'
+     or route starts with 'sonarr_'
+     or route starts with 'prowlarr_'
+     or route starts with 'jellyseerr_'
+     or route starts with 'tmdb_') %}
+  <script nonce="{{ csp_nonce() }}">
+  (function () {
+    var TRANSMISSION_POLL_URL = '{{ path('app_transmission_api_poll_summary') }}';
+    {# User preference drives the polling cadence — 0 disables Transmission polling entirely. #}
+    var TRANSMISSION_POLL_INTERVAL_SECONDS = {{ display_pref('transmission_refresh_seconds') }};
+    if (TRANSMISSION_POLL_INTERVAL_SECONDS <= 0) return;  // poll disabled via /admin/settings
+    var TRANSMISSION_POLL_INTERVAL = TRANSMISSION_POLL_INTERVAL_SECONDS * 1000;
+    var STATE_KEY = 'prismarr_transmission_last_state';
+    var NOTIFIED_KEY = 'prismarr_transmission_notified';  // hashes already notified (cross-tab dedup)
+    var NOTIFIED_TTL = 60 * 60 * 1000; // 1h — beyond that we re-allow the notification (e.g. torrent re-DL)
+
+    // Cross-tab channel to sync notifications across multiple open tabs
+    var bchan = null;
+    try { if (typeof BroadcastChannel !== 'undefined') bchan = new BroadcastChannel('prismarr-transmission-toasts'); } catch (e) {}
+    if (bchan && !window._prismarrTransmissionBchanBound) {
+      window._prismarrTransmissionBchanBound = true;
+      bchan.onmessage = function (e) {
+        // Another tab already notified this hash → mark locally to skip
+        if (e.data && e.data.type === 'notified' && e.data.hash) markNotified(e.data.hash);
+      };
+    }
+
+    function loadNotified() { try { return JSON.parse(localStorage.getItem(NOTIFIED_KEY) || '{}'); } catch (e) { return {}; } }
+    function markNotified(hash) {
+      var n = loadNotified();
+      n[hash] = Date.now();
+      // Purge entries that are too old to avoid bloat
+      var cutoff = Date.now() - NOTIFIED_TTL;
+      Object.keys(n).forEach(function (k) { if (n[k] < cutoff) delete n[k]; });
+      try { localStorage.setItem(NOTIFIED_KEY, JSON.stringify(n)); } catch (e) {}
+      if (bchan) try { bchan.postMessage({ type: 'notified', hash: hash }); } catch (e) {}
+    }
+    function alreadyNotified(hash) {
+      var n = loadNotified();
+      return n[hash] && (Date.now() - n[hash]) < NOTIFIED_TTL;
+    }
+
+    function loadPrev() { try { return JSON.parse(localStorage.getItem(STATE_KEY) || '{}'); } catch (e) { return {}; } }
+    function savePrev(map) { try { localStorage.setItem(STATE_KEY, JSON.stringify(map)); } catch (e) {} }
+
+    // window.prismarrBytes is defined in the head script at the top of
+    // base.html.twig so child templates' javascripts block can rely on it
+    // during initial render. Local fmtGo wrapper kept for the Transmission
+    // poll block below.
+    function fmtGo(bytes) { return window.prismarrBytes(bytes); }
+
+    function updateBadge(active) {
+      var label = active > 99 ? '99+' : String(active);
+      ['sidebar-transmission-badge'].forEach(function (id) {
+        var badge = document.getElementById(id);
+        if (!badge) return;
+        if (active > 0) {
+          badge.textContent = label;
+          badge.style.display = '';
+        } else {
+          badge.style.display = 'none';
+        }
+      });
+    }
+
+    // Circuit breaker: when Transmission is unreachable we back off
+    // exponentially from 15s up to 2min between polls instead of hammering
+    // the NAS every 15s. A single successful poll resets the backoff to the
+    // base interval.
+    var TRANSMISSION_POLL_INTERVAL_MAX = 120000; // 2 min
+    window._prismarrTransmissionFailCount = 0;
+
+    function transmissionNextDelay() {
+      if (window._prismarrTransmissionFailCount === 0) return TRANSMISSION_POLL_INTERVAL;
+      var scaled = TRANSMISSION_POLL_INTERVAL * Math.pow(2, window._prismarrTransmissionFailCount - 1);
+      return Math.min(scaled, TRANSMISSION_POLL_INTERVAL_MAX);
+    }
+
+    function schedulePoll() {
+      if (window._prismarrTransmissionPollTimer) clearTimeout(window._prismarrTransmissionPollTimer);
+      window._prismarrTransmissionPollTimer = setTimeout(pollTransmission, transmissionNextDelay());
+    }
+
+    function pollTransmission() {
+      fetch(TRANSMISSION_POLL_URL, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) {
+          if (!r.ok) throw new Error('HTTP ' + r.status);
+          return r.json();
+        })
+        .then(function (d) {
+          if (!d || d.error) {
+            // Server says Transmission is unreachable — count it as a failure.
+            window._prismarrTransmissionFailCount++;
+            schedulePoll();
+            return;
+          }
+
+          // Success: reset backoff and resume base interval.
+          window._prismarrTransmissionFailCount = 0;
+          updateBadge(d.active || 0);
+
+          // Detect transitions (vs previous snapshot)
+          var prev = loadPrev();
+          var next = {};
+          var justCompleted = [];
+          var justErrored = [];
+          (d.items || []).forEach(function (it) {
+            next[it.hash] = it.state;
+            var was = prev[it.hash];
+            if (was === 'downloading' && (it.state === 'completed' || it.state === 'seeding')) {
+              justCompleted.push(it);
+            }
+            if (was && was !== 'error' && it.state === 'error') {
+              justErrored.push(it);
+            }
+          });
+
+          if (window._prismarrToast) {
+            justCompleted.forEach(function (it) {
+              if (alreadyNotified(it.hash)) return;
+              var truncated = (it.name || '').length > 60 ? it.name.substring(0, 60) + '…' : it.name;
+              window._prismarrToast(truncated + ' — ' + fmtGo(it.size), 'success', 6000);
+              markNotified(it.hash);
+            });
+            justErrored.forEach(function (it) {
+              if (alreadyNotified(it.hash)) return;
+              var truncated = (it.name || '').length > 60 ? it.name.substring(0, 60) + '…' : it.name;
+              window._prismarrToast('Erreur sur : ' + truncated, 'danger', 8000);
+              markNotified(it.hash);
+            });
+          }
+
+          savePrev(next);
+          schedulePoll();
+        })
+        .catch(function () {
+          // Network error / fetch rejected → back off.
+          window._prismarrTransmissionFailCount++;
+          schedulePoll();
+        });
+    }
+
+    // Turbo-safe singleton pattern: a single global poll even with re-exec
+    if (window._prismarrTransmissionPollTimer) clearTimeout(window._prismarrTransmissionPollTimer);
+    pollTransmission();
+
+    // Pause when tab is hidden, resume when it returns
+    if (!window._prismarrTransmissionVisibilityBound) {
+      window._prismarrTransmissionVisibilityBound = true;
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          if (window._prismarrTransmissionPollTimer) { clearTimeout(window._prismarrTransmissionPollTimer); window._prismarrTransmissionPollTimer = null; }
+        } else {
+          pollTransmission();
         }
       });
     }

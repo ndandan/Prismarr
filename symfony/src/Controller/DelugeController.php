@@ -174,7 +174,7 @@ class DelugeController extends AbstractController
             foreach ($this->deluge->getTorrents() as $t) {
                 if (($t['hash'] ?? '') === $hash) { $torrent = $t; break; }
             }
-            if (!$torrent) return $this->json(['found' => false, 'error' => $this->translator->trans('qbittorrent.api.torrent_not_found')], 404);
+            if (!$torrent) return $this->json(['found' => false, 'error' => $this->translator->trans('deluge.api.torrent_not_found')], 404);
 
             return $this->json($this->resolver->resolve($pipeline, $torrent['name'] ?? ''));
         } catch (\Throwable $e) {
@@ -189,7 +189,7 @@ class DelugeController extends AbstractController
         try {
             $detail = $this->deluge->getTorrentDetail($hash);
             if ($detail === null) {
-                return $this->json(['error' => $this->translator->trans('qbittorrent.api.torrent_not_found')], 404);
+                return $this->json(['error' => $this->translator->trans('deluge.api.torrent_not_found')], 404);
             }
             return $this->json($detail);
         } catch (\Throwable $e) {
@@ -274,7 +274,7 @@ class DelugeController extends AbstractController
     public function bulkPause(Request $request): JsonResponse
     {
         $hashes = self::sanitizeHashes($request->toArray()['hashes'] ?? []);
-        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.api.no_valid_hash')], 400);
+        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.api.no_valid_hash')], 400);
         $ok = $this->deluge->pauseTorrents($hashes);
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Deluge', $this->deluge);
     }
@@ -283,7 +283,7 @@ class DelugeController extends AbstractController
     public function bulkResume(Request $request): JsonResponse
     {
         $hashes = self::sanitizeHashes($request->toArray()['hashes'] ?? []);
-        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.api.no_valid_hash')], 400);
+        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.api.no_valid_hash')], 400);
         $ok = $this->deluge->resumeTorrents($hashes);
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Deluge', $this->deluge);
     }
@@ -294,7 +294,7 @@ class DelugeController extends AbstractController
         $data        = $request->toArray();
         $hashes      = self::sanitizeHashes($data['hashes'] ?? []);
         $deleteFiles = (bool) ($data['deleteFiles'] ?? false);
-        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.api.no_valid_hash')], 400);
+        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.api.no_valid_hash')], 400);
         $ok = $this->deluge->deleteTorrents($hashes, $deleteFiles);
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Deluge', $this->deluge);
     }
@@ -303,7 +303,7 @@ class DelugeController extends AbstractController
     public function bulkRecheck(Request $request): JsonResponse
     {
         $hashes = self::sanitizeHashes($request->toArray()['hashes'] ?? []);
-        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.api.no_valid_hash')], 400);
+        if (empty($hashes)) return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.api.no_valid_hash')], 400);
         $ok = $this->deluge->recheckTorrents($hashes);
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Deluge', $this->deluge);
     }
@@ -334,11 +334,11 @@ class DelugeController extends AbstractController
         $savepath = isset($data['savepath']) && $data['savepath'] !== '' ? (string) $data['savepath'] : null;
         $paused   = (bool) ($data['paused'] ?? false);
 
-        if ($urls === '') return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.upload.invalid_url')], 400);
+        if ($urls === '') return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.upload.invalid_url')], 400);
 
         $violation = self::validateTorrentUrlsStatic($urls);
         if ($violation !== null) {
-            $key = $violation === 'forbidden_host' ? 'qbittorrent.upload.forbidden_host' : 'qbittorrent.upload.invalid_url';
+            $key = $violation === 'forbidden_host' ? 'deluge.upload.forbidden_host' : 'deluge.upload.invalid_url';
             return $this->json(['ok' => false, 'error' => $this->translator->trans($key)], 400);
         }
 
@@ -393,32 +393,32 @@ class DelugeController extends AbstractController
         if (!is_array($uploaded)) $uploaded = [$uploaded];
         $uploaded = array_filter($uploaded);
 
-        if (empty($uploaded)) return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.upload.no_file')], 400);
+        if (empty($uploaded)) return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.upload.no_file')], 400);
 
         $files = [];
         foreach ($uploaded as $file) {
             /** @var \Symfony\Component\HttpFoundation\File\UploadedFile $file */
             if (!$file->isValid()) continue;
             if ($file->getSize() > 10 * 1024 * 1024) {
-                return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.upload.too_large')], 400);
+                return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.upload.too_large')], 400);
             }
             if (strtolower($file->getClientOriginalExtension()) !== 'torrent') {
-                return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.upload.invalid_format')], 400);
+                return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.upload.invalid_format')], 400);
             }
             $content = file_get_contents($file->getPathname());
             if ($content === false || $content === '') {
-                return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.upload.unreadable')], 400);
+                return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.upload.unreadable')], 400);
             }
             // Bencoded torrent: starts with 'd' + contains "info"/"announce" early
             if (!str_starts_with($content, 'd') || (!str_contains(substr($content, 0, 4096), 'info') && !str_contains(substr($content, 0, 4096), 'announce'))) {
-                return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.upload.invalid_format')], 400);
+                return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.upload.invalid_format')], 400);
             }
             $origName  = $file->getClientOriginalName() ?: 'upload.torrent';
             $cleanName = basename(str_replace("\0", '', $origName));
             $files[] = ['content' => $content, 'name' => $cleanName !== '' ? $cleanName : 'upload.torrent'];
         }
 
-        if (empty($files)) return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.api.no_valid_file')], 400);
+        if (empty($files)) return $this->json(['ok' => false, 'error' => $this->translator->trans('deluge.api.no_valid_file')], 400);
 
         $savepath = $request->request->getString('savepath') ?: null;
         $paused   = $request->request->get('paused') === 'true';

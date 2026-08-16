@@ -7,12 +7,22 @@ namespace App\Theme;
  * multipliers + light flag), exactly like glance's theme model. ThemeService
  * resolves these into concrete CSS variables.
  *
- * `midnight` is the default and reproduces Prismarr's pre-themes dark look
- * (#111 background, indigo primary) so upgrades are a visual no-op.
+ * `midnight` reproduces Prismarr's pre-themes dark look (#111 background,
+ * indigo primary) and is also what ThemeService uses to render the dark
+ * variant of "classic" mode (see CLASSIC_KEY).
  */
 final class ThemePresets
 {
     public const DEFAULT_KEY = 'midnight';
+
+    /**
+     * Not a preset — the un-set / explicit "classic" value for `display_theme`.
+     * Renders the pre-themes look with the manual light/dark toggle instead
+     * of one of the fixed-light-or-dark presets below. This is the default
+     * for every install so upgrading never changes anyone's look without
+     * them opting into a preset first.
+     */
+    public const CLASSIC_KEY = 'classic';
 
     // glance HSL values are "H S L"; we store [H, S, L]. Where glance omits
     // positive/negative we fill a sensible green/red; omitted multipliers → 1.0.

@@ -11,25 +11,45 @@ final class ThemeServiceTest extends TestCase
     private function serviceFor(?string $stored): ThemeService
     {
         $config = $this->createMock(ConfigService::class);
-        $config->method('get')->with('display_theme')->willReturn($stored);
+        $config->expects(self::atLeastOnce())->method('get')->with('display_theme')->willReturn($stored);
         return new ThemeService($config);
     }
 
-    public function testUnknownKeyFallsBackToDefault(): void
+    public function testUnknownKeyFallsBackToClassic(): void
     {
         $r = $this->serviceFor('does-not-exist')->resolve();
-        self::assertSame(ThemePresets::DEFAULT_KEY, $r['key']);
+        self::assertSame(ThemePresets::CLASSIC_KEY, $r['key']);
+        self::assertFalse($r['active']);
     }
 
-    public function testNullStoredFallsBackToDefault(): void
+    public function testNullStoredFallsBackToClassic(): void
     {
         $r = $this->serviceFor(null)->resolve();
-        self::assertSame('midnight', $r['key']);
+        self::assertSame(ThemePresets::CLASSIC_KEY, $r['key']);
+        self::assertFalse($r['active']);
+        self::assertNull($r['light']);
+        self::assertSame([], $r['css']);
+    }
+
+    public function testExplicitClassicKeyIsInactive(): void
+    {
+        $r = $this->serviceFor(ThemePresets::CLASSIC_KEY)->resolve();
+        self::assertFalse($r['active']);
+    }
+
+    public function testClassicExposesDarkAndLightVariantsMatchingMidnightForDark(): void
+    {
+        $r = $this->serviceFor(null)->resolve();
+        self::assertSame('hsl(0, 0%, 6.5%)', $r['css_dark']['--tblr-body-bg']);
+        self::assertArrayNotHasKey('--tblr-success', $r['css_dark']);
+        self::assertArrayNotHasKey('--tblr-body-color', $r['css_dark']);
+        self::assertSame('#f4f6fb', $r['css_light']['--tblr-body-bg']);
     }
 
     public function testMidnightResolvesExpectedPrimaryAndBackground(): void
     {
         $r = $this->serviceFor('midnight')->resolve();
+        self::assertTrue($r['active']);
         self::assertFalse($r['light']);
         self::assertSame('#6366f1', $r['primary_hex']);
         self::assertSame('99, 102, 241', $r['primary_rgb']);

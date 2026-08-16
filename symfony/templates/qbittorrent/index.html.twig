@@ -2,6 +2,12 @@
 {% import '_icons.html.twig' as ico %}
 {% block title %}{{ 'qbittorrent.page_title'|trans }}{% endblock %}
 {% block page_title %}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#2f67ba" stroke-width="2"><path d="M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2"/><path d="M7 11l5 5 5-5"/><path d="M12 4v12"/></svg> {{ 'qbittorrent.page_title'|trans }}{% endblock %}
+{# Always a full reload in/out of this page — its 3s poller uses a
+   window-global timer handle shared with the other torrent client pages
+   (qBittorrent/Deluge/Transmission); a Turbo in-place visit can leave the
+   outgoing page's closure (and its live interval) running, overwriting
+   the DOM with stale data. Full reload sidesteps the whole class of bug. #}
+{% block head_meta %}<meta name="turbo-visit-control" content="reload">{% endblock %}
 
 {% block stylesheets %}
 <style>
