@@ -5,13 +5,13 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-08-01 (covers 2026-06-13 → 2026-08-01).*
+*Last updated: 2026-08-15 (covers 2026-06-13 → 2026-08-15).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
 mergeable both ways), and everything general-purpose is offered back as an
 upstream PR. Every change lands through the same quality gate as upstream —
-PHP lint, Twig lint and the full PHPUnit suite (~1,080 tests) green in CI, plus
+PHP lint, Twig lint and the full PHPUnit suite (~1,083 tests) green in CI, plus
 a live test on a real Unraid deployment — before an image is published.
 Since 2026-07-31 that gate also includes PHPStan at level 7.
 
@@ -54,9 +54,15 @@ represent a diff:
 
 ---
 
-## 2. Shipped in the fork, proposed upstream (PRs open)
+## 2. Contributed back — absorbed upstream (2026-08-15)
 
-Already on the fork's `main` and `:latest`; each has an open upstream PR.
+Everything in this section started as fork work, was offered upstream, and is
+now part of the original project — so like section 1 it no longer represents a
+diff. It is kept separate because of *how* it landed: rather than merging the
+pull requests, upstream rebased the branches straight into `main` and closed
+them. GitHub therefore shows #66/#68/#69/#70/#74/#75/#76 as **closed, not
+merged**, even though the commits are upstream with their original authorship
+intact. Read the PR links below as "where this was proposed", not as open work.
 
 ### Dashboard themes — [#66](https://github.com/Shoshuo/Prismarr/pull/66)
 
@@ -365,7 +371,17 @@ Fork-only in practice — it is deep infrastructure monitoring rather than media
 management, so it is a poor upstream fit (same reasoning as the Unraid widget in
 §4), but nothing in it is fork-specific if upstream ever wants it.
 
-### Transmission tab (2026-07-25)
+### Transmission tab (2026-07-25) — superseded upstream 2026-08-15
+
+> **No longer a fork diff.** Upstream shipped its own Transmission integration
+> on 2026-08-15, from the same contributor's work via a parallel route. At the
+> sync the fork adopted **upstream's page template** in place of the one below:
+> the two were the same UI, but upstream's uses a properly namespaced
+> `transmission.*` translation block (this fork's borrowed 216 `qbittorrent.*`
+> keys) and carries the cross-client reload guard. The fork's own
+> `TransmissionClient` was kept, since it kept two fixes upstream lacks — the
+> requested `rateDownload`/`rateUpload` fields and PHPStan-clean casts. The
+> account below is retained for the RPC/i18n findings, which still apply.
 
 A third download client alongside qBittorrent and Deluge (merge `79e8ce3`),
 reworked from **jeromelefeuvre's fork PR #18** with the contributor's
@@ -623,6 +639,45 @@ new key. 1079 tests / 2941 assertions; live-verified on `:beta`.
 
 Fork-only by nature — the whole point is that it tracks *this* repository — so
 no upstream PR is planned.
+
+### Upstream resync (2026-08-15)
+
+Upstream came back after a dormant spell and took the fork's whole second wave
+(section 2). Merging its 65 commits back down was mostly a matter of deciding,
+per file, which side was the superset — but three things in it are worth
+recording, because each would have shipped a silent breakage.
+
+- **A duplicate array key git never flagged.** Both sides had added a
+  `display_theme` entry to `AdminSettingsController::DISPLAY_OPTIONS`, at
+  different offsets, so the merge kept **both** with no conflict marker. PHP
+  resolves a duplicate literal key to the last one, so the app would have
+  behaved correctly while carrying a dead block above it — the kind of thing
+  that surfaces months later when someone edits the wrong one. Ours was
+  dropped in favour of the Classic-aware entry.
+- **Already-present code on both sides.** `HealthService` and
+  `DelugeController` had each grown Transmission handling independently, so
+  taking upstream's side of those hunks would have produced a duplicate
+  `'transmission'` match arm and a second `case 'transmission':`. Resolved to
+  the fork's copy after checking the rest of each file for the same symbol.
+- **Un-nonced inline scripts.** Upstream still ships `script-src` with
+  `'unsafe-inline'`, so its templates carry bare `<script>` tags. Under this
+  fork's enforcing nonce policy those are simply not executed — the page
+  renders and every scripted behaviour on it silently disappears. Adopting
+  upstream's Deluge and Transmission templates therefore required re-applying
+  `nonce="{{ csp_nonce() }}"`, and an audit turned up two more that had
+  auto-merged into `base.html.twig`: the **Deluge and Transmission sidebar
+  badge pollers**. The check that finds them is "an inline `<script>` with
+  neither `src=` nor `csp_nonce`"; it now reports zero repo-wide.
+
+Also dropped upstream's `testServicesHealthExpandsOneChipPerInstance`, which
+reflects on `DashboardController::servicesHealth` — a method this fork
+consolidated into `HealthService::chips()` long ago, so the test would have
+failed with a `ReflectionException` rather than a useful assertion.
+
+What the sync brought *in* that the fork wanted: the torrent-page full-reload
+guard (which closes the last open item from the cross-page poller fix above),
+Classic theme mode, the `deluge.*` translation namespace, the 4+ instance
+Radarr/Sonarr sidebar dropdown fix, and PHPUnit 14 test hygiene.
 
 ---
 

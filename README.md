@@ -113,9 +113,6 @@ part of the original project:
 - Plex activity via Tautulli (dashboard widget + full Plex Activity page) and latency-aware health chips — [#60](https://github.com/Shoshuo/Prismarr/pull/60)
 - In-place quick-look modal on the dashboard — [#61](https://github.com/Shoshuo/Prismarr/pull/61)
 - Plex Activity statistics, graphs and per-user filter — [#62](https://github.com/Shoshuo/Prismarr/pull/62)
-
-**Proposed upstream, pending** — already shipped in this fork:
-
 - Dashboard theming: 17 glance-style HSL presets with an admin Theme picker — [#66](https://github.com/Shoshuo/Prismarr/pull/66)
 - Dashboard layout customization: reorder + hide/show sections — [#68](https://github.com/Shoshuo/Prismarr/pull/68)
 - One unified rich detail modal everywhere (top-bar search, dashboard, Explorer, Plex activity) — [#69](https://github.com/Shoshuo/Prismarr/pull/69)
@@ -124,17 +121,15 @@ part of the original project:
 - Plex items open the app-global quick-look modal — [#75](https://github.com/Shoshuo/Prismarr/pull/75)
 - Deluge tab: full torrent management via deluge-web JSON-RPC — [#76](https://github.com/Shoshuo/Prismarr/pull/76)
 
+Upstream took that second wave (#66–#76) by rebasing the branches straight into
+`main`, so those pull requests show as *closed* rather than *merged* — the code
+is upstream either way, with the original commit authorship intact. A third
+download client (Transmission) landed upstream from a parallel community
+contribution around the same time, so this fork now runs upstream's Transmission
+page rather than the one it built.
+
 **Fork-only** — only available here:
 
-- **Transmission tab:** a third download client alongside qBittorrent and
-  Deluge — list/table/compact views, filtering, search, sort and pagination,
-  bulk actions (pause/resume/delete/recheck plus pause-all/resume-all), a
-  per-torrent detail modal (general/files/trackers/peers), add-by-URL and
-  add-by-file, and a read-only filter over Transmission's own labels. Talks the
-  Transmission RPC API and handles its session handshake transparently (the
-  expected `409` that carries the session token is treated as "reachable"; a
-  real `401` is reported as an auth failure). Reworked from a community fork
-  PR — a candidate to offer upstream rather than deliberately fork-bound.
 - **FrankenPHP/Symfony worker mode (opt-in):** an env-gated flag
   (`PRISMARR_WORKER`) that boots the kernel once and keeps it resident instead
   of rebuilding it per request. Off by default. On a real homelab it cut a
@@ -178,12 +173,12 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Movies & Series:** Radarr and Sonarr libraries with five view modes, **multiple instances side by side** (1080p / 4K / Anime, each first-class in the UI), global `Ctrl+K` search and a quick-add modal with a per-instance target picker.
 - **Unified calendar:** movie and episode releases merged across instances, deduped by `tmdbId` / `tvdbId`, with month / week / day views and iCal export.
 - **Dashboard:** hero spotlight, upcoming releases, pending Seerr requests, live service health, watchlist, trending and latest additions. Paints instantly, each widget hydrates on its own.
-- **Dashboard customization (fork):** an admin can reorder and hide/show every dashboard section, and pick one of 17 theme presets.
+- **Dashboard customization (fork):** an admin can reorder and hide/show every dashboard section, and pick one of 17 theme presets (or leave it on Classic).
 - **Quick-look everywhere (fork):** clicking any media tile — dashboard, top-bar search result, Explorer, Plex activity — opens one rich in-place detail modal (poster, synopsis, ratings, release/air dates, watchlist, Add/Manage deep-links) instead of navigating away.
 - **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload), a full Deluge tab (live table, labels, seeding columns, detail panel, add/limits — via deluge-web JSON-RPC), a full Transmission tab (same list/table/compact views, bulk actions, detail modal and add-by-URL/file, with a read-only filter over Transmission's own labels — via the Transmission RPC API), plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
 - **Discovery:** TMDb landing page with recommendations and trending, watchlist, an explorer with filters, and deep-links into your library.
 - **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs with a per-user filter, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
-- **Theming:** a full instance theme chosen in `/admin/settings → Display` from a catalogue of glance-style presets (HSL colour model resolved to CSS variables server-side, light and dark). The default reproduces the previous dark look exactly.
+- **Theming:** a full instance theme chosen in `/admin/settings → Display` from a catalogue of 17 glance-style presets (HSL colour model resolved to CSS variables server-side, light and dark). Picking a preset fixes the palette for everyone; the default **Classic** mode instead keeps the per-browser light/dark toggle in the topbar, so an install that never picks a theme looks exactly as it did before theming existed.
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
 - **Houndarr (fork):** optional dashboard stat tile with backlog-search totals and a health chip.
 - **UniFi network monitoring (fork):** optional admin-only dashboard section — live WAN up/download, client counts (wired/wireless/guest), a 24-hour usage graph and gateway/switch/AP status, via the UniFi OS Network API. Plus a full **UniFi Network tab** (`/unifi`, admin-only): 7-day traffic and 30-day speedtest trends, device inventory, RF environment (AP radios and neighbouring APs), VLANs, wireless clients, live talkers, top clients and DHCP-reservation mismatches — read-only, and every panel falls back to an empty state rather than breaking the page.
