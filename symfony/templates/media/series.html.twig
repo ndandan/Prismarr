@@ -1349,11 +1349,16 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
   // committed URL state) and resync the status pills from the restored
   // hidden input.
   var _seriesDrawer = document.getElementById('series-filters-drawer');
+  // Captured at init = the server-rendered (committed URL) status. Can't be
+  // recovered later: hidden inputs are exempt from form.reset(), and writing
+  // their .value reflects straight into the attribute, so defaultValue is
+  // poisoned by the first pill tap.
+  var _committedStatus = statusInput ? statusInput.value : 'all';
   if (_seriesDrawer) _seriesDrawer.addEventListener('hidden.bs.offcanvas', function() {
     if (_applyingFilters || !filterForm) return;
     filterForm.reset();
-    var committed = statusInput ? statusInput.value : 'all';
-    btnAll.forEach(function (b) { b.classList.toggle('active', (b.dataset.filter || 'all') === committed); });
+    if (statusInput) statusInput.value = _committedStatus;
+    btnAll.forEach(function (b) { b.classList.toggle('active', (b.dataset.filter || 'all') === _committedStatus); });
   });
 
   // Debounced text search: submit after 300ms of inactivity so typing
