@@ -228,6 +228,12 @@ class ProwlarrClient implements ResetInterface
         ], $data);
     }
 
+    /** Grab a search result via the indexer's configured download client. */
+    public function grab(string $guid, int $indexerId): array
+    {
+        return $this->requestWithError('POST', '/api/v1/search', ['guid' => $guid, 'indexerId' => $indexerId]);
+    }
+
     // ── History ───────────────────────────────────────────────────────────────
 
     public function getRecentSearches(int $limit = 20): array
