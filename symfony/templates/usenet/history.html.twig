@@ -3,6 +3,10 @@
 {% block title %}{{ 'usenet.history.title'|trans }} — {{ client_label }}{% endblock %}
 {% block page_title %}<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{ client == 'nzbget' ? '#1f9c3a' : '#ffa000' }}" stroke-width="2"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><path d="M3 4v5h5"/></svg> {{ client_label }} — {{ 'usenet.history.title'|trans }}{% endblock %}
 
+{% block stylesheets %}
+{% include 'usenet/_history_styles.html.twig' %}
+{% endblock %}
+
 {% block body %}
 <div class="d-flex align-items-center mb-3">
   <a href="{{ path('app_usenet_index', {client: client}) }}" class="btn btn-sm btn-outline-secondary">

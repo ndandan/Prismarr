@@ -2,6 +2,7 @@
 
 namespace App\Tests\Controller;
 
+use App\Controller\UsenetController;
 use App\Entity\Setting;
 use App\Service\HealthService;
 use App\Service\Media\Usenet\SabnzbdClient;
@@ -10,6 +11,7 @@ use App\Service\Media\Usenet\UsenetStatus;
 use App\Tests\AbstractWebTestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * #20 — a configured-but-unreachable Usenet client must show an explicit
@@ -22,6 +24,19 @@ use PHPUnit\Framework\MockObject\MockObject;
 #[AllowMockObjectsWithoutExpectations]
 class UsenetControllerTest extends AbstractWebTestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The recent-history preview is cached in the app pool (filesystem in
+        // the test env), which outlives a single test — drop both clients' keys
+        // so no test inherits another's cached history.
+        $cache = static::getContainer()->get(CacheInterface::class);
+        foreach (['sabnzbd', 'nzbget'] as $kind) {
+            $cache->delete(UsenetController::recentHistoryCacheKey($kind));
+        }
+    }
+
     public function testUnreachableSabnzbdShowsErrorBanner(): void
     {
         $em = $this->em();
@@ -104,7 +119,9 @@ class UsenetControllerTest extends AbstractWebTestCase
     {
         $sab = $this->configureSabnzbd();
         $this->mockHealthy();
-        $sab->method('getHistoryPage')->willReturn([
+        // Pin the fetch window: 15 rows from offset 0. That limit governs the
+        // per-render cost, especially on NZBGet (no upstream paging).
+        $sab->expects($this->once())->method('getHistoryPage')->with(0, 15)->willReturn([
             'items' => [
                 $this->historyItem('Recent.One', UsenetStatus::COMPLETED, 1755800000),
                 $this->historyItem('Recent.Two', UsenetStatus::FAILED),
@@ -143,7 +160,9 @@ class UsenetControllerTest extends AbstractWebTestCase
 
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertStringNotContainsString('Recent history', $html);
-        $this->assertStringNotContainsString('uh-row', $html);
+        // Match the markup, not the bare class name — the .uh-* stylesheet is
+        // included unconditionally, so "uh-row" also appears in the CSS.
+        $this->assertStringNotContainsString('class="uh-row"', $html);
         $this->assertStringContainsString('data-stat="active"', $html);
     }
 
@@ -158,6 +177,58 @@ class UsenetControllerTest extends AbstractWebTestCase
 
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertStringNotContainsString('Recent history', (string) $this->client->getResponse()->getContent());
+    }
+
+    public function testRecentHistoryIsFetchedOncePerCacheWindow(): void
+    {
+        // NZBGet's history RPC has no upstream paging — getHistoryPage() pulls
+        // the WHOLE retained history and slices locally. Without a short cache
+        // that unbounded payload would cross the wire on every page render, so
+        // two renders inside the TTL must cost exactly one client call.
+        $this->client->disableReboot(); // keep the mocks + cache pool across both renders
+        $sab = $this->configureSabnzbd();
+        $this->mockHealthy();
+        $sab->expects($this->once())->method('getHistoryPage')->with(0, 15)->willReturn([
+            'items' => [$this->historyItem('Cached.Release', UsenetStatus::COMPLETED, 1755800000)],
+            'total' => 7,
+        ]);
+
+        $this->client->request('GET', '/usenet/sabnzbd');
+        $first = (string) $this->client->getResponse()->getContent();
+        $this->client->request('GET', '/usenet/sabnzbd');
+        $second = (string) $this->client->getResponse()->getContent();
+
+        // Both renders show the rows — the second one out of the cache, which
+        // also proves the UsenetDownload DTOs survive a round-trip through the
+        // pool.
+        $this->assertStringContainsString('Cached.Release', $first);
+        $this->assertStringContainsString('Cached.Release', $second);
+        $this->assertStringContainsString('View all (7)', $second);
+    }
+
+    public function testFailedHistoryFetchIsNotCached(): void
+    {
+        // A transient failure must not be pinned for the whole TTL: the next
+        // render retries (mirrors MediaLibraryCache's "empty is not cached").
+        $this->client->disableReboot();
+        $sab = $this->configureSabnzbd();
+        $this->mockHealthy();
+        $calls = 0;
+        $sab->method('getHistoryPage')->willReturnCallback(function () use (&$calls) {
+            if (++$calls === 1) {
+                throw new \RuntimeException('boom');
+            }
+            return ['items' => [$this->historyItem('Retried.Release', UsenetStatus::COMPLETED)], 'total' => 1];
+        });
+
+        $this->client->request('GET', '/usenet/sabnzbd');
+        $first = (string) $this->client->getResponse()->getContent();
+        $this->client->request('GET', '/usenet/sabnzbd');
+        $second = (string) $this->client->getResponse()->getContent();
+
+        $this->assertStringNotContainsString('Recent history', $first);
+        $this->assertStringContainsString('Retried.Release', $second);
+        $this->assertSame(2, $calls);
     }
 
     /** Make the render-time probe report a healthy client. */

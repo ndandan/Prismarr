@@ -14,6 +14,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
@@ -34,6 +36,23 @@ class UsenetController extends AbstractController
     /** Rows in the downloads page's "Recent history" preview (#47). */
     private const RECENT_HISTORY_LIMIT = 15;
 
+    /**
+     * Cache window for that preview. NZBGet's history RPC has no upstream
+     * paging — getHistoryPage() pulls the whole retained history and slices
+     * locally — so an uncached preview would drag that payload across the wire
+     * on every page render. History only grows when a job finishes, so a short
+     * window needs no invalidation.
+     *
+     * @internal Exposed for tests; matches MediaLibraryCache::TTL.
+     */
+    public const RECENT_HISTORY_TTL = 45; // seconds
+
+    /** @internal Exposed for tests — one key per client, never shared. */
+    public static function recentHistoryCacheKey(string $client): string
+    {
+        return 'usenet.recent_history.' . $client;
+    }
+
     public function __construct(
         private readonly SabnzbdClient $sabnzbd,
         private readonly NzbgetClient $nzbget,
@@ -41,6 +60,7 @@ class UsenetController extends AbstractController
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
+        private readonly CacheInterface $cache,
     ) {}
 
     private function client(string $kind): UsenetClientInterface
@@ -103,11 +123,25 @@ class UsenetController extends AbstractController
         // the queue keeps its JS poller, history doesn't need one. Skipped when
         // the probe already failed: the page shows its unreachable banner
         // instead, and a doomed call would just burn the connect timeout.
+        //
+        // Behind a short per-client cache: NZBGet's history RPC returns the
+        // WHOLE retained history (the client slices locally), so an uncached
+        // preview would pull an unbounded payload on every render. An empty
+        // result isn't cached, and a throwing fetch caches nothing at all, so
+        // neither a fresh install nor a transient failure gets pinned for the
+        // window.
         $recentHistory = [];
         $historyTotal  = 0;
         if ($reason === null) {
             try {
-                $hist = $this->client($client)->getHistoryPage(0, self::RECENT_HISTORY_LIMIT);
+                $hist = $this->cache->get(
+                    self::recentHistoryCacheKey($client),
+                    function (ItemInterface $item) use ($client): array {
+                        $result = $this->client($client)->getHistoryPage(0, self::RECENT_HISTORY_LIMIT);
+                        $item->expiresAfter($result['items'] === [] ? 0 : self::RECENT_HISTORY_TTL);
+                        return $result;
+                    },
+                );
                 $recentHistory = $hist['items'];
                 $historyTotal  = $hist['total'];
             } catch (\Throwable $e) {
