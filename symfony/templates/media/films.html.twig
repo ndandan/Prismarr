@@ -379,11 +379,11 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             {{ 'media.films.actions.search_filtered'|trans }}
           </button>
-          <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-sm btn-ghost-secondary ms-auto">{{ 'media.films.pagination.reset_filters'|trans }}</a>
+          <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-sm btn-ghost-secondary ms-auto js-libfilter-reset">{{ 'media.films.pagination.reset_filters'|trans }}</a>
         </div>
       {% endif %}
       <div class="films-drawer-footer d-lg-none d-flex gap-2 justify-content-end mt-2 pt-2 border-top">
-        <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-ghost-secondary">{{ 'media.films.pagination.reset_filters'|trans }}</a>
+        <a href="{{ path('app_media_films', { slug: current_instance.slug }) }}" class="btn btn-ghost-secondary js-libfilter-reset">{{ 'media.films.pagination.reset_filters'|trans }}</a>
         <button type="button" class="btn btn-primary" id="films-filters-apply">{{ 'media.films.filters.apply'|trans }}</button>
       </div>
       </div>
@@ -1408,6 +1408,21 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   if (_filmsApplyBtn) _filmsApplyBtn.addEventListener('click', function() {
     _applyingFilters = true;
     submitFiltersForm();
+  });
+
+  // Dismissing the drawer without Apply must not keep half-committed state:
+  // the pill/select handlers already wrote the form controls, but no
+  // navigation happened — the drawer would disagree with the grid for the
+  // rest of the page's life and the stale values would silently ride along
+  // on the next submit. Reset the form to its server-rendered values (= the
+  // committed URL state) and resync the status pills from the restored
+  // hidden input.
+  var _filmsDrawer = document.getElementById('films-filters-drawer');
+  if (_filmsDrawer) _filmsDrawer.addEventListener('hidden.bs.offcanvas', function() {
+    if (_applyingFilters || !filterForm) return;
+    filterForm.reset();
+    var committed = statusInput ? statusInput.value : 'all';
+    btnAll.forEach(function (b) { b.classList.toggle('active', (b.dataset.filter || 'all') === committed); });
   });
 
   // Debounced text search: submit after 300ms of inactivity so typing
