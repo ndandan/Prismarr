@@ -16,30 +16,49 @@ export HOME=/var/www/html/var/caddy
 #   unset / "" / 0 / false / no / off  → OFF (classic per-request mode)
 #   1  (or true / yes / on)            → ON, FrankenPHP's default count (2x CPU)
 #   a positive integer N (e.g. 4)      → ON, with N resident workers
-# PRISMARR_WORKER_NUM, if set, overrides the count in every case. The directive
-# is injected into the global `frankenphp { }` block via the
-# {$PRISMARR_WORKER_DIRECTIVE} Caddyfile placeholder; an unset/OFF value leaves
-# it empty — byte-for-byte the classic path. Symfony 8's default runtime
-# auto-detects FrankenPHP's worker loop (FRANKENPHP_WORKER) — no APP_RUNTIME /
-# extra package needed.
+#   anything else                      → OFF + a warning (fail closed: worker
+#                                        mode changes request-isolation
+#                                        semantics, so it must never be
+#                                        enabled by a typo)
+# PRISMARR_WORKER_NUM, if set to a positive integer, overrides the count; any
+# other value is ignored with a warning — it is interpolated into the
+# Caddyfile, so an unvalidated value would fail Caddy's parse and take the
+# whole container down. The directive is injected into the global
+# `frankenphp { }` block via the {$PRISMARR_WORKER_DIRECTIVE} placeholder; an
+# unset/OFF value leaves it empty — byte-for-byte the classic path. Symfony
+# 8's default runtime auto-detects FrankenPHP's worker loop (FRANKENPHP_WORKER)
+# — no APP_RUNTIME / extra package needed.
+_pw_on=""
+_pw_count=""
 case "${PRISMARR_WORKER:-}" in
   ''|0|false|False|FALSE|no|No|NO|off|Off|OFF)
     : ;;  # classic — leave the directive empty
+  1|true|True|TRUE|yes|Yes|YES|on|On|ON)
+    _pw_on=1 ;;
+  *[!0-9]*)
+    # Unrecognized non-integer → fail CLOSED (classic mode), say so.
+    echo "[prismarr] WARNING: unrecognized PRISMARR_WORKER='${PRISMARR_WORKER}' — worker mode stays OFF (use 1/true/on or a worker count)" ;;
   *)
-    _pw_num="${PRISMARR_WORKER_NUM:-}"
-    # No explicit count and PRISMARR_WORKER is a plain integer >1 → use it as
-    # the worker count (so PRISMARR_WORKER=4 means "4 workers").
-    case "${PRISMARR_WORKER}" in
-      ''|*[!0-9]*) : ;;                                                       # not a pure integer
-      *) [ -z "${_pw_num}" ] && [ "${PRISMARR_WORKER}" -gt 1 ] && _pw_num="${PRISMARR_WORKER}" ;;
-    esac
-    if [ -n "${_pw_num}" ]; then
-      export PRISMARR_WORKER_DIRECTIVE="worker /var/www/html/public/index.php ${_pw_num}"
-    else
-      export PRISMARR_WORKER_DIRECTIVE="worker /var/www/html/public/index.php"
-    fi
-    ;;
+    # Pure integer (>1 → also the worker count; 0 was handled above).
+    _pw_on=1
+    [ "${PRISMARR_WORKER}" -gt 1 ] && _pw_count="${PRISMARR_WORKER}" ;;
 esac
+if [ -n "${_pw_on}" ]; then
+  # Optional count override — accepted only as a pure positive integer, since
+  # this value lands verbatim inside the Caddyfile.
+  case "${PRISMARR_WORKER_NUM:-}" in
+    '') : ;;
+    0|*[!0-9]*)
+      echo "[prismarr] WARNING: ignoring invalid PRISMARR_WORKER_NUM='${PRISMARR_WORKER_NUM}' (must be a positive integer)" ;;
+    *)
+      _pw_count="${PRISMARR_WORKER_NUM}" ;;
+  esac
+  if [ -n "${_pw_count}" ]; then
+    export PRISMARR_WORKER_DIRECTIVE="worker /var/www/html/public/index.php ${_pw_count}"
+  else
+    export PRISMARR_WORKER_DIRECTIVE="worker /var/www/html/public/index.php"
+  fi
+fi
 
 # Log the decision so worker status is visible in the container log (the
 # FrankenPHP process runs as www-data / non-dumpable, so its env can't be
