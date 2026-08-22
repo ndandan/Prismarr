@@ -48,6 +48,25 @@
     el.addEventListener('click', function () { clearSaved(key); });
   }
 
+  // The query string this document was *navigated to*. Page scripts rewrite
+  // window.location with history.replaceState before our listeners run — the
+  // films/series deep-link handler strips ?open={id} that way — and reading
+  // the live URL would then mistake a deep link for a bare one and reload
+  // into the saved filters, killing the modal the deep link was opening.
+  // The Navigation Timing entry keeps the real landing URL; replaceState
+  // cannot touch it. Trust it only while it still describes this path: after
+  // a Turbo visit elsewhere it belongs to the previous document.
+  function landingSearch() {
+    try {
+      var nav = performance.getEntriesByType('navigation')[0];
+      if (nav && nav.name) {
+        var landed = new URL(nav.name, window.location.origin);
+        if (landed.pathname === window.location.pathname) { return landed.search; }
+      }
+    } catch (e) {}
+    return window.location.search;
+  }
+
   // Save/restore for the current page if it is a library page. The page marks
   // itself with data-libfilter-type / data-libfilter-slug on its filter form.
   function syncCurrentPage() {
@@ -58,12 +77,13 @@
     if (!type || !slug) { return; }
 
     var key = storageKey(type, slug);
-    var qs = trackedQS(window.location.search);
+    var landed = landingSearch();
+    var qs = trackedQS(landed);
 
     if (qs) {
       // Viewing a filtered URL — remember it.
       writeSaved(key, qs);
-    } else if (!window.location.search) {
+    } else if (!landed) {
       // Completely empty URL — restore saved filters if any.
       var saved = readSaved(key);
       if (saved) {
