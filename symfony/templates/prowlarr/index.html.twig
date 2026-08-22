@@ -509,7 +509,11 @@
     };
 
     // ── Helpers ──
-    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    // Issue #71 fix-round-1 — textContent→innerHTML only escapes & < > ;
+    // this page also interpolates esc() output into attribute contexts
+    // (href, data-guid, data-indexer-id), so " must be escaped too or a
+    // quote in indexer-supplied data breaks out of the attribute.
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
     function showAlert(el, cls, msg) { el.className = 'mt-2 alert ' + cls; el.textContent = msg; el.style.display = ''; }
     // Clean the payload before sending to the Prowlarr API (remove empty selectOptions that cause type errors)
     function cleanPayload(data) {
