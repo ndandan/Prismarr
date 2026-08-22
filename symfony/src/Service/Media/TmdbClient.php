@@ -281,6 +281,12 @@ class TmdbClient implements ResetInterface
      */
     public static function regionPriority(string $locale, array $append = []): array
     {
+        // An explicit region subtag wins outright: en_GB / fr-CA users have
+        // literally named their country, so it leads even the language map.
+        $region = '';
+        if (preg_match('/^[a-zA-Z]{2,3}[_-]([a-zA-Z]{2})\b/', $locale, $m)) {
+            $region = strtoupper($m[1]);
+        }
         $lang = strtolower(substr($locale, 0, 2));
         $lead = match ($lang) {
             'fr'    => ['FR', 'BE', 'LU', 'CA'],
@@ -289,10 +295,13 @@ class TmdbClient implements ResetInterface
             'de'    => ['DE', 'AT', 'CH'],
             'pt'    => ['PT', 'BR'],
             'it'    => ['IT', 'CH'],
-            default => $lang !== '' ? [strtoupper($lang)] : [],
+            // Unknown language → no lead guess. (Never upcast the language
+            // code itself: 'sv' is Swedish, but 'SV' is El Salvador.) The
+            // common chain + payload countries below still apply.
+            default => [],
         };
         $order = [];
-        foreach ([...$lead, 'FR', 'US', 'GB', 'BE', 'LU', 'CA', ...$append] as $cc) {
+        foreach ([$region, ...$lead, 'FR', 'US', 'GB', 'BE', 'LU', 'CA', ...$append] as $cc) {
             $cc = strtoupper((string) $cc);
             if ($cc !== '' && !in_array($cc, $order, true)) {
                 $order[] = $cc;
