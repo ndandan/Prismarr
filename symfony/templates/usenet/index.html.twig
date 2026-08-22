@@ -167,6 +167,8 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
 .usenet-prop-label { font-size:.66rem; color:var(--tblr-text-secondary); text-transform:uppercase; letter-spacing:.3px; font-weight:600; margin-bottom:3px; }
 .usenet-prop-value { font-size:.84rem; font-weight:600; color:var(--tblr-body-color); word-break:break-word; }
 </style>
+{# .uh-* rules for the "Recent history" rows — shared with the history page. #}
+{% include 'usenet/_history_styles.html.twig' %}
 {% endblock %}
 
 {% block body %}
