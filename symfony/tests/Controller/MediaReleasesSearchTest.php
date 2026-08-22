@@ -91,4 +91,52 @@ class MediaReleasesSearchTest extends TestCase
         $this->assertSame(200, $res->getStatusCode());
         $this->assertSame('[]', $res->getContent());
     }
+
+    public function testFilmReleasesMapsInfoUrlFromRadarrPayload(): void
+    {
+        $radarr = $this->createMock(RadarrClient::class);
+        $radarr->method('getMovie')->willReturn(null);
+        $radarr->method('getReleasesForMovie')->willReturn([
+            ['guid' => 'a', 'indexerId' => 1, 'title' => 'Release A', 'infoUrl' => 'https://tracker.example/torrent/1'],
+            ['guid' => 'b', 'indexerId' => 2, 'title' => 'Release B'],
+        ]);
+
+        $res = $this->controller(radarr: $radarr)->filmReleases(1);
+        $this->assertSame(200, $res->getStatusCode());
+        $rows = json_decode($res->getContent(), true);
+        $this->assertSame('https://tracker.example/torrent/1', $rows[0]['infoUrl']);
+        $this->assertNull($rows[1]['infoUrl']);
+    }
+
+    public function testEpisodeReleasesMapsInfoUrlFromSonarrPayload(): void
+    {
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('getEpisode')->willReturn(null);
+        $sonarr->method('getEpisodeReleases')->willReturn([
+            ['guid' => 'a', 'indexerId' => 1, 'title' => 'Release A', 'infoUrl' => 'https://tracker.example/torrent/1'],
+            ['guid' => 'b', 'indexerId' => 2, 'title' => 'Release B'],
+        ]);
+
+        $res = $this->controller(sonarr: $sonarr)->episodeReleases(1);
+        $this->assertSame(200, $res->getStatusCode());
+        $rows = json_decode($res->getContent(), true);
+        $this->assertSame('https://tracker.example/torrent/1', $rows[0]['infoUrl']);
+        $this->assertNull($rows[1]['infoUrl']);
+    }
+
+    public function testSeasonReleasesMapsInfoUrlFromSonarrPayload(): void
+    {
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('getSerie')->willReturn(null);
+        $sonarr->method('getSeasonReleases')->willReturn([
+            ['guid' => 'a', 'indexerId' => 1, 'title' => 'Release A', 'infoUrl' => 'https://tracker.example/torrent/1'],
+            ['guid' => 'b', 'indexerId' => 2, 'title' => 'Release B'],
+        ]);
+
+        $res = $this->controller(sonarr: $sonarr)->seasonReleases(1, 1);
+        $this->assertSame(200, $res->getStatusCode());
+        $rows = json_decode($res->getContent(), true);
+        $this->assertSame('https://tracker.example/torrent/1', $rows[0]['infoUrl']);
+        $this->assertNull($rows[1]['infoUrl']);
+    }
 }
