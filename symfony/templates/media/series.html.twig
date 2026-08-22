@@ -1341,6 +1341,21 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     submitFiltersForm();
   });
 
+  // Dismissing the drawer without Apply must not keep half-committed state:
+  // the pill/select handlers already wrote the form controls, but no
+  // navigation happened — the drawer would disagree with the grid for the
+  // rest of the page's life and the stale values would silently ride along
+  // on the next submit. Reset the form to its server-rendered values (= the
+  // committed URL state) and resync the status pills from the restored
+  // hidden input.
+  var _seriesDrawer = document.getElementById('series-filters-drawer');
+  if (_seriesDrawer) _seriesDrawer.addEventListener('hidden.bs.offcanvas', function() {
+    if (_applyingFilters || !filterForm) return;
+    filterForm.reset();
+    var committed = statusInput ? statusInput.value : 'all';
+    btnAll.forEach(function (b) { b.classList.toggle('active', (b.dataset.filter || 'all') === committed); });
+  });
+
   // Debounced text search: submit after 300ms of inactivity so typing
   // a 5-letter word doesn't trigger 5 navigations.
   var _seriesSearchTimer;

@@ -35,6 +35,25 @@ final class TmdbClientRegionPriorityTest extends TestCase
         self::assertSame('FR', TmdbClient::regionPriority('fr-FR')[0]);
     }
 
+    public function testExplicitRegionSubtagLeadsEvenOverTheLanguageMap(): void
+    {
+        // The user literally named their country — it outranks the language
+        // map's guess (en would otherwise lead with US).
+        self::assertSame('GB', TmdbClient::regionPriority('en_GB')[0]);
+        self::assertSame('CA', TmdbClient::regionPriority('fr-CA')[0]);
+        self::assertSame('BR', TmdbClient::regionPriority('pt_BR')[0]);
+    }
+
+    public function testLanguageCodeIsNeverUpcastToACountryCode(): void
+    {
+        // 'sv' is Swedish; 'SV' is El Salvador. An unmapped language must NOT
+        // fabricate a country from its own code — it falls to the common chain.
+        self::assertNotContains('SV', TmdbClient::regionPriority('sv'));
+        self::assertNotContains('JA', TmdbClient::regionPriority('ja'));
+        self::assertNotContains('KO', TmdbClient::regionPriority('ko'));
+        self::assertSame('FR', TmdbClient::regionPriority('sv')[0]);
+    }
+
     public function testAppendedCountriesIncludedAndDeduped(): void
     {
         $order = TmdbClient::regionPriority('en', ['JP', 'US', 'KR']);
