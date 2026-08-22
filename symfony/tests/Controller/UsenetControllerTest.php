@@ -98,6 +98,77 @@ class UsenetControllerTest extends AbstractWebTestCase
         $this->assertTrue($this->client->getResponse()->isRedirect());
     }
 
+    // ── Recent history on the downloads page (#47) ────────────────────────────
+
+    public function testDownloadsPageRendersRecentHistory(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $this->mockHealthy();
+        $sab->method('getHistoryPage')->willReturn([
+            'items' => [
+                $this->historyItem('Recent.One', UsenetStatus::COMPLETED, 1755800000),
+                $this->historyItem('Recent.Two', UsenetStatus::FAILED),
+            ],
+            'total' => 42,
+        ]);
+
+        $this->client->request('GET', '/usenet/sabnzbd');
+        $html = (string) $this->client->getResponse()->getContent();
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        // The section, its rows and the "view all" link (with the grand total)
+        // must all be server-rendered — no poller fills this in.
+        $this->assertStringContainsString('Recent history', $html);
+        $this->assertStringContainsString('Recent.One', $html);
+        $this->assertStringContainsString('Recent.Two', $html);
+        $this->assertStringContainsString('class="uh-row" data-status="completed"', $html);
+        $this->assertStringContainsString('View all (42)', $html);
+        $this->assertStringContainsString('/usenet/sabnzbd/history', $html);
+        // Two age cells; exactly one falls back to the em dash, so the dated
+        // row really rendered a relative label (locale-independent assertion).
+        $this->assertSame(2, substr_count($html, 'class="uh-age"'));
+        $this->assertSame(1, substr_count($html, 'class="uh-age">—</div>'));
+    }
+
+    public function testDownloadsPageSurvivesHistoryFailure(): void
+    {
+        // A history call that blows up must not take the whole page with it —
+        // the queue still renders and the section is simply absent.
+        $sab = $this->configureSabnzbd();
+        $this->mockHealthy();
+        $sab->method('getHistoryPage')->willThrowException(new \RuntimeException('boom'));
+
+        $this->client->request('GET', '/usenet/sabnzbd');
+        $html = (string) $this->client->getResponse()->getContent();
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertStringNotContainsString('Recent history', $html);
+        $this->assertStringNotContainsString('uh-row', $html);
+        $this->assertStringContainsString('data-stat="active"', $html);
+    }
+
+    public function testUnreachableClientSkipsHistoryFetch(): void
+    {
+        // The probe already failed → the page shows its banner; a doomed
+        // history call would only burn the connect timeout.
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->never())->method('getHistoryPage');
+
+        $this->client->request('GET', '/usenet/sabnzbd');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertStringNotContainsString('Recent history', (string) $this->client->getResponse()->getContent());
+    }
+
+    /** Make the render-time probe report a healthy client. */
+    private function mockHealthy(): void
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('isConfigured')->willReturn(true);
+        $health->method('diagnose')->willReturn(['ok' => true, 'category' => 'ok', 'http' => 200]);
+        static::getContainer()->set(HealthService::class, $health);
+    }
+
     // ── History page ─────────────────────────────────────────────────────────
 
     public function testHistoryPageRendersItems(): void
@@ -137,12 +208,13 @@ class UsenetControllerTest extends AbstractWebTestCase
         $this->assertTrue($this->client->getResponse()->isRedirect());
     }
 
-    private function historyItem(string $name, string $status): UsenetDownload
+    private function historyItem(string $name, string $status, ?int $completedAt = null): UsenetDownload
     {
         return new UsenetDownload(
             id: 'x', name: $name, status: $status, rawStatus: 'Completed',
             sizeBytes: 1048576, remainingBytes: 0, percentage: 100.0, category: 'movies',
             etaSeconds: null, speedBytes: 0, failMessage: null, isHistory: true,
+            completedAt: $completedAt,
         );
     }
 

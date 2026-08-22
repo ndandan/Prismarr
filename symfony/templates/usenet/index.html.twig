@@ -304,6 +304,28 @@ body[data-bs-theme="dark"] .usenet-view-switcher { background:rgba(255,255,255,.
   <div class="usenet-list" data-usenet-queue data-view="list"></div>
   <div class="usenet-empty text-muted small text-center py-3" data-usenet-queue-empty hidden>{{ 'usenet.empty'|trans }}</div>
 
+  {# ─── Recent history (#47) ────────────────────────────────────── #}
+  {# Server-rendered at page load (no poller): what just finished is the
+     question the queue can't answer once a job leaves it. #}
+  {% if recent_history is not empty %}
+  <div class="card mt-3">
+    <div class="card-header py-2">
+      <h3 class="card-title" style="font-size:.82rem;">{{ 'usenet.history.recent_title'|trans }}</h3>
+      <div class="card-actions">
+        <a href="{{ path('app_usenet_history', {client: client}) }}" class="btn btn-sm btn-outline-secondary d-inline-flex align-items-center gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 8v4l3 3"/><path d="M3.05 11a9 9 0 1 1 .5 4"/><path d="M3 4v5h5"/></svg>
+          {{ 'usenet.history.view_all'|trans({count: history_total}) }}
+        </a>
+      </div>
+    </div>
+    <div class="card-body py-2">
+      <div class="uh-list">
+        {% include 'usenet/_history_rows.html.twig' with {items: recent_history, client: client} only %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   {# ─── Bulk action bar ─────────────────────────────────────────── #}
   <div class="usenet-bulk-bar" data-usenet-bulk-bar>
     <span class="fw-bold" data-usenet-bulk-count></span>
