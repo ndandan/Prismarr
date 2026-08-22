@@ -31,6 +31,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[Route('/usenet/{client}', name: 'app_usenet_', requirements: ['client' => 'sabnzbd|nzbget'])]
 class UsenetController extends AbstractController
 {
+    /** Rows in the downloads page's "Recent history" preview (#47). */
+    private const RECENT_HISTORY_LIMIT = 15;
+
     public function __construct(
         private readonly SabnzbdClient $sabnzbd,
         private readonly NzbgetClient $nzbget,
@@ -96,13 +99,35 @@ class UsenetController extends AbstractController
         } catch (\Throwable) {
         }
 
+        // Recent history preview (#47): server-rendered once, at page load —
+        // the queue keeps its JS poller, history doesn't need one. Skipped when
+        // the probe already failed: the page shows its unreachable banner
+        // instead, and a doomed call would just burn the connect timeout.
+        $recentHistory = [];
+        $historyTotal  = 0;
+        if ($reason === null) {
+            try {
+                $hist = $this->client($client)->getHistoryPage(0, self::RECENT_HISTORY_LIMIT);
+                $recentHistory = $hist['items'];
+                $historyTotal  = $hist['total'];
+            } catch (\Throwable $e) {
+                $this->logger->warning('Usenet recent history failed', [
+                    'client'    => $client,
+                    'exception' => $e::class,
+                    'message'   => $e->getMessage(),
+                ]);
+            }
+        }
+
         return $this->render('usenet/index.html.twig', [
-            'client'       => $client,
-            'client_label' => $label,
-            'error'        => $reason !== null,
-            'error_reason' => $reason ?? 'unreachable',
-            'service_url'  => $this->config->get($client . '_url'),
-            'categories'   => $categories,
+            'client'         => $client,
+            'client_label'   => $label,
+            'error'          => $reason !== null,
+            'error_reason'   => $reason ?? 'unreachable',
+            'service_url'    => $this->config->get($client . '_url'),
+            'categories'     => $categories,
+            'recent_history' => $recentHistory,
+            'history_total'  => $historyTotal,
         ]);
     }
 
