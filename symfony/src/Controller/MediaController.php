@@ -410,6 +410,7 @@ class MediaController extends AbstractController
                 'scoreDetails'      => $scoreDetails,
                 'customFormats'     => array_map(fn($cf) => $cf['name'] ?? '?', $r['customFormats'] ?? []),
                 'languages'         => array_map(fn($l) => $l['name'] ?? '?', $r['languages'] ?? []),
+                'infoUrl'           => $r['infoUrl'] ?? null,
             ];
         }, $raw);
 
@@ -1672,6 +1673,7 @@ class MediaController extends AbstractController
                 'versionLabel'      => $versionLabel,
                 'tvdbLabel'         => $tvdbLabel,
                 'releaseGroup'      => $r['releaseGroup'] ?? '',
+                'infoUrl'           => $r['infoUrl'] ?? null,
             ];
         }, $raw);
 
@@ -1817,6 +1819,7 @@ class MediaController extends AbstractController
                 'episodeRequested'  => (bool) ($r['episodeRequested'] ?? true),
                 'versionLabel'      => $versionLabel,
                 'releaseGroup'      => $r['releaseGroup'] ?? '',
+                'infoUrl'           => $r['infoUrl'] ?? null,
             ];
         }, $raw);
 
