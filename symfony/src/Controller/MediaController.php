@@ -69,6 +69,20 @@ class MediaController extends AbstractController
     }
 
     /**
+     * Only http(s) URLs are safe to emit as release tracker links.
+     * `infoUrl` is passed through verbatim from the Radarr/Sonarr release
+     * payload (in turn sourced from whatever indexer answered the search),
+     * so a compromised/hostile indexer could return a `javascript:`/`data:`
+     * URL — reject anything that isn't http(s) before it ever reaches the
+     * frontend, rather than relying on the page's CSP (this becomes an
+     * upstream PR where that CSP does not exist).
+     */
+    private static function safeInfoUrl(mixed $url): ?string
+    {
+        return (is_string($url) && preg_match('~^https?://~i', $url) === 1) ? $url : null;
+    }
+
+    /**
      * v1.1.0 Phase C — slug is mandatory, injected via the class-level
      * /medias/{slug} prefix. The autowired RadarrClient is already bound
      * to the right instance by MultiInstanceBinderSubscriber before this
@@ -410,7 +424,7 @@ class MediaController extends AbstractController
                 'scoreDetails'      => $scoreDetails,
                 'customFormats'     => array_map(fn($cf) => $cf['name'] ?? '?', $r['customFormats'] ?? []),
                 'languages'         => array_map(fn($l) => $l['name'] ?? '?', $r['languages'] ?? []),
-                'infoUrl'           => $r['infoUrl'] ?? null,
+                'infoUrl'           => self::safeInfoUrl($r['infoUrl'] ?? null),
             ];
         }, $raw);
 
@@ -1673,7 +1687,7 @@ class MediaController extends AbstractController
                 'versionLabel'      => $versionLabel,
                 'tvdbLabel'         => $tvdbLabel,
                 'releaseGroup'      => $r['releaseGroup'] ?? '',
-                'infoUrl'           => $r['infoUrl'] ?? null,
+                'infoUrl'           => self::safeInfoUrl($r['infoUrl'] ?? null),
             ];
         }, $raw);
 
@@ -1819,7 +1833,7 @@ class MediaController extends AbstractController
                 'episodeRequested'  => (bool) ($r['episodeRequested'] ?? true),
                 'versionLabel'      => $versionLabel,
                 'releaseGroup'      => $r['releaseGroup'] ?? '',
-                'infoUrl'           => $r['infoUrl'] ?? null,
+                'infoUrl'           => self::safeInfoUrl($r['infoUrl'] ?? null),
             ];
         }, $raw);
 
