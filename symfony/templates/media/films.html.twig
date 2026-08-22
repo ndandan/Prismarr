@@ -1431,6 +1431,26 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     submitFiltersForm();
   });
 
+  // Dismissing the drawer without Apply must not keep half-committed state:
+  // the pill/select handlers already wrote the form controls, but no
+  // navigation happened — the drawer would disagree with the grid for the
+  // rest of the page's life and the stale values would silently ride along
+  // on the next submit. Reset the form to its server-rendered values (= the
+  // committed URL state) and resync the status pills from the restored
+  // hidden input.
+  var _filmsDrawer = document.getElementById('films-filters-drawer');
+  // Captured at init = the server-rendered (committed URL) status. Can't be
+  // recovered later: hidden inputs are exempt from form.reset(), and writing
+  // their .value reflects straight into the attribute, so defaultValue is
+  // poisoned by the first pill tap.
+  var _committedStatus = statusInput ? statusInput.value : 'all';
+  if (_filmsDrawer) _filmsDrawer.addEventListener('hidden.bs.offcanvas', function() {
+    if (_applyingFilters || !filterForm) return;
+    filterForm.reset();
+    if (statusInput) statusInput.value = _committedStatus;
+    btnAll.forEach(function (b) { b.classList.toggle('active', (b.dataset.filter || 'all') === _committedStatus); });
+  });
+
   // Debounced text search: submit after 300ms of inactivity so typing
   // a 5-letter word doesn't trigger 5 navigations.
   var _filmSearchTimer;
