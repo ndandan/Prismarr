@@ -1489,14 +1489,11 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     }
     function fmtShortDate(ts) {
         if (!ts) return '—';
-        var d = new Date(ts * 1000);
-        return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + String(d.getFullYear()).slice(-2);
+        return window._prismarrFmtDate(new Date(ts * 1000));
     }
     function fmtLongDate(ts) {
         if (!ts) return '—';
-        var d = new Date(ts * 1000);
-        return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear()
-            + ' ' + ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2);
+        return window._prismarrFmtDateTime(new Date(ts * 1000));
     }
 
     function buildStatsLine(t) {
