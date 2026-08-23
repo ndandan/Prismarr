@@ -51,7 +51,7 @@
                     </div>
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ 'prowlarr.system.info_started'|trans }}</div>
-                        <div class="datagrid-content">{{ status.startTime ? status.startTime|date('d/m/Y H:i') : '—' }}</div>
+                        <div class="datagrid-content">{{ status.startTime ? status.startTime|prismarr_datetime : '—' }}</div>
                     </div>
                     <div class="datagrid-item">
                         <div class="datagrid-title">{{ 'prowlarr.system.info_appdata'|trans }}</div>

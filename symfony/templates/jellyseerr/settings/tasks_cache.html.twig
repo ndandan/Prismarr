@@ -55,7 +55,7 @@
                         </button>
                     </td>
                     <td class="text-muted small" id="next-{{ job.id }}">
-                        {% if job.nextExecutionTime %}{{ job.nextExecutionTime|date('d/m/Y H:i') }}{% else %}—{% endif %}
+                        {% if job.nextExecutionTime %}{{ job.nextExecutionTime|prismarr_datetime }}{% else %}—{% endif %}
                     </td>
                     <td>
                         <span id="status-{{ job.id }}" class="badge {{ job.running ?? false ? 'bg-purple-lt text-purple js-running' : 'bg-green-lt text-green' }}">
