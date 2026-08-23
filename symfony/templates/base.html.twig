@@ -82,22 +82,40 @@
         date: {{ display_pref('date_format')|json_encode|raw }},
         time: {{ display_pref('time_format')|json_encode|raw }}
       };
+      // An unparseable payload yields an Invalid Date; callers only guard
+      // truthiness, so return the pages' em-dash placeholder rather than
+      // "NaN-NaN-NaN" / "Invalid Date".
       window._prismarrFmtDate = function (d) {
+        if (isNaN(d.getTime())) return '—';
         var p = window._prismarrDatePrefs || {};
         if (p.date === 'iso') {
           var m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2);
           return d.getFullYear() + '-' + m + '-' + day;
         }
-        return d.toLocaleDateString(p.date === 'us' ? 'en-US' : 'fr-FR');
+        // 'us' mirrors formatDate()'s 'M j, Y' → "Apr 21, 2026", not en-US's
+        // default numeric 4/21/2026.
+        if (p.date === 'us') {
+          return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+        return d.toLocaleDateString('fr-FR');
       };
       window._prismarrFmtTime = function (d, withSeconds) {
+        if (isNaN(d.getTime())) return '—';
         var p = window._prismarrDatePrefs || {};
-        var opts = { hour: '2-digit', minute: '2-digit', hour12: p.time === '12h' };
+        // 12h uses a bare hour to match PHP 'g' ("2:30 PM"); 24h pads to match 'H'.
+        var opts = {
+          hour: p.time === '12h' ? 'numeric' : '2-digit',
+          minute: '2-digit',
+          hour12: p.time === '12h'
+        };
         if (withSeconds) opts.second = '2-digit';
         return d.toLocaleTimeString(p.time === '12h' ? 'en-US' : 'fr-FR', opts);
       };
+      // ' · ' is the separator formatDateTime() uses server-side — the two must
+      // agree, since a poller can rewrite an element Twig already rendered.
       window._prismarrFmtDateTime = function (d, withSeconds) {
-        return window._prismarrFmtDate(d) + ' ' + window._prismarrFmtTime(d, withSeconds);
+        if (isNaN(d.getTime())) return '—';
+        return window._prismarrFmtDate(d) + ' · ' + window._prismarrFmtTime(d, withSeconds);
       };
     }
 
