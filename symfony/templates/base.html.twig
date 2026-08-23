@@ -81,11 +81,17 @@
     // These take a JS Date, so the zone is the browser's. That matches the
     // pre-existing client-side behaviour; only the *format* becomes a
     // preference. The server-side filters remain the timezone-aware path.
+
+    // The prefs payload is re-stamped on EVERY document, outside the guard below:
+    // after an admin changes the Display preference, a Turbo-navigated page must
+    // not keep serving the old format from a stale global while the
+    // server-rendered dates around it have already updated. The function bodies
+    // are pure, so those stay guarded and are defined once.
+    window._prismarrDatePrefs = {
+      date: {{ display_pref('date_format')|json_encode|raw }},
+      time: {{ display_pref('time_format')|json_encode|raw }}
+    };
     if (!window._prismarrFmtDate) {
-      window._prismarrDatePrefs = {
-        date: {{ display_pref('date_format')|json_encode|raw }},
-        time: {{ display_pref('time_format')|json_encode|raw }}
-      };
       // An unparseable payload yields an Invalid Date; callers only guard
       // truthiness, so return the pages' em-dash placeholder rather than
       // "NaN-NaN-NaN" / "Invalid Date".
