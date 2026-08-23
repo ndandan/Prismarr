@@ -52,7 +52,7 @@
           {% if status.startTime is defined %}
           <div class="datagrid-item">
             <div class="datagrid-title">{{ 'media.arr_system.status.started'|trans }}</div>
-            <div class="datagrid-content">{{ status.startTime|date('d/m/Y H:i') }}</div>
+            <div class="datagrid-content">{{ status.startTime|prismarr_datetime }}</div>
           </div>
           {% endif %}
           <div class="datagrid-item">
@@ -283,7 +283,7 @@
         {% for log in logs %}
           <tr>
             <td class="text-muted small text-nowrap">
-              {% if log.time is defined %}{{ log.time|date('d/m/Y H:i:s') }}{% else %}—{% endif %}
+              {% if log.time is defined %}{{ log.time|prismarr_datetime(true) }}{% else %}—{% endif %}
             </td>
             <td>
               {% set lvl = log.level ?? '' %}

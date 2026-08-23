@@ -4450,6 +4450,8 @@ usenet:
     prev: Previous
     next: Next
     page_of: 'Page {current} / {total}'
+    recent_title: 'Recent history'
+    view_all: 'View all ({count})'
   empty: 'The queue is empty.'
   toolbar:
     pause_all: Pause all
@@ -4698,6 +4700,10 @@ prowlarr:
     indexer_added: Indexer added!
     error_add_failed: Unable to add
     error_save_failed: Unable to save
+  search:
+    grab: Grab
+    grab_sent: Sent to download client
+    grab_failed_tpl: 'Grab failed: __ERROR__'
   apps:
     title: Applications
     page_title_full: 'Applications — Prowlarr'

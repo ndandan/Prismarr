@@ -4447,6 +4447,8 @@ usenet:
     prev: Précédent
     next: Suivant
     page_of: 'Page {current} / {total}'
+    recent_title: 'Historique récent'
+    view_all: 'Tout voir ({count})'
   empty: 'La file est vide.'
   toolbar:
     pause_all: Tout mettre en pause
@@ -4695,6 +4697,10 @@ prowlarr:
     indexer_added: Indexeur ajouté !
     error_add_failed: Ajout impossible
     error_save_failed: Sauvegarde impossible
+  search:
+    grab: Récupérer
+    grab_sent: Envoyé au client de téléchargement
+    grab_failed_tpl: 'Échec de la récupération : __ERROR__'
   apps:
     title: Applications
     page_title_full: 'Applications — Prowlarr'
