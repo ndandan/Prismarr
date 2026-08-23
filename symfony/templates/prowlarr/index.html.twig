@@ -220,7 +220,7 @@
                                     <span class="d-flex align-items-center gap-1 text-success small"><span class="status-dot status-dot-animated bg-success"></span> {{ 'prowlarr.index.status_ok'|trans }}</span>
                                 {% endif %}
                             </td>
-                            <td class="text-secondary small text-nowrap">{{ idx.added ? idx.added|date('d/m/Y') : '—' }}</td>
+                            <td class="text-secondary small text-nowrap">{{ idx.added ? idx.added|prismarr_date : '—' }}</td>
                             <td class="text-end">
                                 <div class="d-flex gap-1 justify-content-end">
                                     <button class="btn btn-sm btn-ghost-secondary p-1" data-edit-id="{{ idx.id }}" title="{{ 'prowlarr.common.edit'|trans }}">

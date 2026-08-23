@@ -837,7 +837,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
             <span class="item" title="{{ 'qbittorrent.row.title_ratio'|trans }}">{{ ico.icon('scale', '', 14) }} {{ (t.ratio ?? 0)|number_format(2) }}</span>
             {% if t.added_on %}
             <span class="sep"></span>
-            <span class="item" title="{{ 'qbittorrent.row.title_added_tpl'|trans|replace({'__DATE__': t.added_on|date('d/m/Y H:i')}) }}">{{ ico.icon('calendar', '', 14) }} {{ t.added_on|date('d/m/y') }}</span>
+            <span class="item" title="{{ 'qbittorrent.row.title_added_tpl'|trans|replace({'__DATE__': t.added_on|prismarr_datetime}) }}">{{ ico.icon('calendar', '', 14) }} {{ t.added_on|prismarr_date }}</span>
             {% endif %}
         </div>
     </div>
@@ -849,7 +849,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     <div class="qbt-table-cell qbt-cell-up">{{ t.upspeed > 0 ? t.upspeed|prismarr_speed : '—' }}</div>
     <div class="qbt-table-cell">{{ t.num_seeds }}</div>
     <div class="qbt-table-cell">{{ (t.ratio ?? 0)|number_format(2) }}</div>
-    <div class="qbt-table-cell qbt-cell-added" data-added="{{ t.added_on ?? 0 }}">{% if t.added_on %}{{ t.added_on|date('d/m/y') }}{% else %}—{% endif %}</div>
+    <div class="qbt-table-cell qbt-cell-added" data-added="{{ t.added_on ?? 0 }}">{% if t.added_on %}{{ t.added_on|prismarr_date }}{% else %}—{% endif %}</div>
 
     {# Cellule mode compact — % seul #}
     <div class="qbt-compact-pct">{{ t.progress }}%</div>
