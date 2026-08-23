@@ -811,7 +811,6 @@ body[data-bs-theme="dark"] .trs-torrent-list[data-view="table"] .trs-cell-progre
 <script>
 (function(){
     var BASE = '{{ path("app_transmission_index") }}';
-    var LOCALE = {{ app.request.locale|default('fr')|json_encode|raw }};
     var currentFilter = 'all';
     var selectedHashes = {};
     var deleteTarget = { hashes: [], mode: 'single' };

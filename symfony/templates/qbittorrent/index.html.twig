@@ -870,7 +870,6 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
 <script>
 (function(){
     var BASE = '{{ path("app_qbittorrent_index") }}';
-    var LOCALE = {{ app.request.locale|default('fr')|json_encode|raw }};
     var currentFilter = 'all';
     var selectedHashes = {};
     var deleteTarget = { hashes: [], mode: 'single' };
