@@ -63,6 +63,44 @@
       };
     }
 
+    // Global preference-aware date/time formatters (#54) — the JS mirror of the
+    // |prismarr_date / |prismarr_time / |prismarr_datetime Twig filters, so rows
+    // rebuilt by a poller read the same as the server-rendered ones instead of
+    // falling back to the UI locale (or a hardcoded fr-FR).
+    //
+    // Defined here in <head> for exactly the reason prismarrBytes is above: the
+    // child templates' "javascripts" block renders far higher up the body than
+    // the page-lifecycle script near the end of this template, and callers such
+    // as films.html.twig's renderQueue() run during the initial parse — a later
+    // definition would race with the first call.
+    //
+    // These take a JS Date, so the zone is the browser's. That matches the
+    // pre-existing client-side behaviour; only the *format* becomes a
+    // preference. The server-side filters remain the timezone-aware path.
+    if (!window._prismarrFmtDate) {
+      window._prismarrDatePrefs = {
+        date: {{ display_pref('date_format')|json_encode|raw }},
+        time: {{ display_pref('time_format')|json_encode|raw }}
+      };
+      window._prismarrFmtDate = function (d) {
+        var p = window._prismarrDatePrefs || {};
+        if (p.date === 'iso') {
+          var m = ('0' + (d.getMonth() + 1)).slice(-2), day = ('0' + d.getDate()).slice(-2);
+          return d.getFullYear() + '-' + m + '-' + day;
+        }
+        return d.toLocaleDateString(p.date === 'us' ? 'en-US' : 'fr-FR');
+      };
+      window._prismarrFmtTime = function (d, withSeconds) {
+        var p = window._prismarrDatePrefs || {};
+        var opts = { hour: '2-digit', minute: '2-digit', hour12: p.time === '12h' };
+        if (withSeconds) opts.second = '2-digit';
+        return d.toLocaleTimeString(p.time === '12h' ? 'en-US' : 'fr-FR', opts);
+      };
+      window._prismarrFmtDateTime = function (d, withSeconds) {
+        return window._prismarrFmtDate(d) + ' ' + window._prismarrFmtTime(d, withSeconds);
+      };
+    }
+
     // HTML escape helper used wherever JS builds strings via innerHTML with
     // operator-side-controlled values (instance names, search results titles,
     // upstream messages). Self-XSS today (ROLE_ADMIN is the only writer for
