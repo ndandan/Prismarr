@@ -1047,9 +1047,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     }
     function fmtDate(ts) {
         if (!ts || ts < 0) return '-';
-        var d = new Date(ts * 1000);
-        var loc = (LOCALE === 'en') ? 'en-US' : 'fr-FR';
-        return d.toLocaleDateString(loc) + ' ' + d.toLocaleTimeString(loc, {hour:'2-digit',minute:'2-digit'});
+        return window._prismarrFmtDateTime(new Date(ts * 1000));
     }
     function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
 
