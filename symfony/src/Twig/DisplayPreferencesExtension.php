@@ -125,21 +125,26 @@ class DisplayPreferencesExtension extends AbstractExtension
         return $this->requestStack->getCurrentRequest()?->getLocale() ?? 'en';
     }
 
-    public function filterDate(mixed $dt): ?string
+    // A null/unparseable date renders the em-dash placeholder — the same
+    // "no value" convention filterBytes()/filterSpeed() already use, so an
+    // unguarded `{{ x|prismarr_date }}` shows "—" instead of an empty cell.
+    // The service formatters keep returning null (their contract for PHP
+    // callers); the dash is applied only at this display layer.
+    public function filterDate(mixed $dt): string
     {
-        return $this->prefs->formatDate($this->asDateTime($dt));
+        return $this->prefs->formatDate($this->asDateTime($dt)) ?? '—';
     }
 
     /** `{{ d|prismarr_time }}` → "14:30"; `{{ d|prismarr_time(true) }}` → "14:30:07". */
-    public function filterTime(mixed $dt, bool $withSeconds = false): ?string
+    public function filterTime(mixed $dt, bool $withSeconds = false): string
     {
-        return $this->prefs->formatTime($this->asDateTime($dt), $withSeconds);
+        return $this->prefs->formatTime($this->asDateTime($dt), $withSeconds) ?? '—';
     }
 
     /** `{{ d|prismarr_datetime(true) }}` adds seconds to the time half. */
-    public function filterDateTime(mixed $dt, bool $withSeconds = false): ?string
+    public function filterDateTime(mixed $dt, bool $withSeconds = false): string
     {
-        return $this->prefs->formatDateTime($this->asDateTime($dt), $withSeconds);
+        return $this->prefs->formatDateTime($this->asDateTime($dt), $withSeconds) ?? '—';
     }
 
     public function pref(string $key): mixed

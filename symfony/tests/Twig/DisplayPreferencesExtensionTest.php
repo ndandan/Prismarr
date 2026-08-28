@@ -2,7 +2,9 @@
 
 namespace App\Tests\Twig;
 
+use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
+use App\Service\ThemeService;
 use App\Twig\DisplayPreferencesExtension;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -140,5 +142,53 @@ class DisplayPreferencesExtensionTest extends TestCase
 
         $ext = new DisplayPreferencesExtension($prefs, $stack);
         $this->assertSame('1.0 GB', $ext->filterBytes(1073741824));
+    }
+
+    /**
+     * The date/time filters render the em-dash placeholder for a null or
+     * unparseable value — the same "no value" convention filterBytes()/
+     * filterSpeed() use — so an unguarded `{{ x|prismarr_date }}` shows "—"
+     * instead of an empty cell. Needs a real prefs service (not the mock the
+     * byte tests use) so the formatters actually run.
+     *
+     * @param array<string, string|null> $stored
+     */
+    private function makeExtensionWithRealPrefs(array $stored = []): DisplayPreferencesExtension
+    {
+        $config = $this->createMock(ConfigService::class);
+        $config->method('get')->willReturnCallback(fn(string $key) => $stored[$key] ?? null);
+        $prefs = new DisplayPreferencesService($config, new ThemeService($config));
+
+        return new DisplayPreferencesExtension($prefs, new RequestStack());
+    }
+
+    public function testDateFiltersRenderEmDashForNull(): void
+    {
+        $ext = $this->makeExtensionWithRealPrefs();
+
+        $this->assertSame('—', $ext->filterDate(null));
+        $this->assertSame('—', $ext->filterTime(null));
+        $this->assertSame('—', $ext->filterDateTime(null));
+    }
+
+    public function testDateFiltersRenderEmDashForEmptyOrUnparseable(): void
+    {
+        $ext = $this->makeExtensionWithRealPrefs();
+
+        $this->assertSame('—', $ext->filterDate(''));
+        $this->assertSame('—', $ext->filterDateTime('not-a-date'));
+    }
+
+    public function testDateFiltersStillFormatValidValues(): void
+    {
+        $ext = $this->makeExtensionWithRealPrefs([
+            'display_date_format' => 'iso',
+            'display_time_format' => '24h',
+            'display_timezone'    => 'Europe/Paris',
+        ]);
+        $dt = new \DateTimeImmutable('2026-04-21 14:30:00', new \DateTimeZone('Europe/Paris'));
+
+        $this->assertSame('2026-04-21', $ext->filterDate($dt));
+        $this->assertSame('2026-04-21 · 14:30', $ext->filterDateTime($dt));
     }
 }
