@@ -16,6 +16,7 @@ use App\Service\Media\SeriesLibraryFilter;
 use App\Service\Media\SeriesLibraryQuery;
 use App\Service\Media\SonarrClient;
 use App\Service\ServiceInstanceProvider;
+use App\Util\SafeUrl;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -66,20 +67,6 @@ class MediaController extends AbstractController
         if ($slug !== null) {
             $this->libraryCache->invalidate('sonarr', $slug);
         }
-    }
-
-    /**
-     * Only http(s) URLs are safe to emit as release tracker links.
-     * `infoUrl` is passed through verbatim from the Radarr/Sonarr release
-     * payload (in turn sourced from whatever indexer answered the search),
-     * so a compromised/hostile indexer could return a `javascript:`/`data:`
-     * URL — reject anything that isn't http(s) before it ever reaches the
-     * frontend, rather than relying on the page's CSP (this becomes an
-     * upstream PR where that CSP does not exist).
-     */
-    private static function safeInfoUrl(mixed $url): ?string
-    {
-        return (is_string($url) && preg_match('~^https?://~i', $url) === 1) ? $url : null;
     }
 
     /**
@@ -424,7 +411,7 @@ class MediaController extends AbstractController
                 'scoreDetails'      => $scoreDetails,
                 'customFormats'     => array_map(fn($cf) => $cf['name'] ?? '?', $r['customFormats'] ?? []),
                 'languages'         => array_map(fn($l) => $l['name'] ?? '?', $r['languages'] ?? []),
-                'infoUrl'           => self::safeInfoUrl($r['infoUrl'] ?? null),
+                'infoUrl'           => SafeUrl::httpOrNull($r['infoUrl'] ?? null),
             ];
         }, $raw);
 
@@ -1687,7 +1674,7 @@ class MediaController extends AbstractController
                 'versionLabel'      => $versionLabel,
                 'tvdbLabel'         => $tvdbLabel,
                 'releaseGroup'      => $r['releaseGroup'] ?? '',
-                'infoUrl'           => self::safeInfoUrl($r['infoUrl'] ?? null),
+                'infoUrl'           => SafeUrl::httpOrNull($r['infoUrl'] ?? null),
             ];
         }, $raw);
 
@@ -1833,7 +1820,7 @@ class MediaController extends AbstractController
                 'episodeRequested'  => (bool) ($r['episodeRequested'] ?? true),
                 'versionLabel'      => $versionLabel,
                 'releaseGroup'      => $r['releaseGroup'] ?? '',
-                'infoUrl'           => self::safeInfoUrl($r['infoUrl'] ?? null),
+                'infoUrl'           => SafeUrl::httpOrNull($r['infoUrl'] ?? null),
             ];
         }, $raw);
 
