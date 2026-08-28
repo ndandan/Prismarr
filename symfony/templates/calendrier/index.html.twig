@@ -879,8 +879,12 @@
         var metas = [];
         var dateStr = ev.dateStr || ev.sortDate || '';
         if (dateStr && !dateStr.startsWith('9999')) {
+            // Noon-local avoids a timezone date-shift; route through the shared
+            // formatter (base.html.twig head) so this honors the Display date
+            // preference like every other date, instead of a hardcoded d/m/Y.
             var dt = new Date(dateStr + 'T12:00:00');
-            metas.push(String(dt.getDate()).padStart(2,'0') + '/' + String(dt.getMonth()+1).padStart(2,'0') + '/' + dt.getFullYear());
+            metas.push(window._prismarrFmtDate ? window._prismarrFmtDate(dt)
+                : String(dt.getDate()).padStart(2,'0') + '/' + String(dt.getMonth()+1).padStart(2,'0') + '/' + dt.getFullYear());
         }
         if (ev.runtime) metas.push(ev.runtime + ' min');
         if (ev.studio) metas.push(ev.studio);
