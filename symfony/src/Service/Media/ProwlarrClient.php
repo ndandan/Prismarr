@@ -4,6 +4,7 @@ namespace App\Service\Media;
 
 use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
+use App\Util\SafeUrl;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
@@ -220,18 +221,12 @@ class ProwlarrClient implements ResetInterface
             'tvdbId'      => $r['tvdbId'] ?? null,
             'categories'  => $r['categories'] ?? [],
             'downloadUrl' => $r['downloadUrl'] ?? null,
-            'infoUrl'     => self::safeInfoUrl($r['infoUrl'] ?? null),
+            'infoUrl'     => SafeUrl::httpOrNull($r['infoUrl'] ?? null),
             'infoHash'    => $r['infoHash'] ?? null,
             'publishDate' => $r['publishDate'] ?? null,
             'indexerFlags' => $r['indexerFlags'] ?? [],
             'fileName'    => $r['fileName'] ?? null,
         ], $data);
-    }
-
-    /** Only http(s) URLs are safe to emit as release tracker links. */
-    private static function safeInfoUrl(mixed $url): ?string
-    {
-        return (is_string($url) && preg_match('~^https?://~i', $url) === 1) ? $url : null;
     }
 
     /** Grab a search result via the indexer's configured download client. */

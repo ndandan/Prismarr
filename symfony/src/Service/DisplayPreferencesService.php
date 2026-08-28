@@ -58,7 +58,18 @@ class DisplayPreferencesService implements ResetInterface
     {
         $stored = $this->config->get('display_timezone');
         if ($stored !== null && $stored !== '') {
-            return (string) $stored;
+            $tz = (string) $stored;
+            // The formatter path catches an invalid zone in toUserTimezone(),
+            // but raw Twig `date(tz)` call sites (series episode rows, admin
+            // settings preview) hand this straight to new \DateTimeZone() and
+            // would fatal on a hand-edited/corrupted DB value. Validate once at
+            // the source so every consumer gets a real zone.
+            try {
+                new \DateTimeZone($tz);
+                return $tz;
+            } catch (\Throwable) {
+                // Fall through to the system zone; the next admin save re-normalizes.
+            }
         }
         return date_default_timezone_get();
     }

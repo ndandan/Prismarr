@@ -94,7 +94,7 @@ class MediaReleasesSearchTest extends TestCase
 
     /**
      * @return array<int, array<string, mixed>> five rows exercising every
-     *   `safeInfoUrl()` branch: a plain https URL (kept), a missing key
+     *   `SafeUrl::httpOrNull()` branch: a plain https URL (kept), a missing key
      *   (null), a `javascript:` URL (rejected — XSS vector), an uppercase
      *   `HTTPS://` scheme (kept — case-insensitive), and a non-string value
      *   (rejected).
