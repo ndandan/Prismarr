@@ -216,16 +216,20 @@ class DisplayPreferencesServiceTest extends TestCase
         $this->assertNull($prefs->formatDateTime(null, true));
     }
 
-    public function testInvalidStoredTimezoneFallsBackToRawDatetime(): void
+    public function testInvalidStoredTimezoneFallsBackToSystemZone(): void
     {
-        // An invalid timezone in the DB must not crash the render.
+        // A corrupted/hand-edited timezone in the DB must not crash the render.
+        // getTimezone() now validates at the source and falls back to the system
+        // default zone (a real zone), so raw Twig date(tz) call sites — which
+        // hand the value straight to new \DateTimeZone() — can't fatal either.
         $dt = new \DateTimeImmutable('2026-04-21 14:30:00', new \DateTimeZone('Europe/Paris'));
         $prefs = $this->serviceWith([
             'display_timezone'    => 'Not/A-Real/Zone',
             'display_time_format' => '24h',
         ]);
 
-        // The raw Paris-tz datetime is used verbatim.
-        $this->assertSame('14:30', $prefs->formatTime($dt));
+        $this->assertSame(date_default_timezone_get(), $prefs->getTimezone());
+        $expected = $dt->setTimezone(new \DateTimeZone(date_default_timezone_get()))->format('H:i');
+        $this->assertSame($expected, $prefs->formatTime($dt));
     }
 }
