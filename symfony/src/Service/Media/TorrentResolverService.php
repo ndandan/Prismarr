@@ -112,7 +112,7 @@ class TorrentResolverService
         $reachedAny = false;
         foreach ($enabled as $instance) {
             try {
-                $series = $this->sonarr->withInstance($instance)->getRawAllSeries();
+                $series = $this->sonarr->withInstance($instance)->getRawAllSeries(SonarrClient::LIBRARY_TIMEOUT);
                 $reachedAny = true;
             } catch (\Throwable) {
                 continue;
