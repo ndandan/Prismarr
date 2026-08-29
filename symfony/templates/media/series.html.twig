@@ -2129,7 +2129,10 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
         bannerEl.id = 'queue-warning-banner';
         bannerEl.className = 'alert alert-warning mb-0 py-2';
         bannerEl.style.cssText = 'font-size:.82rem;border-radius:0;';
-        queueCard.querySelector('#queue-body').insertBefore(bannerEl, queueCard.querySelector('.table-responsive'));
+        // Between the card header and #queue-body: the body is collapsed
+        // (display:none) by default, so a banner inside it would be invisible
+        // until the user manually expands the queue.
+        queueCard.insertBefore(bannerEl, document.getElementById('queue-body'));
       }
 
       var html = '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">';
