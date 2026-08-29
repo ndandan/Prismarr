@@ -137,6 +137,81 @@ class BazarrClient implements ResetInterface
         return is_array($r['data'] ?? null) ? $r['data'] : [];
     }
 
+    /** @return array<string, mixed>|null Provider search results; null on failure. */
+    public function searchMovie(int $radarrId): ?array
+    {
+        if (!$this->ready()) {
+            return null;
+        }
+        return $this->request('GET', '/providers/movies', ['radarrid' => $radarrId]);
+    }
+
+    /** @return array<string, mixed>|null Provider search results; null on failure. */
+    public function searchEpisode(int $episodeId): ?array
+    {
+        if (!$this->ready()) {
+            return null;
+        }
+        return $this->request('GET', '/providers/episodes', ['episodeid' => $episodeId]);
+    }
+
+    /** @param array{radarrid?: mixed, hi?: mixed, forced?: mixed, original_format?: mixed, provider?: mixed, subtitle?: mixed} $p */
+    public function downloadMovie(array $p): bool
+    {
+        if (!$this->ready()) {
+            return false;
+        }
+        return $this->request('POST', '/providers/movies', [], $this->downloadBody($p, 'radarrid')) !== null;
+    }
+
+    /** @param array{episodeid?: mixed, hi?: mixed, forced?: mixed, original_format?: mixed, provider?: mixed, subtitle?: mixed} $p */
+    public function downloadEpisode(array $p): bool
+    {
+        if (!$this->ready()) {
+            return false;
+        }
+        return $this->request('POST', '/providers/episodes', [], $this->downloadBody($p, 'episodeid')) !== null;
+    }
+
+    public function searchMissingMovie(int $radarrId): bool
+    {
+        if (!$this->ready()) {
+            return false;
+        }
+        return $this->request('PATCH', '/movies', [], ['radarrid' => $radarrId, 'action' => 'search-missing']) !== null;
+    }
+
+    public function searchMissingSeries(int $sonarrSeriesId): bool
+    {
+        if (!$this->ready()) {
+            return false;
+        }
+        return $this->request('PATCH', '/series', [], ['seriesid' => $sonarrSeriesId, 'action' => 'search-missing']) !== null;
+    }
+
+    /**
+     * Normalizes a subtitle-download request body for Bazarr's
+     * `/providers/{movies,episodes}` POST endpoints: the id is cast to a
+     * string under the caller-supplied key ('radarrid' or 'episodeid'), and
+     * the three boolean-ish flags are coerced to Bazarr's expected literal
+     * strings "True"/"False" (truthy-ish inputs: `true`, `"True"`, `"1"`, `1`).
+     *
+     * @param array<string, mixed> $p
+     * @return array<string, string>
+     */
+    private function downloadBody(array $p, string $idKey): array
+    {
+        $b = static fn($v): string => (($v === true || $v === 'True' || $v === '1' || $v === 1) ? 'True' : 'False');
+        return [
+            $idKey            => (string) ($p[$idKey] ?? ''),
+            'hi'              => $b($p['hi'] ?? false),
+            'forced'          => $b($p['forced'] ?? false),
+            'original_format' => $b($p['original_format'] ?? false),
+            'provider'        => (string) ($p['provider'] ?? ''),
+            'subtitle'        => (string) ($p['subtitle'] ?? ''),
+        ];
+    }
+
     /**
      * Issue a Bazarr API call. Returns the decoded top-level response array
      * (empty array on a 204 / empty-body 2xx — Bazarr's download/PATCH
