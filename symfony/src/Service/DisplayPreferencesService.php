@@ -129,13 +129,19 @@ class DisplayPreferencesService implements ResetInterface
     /**
      * Formatted date string according to the user's chosen date format.
      * Null input → null output so callers can render a dash.
+     *
+     * $floating skips the user-timezone conversion for values that are
+     * calendar dates rather than instants (e.g. Sonarr airDate, anchored at
+     * midnight UTC on purpose — converting those shifts the day, issue #26).
      */
-    public function formatDate(?\DateTimeInterface $dt): ?string
+    public function formatDate(?\DateTimeInterface $dt, bool $floating = false): ?string
     {
         if ($dt === null) {
             return null;
         }
-        $dt = $this->toUserTimezone($dt);
+        if (!$floating) {
+            $dt = $this->toUserTimezone($dt);
+        }
 
         return match ($this->getDateFormat()) {
             'us'  => $dt->format('M j, Y'),

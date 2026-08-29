@@ -191,4 +191,19 @@ class DisplayPreferencesExtensionTest extends TestCase
         $this->assertSame('2026-04-21', $ext->filterDate($dt));
         $this->assertSame('2026-04-21 · 14:30', $ext->filterDateTime($dt));
     }
+
+    public function testFilterDateFloatingSkipsTimezoneConversion(): void
+    {
+        $ext = $this->makeExtensionWithRealPrefs([
+            'display_date_format' => 'iso',
+            'display_timezone'    => 'America/New_York',
+        ]);
+        // UTC-midnight-anchored floating date (Sonarr airDate) — see
+        // DisplayPreferencesServiceTest; the Twig arg is `floating=true`.
+        $utc = new \DateTimeImmutable('2026-01-15 00:00:00', new \DateTimeZone('UTC'));
+
+        $this->assertSame('2026-01-14', $ext->filterDate($utc), 'converted rendering shifts the day (control)');
+        $this->assertSame('2026-01-15', $ext->filterDate($utc, true), 'floating rendering keeps the anchored day');
+        $this->assertSame('—', $ext->filterDate(null, true));
+    }
 }
