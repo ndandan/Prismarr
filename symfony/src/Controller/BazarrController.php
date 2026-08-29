@@ -12,7 +12,6 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
-use Symfony\Contracts\Translation\TranslatorInterface;
 
 /**
  * Admin-only Bazarr subtitle-management section. This task ships the shell +
@@ -34,7 +33,6 @@ class BazarrController extends AbstractController
         private readonly BazarrClient $bazarr,
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
-        private readonly TranslatorInterface $translator,
     ) {}
 
     #[Route('', name: 'index')]

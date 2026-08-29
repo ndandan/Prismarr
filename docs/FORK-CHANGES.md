@@ -679,6 +679,21 @@ guard (which closes the last open item from the cross-page poller fix above),
 Classic theme mode, the `deluge.*` translation namespace, the 4+ instance
 Radarr/Sonarr sidebar dropdown fix, and PHPUnit 14 test hygiene.
 
+### Bazarr integration (2026-08-29) — [#103](https://github.com/ndandan/Prismarr/issues/103)
+
+New optional [Bazarr](https://bsky.app/profile/bazarr.media) subtitle-management
+integration, single-instance flat config under `/admin/settings` (URL + API
+key, kill switch, Test connection), admin-only, and fails closed like every
+other media-client controller.
+
+- **Subtitle-management tab (`/bazarr`)** with Wanted / Movies / Series /
+  History sub-views, manual provider search + download per item, and a
+  one-click auto-search action.
+- **Subtitle-status badges** surfaced wherever a media item is already
+  rendered: the Films/Series grids, the global quick-look modal, and global
+  search results — so subtitle coverage is visible without opening the
+  Bazarr tab.
+
 ---
 
 ## 4. Fork-only — declined upstream
