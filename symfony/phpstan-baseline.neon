@@ -31,6 +31,42 @@ parameters:
 			path: src/Controller/BazarrController.php
 
 		-
+			message: '#^Offset ''code'' on \*NEVER\* on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/BazarrController.php
+
+		-
+			message: '#^Offset ''code'' on array\{code\: int, method\: string, path\: string, message\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: src/Controller/BazarrController.php
+
+		-
+			message: '#^Offset ''message'' on array\{code\: int, method\: string, path\: string, message\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: src/Controller/BazarrController.php
+
+		-
+			message: '#^Offset ''method'' on array\{code\: int, method\: string, path\: string, message\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: src/Controller/BazarrController.php
+
+		-
+			message: '#^Offset ''ok'' on array\{ok\: bool, error\?\: mixed, code\?\: int, data\?\: mixed\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Controller/BazarrController.php
+
+		-
+			message: '#^Offset ''path'' on array\{code\: int, method\: string, path\: string, message\: string\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 2
+			path: src/Controller/BazarrController.php
+
+		-
 			message: '#^Offset ''sortDate'' on array\{type\: ''episode'', seriesTitle\: mixed, title\: mixed, overview\: mixed, season\: mixed, episode\: mixed, date\: null, poster\: mixed, \.\.\.\}\|array\{type\: ''film'', title\: mixed, year\: mixed, poster\: mixed, fanart\: mixed, overview\: mixed, status\: mixed, hasFile\: bool, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
