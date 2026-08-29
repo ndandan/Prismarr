@@ -149,6 +149,19 @@ class DisplayPreferencesServiceTest extends TestCase
         $this->assertNull($this->serviceWith([])->formatDate(null));
     }
 
+    public function testFormatDateFloatingSkipsTimezoneConversion(): void
+    {
+        // A UTC-midnight-anchored floating broadcast date (SonarrClient's
+        // issue-#26 anchor) — converting it to a negative-offset zone shifts
+        // the day; floating rendering must not (review 2026-08-28 #4).
+        $dt = new \DateTimeImmutable('2026-01-15 00:00:00', new \DateTimeZone('UTC'));
+        $svc = $this->serviceWith(['display_timezone' => 'America/New_York', 'display_date_format' => 'iso']);
+
+        $this->assertSame('2026-01-14', $svc->formatDate($dt), 'converted rendering shifts the day (control)');
+        $this->assertSame('2026-01-15', $svc->formatDate($dt, floating: true), 'floating rendering keeps the anchored day');
+        $this->assertNull($svc->formatDate(null, floating: true));
+    }
+
     public function testFormatTimeHonorsPreference(): void
     {
         $dt = new \DateTimeImmutable('2026-04-21 14:30:00', new \DateTimeZone('Europe/Paris'));

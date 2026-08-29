@@ -238,7 +238,8 @@
         off: {{ 'prowlarr.common.off'|trans|json_encode|raw }}
     };
 
-    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+    // Attribute-context hardening (same as index.html.twig): esc() output lands in value="…"/data-*="…", so " must be escaped too.
+    function esc(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
     function showAlert(el, cls, msg) { el.className = 'mt-2 alert ' + cls; el.textContent = msg; }
     function openModal(id) { var m = document.getElementById(id); m.classList.add('show'); m.style.display = 'block'; document.body.classList.add('modal-open'); document.body.style.overflow = 'hidden'; if (!document.querySelector('.modal-backdrop')) { var b = document.createElement('div'); b.className = 'modal-backdrop fade show'; document.body.appendChild(b); } }
     function closeModal(id) { var m = document.getElementById(id); m.classList.remove('show'); m.style.display = 'none'; document.body.classList.remove('modal-open'); document.body.style.overflow = ''; var b = document.querySelector('.modal-backdrop'); if (b) b.remove(); }

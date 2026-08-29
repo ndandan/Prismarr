@@ -332,11 +332,11 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
               S{{ '%02d'|format(ep.season) }}E{{ '%02d'|format(ep.episode) }} — {{ ep.title }}
             </td>
             <td class="text-muted" style="font-size:.78rem;">
-              {# The weekday is the useful part of an air date, so it survives the
-                 preference sweep (#54) as a separate |date('D') — the date and time
-                 halves go through |prismarr_datetime, which applies the user's
-                 timezone itself, so the hardcoded zone is gone. #}
-              {% if ep.airDate %}{{ ep.airDate|date('D', display_pref('timezone')) }} {{ ep.airDate|prismarr_datetime }}{% else %}—{% endif %}
+              {# airDate is a floating broadcast date anchored at midnight UTC
+                 (SonarrClient, issue #26) — render it without tz conversion or
+                 the day shifts for negative-offset users. The anchored time is
+                 meaningless, so no time half. #}
+              {% if ep.airDate %}{{ ep.airDate|date('D', 'UTC') }} {{ ep.airDate|prismarr_date(floating=true) }}{% else %}—{% endif %}
             </td>
             <td>
               {% if ep.hasFile %}
@@ -2129,7 +2129,10 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
         bannerEl.id = 'queue-warning-banner';
         bannerEl.className = 'alert alert-warning mb-0 py-2';
         bannerEl.style.cssText = 'font-size:.82rem;border-radius:0;';
-        queueCard.querySelector('#queue-body').insertBefore(bannerEl, queueCard.querySelector('.table-responsive'));
+        // Between the card header and #queue-body: the body is collapsed
+        // (display:none) by default, so a banner inside it would be invisible
+        // until the user manually expands the queue.
+        queueCard.insertBefore(bannerEl, document.getElementById('queue-body'));
       }
 
       var html = '<div class="d-flex align-items-center justify-content-between flex-wrap gap-2">';
@@ -2944,7 +2947,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     if (!el) return;
     ajaxGet('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/warnings').then(function(warnings) {
       if (!warnings || !warnings.length) { el.innerHTML = ''; return; }
-      el.innerHTML = '<div class="alert alert-warning mb-3"><div class="d-flex align-items-center"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2 flex-shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>' + warnings.map(function(w) { return '<div>' + w + '</div>'; }).join('') + '</div></div></div>';
+      el.innerHTML = '<div class="alert alert-warning mb-3"><div class="d-flex align-items-center"><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-2 flex-shrink-0"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg><div>' + warnings.map(function(w) { return '<div>' + esc(w) + '</div>'; }).join('') + '</div></div></div>';
     }).catch(function(){});
   }
   refreshSeriesWarnings();

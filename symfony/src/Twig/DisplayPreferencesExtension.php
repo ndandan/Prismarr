@@ -130,9 +130,11 @@ class DisplayPreferencesExtension extends AbstractExtension
     // unguarded `{{ x|prismarr_date }}` shows "—" instead of an empty cell.
     // The service formatters keep returning null (their contract for PHP
     // callers); the dash is applied only at this display layer.
-    public function filterDate(mixed $dt): string
+    // `{{ d|prismarr_date(floating=true) }}` formats a calendar date (e.g. a
+    // UTC-anchored Sonarr airDate) without the user-timezone conversion.
+    public function filterDate(mixed $dt, bool $floating = false): string
     {
-        return $this->prefs->formatDate($this->asDateTime($dt)) ?? '—';
+        return $this->prefs->formatDate($this->asDateTime($dt), $floating) ?? '—';
     }
 
     /** `{{ d|prismarr_time }}` → "14:30"; `{{ d|prismarr_time(true) }}` → "14:30:07". */
