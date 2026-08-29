@@ -124,7 +124,7 @@ class BazarrClient implements ResetInterface
             return [];
         }
         $r = $this->request('GET', '/movies', ['start' => 0, 'length' => -1]);
-        return is_array($r['data'] ?? null) ? $r['data'] : [];
+        return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
 
     /** @return list<array<string, mixed>> Raw series dicts; [] on failure. */
@@ -134,7 +134,7 @@ class BazarrClient implements ResetInterface
             return [];
         }
         $r = $this->request('GET', '/series', ['start' => 0, 'length' => -1]);
-        return is_array($r['data'] ?? null) ? $r['data'] : [];
+        return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
 
     /** @return array<string, mixed>|null Provider search results; null on failure. */

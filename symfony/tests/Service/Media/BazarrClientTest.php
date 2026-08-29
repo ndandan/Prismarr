@@ -57,7 +57,7 @@ class BazarrClientTest extends TestCase
             'radarrid' => 42, 'hi' => true, 'forced' => false,
             'original_format' => false, 'provider' => 'opensubtitles', 'subtitle' => 'abc',
         ], 'radarrid');
-        $this->assertSame('42', (string) $body['radarrid']);
+        $this->assertSame('42', $body['radarrid']);
         $this->assertSame('True', $body['hi']);
         $this->assertSame('False', $body['forced']);
         $this->assertSame('False', $body['original_format']);
