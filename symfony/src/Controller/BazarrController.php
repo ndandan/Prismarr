@@ -7,6 +7,8 @@ use App\Service\ConfigService;
 use App\Service\Media\BazarrClient;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -177,5 +179,81 @@ class BazarrController extends AbstractController
             'episodes'     => $episodes,
             'service_url'  => $this->config->get('bazarr_url'),
         ]);
+    }
+
+    /**
+     * Manual subtitle search for one Radarr movie. searchMovie() returns a
+     * provider-result list, either bare or wrapped in a `{data: [...]}`
+     * envelope depending on the Bazarr version — the `$r['data'] ?? $r`
+     * unwrap handles both.
+     */
+    #[Route('/api/search/movie/{radarrId}', name: 'api_search_movie', methods: ['GET'], requirements: ['radarrId' => '\d+'])]
+    public function apiSearchMovie(int $radarrId): JsonResponse
+    {
+        $r = $this->bazarr->searchMovie($radarrId);
+
+        return $r !== null
+            ? $this->json(['ok' => true, 'results' => $r['data'] ?? $r])
+            : $this->jsonClientError('Bazarr', $this->bazarr);
+    }
+
+    /**
+     * Manual subtitle search for one Sonarr episode. Same envelope handling
+     * as apiSearchMovie().
+     */
+    #[Route('/api/search/episode/{episodeId}', name: 'api_search_episode', methods: ['GET'], requirements: ['episodeId' => '\d+'])]
+    public function apiSearchEpisode(int $episodeId): JsonResponse
+    {
+        $r = $this->bazarr->searchEpisode($episodeId);
+
+        return $r !== null
+            ? $this->json(['ok' => true, 'results' => $r['data'] ?? $r])
+            : $this->jsonClientError('Bazarr', $this->bazarr);
+    }
+
+    /**
+     * Download a specific subtitle result for a movie. No CSRF token —
+     * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
+     */
+    #[Route('/api/download/movie', name: 'api_download_movie', methods: ['POST'])]
+    public function apiDownloadMovie(Request $request): JsonResponse
+    {
+        $ok = $this->bazarr->downloadMovie($request->request->all());
+
+        return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
+    }
+
+    /**
+     * Download a specific subtitle result for an episode. No CSRF token —
+     * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
+     */
+    #[Route('/api/download/episode', name: 'api_download_episode', methods: ['POST'])]
+    public function apiDownloadEpisode(Request $request): JsonResponse
+    {
+        $ok = $this->bazarr->downloadEpisode($request->request->all());
+
+        return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
+    }
+
+    /**
+     * Trigger Bazarr's automatic "search missing" for one Radarr movie.
+     */
+    #[Route('/api/auto/movie/{radarrId}', name: 'api_auto_movie', methods: ['POST'], requirements: ['radarrId' => '\d+'])]
+    public function apiAutoMovie(int $radarrId): JsonResponse
+    {
+        $ok = $this->bazarr->searchMissingMovie($radarrId);
+
+        return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
+    }
+
+    /**
+     * Trigger Bazarr's automatic "search missing" for one Sonarr series.
+     */
+    #[Route('/api/auto/series/{seriesId}', name: 'api_auto_series', methods: ['POST'], requirements: ['seriesId' => '\d+'])]
+    public function apiAutoSeries(int $seriesId): JsonResponse
+    {
+        $ok = $this->bazarr->searchMissingSeries($seriesId);
+
+        return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
     }
 }

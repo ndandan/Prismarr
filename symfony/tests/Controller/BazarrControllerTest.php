@@ -39,4 +39,62 @@ class BazarrControllerTest extends AbstractWebTestCase
 
         self::assertResponseRedirects('/admin/settings');
     }
+
+    /**
+     * Anonymous access to the JSON API routes must be denied, same as every
+     * other admin-only section. AbstractWebTestCase::setUp() already logs
+     * $this->client in as admin, and the test kernel/client may only be
+     * booted once per test (a second static::createClient() call throws) —
+     * so we drop the session cookie to make the next requests anonymous
+     * instead of spinning up a second client.
+     */
+    public function testJsonApiRoutesDenyAnonymousAccess(): void
+    {
+        $this->client->getCookieJar()->clear();
+
+        $this->client->request('GET', '/bazarr/api/search/movie/1');
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'GET search/movie should redirect anonymous users');
+
+        $this->client->request('GET', '/bazarr/api/search/episode/1');
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'GET search/episode should redirect anonymous users');
+
+        $this->client->request('POST', '/bazarr/api/download/movie');
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'POST download/movie should redirect anonymous users');
+
+        $this->client->request('POST', '/bazarr/api/download/episode');
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'POST download/episode should redirect anonymous users');
+
+        $this->client->request('POST', '/bazarr/api/auto/movie/1');
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'POST auto/movie should redirect anonymous users');
+
+        $this->client->request('POST', '/bazarr/api/auto/series/1');
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'POST auto/series should redirect anonymous users');
+    }
+
+    /**
+     * ServiceRouteGuardSubscriber matches route names by the `app_bazarr_`
+     * prefix (src/EventSubscriber/ServiceRouteGuardSubscriber.php), which
+     * covers `app_bazarr_api_*` too — it runs on kernel.request before the
+     * controller (or even the #[IsGranted] check) ever executes. So in CI,
+     * where Bazarr is never configured, every JSON API route redirects to
+     * admin settings exactly like the HTML routes; the jsonClientError()
+     * 500-with-ok:false path is only reachable once Bazarr IS configured but
+     * erroring, which this unconfigured-only test fixture cannot exercise
+     * (verified live on :beta instead — see the task report).
+     */
+    public function testDownloadMovieRedirectsWhenUnconfigured(): void
+    {
+        $this->client->request('POST', '/bazarr/api/download/movie', [
+            'radarrid' => 42, 'provider' => 'x', 'subtitle' => 'y', 'hi' => 'False', 'forced' => 'False', 'original_format' => 'False',
+        ]);
+
+        self::assertResponseRedirects('/admin/settings');
+    }
+
+    public function testAutoMovieRedirectsWhenUnconfigured(): void
+    {
+        $this->client->request('POST', '/bazarr/api/auto/movie/42');
+
+        self::assertResponseRedirects('/admin/settings');
+    }
 }
