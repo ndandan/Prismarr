@@ -1687,6 +1687,8 @@
 
   {% include '_quicklook.html.twig' with {} only %}
 
+  {% if is_granted('ROLE_ADMIN') %}{{ include('bazarr/_search_modal.html.twig') }}{% endif %}
+
   <script src="{{ asset('static/tabler/js/tabler.min.js') }}"></script>
 
   {# Strings translated server-side and exposed to inline JS. Keep this block

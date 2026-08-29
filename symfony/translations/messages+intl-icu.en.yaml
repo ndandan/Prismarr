@@ -5697,6 +5697,23 @@ bazarr:
     missing_count: '{count, plural, one {# subtitle missing} other {# subtitles missing}}'
     complete: Subtitles complete
     subs: Subs
+  modal:
+    title: Subtitle search
+    download: Download
+    no_results: No subtitles found
+    searching: Searching…
+    downloading: Downloading…
+    success: Subtitle downloaded
+    error: Could not complete the request
+    columns:
+      provider: Provider
+      language: Language
+      hi: HI
+      forced: Forced
+      score: Score
+      release: Release
+      uploader: Uploader
+      actions: Action
 
 user:
   email:

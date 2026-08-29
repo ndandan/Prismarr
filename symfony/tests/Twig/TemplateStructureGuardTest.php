@@ -51,4 +51,14 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertStringContainsString('_subtitle_badge.html.twig', $films);
         $this->assertStringContainsString('_subtitle_badge.html.twig', $series);
     }
+
+    public function testBaseIncludesBazarrSearchModalForAdmins(): void
+    {
+        $base = file_get_contents(self::TEMPLATE_ROOT . 'base.html.twig');
+        $this->assertNotFalse($base);
+        // Task 11 (Bazarr integration): the shared subtitle-search modal must
+        // be mounted once, admin-gated, so the movie/episode search triggers
+        // (Tasks 6/9/10) have a modal to open.
+        $this->assertStringContainsString('bazarr/_search_modal.html.twig', $base);
+    }
 }

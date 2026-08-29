@@ -1,0 +1,237 @@
+{# Shared subtitle-search modal (Task 11). Delegated click handler catches any
+   [data-bazarr-search][data-kind][data-id] trigger app-wide — the movie
+   "missing" badge (Task 10, media/_subtitle_badge.html.twig) and the
+   per-episode Search buttons on the series-detail page (Task 6,
+   bazarr/series_detail.html.twig) both emit that contract without knowing
+   about this modal.
+
+   Tabler doesn't expose window.bootstrap (see dashboard/_plex_info_modal.html.twig),
+   so — same pattern as that modal — we open by clicking a hidden
+   data-bs-toggle trigger and close via the standard data-bs-dismiss button;
+   Bootstrap's data-api (bundled inside tabler.min.js) does the rest. No
+   window.tabler.Modal / window.bootstrap.Modal resolution needed for the
+   common path; doDownload()'s close still falls back to manual class
+   toggling in the unlikely event the data-api didn't attach.
+
+   Include exactly ONCE, admin-gated, from base.html.twig. #}
+<button type="button" class="d-none" data-bazarr-search-trigger data-bs-toggle="modal" data-bs-target="#bazarr-search-modal"></button>
+<div class="modal modal-blur fade" id="bazarr-search-modal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">{{ 'bazarr.modal.title'|trans }}</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div id="bazarr-search-status" class="d-none"></div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <thead>
+              <tr>
+                <th>{{ 'bazarr.modal.columns.provider'|trans }}</th>
+                <th>{{ 'bazarr.modal.columns.language'|trans }}</th>
+                <th class="text-center">{{ 'bazarr.modal.columns.hi'|trans }}</th>
+                <th class="text-center">{{ 'bazarr.modal.columns.forced'|trans }}</th>
+                <th>{{ 'bazarr.modal.columns.score'|trans }}</th>
+                <th>{{ 'bazarr.modal.columns.release'|trans }}</th>
+                <th>{{ 'bazarr.modal.columns.uploader'|trans }}</th>
+                <th class="text-end">{{ 'bazarr.modal.columns.actions'|trans }}</th>
+              </tr>
+            </thead>
+            <tbody id="bazarr-search-results-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  if (window._prismarrBazarrSearchInit) return;
+  window._prismarrBazarrSearchInit = true;
+
+  var I18N = {
+    no_results:  {{ 'bazarr.modal.no_results'|trans|json_encode|raw }},
+    searching:   {{ 'bazarr.modal.searching'|trans|json_encode|raw }},
+    downloading: {{ 'bazarr.modal.downloading'|trans|json_encode|raw }},
+    success:     {{ 'bazarr.modal.success'|trans|json_encode|raw }},
+    error:       {{ 'bazarr.modal.error'|trans|json_encode|raw }},
+    download:    {{ 'bazarr.modal.download'|trans|json_encode|raw }}
+  };
+
+  function modalEl()   { return document.getElementById('bazarr-search-modal'); }
+  function triggerEl() { return document.querySelector('[data-bazarr-search-trigger]'); }
+  function tbodyEl()   { return document.getElementById('bazarr-search-results-tbody'); }
+  function statusEl()  { return document.getElementById('bazarr-search-status'); }
+
+  function setStatus(msg, isError) {
+    var s = statusEl();
+    if (!s) return;
+    if (!msg) { s.className = 'd-none'; s.textContent = ''; return; }
+    s.className = 'text-center py-4 ' + (isError ? 'text-danger' : 'text-secondary');
+    s.textContent = msg;
+  }
+
+  // Truthy-ish coercion mirroring BazarrClient::downloadBody() server-side —
+  // search results can carry real booleans or Bazarr's own "True"/"False"
+  // strings depending on version.
+  function isTruthy(v) {
+    return v === true || v === 'True' || v === '1' || v === 1;
+  }
+
+  function normalizeLanguage(lang) {
+    if (lang && typeof lang === 'object') {
+      return lang.name || lang.code2 || lang.code3 || '';
+    }
+    return lang || '';
+  }
+
+  function normalizeRelease(info) {
+    if (Array.isArray(info)) return info.join(', ');
+    return info || '';
+  }
+
+  var searchToken = 0;
+
+  function renderRows(kind, itemId, results) {
+    var tbody = tbodyEl();
+    if (!tbody) return;
+    if (!results || !results.length) {
+      tbody.innerHTML = '';
+      tbody._bazarrRows = null;
+      setStatus(I18N.no_results, false);
+      return;
+    }
+    setStatus('', false);
+    tbody._bazarrRows = results;
+    tbody.setAttribute('data-kind', kind);
+    tbody.setAttribute('data-item-id', String(itemId));
+    tbody.innerHTML = results.map(function (r, idx) {
+      var lang = window.escHtml(normalizeLanguage(r.language));
+      var release = normalizeRelease(r.release_info);
+      var hi = isTruthy(r.hearing_impaired) ? '&#10003;' : '';
+      var forced = isTruthy(r.forced) ? '&#10003;' : '';
+      var score = r.score === null || r.score === undefined ? '' : window.escHtml(r.score);
+      return '<tr>'
+        + '<td>' + window.escHtml(r.provider || '') + '</td>'
+        + '<td>' + lang + '</td>'
+        + '<td class="text-center">' + hi + '</td>'
+        + '<td class="text-center">' + forced + '</td>'
+        + '<td>' + score + '</td>'
+        + '<td class="text-truncate" style="max-width:240px;" title="' + window.escHtml(release) + '">' + window.escHtml(release) + '</td>'
+        + '<td>' + window.escHtml(r.uploader || '') + '</td>'
+        + '<td class="text-end"><button type="button" class="btn btn-sm btn-primary" data-bazarr-download data-idx="' + idx + '">' + window.escHtml(I18N.download) + '</button></td>'
+        + '</tr>';
+    }).join('');
+  }
+
+  function doSearch(kind, id) {
+    var trigger = triggerEl();
+    if (!trigger) return;
+    var token = ++searchToken;
+    var tbody = tbodyEl();
+    if (tbody) { tbody.innerHTML = ''; tbody._bazarrRows = null; }
+    setStatus(I18N.searching, false);
+    trigger.click();
+
+    fetch('/bazarr/api/search/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id), {
+      headers: { 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        var ct = r.headers.get('content-type') || '';
+        if (!r.ok || ct.indexOf('application/json') === -1) { throw new Error('bad-response'); }
+        return r.json();
+      })
+      .then(function (data) {
+        if (token !== searchToken) return; // a newer search superseded this one
+        if (!data || data.ok !== true) { throw new Error((data && data.error) || 'search-failed'); }
+        renderRows(kind, id, data.results || []);
+      })
+      .catch(function () {
+        if (token !== searchToken) return;
+        var tb = tbodyEl();
+        if (tb) { tb.innerHTML = ''; tb._bazarrRows = null; }
+        setStatus(I18N.error, true);
+      });
+  }
+
+  function closeModal() {
+    var m = modalEl();
+    if (!m) return;
+    var dismiss = m.querySelector('[data-bs-dismiss="modal"]');
+    if (dismiss) { dismiss.click(); return; }
+    // Manual fallback in case the data-api never attached to this element.
+    m.classList.remove('show');
+    m.style.display = 'none';
+    m.removeAttribute('aria-modal');
+    document.body.classList.remove('modal-open');
+    document.querySelectorAll('.modal-backdrop').forEach(function (b) { b.remove(); });
+  }
+
+  function doDownload(kind, itemId, row, btn) {
+    var origHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    setStatus(I18N.downloading, false);
+
+    var idField = kind === 'movie' ? 'radarrid' : 'episodeid';
+    var params = {};
+    params[idField] = itemId;
+    params.hi = isTruthy(row.hearing_impaired) ? '1' : '0';
+    params.forced = isTruthy(row.forced) ? '1' : '0';
+    params.original_format = isTruthy(row.original_format) ? '1' : '0';
+    params.provider = row.provider || '';
+    params.subtitle = row.subtitle || '';
+
+    fetch('/bazarr/api/download/' + kind, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'X-Requested-With': 'fetch'
+      },
+      credentials: 'same-origin',
+      body: new URLSearchParams(params).toString()
+    })
+      .then(function (r) {
+        var ct = r.headers.get('content-type') || '';
+        if (ct.indexOf('application/json') === -1) { throw new Error('bad-response'); }
+        return r.json();
+      })
+      .then(function (data) {
+        if (!data || data.ok !== true) { throw new Error((data && data.error) || 'download-failed'); }
+        setStatus('', false);
+        if (window._prismarrToast) window._prismarrToast(I18N.success, 'success');
+        closeModal();
+      })
+      .catch(function () {
+        setStatus('', false);
+        if (window._prismarrToast) window._prismarrToast(I18N.error, 'danger');
+        btn.disabled = false;
+        btn.innerHTML = origHtml;
+      });
+  }
+
+  document.addEventListener('click', function (e) {
+    var searchTrigger = e.target.closest('[data-bazarr-search]');
+    if (searchTrigger) {
+      var kind = searchTrigger.getAttribute('data-kind');
+      var id = searchTrigger.getAttribute('data-id');
+      if (!kind || !id) return;
+      e.preventDefault();
+      doSearch(kind, id);
+      return;
+    }
+
+    var downloadBtn = e.target.closest('[data-bazarr-download]');
+    if (downloadBtn) {
+      e.preventDefault();
+      var tbody = tbodyEl();
+      var rows = tbody && tbody._bazarrRows;
+      var idx = parseInt(downloadBtn.getAttribute('data-idx'), 10);
+      if (!rows || !rows[idx]) return;
+      doDownload(tbody.getAttribute('data-kind'), tbody.getAttribute('data-item-id'), rows[idx], downloadBtn);
+    }
+  });
+})();
+</script>

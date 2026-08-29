@@ -5694,6 +5694,23 @@ bazarr:
     missing_count: '{count, plural, one {# sous-titre manquant} other {# sous-titres manquants}}'
     complete: Sous-titres complets
     subs: Sous-titres
+  modal:
+    title: Recherche de sous-titres
+    download: Télécharger
+    no_results: Aucun sous-titre trouvé
+    searching: Recherche en cours…
+    downloading: Téléchargement en cours…
+    success: Sous-titre téléchargé
+    error: Impossible de terminer la requête
+    columns:
+      provider: Fournisseur
+      language: Langue
+      hi: Malentendants
+      forced: Forcé
+      score: Score
+      release: Version
+      uploader: Auteur
+      actions: Action
 
 user:
   email:
