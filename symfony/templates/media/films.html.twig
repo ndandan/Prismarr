@@ -56,6 +56,14 @@
     border-radius: .25rem; background: rgba(0,0,0,.65); color: #fff;
     backdrop-filter: blur(4px);
 }
+/* Bazarr subtitle-status pill. Font-size floor is !important because it must
+   hold at 11px (PRODUCT.md) in every context it's included into, including
+   the .h-badges row whose sibling badges are deliberately smaller. */
+.media-card .subtitle-badge { font-size: .6875rem !important; }
+.media-card > .subtitle-badge {
+    position: absolute; top: 1.7rem; left: .4rem;
+    padding: .05rem .35rem; border-radius: .25rem;
+}
 /* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
 .media-card .ribbon { font-size: .56rem; font-weight: 700; padding: .05rem .4rem; z-index: 2; letter-spacing: .03em; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
@@ -138,6 +146,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
 .media-grid.view-wall .media-card { border-radius: 0; border: none; }
 .media-grid.view-wall .media-card .status-dot,
 .media-grid.view-wall .media-card .quality-badge,
+.media-grid.view-wall .media-card > .subtitle-badge,
 .media-grid.view-wall .media-card .card-overlay { display: none !important; }
 .media-grid.view-wall .media-card:hover { transform: none; box-shadow: none; }
 .media-grid.view-wall.select-mode .media-card .select-cb { display: flex !important; z-index: 10; }
@@ -148,6 +157,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
 .media-grid.view-extended .media-card .no-poster { width: 80px; height: 120px; aspect-ratio: auto; font-size: .55rem; flex-shrink: 0; }
 .media-grid.view-extended .media-card .status-dot,
 .media-grid.view-extended .media-card .quality-badge,
+.media-grid.view-extended .media-card > .subtitle-badge,
 .media-grid.view-extended .media-card .card-overlay,
 .media-grid.view-extended .media-card .hover-info { display: none !important; }
 .media-grid.view-extended .media-card .extended-info { display: flex; flex-direction: column; justify-content: center; padding: .5rem .75rem; flex: 1; min-width: 0; }
@@ -477,6 +487,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
               {% if movie.hasFile %}<span class="badge bg-success-lt" style="font-size:.65rem;">{{ 'media.films.status.downloaded'|trans }}</span>
               {% elseif movie.monitored %}<span class="badge bg-warning-lt" style="font-size:.65rem;">{{ 'media.films.status.missing'|trans }}</span>
               {% else %}<span class="badge bg-secondary-lt" style="font-size:.65rem;">{{ 'media.films.status.unmonitored'|trans }}</span>{% endif %}
+              {{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: movie.id }) }}
             </td>
           </tr>
           {% endfor %}
@@ -721,6 +732,8 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
       <div class="quality-badge">{{ movie.quality }}</div>
     {% endif %}
 
+    {{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: movie.id }) }}
+
     <div class="card-overlay">
       <div class="card-title-text">{{ movie.title }}</div>
       <div class="card-year">{{ movie.year }}</div>
@@ -751,6 +764,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         {% if movie.hasFile %}<span class="badge bg-success-lt">{{ 'media.films.status.downloaded'|trans }}</span>
         {% elseif movie.monitored %}<span class="badge bg-warning-lt">{{ 'media.films.status.missing'|trans }}</span>
         {% else %}<span class="badge bg-secondary-lt">{{ 'media.films.status.unmonitored'|trans }}</span>{% endif %}
+        {{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: movie.id }) }}
       </div>
       <div class="h-title">{{ movie.title }}</div>
       <div class="h-year">{{ movie.year }}{% if movie.runtime %} · {{ movie.runtime }} min{% endif %}{% if movie.sizeGb %} · {{ movie.sizeGb }} {{ 'media.films.stats.gb_suffix'|trans }}{% endif %}</div>
@@ -765,6 +779,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         {% elseif movie.monitored %}<span class="badge bg-warning-lt">{{ 'media.films.status.missing'|trans }}</span>
         {% else %}<span class="badge bg-secondary-lt">{{ 'media.films.status.unmonitored'|trans }}</span>{% endif %}
         {% if movie.quality %}<span class="badge bg-blue-lt">{{ movie.quality }}</span>{% endif %}
+        {{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: movie.id }) }}
         {% if movie.runtime %}<span class="text-muted">{{ movie.runtime }} min</span>{% endif %}
         {% if movie.sizeGb %}<span class="text-muted">{{ movie.sizeGb }} {{ 'media.films.stats.gb_suffix'|trans }}</span>{% endif %}
       </div>

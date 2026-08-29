@@ -38,4 +38,17 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertNotFalse($src);
         $this->assertSame(1, substr_count($src, 'Global Transmission poll'));
     }
+
+    public function testFilmsAndSeriesGridsIncludeSubtitleBadge(): void
+    {
+        $films = file_get_contents(self::TEMPLATE_ROOT . 'media/films.html.twig');
+        $series = file_get_contents(self::TEMPLATE_ROOT . 'media/series.html.twig');
+        $this->assertNotFalse($films);
+        $this->assertNotFalse($series);
+        // Task 10 (Bazarr integration): every view mode of the Films/Series
+        // grids should surface the shared subtitle-status pill, not just the
+        // primary card face.
+        $this->assertStringContainsString('_subtitle_badge.html.twig', $films);
+        $this->assertStringContainsString('_subtitle_badge.html.twig', $series);
+    }
 }

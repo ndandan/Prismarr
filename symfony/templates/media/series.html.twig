@@ -95,6 +95,10 @@
     border-radius: .25rem; background: rgba(0,0,0,.65); color: #fff;
     backdrop-filter: blur(4px);
 }
+/* Bazarr subtitle-status pill (Task 10). Flex child of .top-indicators, so
+   no positioning of its own — just the 11px PRODUCT.md floor, forced past
+   any denser sibling badge sizing in whichever row it lands in. */
+.media-card .subtitle-badge { font-size: .6875rem !important; padding: .05rem .3rem; flex-shrink: 0; }
 .ep-bar { height: 4px; border-radius: 2px; margin-top: .3rem; background: rgba(255,255,255,.25); overflow: hidden; }
 .ep-bar-fill { height: 100%; border-radius: 2px; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
@@ -541,6 +545,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
               <span class="badge {% if s.status == 'continuing' %}bg-success-lt{% elseif s.status == 'ended' %}bg-secondary-lt{% elseif s.status == 'upcoming' %}bg-purple-lt{% else %}bg-secondary-lt{% endif %}" style="font-size:.65rem;">
                 {{ s.status == 'continuing' ? 'media.series.status.continuing'|trans : (s.status == 'ended' ? 'media.series.status.ended'|trans : (s.status == 'upcoming' ? 'media.series.status.upcoming'|trans : s.status)) }}
               </span>
+              {{ include('media/_subtitle_badge.html.twig', { kind: 'series', id: s.id }) }}
             </td>
           </tr>
           {% endfor %}
@@ -602,6 +607,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
       {% if s.seriesType == 'anime' %}
         <span style="font-size:.6rem;font-weight:700;margin-right:auto;">{{ 'media.series.status.anime_emoji'|trans }}</span>
       {% endif %}
+      {{ include('media/_subtitle_badge.html.twig', { kind: 'series', id: s.id }) }}
       {% if s.status == 'ended' %}
         <svg class="ended-check" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" title="{{ 'media.series.status.series_ended'|trans }}"><polyline points="20 6 9 17 4 12"/></svg>
       {% endif %}
