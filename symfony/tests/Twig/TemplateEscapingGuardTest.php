@@ -384,6 +384,27 @@ class TemplateEscapingGuardTest extends TestCase
             "/d\\.textContent = s; return d\\.innerHTML; \\}/",
             "le guillemet double n'est pas échappé alors que escHtml alimente des attributs entre guillemets",
         ];
+
+        // Review 2026-08-28 #2: the Sonarr health-warnings banner spliced the
+        // warning text raw into innerHTML while the films sibling uses esc(w).
+        yield 'series: Sonarr health warnings banner' => [
+            'media/series.html.twig',
+            "/\\+\\s*w\\s*\\+/",
+            'Sonarr healthWarnings text lands raw in the page banner innerHTML (films sibling uses esc(w))',
+        ];
+
+        // Review 2026-08-28 #3: f02bc5f hardened esc() against attribute
+        // breakout in prowlarr/index.html.twig only; these byte-identical
+        // siblings interpolate esc() into value="…"/data-*="…" attributes, so
+        // an unescaped quote truncates the field and Save writes the truncated
+        // value back to Prowlarr.
+        foreach (['apps', 'download_clients', 'notifications', '_schema_page'] as $tpl) {
+            yield "prowlarr/$tpl: esc() without quote escaping" => [
+                "prowlarr/$tpl.html.twig",
+                "/function esc\\(s\\)[^\\n]*return d\\.innerHTML; \\}/",
+                'esc() must escape double quotes — its output lands in double-quoted attributes',
+            ];
+        }
     }
 
     #[DataProvider('forbiddenPatterns')]
