@@ -1,0 +1,33 @@
+{#
+    Per-item Bazarr subtitle-status badge. Shared by the Films/Series grids,
+    the quick-look modal, and search results (Tasks 10/12/13) so the
+    missing/complete/hidden logic and admin-only search affordance live in
+    one place.
+
+    Params:
+      kind: 'movie'|'series' — dispatches to BazarrSubtitleIndex::movieStatus/seriesStatus.
+      id:   the Radarr movie id or Sonarr series id.
+
+    Renders nothing when Bazarr doesn't track the item (no profile assigned,
+    or a series with zero episode files) — that's the 'hidden' state.
+#}
+{% set st = subtitle_status(kind, id) %}
+{% if st.state != 'hidden' %}
+  {% if st.state == 'missing' and is_granted('ROLE_ADMIN') %}
+    {% if kind == 'movie' %}
+      <button type="button" class="badge bg-warning-lt border-0 subtitle-badge" data-bazarr-search data-kind="movie" data-id="{{ id }}"
+              title="{{ 'bazarr.badge.missing_count'|trans({count: st.count}) }}">
+        {{ 'bazarr.badge.missing'|trans }} {{ st.count }}
+      </button>
+    {% else %}
+      <a class="badge bg-warning-lt subtitle-badge" href="{{ path('app_bazarr_series_detail', {seriesId: id}) }}"
+         title="{{ 'bazarr.badge.missing_count'|trans({count: st.count}) }}">
+        {{ 'bazarr.badge.missing'|trans }} {{ st.count }}
+      </a>
+    {% endif %}
+  {% elseif st.state == 'missing' %}
+    <span class="badge bg-warning-lt subtitle-badge" title="{{ 'bazarr.badge.missing_count'|trans({count: st.count}) }}">{{ 'bazarr.badge.missing'|trans }} {{ st.count }}</span>
+  {% else %}
+    <span class="badge bg-success-lt subtitle-badge" title="{{ 'bazarr.badge.complete'|trans }}">{{ 'bazarr.badge.subs'|trans }}</span>
+  {% endif %}
+{% endif %}

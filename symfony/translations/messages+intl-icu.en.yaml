@@ -5692,6 +5692,11 @@ bazarr:
     column_status: Subtitles
     search: Search
     complete: Complete
+  badge:
+    missing: Missing
+    missing_count: '{count, plural, one {# subtitle missing} other {# subtitles missing}}'
+    complete: Subtitles complete
+    subs: Subs
 
 user:
   email:

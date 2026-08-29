@@ -5689,6 +5689,11 @@ bazarr:
     column_status: Sous-titres
     search: Rechercher
     complete: Complet
+  badge:
+    missing: Manquant
+    missing_count: '{count, plural, one {# sous-titre manquant} other {# sous-titres manquants}}'
+    complete: Sous-titres complets
+    subs: Sous-titres
 
 user:
   email:
