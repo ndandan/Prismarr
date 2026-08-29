@@ -1,0 +1,248 @@
+<?php
+
+namespace App\Service\Media;
+
+use App\Service\ConfigService;
+use App\Service\HealthService;
+use Psr\Log\LoggerInterface;
+use Symfony\Contracts\Service\ResetInterface;
+
+/**
+ * Read/write client for the Bazarr subtitle-management API.
+ *
+ * Single-instance, flat-config service (like Tautulli / Deluge): config is
+ * read lazily from the `setting` table via ConfigService, and the client
+ * fails closed — an unconfigured / disabled / unreachable Bazarr yields safe
+ * empty shapes (`[]`, zero counts, `ping() === false`) instead of throwing,
+ * so a badge or a widget never breaks page render.
+ *
+ * Auth is an `X-API-KEY` request header (NOT a `?apikey=` query param, unlike
+ * Tautulli). Endpoint base: {bazarr_url}/api{path}.
+ *
+ * Docs: https://wiki.bazarr.media/Additional-Configuration/API/
+ */
+class BazarrClient implements ResetInterface
+{
+    /** Short slug — circuit-breaker key + HealthService service id. */
+    public const SERVICE = 'bazarr';
+
+    private bool $configLoaded = false;
+    private bool $enabled = true;
+    private string $baseUrl = '';
+    private string $apiKey = '';
+
+    /** @var array{code:int, method:string, path:string, message:string}|null */
+    private ?array $lastError = null;
+
+    public function __construct(
+        private readonly ConfigService $config,
+        private readonly LoggerInterface $logger,
+        private readonly ?ServiceHealthCache $health = null,
+    ) {}
+
+    public function reset(): void
+    {
+        $this->configLoaded = false;
+        $this->enabled      = true;
+        $this->baseUrl      = '';
+        $this->apiKey       = '';
+        $this->lastError    = null;
+    }
+
+    /** @return array{code:int, method:string, path:string, message:string}|null */
+    public function getLastError(): ?array
+    {
+        return $this->lastError;
+    }
+
+    private function ensureConfig(): void
+    {
+        if ($this->configLoaded) {
+            return;
+        }
+        // Explicit kill switch (issue #15 pattern): only '0' disables; a
+        // missing row means the toggle was never touched → stays enabled.
+        $this->enabled = $this->config->get('bazarr_enabled') !== '0';
+        $this->baseUrl = (string) ($this->config->get('bazarr_url') ?? '');
+        $this->apiKey  = (string) ($this->config->get('bazarr_api_key') ?? '');
+        $this->configLoaded = true;
+    }
+
+    private function ready(): bool
+    {
+        $this->ensureConfig();
+        return $this->enabled && $this->baseUrl !== '' && $this->apiKey !== '';
+    }
+
+    /**
+     * Lightweight reachability probe for HealthService. True when
+     * /system/status answers without a transport/JSON error.
+     */
+    public function ping(): bool
+    {
+        if (!$this->ready()) {
+            return false;
+        }
+        return $this->request('GET', '/system/status') !== null;
+    }
+
+    /** @return array<string, mixed> Empty on failure. */
+    public function getSystemStatus(): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/system/status');
+        if ($r === null) {
+            return [];
+        }
+        return is_array($r['data'] ?? null) ? $r['data'] : $r;
+    }
+
+    /** @return array{movies: int, episodes: int, providers: int} Zeros on failure. */
+    public function getBadgeCounts(): array
+    {
+        $zero = ['movies' => 0, 'episodes' => 0, 'providers' => 0];
+        if (!$this->ready()) {
+            return $zero;
+        }
+        $r = $this->request('GET', '/badges');
+        if ($r === null) {
+            return $zero;
+        }
+        return [
+            'movies'    => (int) ($r['movies'] ?? 0),
+            'episodes'  => (int) ($r['episodes'] ?? 0),
+            'providers' => (int) ($r['providers'] ?? 0),
+        ];
+    }
+
+    /** @return list<array<string, mixed>> Raw movie dicts; [] on failure. */
+    public function getMovies(): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/movies', ['start' => 0, 'length' => -1]);
+        return is_array($r['data'] ?? null) ? $r['data'] : [];
+    }
+
+    /** @return list<array<string, mixed>> Raw series dicts; [] on failure. */
+    public function getSeries(): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/series', ['start' => 0, 'length' => -1]);
+        return is_array($r['data'] ?? null) ? $r['data'] : [];
+    }
+
+    /**
+     * Issue a Bazarr API call. Returns the decoded top-level response array
+     * (empty array on a 204 / empty-body 2xx — Bazarr's download/PATCH
+     * endpoints answer no-content on success), or null when the host is
+     * unreachable / blocked / returns a non-2xx / returns invalid JSON.
+     * Honors + feeds the cross-request circuit breaker so a downed Bazarr
+     * doesn't cost an 8 s timeout on every poll.
+     *
+     * @param array<string, mixed> $query Appended as a query string.
+     * @param array<string, mixed> $body  Form-encoded body for POST/PATCH.
+     * @return array<string, mixed>|null
+     */
+    private function request(string $method, string $path, array $query = [], array $body = []): ?array
+    {
+        // Circuit breaker: skip the call entirely if Bazarr was just seen
+        // down — a widget poll would otherwise stack connect timeouts.
+        if ($this->health?->isDown(self::SERVICE)) {
+            return null;
+        }
+
+        // SSRF guard #1 — reuse the shared validator (blocks non-http(s)
+        // schemes + link-local / cloud-metadata IPs) before opening a socket.
+        $endpoint = rtrim($this->baseUrl, '/') . '/api' . $path;
+        if (($reason = HealthService::urlBlockedReason($endpoint)) !== null) {
+            $this->recordError(0, 'blocked: ' . $reason, $method, $path);
+            $this->logger->warning('Bazarr URL blocked', ['reason' => $reason]);
+            return null;
+        }
+
+        $url = $endpoint . ($query !== [] ? '?' . http_build_query($query) : '');
+
+        $ch = curl_init($url);
+        if ($ch === false) {
+            return null;
+        }
+
+        $opts = [
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_CONNECTTIMEOUT => 3,
+            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_NOSIGNAL       => true, // critical under FrankenPHP/Alpine
+            CURLOPT_FOLLOWLOCATION => false,
+            // SSRF guard #2 — lock the protocol even across any redirect.
+            CURLOPT_PROTOCOLS       => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
+            CURLOPT_SSL_VERIFYPEER => true,
+            CURLOPT_SSL_VERIFYHOST => 2,
+            CURLOPT_HTTPHEADER     => ['X-API-KEY: ' . $this->apiKey, 'Accept: application/json'],
+        ];
+
+        if ($method === 'POST' || $method === 'PATCH') {
+            $opts[CURLOPT_CUSTOMREQUEST] = $method;
+            $opts[CURLOPT_POSTFIELDS] = http_build_query($body);
+        }
+
+        curl_setopt_array($ch, $opts);
+        $rawBody = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        if ($rawBody === false || $err !== '' || $code === 0) {
+            $this->recordError($code, $err !== '' ? $err : 'connection failed', $method, $path);
+            $this->health?->markDown(self::SERVICE);
+            return null;
+        }
+
+        if ($code < 200 || $code >= 300) {
+            $this->recordError($code, 'unexpected HTTP status', $method, $path);
+            $this->health?->markDown(self::SERVICE);
+            return null;
+        }
+
+        // 204 / empty-body 2xx counts as success (Bazarr's download/PATCH
+        // endpoints answer no-content) — don't treat it as a JSON failure.
+        if ($code === 204 || trim((string) $rawBody) === '') {
+            $this->health?->clear(self::SERVICE);
+            $this->lastError = null;
+            return [];
+        }
+
+        $json = json_decode((string) $rawBody, true);
+        if (!is_array($json)) {
+            $this->recordError($code, 'invalid JSON response', $method, $path);
+            $this->health?->markDown(self::SERVICE);
+            return null;
+        }
+
+        $this->health?->clear(self::SERVICE);
+        $this->lastError = null;
+        return $json;
+    }
+
+    private function recordError(int $code, string $message, string $method, string $path): void
+    {
+        $this->lastError = [
+            'code'    => $code,
+            'method'  => $method,
+            'path'    => $path,
+            'message' => $message,
+        ];
+        $this->logger->warning('Bazarr request failed', [
+            'method'  => $method,
+            'path'    => $path,
+            'code'    => $code,
+            'message' => $message,
+        ]);
+    }
+}
