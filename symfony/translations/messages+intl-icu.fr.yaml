@@ -5635,6 +5635,24 @@ jellyseerr:
       available: Disponible
       partially_available: Partiellement disponible
 
+bazarr:
+  title: Bazarr
+  subtitle: Gestion des sous-titres — films et épisodes recherchés
+  nav:
+    wanted: Recherchés
+    movies: Films
+    series: Séries
+    history: Historique
+  stat:
+    movies_wanted: Films recherchés
+    episodes_wanted: Épisodes recherchés
+    providers: Fournisseurs activés
+  wanted:
+    movies_title: Films sans sous-titres
+    episodes_title: Épisodes sans sous-titres
+    empty: Rien à rechercher
+    column_title: Titre
+
 user:
   email:
     already_exists: Un compte existe déjà avec cet email.

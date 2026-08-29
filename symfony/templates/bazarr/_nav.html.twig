@@ -1,0 +1,29 @@
+{#
+  Bazarr navigation bar — flat button group (only 4 sub-pages, no dropdowns
+  needed). Same active-state pattern as media/_radarr_nav.html.twig, simplified
+  to plain links per jellyseerr/_nav.html.twig's first two buttons.
+
+  Movies/Series/History routes (app_bazarr_movies/_series/_history) don't
+  exist yet — they land in Task 6 under the same `app_bazarr_` prefix this
+  file already references. path() resolves route names at render time, not at
+  Twig compile/lint time, and the index route this task ships is always
+  reached through ServiceRouteGuardSubscriber, which redirects away before the
+  template ever renders while Bazarr is unconfigured (the state in CI/tests
+  today) — so these three unresolved route names are inert until Task 6 lands.
+#}
+{% set _route = app.request.attributes.get('_route') %}
+{% set _tabs = [
+  { route: 'app_bazarr_index',   label: 'bazarr.nav.wanted'  },
+  { route: 'app_bazarr_movies',  label: 'bazarr.nav.movies'  },
+  { route: 'app_bazarr_series',  label: 'bazarr.nav.series'  },
+  { route: 'app_bazarr_history', label: 'bazarr.nav.history' },
+] %}
+
+<div class="d-flex gap-2 align-items-center flex-wrap">
+  {% for tab in _tabs %}
+    <a href="{{ path(tab.route) }}"
+       class="btn btn-sm {{ _route == tab.route ? 'btn-primary' : 'btn-ghost-primary' }}">
+      {{ tab.label|trans }}
+    </a>
+  {% endfor %}
+</div>

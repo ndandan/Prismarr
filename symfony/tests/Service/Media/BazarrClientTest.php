@@ -43,6 +43,16 @@ class BazarrClientTest extends TestCase
         $this->assertSame([], $this->client([])->getMovies());
     }
 
+    public function testGetWantedMoviesEmptyWhenUnconfigured(): void
+    {
+        $this->assertSame([], $this->client([])->getWantedMovies());
+    }
+
+    public function testGetWantedEpisodesEmptyWhenUnconfigured(): void
+    {
+        $this->assertSame([], $this->client([])->getWantedEpisodes());
+    }
+
     public function testGetBadgeCountsZeroWhenUnconfigured(): void
     {
         $this->assertSame(['movies' => 0, 'episodes' => 0, 'providers' => 0], $this->client([])->getBadgeCounts());

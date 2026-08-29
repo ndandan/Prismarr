@@ -117,6 +117,26 @@ class BazarrClient implements ResetInterface
         ];
     }
 
+    /** @return list<array<string, mixed>> Wanted-movie dicts (missing subtitles); [] on failure. */
+    public function getWantedMovies(): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/movies/wanted');
+        return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
+    }
+
+    /** @return list<array<string, mixed>> Wanted-episode dicts (missing subtitles); [] on failure. */
+    public function getWantedEpisodes(): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/episodes/wanted');
+        return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
+    }
+
     /** @return list<array<string, mixed>> Raw movie dicts; [] on failure. */
     public function getMovies(): array
     {

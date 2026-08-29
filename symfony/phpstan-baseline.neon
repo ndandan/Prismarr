@@ -25,6 +25,12 @@ parameters:
 			path: src/Controller/AdminSettingsController.php
 
 		-
+			message: '#^Property App\\Controller\\BazarrController\:\:\$translator is never read, only written\.$#'
+			identifier: property.onlyWritten
+			count: 1
+			path: src/Controller/BazarrController.php
+
+		-
 			message: '#^Offset ''sortDate'' on array\{type\: ''episode'', seriesTitle\: mixed, title\: mixed, overview\: mixed, season\: mixed, episode\: mixed, date\: null, poster\: mixed, \.\.\.\}\|array\{type\: ''film'', title\: mixed, year\: mixed, poster\: mixed, fanart\: mixed, overview\: mixed, status\: mixed, hasFile\: bool, \.\.\.\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1

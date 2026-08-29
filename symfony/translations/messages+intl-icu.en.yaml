@@ -5638,6 +5638,24 @@ jellyseerr:
       available: Available
       partially_available: Partially available
 
+bazarr:
+  title: Bazarr
+  subtitle: Subtitle management — wanted movies and episodes
+  nav:
+    wanted: Wanted
+    movies: Movies
+    series: Series
+    history: History
+  stat:
+    movies_wanted: Movies wanted
+    episodes_wanted: Episodes wanted
+    providers: Providers enabled
+  wanted:
+    movies_title: Movies missing subtitles
+    episodes_title: Episodes missing subtitles
+    empty: Nothing wanted
+    column_title: Title
+
 user:
   email:
     already_exists: An account with this email already exists.
