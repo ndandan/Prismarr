@@ -46,6 +46,16 @@
     window.DEFAULT_RADARR_SLUG = DEFAULT_RADARR_SLUG;
     window.DEFAULT_SONARR_SLUG = DEFAULT_SONARR_SLUG;
 
+    // Task 13 — the global search dropdown renders its subtitle badge purely
+    // client-side (results are built from a JSON payload, not Twig), so the
+    // click-to-search affordance on a 'missing' badge needs an admin check
+    // in JS. This mirrors the server-side gate: `bazarr/_search_modal.html.twig`
+    // (below) is itself only ever included for admins, and BazarrController
+    // is `#[IsGranted('ROLE_ADMIN')]` on the whole class — so this flag only
+    // controls whether the badge LOOKS clickable, it grants no capability by
+    // itself.
+    window.PRISMARR_IS_ADMIN = {{ is_granted('ROLE_ADMIN') ? 'true' : 'false' }};
+
     // Global locale-aware byte formatter — must be defined here in <head>
     // BEFORE any child template's javascripts block runs. The original
     // location was a media-pages-only conditional script further down the
@@ -1711,6 +1721,8 @@
       'search.forget':         'topbar.search.forget'|trans,
       'search.in_library_badge': 'topbar.search.in_library_badge'|trans,
       'search.not_added_badge':  'topbar.search.not_added_badge'|trans,
+      'bazarr.badge.missing':    'bazarr.badge.missing'|trans,
+      'bazarr.badge.complete':   'bazarr.badge.complete'|trans,
       'search.add':              'topbar.search.add'|trans,
       'dashboard.quicklook.manage': 'dashboard.quicklook.manage'|trans,
       'theme.label_light':     'topbar.theme.label_light'|trans,
@@ -1811,6 +1823,26 @@
         var instanceLabel = (item.instance && item.instance.name)
           ? ' · <span class="text-info">' + window.escHtml(item.instance.name) + '</span>'
           : '';
+        // Task 13 — subtitle status badge. `item.subtitle` only ever exists
+        // on in-library results (attached server-side in MediaController::
+        // globalSearch(), omitted for the 'hidden' state and for online/
+        // TMDb-only results), so its mere presence is the render gate.
+        // 'missing' is clickable (opens the Bazarr search modal) but only
+        // for admins — the modal itself, and its `[data-bazarr-search]`
+        // delegated listener, don't even exist in the DOM for non-admins.
+        var subtitleBadge = '';
+        if (item.subtitle && item.subtitle.state === 'missing') {
+          var subKind = item.type === 'film' ? 'movie' : 'series';
+          var subCount = window.escHtml(String(item.subtitle.count));
+          var subTitle = window.escHtml((window._i18n && window._i18n['bazarr.badge.missing']) || 'Missing');
+          var subClickAttrs = window.PRISMARR_IS_ADMIN
+            ? ' data-bazarr-search data-kind="' + subKind + '" data-id="' + window.escHtml(String(item.id)) + '" role="button"'
+            : '';
+          subtitleBadge = '<span class="badge bg-warning-lt ms-1 flex-shrink-0" style="font-size:.7rem;" title="' + subTitle + '"' + subClickAttrs + '>' + subCount + '</span>';
+        } else if (item.subtitle && item.subtitle.state === 'complete') {
+          var compTitle = window.escHtml((window._i18n && window._i18n['bazarr.badge.complete']) || 'Subtitles complete');
+          subtitleBadge = '<span class="badge bg-success-lt ms-1 flex-shrink-0" style="font-size:.7rem;" title="' + compTitle + '">&#10003;</span>';
+        }
         return '<a href="#" class="prismarr-search-item" role="option" data-item-index="' + i + '"' + dataAttr + '>'
           + poster
           + '<div class="overflow-hidden flex-grow-1">'
@@ -1818,6 +1850,7 @@
           + '<div class="text-secondary" style="font-size:.7rem;">' + window.escHtml(item.year || '') + instanceLabel + '</div>'
           + '</div>'
           + badge
+          + subtitleBadge
           + '</a>';
       }
 
@@ -2056,6 +2089,13 @@
       // then fail its `.contains(e.target)` check (the orphan node is no
       // longer in the DOM) and wrongly close the dropdown.
       resultsDiv.addEventListener('click', function (e) {
+        // Task 13 — let a click on the subtitle badge bubble past the
+        // "open this result" handling below (which stops propagation) so
+        // it reaches the document-level `[data-bazarr-search]` listener
+        // registered by bazarr/_search_modal.html.twig (admins only —
+        // that partial isn't even in the DOM for non-admins, so this is a
+        // no-op check for everyone else).
+        if (e.target.closest('[data-bazarr-search]')) { return; }
         var pill = e.target.closest('.prismarr-search-pill');
         if (pill) {
           e.stopPropagation();

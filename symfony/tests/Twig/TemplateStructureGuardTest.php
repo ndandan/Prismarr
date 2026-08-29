@@ -74,4 +74,19 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertStringContainsString('ql.radarrId', $body);
         $this->assertStringContainsString('ql.sonarrId', $body);
     }
+
+    public function testSearchRenderItemRendersSubtitleBadge(): void
+    {
+        $base = file_get_contents(self::TEMPLATE_ROOT . 'base.html.twig');
+        $this->assertNotFalse($base);
+        // Task 13 (Bazarr integration): the global search dropdown renders
+        // results client-side from a JSON payload, so the subtitle badge has
+        // to be built in JS from `item.subtitle`, not via a Twig include.
+        $this->assertStringContainsString('item.subtitle', $base);
+        // The click-to-search affordance on a 'missing' badge is admin-only;
+        // it must check the same is_granted('ROLE_ADMIN')-derived JS flag
+        // the rest of the page uses, not invent a separate auth signal.
+        $this->assertStringContainsString('window.PRISMARR_IS_ADMIN', $base);
+        $this->assertStringContainsString("is_granted('ROLE_ADMIN') ? 'true' : 'false'", $base);
+    }
 }
