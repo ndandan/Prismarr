@@ -76,6 +76,7 @@ sidebar:
     jellyseerr: Seerr
     films: Movies
     series: TV Shows
+    bazarr: Bazarr
   footer:
     collapse: Collapse sidebar
     expand: Expand sidebar

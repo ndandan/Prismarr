@@ -75,6 +75,7 @@ sidebar:
     jellyseerr: Seerr
     films: Films
     series: Séries
+    bazarr: Bazarr
   footer:
     collapse: Réduire la barre latérale
     expand: Développer la barre latérale
