@@ -97,6 +97,10 @@ class AdminSettingsController extends AbstractController
             ['key' => 'tautulli_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8181'],
             ['key' => 'tautulli_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
         ],
+        'bazarr' => [
+            ['key' => 'bazarr_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:6767'],
+            ['key' => 'bazarr_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
+        ],
         'unraid' => [
             ['key' => 'unraid_url',             'type' => 'text',     'label' => 'admin.field.url', 'placeholder' => 'https://tower.local'],
             ['key' => 'unraid_api_key',         'type' => 'password', 'label' => 'admin.field.api_key'],
@@ -162,6 +166,7 @@ class AdminSettingsController extends AbstractController
         'nzbget'      => 'NZBGet',
         'gluetun'     => 'Gluetun',
         'tautulli'    => 'Tautulli',
+        'bazarr'      => 'Bazarr',
         'unraid'      => 'Unraid',
         'unifi'       => 'UniFi',
         'houndarr'    => 'Houndarr',
@@ -574,6 +579,7 @@ class AdminSettingsController extends AbstractController
             'sabnzbd'                                    => ['sabnzbd_url', 'sabnzbd_api_key'],
             'nzbget'                                     => ['nzbget_url', 'nzbget_user', 'nzbget_password'],
             'tautulli'                                   => ['tautulli_url', 'tautulli_api_key'],
+            'bazarr'                                     => ['bazarr_url', 'bazarr_api_key'],
             'unraid'                                     => ['unraid_url', 'unraid_api_key', 'unraid_skip_tls_verify'],
             'unifi'                                      => ['unifi_url', 'unifi_api_key', 'unifi_site', 'unifi_skip_tls_verify'],
             'houndarr'                                   => ['houndarr_url', 'houndarr_api_key'],
@@ -625,7 +631,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr'];
+        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr', 'bazarr'];
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }

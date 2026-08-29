@@ -818,6 +818,7 @@ admin:
       unraid: 'Unraid server monitoring — array, disks, system, Docker, UPS (Unraid 7+, read-only API key)'
       unifi: 'UniFi network monitoring — WAN throughput, clients, devices (Network 9.0+, read-only API key from Control Plane → Integrations)'
       houndarr: 'Automated *arr backlog search (read-only widget)'
+      bazarr: 'Subtitle manager (via Bazarr)'
     sidebar_toggle: Menu
     sidebar_toggle_title: Show in sidebar
     status:
