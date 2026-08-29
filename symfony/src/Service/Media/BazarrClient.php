@@ -157,6 +157,36 @@ class BazarrClient implements ResetInterface
         return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
 
+    /** @return list<array<string, mixed>> Raw movie subtitle-history dicts; [] on failure. */
+    public function getHistoryMovies(): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/movies/history');
+        return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
+    }
+
+    /** @return list<array<string, mixed>> Raw episode subtitle-history dicts; [] on failure. */
+    public function getHistoryEpisodes(): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/episodes/history');
+        return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
+    }
+
+    /** @return list<array<string, mixed>> Raw episode dicts for one Sonarr series; [] on failure. */
+    public function getEpisodes(int $sonarrSeriesId): array
+    {
+        if (!$this->ready()) {
+            return [];
+        }
+        $r = $this->request('GET', '/episodes', ['seriesid[]' => $sonarrSeriesId]);
+        return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
+    }
+
     /** @return array<string, mixed>|null Provider search results; null on failure. */
     public function searchMovie(int $radarrId): ?array
     {

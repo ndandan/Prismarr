@@ -5655,6 +5655,42 @@ bazarr:
     episodes_title: Episodes missing subtitles
     empty: Nothing wanted
     column_title: Title
+  movies:
+    title: Movies
+    empty: No movies found
+    column_title: Title
+    column_year: Year
+    column_language: Audio language
+    column_missing: Missing subtitles
+    none_missing: Complete
+  series:
+    title: Series
+    empty: No series found
+    column_title: Title
+    column_year: Year
+    column_episodes: Episode files
+    column_missing: Missing episodes
+    none_missing: Complete
+  history:
+    movies_title: Movie subtitle history
+    episodes_title: Episode subtitle history
+    empty: No history yet
+    column_title: Title
+    column_action: Action
+    column_provider: Provider
+    column_language: Language
+    column_date: Date
+  series_detail:
+    title: Episodes
+    back: Back to series
+    empty: No episodes found
+    column_season: Season
+    column_episode: Episode
+    column_title: Title
+    column_language: Audio language
+    column_status: Subtitles
+    search: Search
+    complete: Complete
 
 user:
   email:

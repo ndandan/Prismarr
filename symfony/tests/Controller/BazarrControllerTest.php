@@ -24,4 +24,19 @@ class BazarrControllerTest extends AbstractWebTestCase
 
         self::assertResponseRedirects('/admin/settings');
     }
+
+    public function testMoviesSeriesHistoryRedirectWhenUnconfigured(): void
+    {
+        foreach (['/bazarr/movies', '/bazarr/series', '/bazarr/history'] as $path) {
+            $this->client->request('GET', $path);
+            self::assertResponseRedirects('/admin/settings');
+        }
+    }
+
+    public function testSeriesDetailRedirectsWhenUnconfigured(): void
+    {
+        $this->client->request('GET', '/bazarr/series/7');
+
+        self::assertResponseRedirects('/admin/settings');
+    }
 }
