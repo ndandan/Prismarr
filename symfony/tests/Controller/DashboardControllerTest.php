@@ -326,6 +326,57 @@ class DashboardControllerTest extends TestCase
         self::assertStringContainsString('open=42', $movie['actionUrl']);
         self::assertStringContainsString('app_media_films', $movie['actionUrl']);
         self::assertSame('dashboard.quicklook.manage', $movie['actionLabel']);
+        // Task 12 fix round: TMDb-keyed quick-look for a title already in the
+        // library must wire radarrId from the match so the subtitle badge
+        // shows on discover/trending/watchlist too, not just /films.
+        self::assertSame(42, $movie['radarrId']);
+        self::assertNull($movie['sonarrId']);
+    }
+
+    public function testQuickLookTmdbTvInLibrarySetsSonarrId(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getTv')->willReturn([
+            'id' => 95396, 'name' => 'Severance', 'first_air_date' => '2022-02-18',
+            'overview' => '...', 'number_of_seasons' => 2, 'vote_average' => 8.4,
+            'poster_path' => '/s.jpg', 'genres' => [['id' => 18, 'name' => 'Drama']],
+            'networks' => [['id' => 2552, 'name' => 'Apple TV+']],
+        ]);
+
+        // Populated Sonarr library so the tmdbId resolves to a Manage deep-link.
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $type): array => $type === ServiceInstance::TYPE_SONARR
+                ? [$this->instance('sonarr-1', 'Sonarr')] : []
+        );
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('withInstance')->willReturnSelf();
+        $sonarr->method('getSeries')->willReturn([
+            ['tmdbId' => 95396, 'id' => 7, 'hasFile' => true, 'monitored' => true],
+        ]);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $sonarr, $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $instances, new NullLogger(), $translator, $cache, $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+
+        $tv = $m->invoke($controller, 'tv', 95396);
+
+        self::assertTrue($tv['inLibrary']);
+        self::assertStringContainsString('open=7', $tv['actionUrl']);
+        self::assertStringContainsString('app_media_series', $tv['actionUrl']);
+        self::assertSame(7, $tv['sonarrId']);
+        self::assertNull($tv['radarrId']);
     }
 
     public function testHeroSpotlightCarriesQuickLookFields(): void
