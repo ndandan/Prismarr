@@ -61,4 +61,17 @@ class TemplateStructureGuardTest extends TestCase
         // (Tasks 6/9/10) have a modal to open.
         $this->assertStringContainsString('bazarr/_search_modal.html.twig', $base);
     }
+
+    public function testQuicklookBodyIncludesSubtitleBadge(): void
+    {
+        $body = file_get_contents(self::TEMPLATE_ROOT . 'dashboard/_quicklook_body.html.twig');
+        $this->assertNotFalse($body);
+        // Task 12 (Bazarr integration): the quick-look modal should surface
+        // the shared subtitle-status pill for in-library items, keyed off the
+        // *arr id threaded through by the DashboardController quick-look
+        // builders (radarrId for movies, sonarrId for series).
+        $this->assertStringContainsString('_subtitle_badge.html.twig', $body);
+        $this->assertStringContainsString('ql.radarrId', $body);
+        $this->assertStringContainsString('ql.sonarrId', $body);
+    }
 }

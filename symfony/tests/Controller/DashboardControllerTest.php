@@ -107,6 +107,10 @@ class DashboardControllerTest extends TestCase
         self::assertSame('155 min', $vm['metaLine']);
         self::assertSame('downloaded', $vm['statusBadge']['kind']);
         self::assertStringContainsString('open=42', $vm['actionUrl']);
+        // Task 12 (Bazarr integration): the quick-look badge needs the
+        // Radarr movie id threaded through — same id the route matched on.
+        self::assertSame(42, $vm['radarrId']);
+        self::assertNull($vm['sonarrId']);
     }
 
     public function testQuickLookLibrarySeriesAndUnknownId(): void
@@ -147,6 +151,9 @@ class DashboardControllerTest extends TestCase
         self::assertSame('Apple TV+', $vm['metaLine']);
         self::assertSame('monitored', $vm['statusBadge']['kind']);
         self::assertStringContainsString('open=7', $vm['actionUrl']);
+        // Task 12 (Bazarr integration): series builder threads sonarrId, not radarrId.
+        self::assertSame(7, $vm['sonarrId']);
+        self::assertNull($vm['radarrId']);
 
         // Unknown id, instance lookup returns null → null view-model.
         $instances->method('getBySlug')->willReturn(null);
@@ -194,6 +201,10 @@ class DashboardControllerTest extends TestCase
         self::assertSame('167 min', $movie['metaLine']);
         self::assertNull($movie['statusBadge']);
         self::assertStringContainsString('detail=movie/693134', $movie['actionUrl']);
+        // Task 12 (Bazarr integration): the TMDb-only builder never carries an
+        // *arr id — the quick-look badge stays hidden for these view-models.
+        self::assertNull($movie['radarrId']);
+        self::assertNull($movie['sonarrId']);
 
         $tv = $m->invoke($controller, 'tv', 95396);
         self::assertSame('Severance', $tv['title']);
@@ -201,6 +212,8 @@ class DashboardControllerTest extends TestCase
         self::assertNull($tv['backdrop']); // backdrop_path null → null
         self::assertSame('Apple TV+ · 2 saisons', $tv['metaLine']);
         self::assertStringContainsString('detail=tv/95396', $tv['actionUrl']);
+        self::assertNull($tv['radarrId']);
+        self::assertNull($tv['sonarrId']);
     }
 
     public function testQuickLookTmdbIncludesCastProvidersTrailerAndExternalIds(): void

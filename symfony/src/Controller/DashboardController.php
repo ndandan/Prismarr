@@ -1015,6 +1015,8 @@ class DashboardController extends AbstractController implements ResetInterface
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $this->translator->trans('dashboard.quicklook.manage'),
             'inLibrary'    => true,
+            'radarrId'     => $type === 'movie' ? $id : null,
+            'sonarrId'     => $type === 'series' ? $id : null,
             'airStatus'    => $airStatus,
             'releaseDates' => $type === 'series'
                 ? $this->seriesReleaseChips(
@@ -1112,6 +1114,8 @@ class DashboardController extends AbstractController implements ResetInterface
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $actionLabel,
             'inLibrary'    => $match !== null,
+            'radarrId'     => null,
+            'sonarrId'     => null,
             'airStatus'    => $airStatus,
             'cast'         => $extras['cast'],
             'providers'    => $extras['providers'],
