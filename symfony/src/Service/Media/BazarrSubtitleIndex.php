@@ -154,7 +154,7 @@ class BazarrSubtitleIndex implements ResetInterface
 
     private function exactlyOneEnabled(string $type): bool
     {
-        return count($this->instances->getEnabled($type)) === 1;
+        return $this->instances->hasExactlyOneEnabled($type);
     }
 
     /** @return array<int, SubtitleStatus> */

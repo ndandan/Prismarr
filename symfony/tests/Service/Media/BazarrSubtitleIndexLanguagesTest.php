@@ -35,6 +35,13 @@ class BazarrSubtitleIndexLanguagesTest extends TestCase
                 ? $make(ServiceInstance::TYPE_RADARR, $radarr)
                 : $make(ServiceInstance::TYPE_SONARR, $sonarr),
         );
+        // BazarrSubtitleIndex's gate() now delegates to the shared predicate
+        // (ServiceInstanceProvider::hasExactlyOneEnabled) instead of counting
+        // getEnabled() itself — stub it from the same $radarr/$sonarr counts
+        // so this mock still behaves like the real provider.
+        $provider->method('hasExactlyOneEnabled')->willReturnCallback(
+            static fn (string $type) => ($type === ServiceInstance::TYPE_RADARR ? $radarr : $sonarr) === 1,
+        );
 
         return $provider;
     }

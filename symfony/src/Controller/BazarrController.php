@@ -3,9 +3,12 @@
 namespace App\Controller;
 
 use App\Controller\Concerns\ApiClientErrorTrait;
+use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\Media\BazarrClient;
+use App\Service\Media\BazarrLangs;
 use App\Service\Media\BazarrSubtitleIndex;
+use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -37,6 +40,7 @@ class BazarrController extends AbstractController
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
         private readonly BazarrSubtitleIndex $bazarrIndex,
+        private readonly ServiceInstanceProvider $instances,
     ) {}
 
     #[Route('', name: 'index')]
@@ -215,26 +219,55 @@ class BazarrController extends AbstractController
 
     /**
      * Present/missing subtitle languages for one Radarr movie, fetched by the
-     * film-detail modal on open. Fail-closed like the badge it sits beside: a
-     * gated (multi-instance) / untracked / absent movie answers a 200
-     * `tracked:false` — NOT an error — so the modal simply renders no chips.
-     * Only a hard transport failure during the underlying getMovies() fetch
-     * surfaces the JSON error shape.
+     * film-detail modal on open. Fail-closed like the badge it sits beside:
+     * a gated (multi-instance) / untracked / absent movie — AND a genuinely
+     * unreachable Bazarr — all answer the same 200 `tracked:false`, never a
+     * JSON error. movieLanguages() already degrades to the untracked shape on
+     * every one of those paths (an empty movie-langs map on a failed fetch
+     * simply misses the lookup), so this action has nothing left to branch
+     * on; a modal opening on a down Bazarr just renders no chips instead of
+     * an error toast.
      */
     #[Route('/api/subtitles/movie/{radarrId}', name: 'api_subtitles_movie', methods: ['GET'], requirements: ['radarrId' => '\d+'])]
     public function apiSubtitlesMovie(int $radarrId): JsonResponse
     {
-        $langs = $this->bazarrIndex->movieLanguages($radarrId);
+        return $this->json(['ok' => true, ...$this->bazarrIndex->movieLanguages($radarrId)]);
+    }
 
-        // movieLanguages() already degrades to tracked:false on a gated /
-        // untracked / absent id, but a genuine transport failure during its
-        // fetch leaves a structured error on the client — surface that rather
-        // than a misleading "untracked".
-        if ($this->bazarr->getLastError() !== null) {
-            return $this->jsonClientError('Bazarr', $this->bazarr);
+    /**
+     * Present/missing subtitle languages per Sonarr episode for one series,
+     * fetched by the series-detail modal on open. Same fail-closed contract
+     * as apiSubtitlesMovie(): the multi-instance Sonarr gate answers 200
+     * `tracked:false, episodes:{}` (a bare sonarrEpisodeId is ambiguous across
+     * two enabled Sonarr instances), and any other failure — an unreachable
+     * Bazarr, an empty/absent series — degrades to `tracked:true` with an
+     * empty or partial episodes map rather than a JSON error, since
+     * BazarrClient::getEpisodes() already fails closed to `[]` on a transport
+     * failure. Episodes missing `sonarrEpisodeId` are skipped — nothing to
+     * key them by.
+     *
+     * Unlike the movie endpoint this reads BazarrClient directly rather than
+     * through BazarrSubtitleIndex: there is no cross-request cache for the
+     * per-episode detail (the series drill-down page is a low-traffic modal
+     * open, not a badge rendered on every card), so the extra caching layer
+     * would only add complexity for no real benefit here.
+     */
+    #[Route('/api/subtitles/series/{sonarrSeriesId}', name: 'api_subtitles_series', methods: ['GET'], requirements: ['sonarrSeriesId' => '\d+'])]
+    public function apiSubtitlesSeries(int $sonarrSeriesId): JsonResponse
+    {
+        if (!$this->instances->hasExactlyOneEnabled(ServiceInstance::TYPE_SONARR)) {
+            return $this->json(['ok' => true, 'tracked' => false, 'episodes' => []]);
         }
 
-        return $this->json(['ok' => true, ...$langs]);
+        $episodes = [];
+        foreach ($this->bazarr->getEpisodes($sonarrSeriesId) as $episode) {
+            if (!isset($episode['sonarrEpisodeId'])) {
+                continue;
+            }
+            $episodes[(int) $episode['sonarrEpisodeId']] = BazarrLangs::extract($episode);
+        }
+
+        return $this->json(['ok' => true, 'tracked' => true, 'episodes' => $episodes]);
     }
 
     /**
