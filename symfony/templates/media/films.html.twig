@@ -68,17 +68,35 @@
     position: absolute; top: 1.7rem; left: .4rem; z-index: 6;
     padding: .05rem .35rem; border-radius: .25rem;
 }
-/* Solid-backed badge treatment for anything rendered over a poster image —
-   the plain Tabler -lt tints (translucent) can blend into a same-colored
-   poster, so this adds a theme-aware surface fill + dark ring/shadow that
-   reads on any backdrop. Self-contained (own font-size floor) because later
-   tasks (_subtitle_chips.html.twig) drop this class in outside .media-card
-   too. Flat table/list-row badges keep the plain -lt tint, no .poster-chip. */
+/* Solid-backed badge treatment for anything rendered over a poster image.
+   Tabler's bg-*-lt classes set background-color/color with !important and
+   resolve to a TRANSLUCENT tint (verified against tabler.min.css) — a
+   non-important background can never win against that, so poster-context
+   chips drop bg-*-lt entirely and instead mirror .quality-badge's existing
+   opaque dark-scrim convention (same rgba fill + backdrop-filter, used
+   elsewhere in this file for exactly this "must read on ANY poster" need).
+   Status is carried by colored TEXT (is-success/is-danger/is-warning,
+   sourced from the same --tblr-* vars as the -lt classes) instead of the
+   background, so it stays legible in both themes and on the flat modal
+   surface the chips partial also renders on, not only over a poster.
+   Self-contained font-size floor because later tasks (_subtitle_chips.html.twig)
+   drop this class in outside .media-card too. Flat table/list-row badges are
+   untouched — they keep the plain -lt tint, no .poster-chip. */
 .poster-chip {
-    background: var(--tblr-bg-surface);
-    box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 1px 2px rgba(0,0,0,.4);
+    background: rgba(0,0,0,.65);
+    backdrop-filter: blur(4px);
+    color: #fff;
     font-size: .6875rem !important;
 }
+.poster-chip.is-success { color: var(--tblr-success); }
+.poster-chip.is-danger { color: var(--tblr-danger); }
+.poster-chip.is-warning { color: var(--tblr-warning); }
+/* Tabler's reboot shrinks sub/sup to .75em (position:relative;top:-.5em),
+   which would put the HI/F markers under the 11px PRODUCT.md floor on a
+   .6875rem chip (.75em of that is ~8.25px). The reboot's top:-.5em offset is
+   relative to the sup's own font-size, so parity sizing still reads as a
+   raised marker instead of shrinking below the floor. */
+.poster-chip sup { font-size: 1em; }
 /* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
 .media-card .ribbon { font-size: .56rem; font-weight: 700; padding: .05rem .4rem; z-index: 2; letter-spacing: .03em; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }

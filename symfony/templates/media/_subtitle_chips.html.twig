@@ -4,8 +4,16 @@
     red for one still missing. Small superscript markers flag hearing-impaired
     (HI) and forced tracks. Consumed server-side by Tasks 4/7; a later JS task
     mirrors this exact markup to inject chips client-side, so the class list
-    here (`badge poster-chip bg-success-lt` / `badge poster-chip bg-danger-lt`)
-    must stay stable — don't rename or reorder without updating that JS too.
+    here (`badge poster-chip is-success` / `badge poster-chip is-danger`) must
+    stay stable — don't rename or reorder without updating that JS too.
+
+    Deliberately NOT bg-success-lt/bg-danger-lt: those Tabler classes set
+    background-color with !important and resolve to a translucent tint that
+    blends into a same-colored poster. `.poster-chip` instead gives the chip
+    an opaque dark-scrim fill (see films.html.twig/series.html.twig's
+    `.poster-chip` rule) and the is-success/is-danger modifier carries the
+    status via colored text, which reads on both a poster and the flat
+    detail-modal surface this partial also renders on.
 
     Params:
       present: list of { lang: string, hi: bool, forced: bool } — languages
@@ -18,10 +26,10 @@
 {% if present is not empty or missing is not empty %}
   <div class="d-flex flex-wrap gap-1">
     {% for c in present %}
-      <span class="badge poster-chip bg-success-lt">{{ c.lang }}{% if c.hi %}<sup title="{{ 'bazarr.chips.hi_title'|trans }}">HI</sup>{% endif %}{% if c.forced %}<sup title="{{ 'bazarr.chips.forced_title'|trans }}">F</sup>{% endif %}</span>
+      <span class="badge poster-chip is-success">{{ c.lang }}{% if c.hi %}<sup title="{{ 'bazarr.chips.hi_title'|trans }}">HI</sup>{% endif %}{% if c.forced %}<sup title="{{ 'bazarr.chips.forced_title'|trans }}">F</sup>{% endif %}</span>
     {% endfor %}
     {% for c in missing %}
-      <span class="badge poster-chip bg-danger-lt">{{ c.lang }}{% if c.hi %}<sup title="{{ 'bazarr.chips.hi_title'|trans }}">HI</sup>{% endif %}{% if c.forced %}<sup title="{{ 'bazarr.chips.forced_title'|trans }}">F</sup>{% endif %}</span>
+      <span class="badge poster-chip is-danger">{{ c.lang }}{% if c.hi %}<sup title="{{ 'bazarr.chips.hi_title'|trans }}">HI</sup>{% endif %}{% if c.forced %}<sup title="{{ 'bazarr.chips.forced_title'|trans }}">F</sup>{% endif %}</span>
     {% endfor %}
   </div>
 {% endif %}
