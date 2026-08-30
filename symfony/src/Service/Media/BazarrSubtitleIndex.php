@@ -25,20 +25,29 @@ use Symfony\Contracts\Service\ResetInterface;
  * downloaded subtitle shows up immediately instead of up to 60 s later.
  *
  * @phpstan-type SubtitleStatus array{state: 'complete'|'missing'|'hidden', count: int}
+ * @phpstan-import-type BazarrLang from BazarrLangs
+ * @phpstan-type MovieLangs array{present: list<BazarrLang>, missing: list<BazarrLang>, tracked: bool}
  */
 class BazarrSubtitleIndex implements ResetInterface
 {
     /** @var SubtitleStatus */
     private const HIDDEN = ['state' => 'hidden', 'count' => 0];
 
-    private const CACHE_KEY_MOVIES = 'bazarr_subtitle_index.movies';
-    private const CACHE_KEY_SERIES = 'bazarr_subtitle_index.series';
+    /** @var MovieLangs Fail-closed language shape: gated / untracked / absent. */
+    private const UNTRACKED_LANGS = ['present' => [], 'missing' => [], 'tracked' => false];
+
+    private const CACHE_KEY_MOVIES      = 'bazarr_subtitle_index.movies';
+    private const CACHE_KEY_MOVIE_LANGS = 'bazarr_subtitle_index.movie_langs';
+    private const CACHE_KEY_SERIES      = 'bazarr_subtitle_index.series';
 
     /** Seconds. Short enough that a stale badge self-heals without any action. */
     private const TTL = 60;
 
     /** @var array<int, SubtitleStatus>|null */
     private ?array $movies = null;
+
+    /** @var array<int, MovieLangs>|null Filled by the SAME getMovies() pass as $movies. */
+    private ?array $movieLangs = null;
 
     /** @var array<int, SubtitleStatus>|null */
     private ?array $series = null;
@@ -57,6 +66,7 @@ class BazarrSubtitleIndex implements ResetInterface
     public function reset(): void
     {
         $this->movies     = null;
+        $this->movieLangs = null;
         $this->series     = null;
         $this->radarrGate = null;
         $this->sonarrGate = null;
@@ -65,12 +75,17 @@ class BazarrSubtitleIndex implements ResetInterface
     /**
      * Drop the memo AND the cross-request pool entries. Called by the Bazarr
      * mutation endpoints (subtitle download / auto-search), which change the
-     * very numbers the badges display.
+     * very numbers the badges display AND the present/missing language lists
+     * the detail modal shows.
      */
     public function invalidate(): void
     {
         $this->reset();
-        $this->cacheApp->deleteItems([self::CACHE_KEY_MOVIES, self::CACHE_KEY_SERIES]);
+        $this->cacheApp->deleteItems([
+            self::CACHE_KEY_MOVIES,
+            self::CACHE_KEY_MOVIE_LANGS,
+            self::CACHE_KEY_SERIES,
+        ]);
     }
 
     /** @return SubtitleStatus */
@@ -83,6 +98,23 @@ class BazarrSubtitleIndex implements ResetInterface
         }
 
         return $this->movieMap()[$radarrId] ?? self::HIDDEN;
+    }
+
+    /**
+     * Per-movie present/missing subtitle languages for the film-detail modal.
+     * Same multi-instance gate and fail-closed rule as the badge: a gated,
+     * untracked (no subtitle profile) or absent movie answers the empty
+     * `tracked:false` shape, never an error.
+     *
+     * @return MovieLangs
+     */
+    public function movieLanguages(int $radarrId): array
+    {
+        if (!$this->gate(ServiceInstance::TYPE_RADARR)) {
+            return self::UNTRACKED_LANGS;
+        }
+
+        return $this->movieLangMap()[$radarrId] ?? self::UNTRACKED_LANGS;
     }
 
     /** @return SubtitleStatus */
@@ -128,27 +160,61 @@ class BazarrSubtitleIndex implements ResetInterface
     /** @return array<int, SubtitleStatus> */
     private function movieMap(): array
     {
-        if ($this->movies !== null) {
-            return $this->movies;
+        $this->loadMovies();
+
+        return $this->movies ?? [];
+    }
+
+    /** @return array<int, MovieLangs> */
+    private function movieLangMap(): array
+    {
+        $this->loadMovies();
+
+        return $this->movieLangs ?? [];
+    }
+
+    /**
+     * ONE getMovies() pass fills BOTH the status-tuple map (the badge) and the
+     * present/missing language map (the detail modal) — a Bazarr `/movies`
+     * fetch is far too expensive to run twice. Memoized per request; each map
+     * is cross-request cached under its own pool key, and both are written
+     * only when the fetch was clean (see store()), so a downed Bazarr never
+     * pins an empty result for the full TTL.
+     */
+    private function loadMovies(): void
+    {
+        if ($this->movies !== null && $this->movieLangs !== null) {
+            return;
         }
 
-        $item   = $this->cacheApp->getItem(self::CACHE_KEY_MOVIES);
-        $cached = $item->isHit() ? $item->get() : null;
-        if (is_array($cached)) {
-            /** @var array<int, SubtitleStatus> $cached */
-            return $this->movies = $cached;
+        $statusItem = $this->cacheApp->getItem(self::CACHE_KEY_MOVIES);
+        $langsItem  = $this->cacheApp->getItem(self::CACHE_KEY_MOVIE_LANGS);
+        $cachedStatus = $statusItem->isHit() ? $statusItem->get() : null;
+        $cachedLangs  = $langsItem->isHit() ? $langsItem->get() : null;
+        if (is_array($cachedStatus) && is_array($cachedLangs)) {
+            /** @var array<int, SubtitleStatus> $cachedStatus */
+            /** @var array<int, MovieLangs> $cachedLangs */
+            $this->movies     = $cachedStatus;
+            $this->movieLangs = $cachedLangs;
+
+            return;
         }
 
-        $map = [];
+        $statusMap = [];
+        $langsMap  = [];
         foreach ($this->client->getMovies() as $m) {
             if (isset($m['radarrId'])) {
-                $map[(int) $m['radarrId']] = self::computeMovieStatus($m);
+                $id             = (int) $m['radarrId'];
+                $statusMap[$id] = self::computeMovieStatus($m);
+                $langsMap[$id]  = self::extractMovieLangs($m);
             }
         }
 
-        $this->store($item, $map);
+        $this->store($statusItem, $statusMap);
+        $this->store($langsItem, $langsMap);
 
-        return $this->movies = $map;
+        $this->movies     = $statusMap;
+        $this->movieLangs = $langsMap;
     }
 
     /** @return array<int, SubtitleStatus> */
@@ -183,7 +249,7 @@ class BazarrSubtitleIndex implements ResetInterface
      * empty list plus a recorded lastError; caching that would keep every
      * badge hidden for 60 s after the service came back.
      *
-     * @param array<int, SubtitleStatus> $map
+     * @param array<int, SubtitleStatus>|array<int, MovieLangs> $map
      */
     private function store(CacheItemInterface $item, array $map): void
     {
@@ -211,6 +277,24 @@ class BazarrSubtitleIndex implements ResetInterface
         return $missing > 0
             ? ['state' => 'missing', 'count' => $missing]
             : ['state' => 'complete', 'count' => 0];
+    }
+
+    /**
+     * Map one movie dict to its present/missing subtitle languages. The
+     * untracked rule (no subtitle profile → tracked:false, empty lists) lives
+     * HERE, not in BazarrLangs, which is a pure array mapper shared with the
+     * episode drill-down.
+     *
+     * @param array<string, mixed> $movie
+     * @return MovieLangs
+     */
+    private static function extractMovieLangs(array $movie): array
+    {
+        if (($movie['profileId'] ?? null) === null) {
+            return self::UNTRACKED_LANGS;
+        }
+
+        return BazarrLangs::extract($movie) + ['tracked' => true];
     }
 
     /**

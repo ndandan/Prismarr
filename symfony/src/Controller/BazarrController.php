@@ -214,6 +214,30 @@ class BazarrController extends AbstractController
     }
 
     /**
+     * Present/missing subtitle languages for one Radarr movie, fetched by the
+     * film-detail modal on open. Fail-closed like the badge it sits beside: a
+     * gated (multi-instance) / untracked / absent movie answers a 200
+     * `tracked:false` — NOT an error — so the modal simply renders no chips.
+     * Only a hard transport failure during the underlying getMovies() fetch
+     * surfaces the JSON error shape.
+     */
+    #[Route('/api/subtitles/movie/{radarrId}', name: 'api_subtitles_movie', methods: ['GET'], requirements: ['radarrId' => '\d+'])]
+    public function apiSubtitlesMovie(int $radarrId): JsonResponse
+    {
+        $langs = $this->bazarrIndex->movieLanguages($radarrId);
+
+        // movieLanguages() already degrades to tracked:false on a gated /
+        // untracked / absent id, but a genuine transport failure during its
+        // fetch leaves a structured error on the client — surface that rather
+        // than a misleading "untracked".
+        if ($this->bazarr->getLastError() !== null) {
+            return $this->jsonClientError('Bazarr', $this->bazarr);
+        }
+
+        return $this->json(['ok' => true, ...$langs]);
+    }
+
+    /**
      * Download a specific subtitle result for a movie. No CSRF token —
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
      *
