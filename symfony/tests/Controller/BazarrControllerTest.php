@@ -72,29 +72,46 @@ class BazarrControllerTest extends AbstractWebTestCase
     }
 
     /**
-     * ServiceRouteGuardSubscriber matches route names by the `app_bazarr_`
-     * prefix (src/EventSubscriber/ServiceRouteGuardSubscriber.php), which
-     * covers `app_bazarr_api_*` too — it runs on kernel.request before the
-     * controller (or even the #[IsGranted] check) ever executes. So in CI,
-     * where Bazarr is never configured, every JSON API route redirects to
-     * admin settings exactly like the HTML routes; the jsonClientError()
-     * 500-with-ok:false path is only reachable once Bazarr IS configured but
-     * erroring, which this unconfigured-only test fixture cannot exercise
-     * (verified live on :beta instead — see the task report).
+     * ServiceRouteGuardSubscriber's `app_bazarr_` rule carries an
+     * `exclude_prefix` of `app_bazarr_api_`, so the JSON endpoints are exempt
+     * from the guard (src/EventSubscriber/ServiceRouteGuardSubscriber.php).
+     * A 302-to-HTML on a background fetch is unparseable to the caller, drops
+     * the POST body, and leaves a flash message queued for whatever page the
+     * user loads next. Unconfigured Bazarr therefore falls through to the
+     * controller, whose client fails closed → jsonClientError(): a JSON 500
+     * carrying `ok: false`.
      */
-    public function testDownloadMovieRedirectsWhenUnconfigured(): void
+    public function testDownloadMovieAnswersJsonErrorWhenUnconfigured(): void
     {
         $this->client->request('POST', '/bazarr/api/download/movie', [
             'radarrid' => 42, 'provider' => 'x', 'subtitle' => 'y', 'hi' => 'False', 'forced' => 'False', 'original_format' => 'False',
         ]);
 
-        self::assertResponseRedirects('/admin/settings');
+        self::assertFalse($this->client->getResponse()->isRedirect(), 'API routes must never redirect');
+        self::assertResponseStatusCodeSame(500);
+        self::assertJson((string) $this->client->getResponse()->getContent());
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertFalse($payload['ok']);
+        self::assertSame('Bazarr', $payload['service']);
     }
 
-    public function testAutoMovieRedirectsWhenUnconfigured(): void
+    public function testAutoMovieAnswersJsonErrorWhenUnconfigured(): void
     {
         $this->client->request('POST', '/bazarr/api/auto/movie/42');
 
-        self::assertResponseRedirects('/admin/settings');
+        self::assertFalse($this->client->getResponse()->isRedirect());
+        self::assertResponseStatusCodeSame(500);
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertFalse($payload['ok']);
+    }
+
+    public function testSearchMovieAnswersJsonErrorWhenUnconfigured(): void
+    {
+        $this->client->request('GET', '/bazarr/api/search/movie/42');
+
+        self::assertFalse($this->client->getResponse()->isRedirect());
+        self::assertResponseStatusCodeSame(500);
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertFalse($payload['ok']);
     }
 }
