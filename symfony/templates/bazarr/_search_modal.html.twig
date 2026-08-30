@@ -184,14 +184,18 @@
     document.querySelectorAll('.modal-backdrop:not(.ql-backdrop-el)').forEach(function (b) { b.remove(); });
   }
 
-  // Bootstrap's hide() drops `modal-open` from <body> unconditionally, which
-  // un-locks scrolling behind a quick-look that is still open underneath us
-  // (badge clicked from inside the quick-look → search modal stacks on top →
-  // closing it left the quick-look scrollable). Delegated on `document` rather
-  // than bound to the element: Turbo replaces the <body> on every visit, and
-  // the init guard above keeps this script from re-running, so an element-bound
-  // listener would be lost after the first navigation. Bootstrap 5 dispatches
-  // its lifecycle events with `bubbles: true`, so document sees them.
+  // Bootstrap's hide() drops `modal-open` from <body> unconditionally, taking
+  // the quick-look's marker with it when this modal was stacked on top of a
+  // still-open quick-look. Re-adding it keeps that marker consistent for
+  // anything that reads it. It does NOT scroll-lock anything: Bootstrap 5 locks
+  // scroll with an inline `overflow: hidden` on <body>, and no CSS in this app
+  // (Tabler included) styles `.modal-open` at all — the quick-look only ever
+  // set the class, so there was never a lock here to restore.
+  // Delegated on `document` rather than bound to the element: Turbo replaces
+  // the <body> on every visit, and the init guard above keeps this script from
+  // re-running, so an element-bound listener would be lost after the first
+  // navigation. Bootstrap 5 dispatches its lifecycle events with
+  // `bubbles: true`, so document sees them.
   document.addEventListener('hidden.bs.modal', function (e) {
     if (!e.target || e.target.id !== 'bazarr-search-modal') return;
     if (quicklookOpen()) { document.body.classList.add('modal-open'); }
@@ -290,6 +294,16 @@
   document.addEventListener('click', function (e) {
     var target = e.target;
     if (!target || typeof target.closest !== 'function') return;
+
+    // Bulk-select mode owns the whole grid. Films/Series each register their own
+    // CAPTURE-phase handler on the `.media-grid` element (films.html.twig ~4470,
+    // series.html.twig ~1759) that turns any card click into a selection toggle
+    // — and `document` capture runs *before* an element capture further down the
+    // tree, so containing the click here would swallow it: the badge would stop
+    // toggling selection, and on Series it would Turbo.visit away and throw the
+    // in-progress multi-selection out. While the grid is in select mode we stay
+    // out of the way entirely and let the grid handler have the click.
+    if (target.closest('.media-grid.select-mode')) return;
 
     var searchTrigger = target.closest('[data-bazarr-search]');
     if (searchTrigger) {
