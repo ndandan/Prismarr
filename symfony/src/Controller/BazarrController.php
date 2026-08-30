@@ -222,7 +222,7 @@ class BazarrController extends AbstractController
      * @param list<array<string, mixed>> $rows
      * @param 'movie'|'series'            $kind
      *
-     * @return array{cards: list<array{title: string, year: int|string|null, poster: string|null, substate: string, count: int, missingLangs: list<string>, seriesId: int|null}>, languages: list<string>}
+     * @return array{cards: list<array{title: string, year: int|string|null, poster: string|null, substate: string, count: int, missingLangs: list<string>, seriesId: int|null, movieId: int|null}>, languages: list<string>}
      */
     private function buildCards(array $rows, string $kind): array
     {
@@ -253,6 +253,7 @@ class BazarrController extends AbstractController
                 'count'        => $status['count'],
                 'missingLangs' => array_keys($codes),
                 'seriesId'     => $kind === 'series' ? $id : null,
+                'movieId'      => $kind === 'movie' ? $id : null,
             ];
         }
 
