@@ -1859,7 +1859,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
      The modal is reused across movies, so the id being fetched is captured
      up front (movieId) and compared against currentId when the response
      lands — a slow response for a movie the user has since navigated away
-     from (or closed the modal on) is dropped rather than rendered. #}
+     from (or closed the modal on) is dropped rather than rendered. */
   function resetFilmSubtitles() {
     document.getElementById('film-subtitles').classList.add('d-none');
     document.getElementById('film-subtitles-chips').innerHTML = '';

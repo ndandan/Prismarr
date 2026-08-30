@@ -111,4 +111,35 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertStringContainsString('poster-chip', $films);
         $this->assertStringContainsString('poster-chip', $series);
     }
+
+    public function testTwigCommentDelimitersAreBalanced(): void
+    {
+        // Bazarr visual & detail pass regression: the Task 4/5 film & series
+        // detail-modal inline scripts each opened a JS block comment with `/*`
+        // but closed it with `#}` (a Twig delimiter). lint:twig can't see it
+        // (`/*` and a bare `#}` are literal text to Twig, no `{#` opener), and
+        // no test executes the JS — so the stray `#}` swallowed the modal's
+        // populate functions into the comment, breaking the whole <script> and
+        // leaving the detail modal an empty shell. A well-formed template has
+        // balanced Twig comment delimiters; an unmatched `#}` (the exact
+        // signature of that bug) makes the counts diverge.
+        $files = [
+            'media/films.html.twig',
+            'media/series.html.twig',
+            'bazarr/_grid.html.twig',
+            'bazarr/index.html.twig',
+            'bazarr/history.html.twig',
+            'media/_subtitle_chips.html.twig',
+        ];
+        foreach ($files as $relPath) {
+            $src = file_get_contents(self::TEMPLATE_ROOT . $relPath);
+            $this->assertNotFalse($src);
+            $this->assertSame(
+                substr_count($src, '{#'),
+                substr_count($src, '#}'),
+                $relPath . ': unbalanced Twig comment delimiters — a `#}` with no matching `{#` '
+                    . '(often a JS `/* … */` comment mistakenly closed with `#}`).'
+            );
+        }
+    }
 }
