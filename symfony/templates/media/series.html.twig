@@ -2462,10 +2462,18 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
       if (!epId) return;
       var entry = episodeSubtitleData[epId];
       if (!entry) return; // absent from the map: no marker, silently
+      var presentLen = entry.present ? entry.present.length : 0;
+      var missingLen = entry.missing ? entry.missing.length : 0;
+      // Fix (Bazarr visual & detail pass review): present:[] + missing:[] means
+      // Bazarr tracks the episode but has no subtitle requirement at all (e.g.
+      // no language profile) — NOT "complete". Mirrors films.html.twig Task 4's
+      // identical guard (`!present.length && !missing.length`): render nothing
+      // and leave the row unstamped so a later real update can still annotate it.
+      if (!presentLen && !missingLen) return;
       row.dataset.subtitleApplied = '1';
-      var missing = !!(entry.missing && entry.missing.length);
+      var missing = missingLen > 0;
       var marker = missing
-        ? '<span class="badge poster-chip is-danger" style="flex-shrink:0;" title="' + window.escHtml(SERIES_I18N.bazarr_episode_missing_title) + '">' + entry.missing.length + '</span>'
+        ? '<span class="badge poster-chip is-danger" style="flex-shrink:0;" title="' + window.escHtml(SERIES_I18N.bazarr_episode_missing_title) + '">' + missingLen + '</span>'
         : '<span class="badge poster-chip is-success" style="flex-shrink:0;" title="' + window.escHtml(SERIES_I18N.bazarr_subtitles_complete_title) + '">&#10003;</span>';
       var searchBtn = '<button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bazarr-search data-kind="episode" data-id="' + window.escHtml(epId) + '" title="' + window.escHtml(SERIES_I18N.bazarr_search_title) + '" style="flex-shrink:0;width:20px;height:20px;">' + SVG_SEARCH_SM + '</button>';
       row.insertAdjacentHTML('beforeend', marker + searchBtn);
@@ -2494,6 +2502,15 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
   }
 
   function loadEpisodes() {
+    // Captured up front (fix, Bazarr visual & detail pass review): the modal
+    // can close and reopen for a different series while this fetch is still
+    // in flight (loadEpisodes() is re-triggered by season/episode monitor
+    // toggles, file delete/rename, and bulk ops too, all of which take a
+    // round-trip), so the .then() below re-checks this against currentId
+    // before touching the DOM — a slow response for a series the user has
+    // since navigated away from is dropped rather than rendered, mirroring
+    // the same stale-response guard already used by loadEpisodeSubtitles().
+    var seriesId = currentId;
     var epContainer = document.getElementById('modal-serie-episodes');
     epContainer.innerHTML = '<div class="text-center text-muted py-4"><span class="spinner-border spinner-border-sm me-1"></span> ' + esc(SERIES_I18N.d_loading_episodes) + '</div>';
 
@@ -2501,6 +2518,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
       ajaxGet('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/' + currentId + '/episodes'),
       ajaxGet('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/' + currentId + '/files')
     ]).then(function(results) {
+      if (seriesId !== currentId) return; // stale: the modal moved on to another series
       var episodes = results[0] || [];
       var allFiles = results[1] || [];
       // Index files by id for quick lookup
