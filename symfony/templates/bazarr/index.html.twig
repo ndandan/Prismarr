@@ -1,0 +1,183 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ 'bazarr.title'|trans }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+{% endblock %}
+
+{% block body %}
+{#
+  Compact landing overview (Task 8 of the visual & detail pass): stat tiles +
+  a "most missing" poster row, replacing the two long Wanted tables this page
+  used to scroll through. The full sortable/filterable lists still live on
+  the Movies/Series tabs (bazarr/_grid.html.twig, Task 7) — this page is a
+  glanceable summary that links out to them.
+
+  Card look/CSS below is a page-local copy of the Task-7 `.media-card` +
+  locked Task-1 `.poster-chip` treatment (see bazarr/_grid.html.twig), kept
+  visually identical so the landing row and the full grids read as one
+  design. Cards are plain <div>s (not <a>) — each one carries a real
+  <button data-bazarr-auto> as a SIBLING of the optional series-detail <a>,
+  never nested inside it, so the auto-search affordance this page is now the
+  primary home for stays valid HTML and reachable via the shared delegated
+  handler in bazarr/_search_modal.html.twig.
+#}
+<style>
+.bazarr-missing-row { display: flex; gap: .75rem; overflow-x: auto; padding-bottom: .4rem; }
+.bz-missing-card { flex: 0 0 150px; display: flex; flex-direction: column; }
+.bz-missing-card .media-card {
+  position: relative; display: block; border-radius: .5rem; overflow: hidden;
+  background: var(--tblr-bg-surface); border: 1px solid var(--tblr-border-color);
+  transition: transform .15s, box-shadow .15s;
+}
+.bz-missing-card .media-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.bz-missing-card .media-card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; display: block; }
+.bz-missing-card .no-poster {
+  width: 100%; aspect-ratio: 2/3;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--tblr-bg-surface-secondary);
+  color: var(--tblr-muted); font-size: .7rem; text-align: center; padding: .5rem;
+}
+.bz-missing-card .card-overlay {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  background: linear-gradient(transparent, rgba(0,0,0,.85));
+  padding: .5rem .4rem .4rem;
+}
+.bz-missing-card .card-title-text {
+  font-size: .72rem; font-weight: 600; color: #fff;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;
+}
+.bz-missing-card .card-title-text a { color: inherit; text-decoration: none; }
+.bz-missing-card .card-title-text a:hover { text-decoration: underline; }
+.bz-missing-card .card-year { font-size: .62rem; color: rgba(255,255,255,.55); }
+/* Locked .poster-chip scrim (Task 1) — mirrors films.html.twig/series.html.twig/_grid.html.twig. */
+.poster-chip { background: rgba(0,0,0,.65); backdrop-filter: blur(4px); color: #fff; font-size: .6875rem !important; }
+.poster-chip.is-warning { color: var(--tblr-warning); }
+.poster-chip sup { font-size: 1em; }
+.bz-missing-card .bazarr-chip { position: absolute; top: .4rem; left: .4rem; z-index: 2; padding: .1rem .4rem; border-radius: .25rem; }
+.bz-missing-card .bz-missing-footer { margin-top: .4rem; }
+/* Mobile/tablet readability floor (PRODUCT.md): sub-11px text bumps to .6875rem
+   below the lg breakpoint; desktop keeps the denser sizes. */
+@media (max-width: 991.98px) {
+  .bz-missing-card .card-year { font-size: .6875rem; }
+}
+</style>
+
+<div class="page-header d-print-none">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">{{ 'bazarr.title'|trans }}</h2>
+      <div class="text-secondary">{{ 'bazarr.subtitle'|trans }}</div>
+    </div>
+    <div class="col-auto ms-auto">
+      {% include 'bazarr/_nav.html.twig' %}
+    </div>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="container-xl">
+
+    {% if error %}
+      {% include 'error/_service_banner.html.twig' with { service: 'Bazarr', wizard_route: 'admin_settings_index', configured_url: service_url, reason: 'unreachable' } %}
+    {% else %}
+      <div class="row row-cards mb-3">
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-auto">
+                  <span class="bg-primary text-white avatar">{{ counts.movies }}</span>
+                </div>
+                <div class="col">
+                  <div class="text-secondary">{{ 'bazarr.stat.movies_wanted'|trans }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-auto">
+                  <span class="bg-azure text-white avatar">{{ counts.episodes }}</span>
+                </div>
+                <div class="col">
+                  <div class="text-secondary">{{ 'bazarr.stat.episodes_wanted'|trans }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-lg-4">
+          <div class="card card-sm">
+            <div class="card-body">
+              <div class="row align-items-center">
+                <div class="col-auto">
+                  <span class="bg-green text-white avatar">{{ counts.providers }}</span>
+                </div>
+                <div class="col">
+                  <div class="text-secondary">{{ 'bazarr.stat.providers'|trans }}</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title mb-0">{{ 'bazarr.landing.most_missing_title'|trans }}</h3>
+          <div class="card-actions">
+            <a href="{{ path('app_bazarr_movies') }}" class="btn btn-sm btn-outline-secondary">{{ 'bazarr.landing.view_movies'|trans }}</a>
+            <a href="{{ path('app_bazarr_series') }}" class="btn btn-sm btn-outline-secondary">{{ 'bazarr.landing.view_series'|trans }}</a>
+          </div>
+        </div>
+
+        {% if most_missing is empty %}
+          <div class="card-body">
+            <div class="empty">
+              <p class="empty-title">{{ 'bazarr.landing.empty'|trans }}</p>
+            </div>
+          </div>
+        {% else %}
+          <div class="card-body">
+            <div class="bazarr-missing-row">
+              {% for item in most_missing %}
+                <div class="bz-missing-card">
+                  <div class="media-card is-static">
+                    {% if item.poster %}
+                      <img src="{{ item.poster }}" alt="{{ item.title }}" loading="lazy">
+                    {% else %}
+                      <div class="no-poster">{{ item.title }}</div>
+                    {% endif %}
+                    <span class="badge poster-chip is-warning bazarr-chip" title="{{ 'bazarr.badge.missing_count'|trans({count: item.missingCount}) }}">{{ 'bazarr.badge.missing_count'|trans({count: item.missingCount}) }}</span>
+                    <div class="card-overlay">
+                      <div class="card-title-text" title="{{ item.title }}">
+                        {%- if item.kind == 'series' and item.id is not null -%}
+                          <a href="{{ path('app_bazarr_series_detail', {seriesId: item.id}) }}" data-bazarr-nav>{{ item.title }}</a>
+                        {%- else -%}
+                          {{ item.title }}
+                        {%- endif -%}
+                      </div>
+                      {% if item.year %}<div class="card-year">{{ item.year }}</div>{% endif %}
+                    </div>
+                  </div>
+                  {% if item.id is not null %}
+                    <div class="bz-missing-footer">
+                      <button type="button" class="btn btn-sm btn-ghost-primary w-100" data-bazarr-auto data-kind="{{ item.kind }}" data-id="{{ item.id }}">{{ 'bazarr.auto.button'|trans }}</button>
+                    </div>
+                  {% endif %}
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+        {% endif %}
+      </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

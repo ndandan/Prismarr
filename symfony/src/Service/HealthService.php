@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\ServiceInstance;
+use App\Service\Media\BazarrClient;
 use App\Service\Media\DelugeClient;
 use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
@@ -90,6 +91,9 @@ class HealthService implements ResetInterface
         // Transmission — nullable + last for the same legacy-test-constructor
         // reason as the clients above.
         private readonly ?TransmissionClient $transmission = null,
+        // Bazarr (subtitle management) — nullable + last, same
+        // legacy-test-constructor reason as the clients above.
+        private readonly ?BazarrClient      $bazarr = null,
     ) {}
 
     /**
@@ -264,6 +268,7 @@ class HealthService implements ResetInterface
             'houndarr'    => $this->houndarr?->ping() ?? false,
             'unifi'       => $this->unifi?->ping() ?? false,
             'transmission' => $this->transmission?->ping() ?? false,
+            'bazarr'      => $this->bazarr?->ping() ?? false,
             default       => true,
         };
     }
@@ -280,7 +285,7 @@ class HealthService implements ResetInterface
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi', 'bazarr'];
 
     /** Brand colors for the health chips — single source for dashboard + topbar. */
     private const SERVICE_COLORS = [
@@ -298,6 +303,7 @@ class HealthService implements ResetInterface
         'unraid'      => '#f15a2c',
         'houndarr'    => '#c2703d',
         'unifi'       => '#006fff',
+        'bazarr'      => '#be4bdb',
     ];
 
     /**
@@ -324,7 +330,7 @@ class HealthService implements ResetInterface
             }
         }
 
-        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'transmission' => 'Transmission', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr'];
+        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'transmission' => 'Transmission', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr', 'bazarr' => 'Bazarr'];
         if ($includeUnraid) {
             $labels['unraid'] = 'Unraid';
             $labels['unifi']  = 'UniFi';
@@ -403,6 +409,10 @@ class HealthService implements ResetInterface
             // qBittorrent/Deluge (empty user/password is a legitimate setup).
             'transmission' =>
                 $this->config->has('transmission_url'),
+            // Bazarr needs both the URL and the API key (every /api call is
+            // X-API-KEY authenticated).
+            'bazarr' =>
+                $this->config->has('bazarr_url') && $this->config->has('bazarr_api_key'),
             default => true,
         };
     }
@@ -429,7 +439,7 @@ class HealthService implements ResetInterface
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi', 'bazarr'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -788,6 +798,17 @@ class HealthService implements ResetInterface
                     'headers'  => ['X-API-KEY: ' . $key, 'Accept: application/json'],
                     // UniFi OS consoles ship a self-signed cert by default.
                     'insecure' => $get('unifi_skip_tls_verify') === '1',
+                ];
+            }
+            case 'bazarr': {
+                $url = $get('bazarr_url');
+                $key = $get('bazarr_api_key');
+                if ($url === '' || $key === '') return null;
+                // Same read-only endpoint the client's ping() uses; a bad or
+                // revoked key answers 401 → diagnosed as `auth`.
+                return [
+                    'url'     => rtrim($url, '/') . '/api/system/status',
+                    'headers' => ['X-API-KEY: ' . $key, 'Accept: application/json'],
                 ];
             }
             case 'transmission': {

@@ -37,7 +37,7 @@ class TransmissionRegistrationTest extends TestCase
         // a distinct list from the groupings one above (different membership
         // and order), so this proves transmission is in THIS list specifically.
         self::assertStringContainsString(
-            "['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr']",
+            "['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'sabnzbd', 'nzbget', 'tautulli', 'bazarr', 'unraid', 'unifi', 'houndarr']",
             $tpl,
         );
         // 4. "Test connection" TEST_FIELDS map, ~line 1314

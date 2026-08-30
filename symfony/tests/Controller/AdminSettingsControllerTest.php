@@ -429,6 +429,19 @@ class AdminSettingsControllerTest extends TestCase
         $this->assertStringContainsString('"http":401', $response->getContent());
     }
 
+    public function testHealthInvalidateAcceptsBazarr(): void
+    {
+        $settings = $this->createMock(SettingRepository::class);
+        $config   = $this->createMock(ConfigService::class);
+        $health   = $this->createMock(HealthService::class);
+        $health->expects($this->once())->method('invalidate')->with('bazarr');
+
+        $response = $this->controller($settings, $config, $health)->healthInvalidate('bazarr');
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('"ok":true', $response->getContent());
+    }
+
     public function testTestEndpointRejectsUnknownService(): void
     {
         $settings = $this->createMock(SettingRepository::class);
@@ -469,6 +482,40 @@ class AdminSettingsControllerTest extends TestCase
         ]);
 
         $this->controller($settings, $config, $health)->test('radarr', $request);
+    }
+
+    /**
+     * Task 8 — Bazarr must be wired into the Test-endpoint allow-list just
+     * like every other flat-config service. Without the 'bazarr' arm in the
+     * controller's match($service), typed url/api_key overrides would be
+     * silently dropped and the Test button would always probe the saved
+     * (possibly stale) DB value instead of what the admin just typed.
+     */
+    public function testTestEndpointForwardsBazarrOverridesToHealth(): void
+    {
+        $settings = $this->createMock(SettingRepository::class);
+        $config   = $this->createMock(ConfigService::class);
+        $health   = $this->createMock(HealthService::class);
+        $health->expects($this->once())
+            ->method('diagnose')
+            ->with('bazarr', $this->callback(function (?array $overrides) {
+                return is_array($overrides)
+                    && ($overrides['bazarr_url'] ?? null) === 'http://typed-bazarr:6767'
+                    && ($overrides['bazarr_api_key'] ?? null) === 'typed-key'
+                    && !array_key_exists('radarr_url', $overrides);
+            }))
+            ->willReturn(['ok' => true, 'category' => 'ok', 'http' => 200]);
+
+        $request = Request::create('/admin/settings/test/bazarr', 'POST', [
+            'bazarr_url'     => 'http://typed-bazarr:6767',
+            'bazarr_api_key' => 'typed-key',
+            'radarr_url'     => 'http://attacker:1234', // ignored
+        ]);
+
+        $response = $this->controller($settings, $config, $health)->test('bazarr', $request);
+
+        $this->assertSame(200, $response->getStatusCode());
+        $this->assertStringContainsString('"service":"Bazarr"', $response->getContent());
     }
 
     /**

@@ -70,6 +70,20 @@ class ConfigExtensionTest extends TestCase
         $this->assertTrue($ext->isServiceConfigured('gluetun'));
     }
 
+    public function testBazarrConfiguredByUrlNotApiKey(): void
+    {
+        // Bazarr, like qBittorrent/Gluetun, uses URL as the presence
+        // indicator for SERVICE_KEYS resolution (Task 14).
+        $ext = $this->extension(['bazarr_url']);
+        $this->assertTrue($ext->isServiceConfigured('bazarr'));
+    }
+
+    public function testBazarrNotConfiguredWhenUrlMissing(): void
+    {
+        $ext = $this->extension([]);
+        $this->assertFalse($ext->isServiceConfigured('bazarr'));
+    }
+
     public function testUnknownServiceReturnsFalse(): void
     {
         $ext = $this->extension(['radarr_api_key', 'sonarr_api_key']);
@@ -169,6 +183,18 @@ class ConfigExtensionTest extends TestCase
         // Configured but admin hid it from the sidebar.
         $ext = $this->extensionWithHideFlag(['radarr_api_key'], ['radarr']);
         $this->assertFalse($ext->isServiceVisibleInSidebar('radarr'));
+    }
+
+    public function testBazarrVisibleInSidebarWhenConfiguredAndNotHidden(): void
+    {
+        $ext = $this->extensionWithHideFlag(['bazarr_url'], []);
+        $this->assertTrue($ext->isServiceVisibleInSidebar('bazarr'));
+    }
+
+    public function testBazarrNotVisibleInSidebarWhenExplicitlyHidden(): void
+    {
+        $ext = $this->extensionWithHideFlag(['bazarr_url'], ['bazarr']);
+        $this->assertFalse($ext->isServiceVisibleInSidebar('bazarr'));
     }
 
     public function testSidebarFunctionRegistered(): void

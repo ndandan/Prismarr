@@ -1,0 +1,33 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}{{ 'bazarr.title'|trans }}{% endblock %}
+
+{% block stylesheets %}
+{{ parent() }}
+{% endblock %}
+
+{% block body %}
+<div class="page-header d-print-none">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">{{ 'bazarr.title'|trans }}</h2>
+      <div class="text-secondary">{{ 'bazarr.subtitle'|trans }}</div>
+    </div>
+    <div class="col-auto ms-auto">
+      {% include 'bazarr/_nav.html.twig' %}
+    </div>
+  </div>
+</div>
+
+<div class="page-body">
+  <div class="container-xl">
+
+    {% if error %}
+      {% include 'error/_service_banner.html.twig' with { service: 'Bazarr', wizard_route: 'admin_settings_index', configured_url: service_url, reason: 'unreachable' } %}
+    {% else %}
+      {% include 'bazarr/_grid.html.twig' with { kind: 'movie', cards: cards, languages: languages } only %}
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

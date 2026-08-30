@@ -1,0 +1,21 @@
+{#
+  Bazarr navigation bar — flat button group (only 4 sub-pages, no dropdowns
+  needed). Same active-state pattern as media/_radarr_nav.html.twig, simplified
+  to plain links per jellyseerr/_nav.html.twig's first two buttons.
+#}
+{% set _route = app.request.attributes.get('_route') %}
+{% set _tabs = [
+  { route: 'app_bazarr_index',   label: 'bazarr.nav.wanted'  },
+  { route: 'app_bazarr_movies',  label: 'bazarr.nav.movies'  },
+  { route: 'app_bazarr_series',  label: 'bazarr.nav.series'  },
+  { route: 'app_bazarr_history', label: 'bazarr.nav.history' },
+] %}
+
+<div class="d-flex gap-2 align-items-center flex-wrap">
+  {% for tab in _tabs %}
+    <a href="{{ path(tab.route) }}"
+       class="btn btn-sm {{ _route == tab.route or (tab.route == 'app_bazarr_series' and _route == 'app_bazarr_series_detail') ? 'btn-primary' : 'btn-ghost-primary' }}">
+      {{ tab.label|trans }}
+    </a>
+  {% endfor %}
+</div>

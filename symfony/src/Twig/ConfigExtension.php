@@ -32,6 +32,7 @@ class ConfigExtension extends AbstractExtension
         'gluetun'     => 'gluetun_url',
         'tautulli'    => 'tautulli_url',
         'unifi'       => 'unifi_url',
+        'bazarr'      => 'bazarr_url',
     ];
 
     /** Services backed by service_instance instead of a flat setting. */
