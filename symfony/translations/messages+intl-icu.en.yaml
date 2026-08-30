@@ -5707,6 +5707,7 @@ bazarr:
   detail:
     subtitles: Subtitles
     search: Search
+    episode_missing: Missing subtitles
   auto:
     started: Automatic search started
     button: Auto search

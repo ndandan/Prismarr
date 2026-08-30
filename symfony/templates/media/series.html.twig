@@ -1339,7 +1339,11 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     fm_release_type_single: {{ 'media.series.filemanager.release_type_single'|trans|json_encode|raw }},
     fm_release_type_multi: {{ 'media.series.filemanager.release_type_multi'|trans|json_encode|raw }},
     fm_release_type_pack: {{ 'media.series.filemanager.release_type_pack'|trans|json_encode|raw }},
-    fm_indexer_flag_none: {{ 'media.series.filemanager.indexer_flag_none'|trans|json_encode|raw }}
+    fm_indexer_flag_none: {{ 'media.series.filemanager.indexer_flag_none'|trans|json_encode|raw }},
+    // Bazarr subtitles (visual & detail pass, Task 5)
+    bazarr_episode_missing_title: {{ 'bazarr.detail.episode_missing'|trans|json_encode|raw }},
+    bazarr_subtitles_complete_title: {{ 'bazarr.badge.complete'|trans|json_encode|raw }},
+    bazarr_search_title: {{ 'bazarr.detail.search'|trans|json_encode|raw }}
   };
   function tpl(s, map) {
     if (!s) return '';
@@ -2318,6 +2322,11 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
   var currentMonitored = false;
   var searchInProgress = false;
   var modalEl          = document.getElementById('modal-serie');
+  // Bazarr subtitles (visual & detail pass, Task 5): cached keyed map from
+  // GET /bazarr/api/subtitles/series/{id} (episodeId -> {present, missing}),
+  // plus the series id it belongs to. See applyEpisodeSubtitleMarkers().
+  var episodeSubtitleData   = null;
+  var episodeSubtitleSeries = null;
   var SVG_SEARCH_SM = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>';
   var SVG_SPIN_SM = '<span class="spinner-border spinner-border-sm" style="width:12px;height:12px;"></span>';
   var SVG_OK_SM = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>';
@@ -2394,9 +2403,95 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     // Monitor button
     refreshSerieMonitorBtn();
 
+    // Bazarr subtitles (visual & detail pass, Task 5): per-episode has-sub/
+    // missing markers + a per-episode Search button, admin-only. Reset FIRST
+    // so a previous series' cached data/markers never leak into this one,
+    // then fetch in parallel with loadEpisodes() below — whichever finishes
+    // last is the one that actually paints the markers (see
+    // applyEpisodeSubtitleMarkers() and loadEpisodeSubtitles()).
+    resetEpisodeSubtitleMarkers();
+    loadEpisodeSubtitles(currentId);
+
     // Load episodes
     loadEpisodes();
   });
+
+  /* ── Bazarr subtitles (visual & detail pass, Task 5) ──
+     Admin-only per-episode has-sub/missing markers + a per-episode Search
+     button, mirroring Task 4's per-movie chips (films.html.twig). The join
+     key is the Sonarr episode id (ep.id, stamped onto each row as
+     data-episode-id above).
+     GET /bazarr/api/subtitles/series/{id} always answers 200 JSON and fails
+     closed: down/gated/untracked all come back as {ok:true, tracked:false,
+     episodes:{}} (or an empty [] — PHP encodes an empty map as a JSON array),
+     so a non-ok/non-200/network-error/untracked response just leaves every
+     row unmarked. `episodes` is a KEYED MAP (not a list) — even in its empty
+     [] encoding a keyed lookup (map[epId]) works correctly, so it's read
+     purely as a map here and never iterated as an array.
+     Episode rows are rebuilt from scratch by loadEpisodes() — not just on
+     modal open, but again on season/episode monitor toggle, file delete,
+     rename and bulk ops, all of which call it a second (or third...) time
+     while the modal stays open for the same series — which would wipe out
+     any markers already painted onto the old rows. So the fetched map is
+     cached (episodeSubtitleData/episodeSubtitleSeries) instead of being
+     applied once, and applyEpisodeSubtitleMarkers() re-runs it against
+     whatever rows currently exist: once from this fetch's own .then() (in
+     case loadEpisodes() already finished rendering), and once more at the
+     end of every loadEpisodes() render (in case the fetch already resolved
+     first, or resolved while a later reload was in flight). Each row is
+     marked with data-subtitle-applied after its marker is injected so a
+     row already annotated is never double-stamped when both call paths land
+     for the same render.
+     The series id being fetched is captured up front and compared against
+     currentId when the response lands, and again against
+     episodeSubtitleSeries before every apply, so a slow response (or a
+     lingering cached map) for a series the user has since closed or
+     navigated away from is dropped rather than rendered. #}
+  function resetEpisodeSubtitleMarkers() {
+    episodeSubtitleData   = null;
+    episodeSubtitleSeries = null;
+  }
+
+  function applyEpisodeSubtitleMarkers() {
+    if (!episodeSubtitleData || episodeSubtitleSeries !== currentId) return;
+    var epContainer = document.getElementById('modal-serie-episodes');
+    if (!epContainer) return;
+    epContainer.querySelectorAll('[data-episode-id]').forEach(function (row) {
+      if (row.dataset.subtitleApplied) return;
+      var epId = row.getAttribute('data-episode-id');
+      if (!epId) return;
+      var entry = episodeSubtitleData[epId];
+      if (!entry) return; // absent from the map: no marker, silently
+      row.dataset.subtitleApplied = '1';
+      var missing = !!(entry.missing && entry.missing.length);
+      var marker = missing
+        ? '<span class="badge poster-chip is-danger" style="flex-shrink:0;" title="' + window.escHtml(SERIES_I18N.bazarr_episode_missing_title) + '">' + entry.missing.length + '</span>'
+        : '<span class="badge poster-chip is-success" style="flex-shrink:0;" title="' + window.escHtml(SERIES_I18N.bazarr_subtitles_complete_title) + '">&#10003;</span>';
+      var searchBtn = '<button type="button" class="btn btn-ghost-secondary btn-icon btn-sm" data-bazarr-search data-kind="episode" data-id="' + window.escHtml(epId) + '" title="' + window.escHtml(SERIES_I18N.bazarr_search_title) + '" style="flex-shrink:0;width:20px;height:20px;">' + SVG_SEARCH_SM + '</button>';
+      row.insertAdjacentHTML('beforeend', marker + searchBtn);
+    });
+  }
+
+  function loadEpisodeSubtitles(seriesId) {
+    if (!window.PRISMARR_IS_ADMIN || !seriesId) return;
+    fetch('/bazarr/api/subtitles/series/' + encodeURIComponent(seriesId), {
+      headers: { 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        var ct = r.headers.get('content-type') || '';
+        if (!r.ok || ct.indexOf('application/json') === -1) throw new Error('bad-response');
+        return r.json();
+      })
+      .then(function (data) {
+        if (seriesId !== currentId) return; // stale: the modal moved on to another series
+        if (!data || !data.ok || !data.tracked) return;
+        episodeSubtitleData   = data.episodes || {};
+        episodeSubtitleSeries = seriesId;
+        applyEpisodeSubtitleMarkers();
+      })
+      .catch(function () { /* fail closed: leave rows unmarked */ });
+  }
 
   function loadEpisodes() {
     var epContainer = document.getElementById('modal-serie-episodes');
@@ -2464,7 +2559,10 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
           var epMon = ep.monitored || false;
           var dotColor = hasFile ? '#22c55e' : (epMon ? '#f59e0b' : '#6b7280');
           var dotGlow = hasFile ? 'box-shadow:0 0 4px #22c55e;' : (epMon ? 'box-shadow:0 0 4px #f59e0b;' : '');
-          html += '<div class="d-flex align-items-center gap-2 px-3" style="padding:.4rem 0;border-top:1px solid rgba(255,255,255,.05);font-size:.82rem;">';
+          // data-episode-id (Bazarr visual & detail pass, Task 5): the Sonarr
+          // episode id, used as the join key for the per-episode subtitle
+          // marker applied later by applyEpisodeSubtitleMarkers().
+          html += '<div class="d-flex align-items-center gap-2 px-3" data-episode-id="' + (ep.id || '') + '" style="padding:.4rem 0;border-top:1px solid rgba(255,255,255,.05);font-size:.82rem;">';
           // Episode monitor toggle
           var epMonStyle = !currentMonitored ? 'flex-shrink:0;padding:0;width:20px;height:20px;opacity:.3;pointer-events:none;' : 'flex-shrink:0;padding:0;width:20px;height:20px;';
           html += '<button class="btn btn-ghost-secondary btn-icon btn-sm btn-ep-monitor" data-ep-id="' + (ep.id || '') + '" data-monitored="' + (epMon ? '1' : '0') + '" title="' + esc(epMon ? SERIES_I18N.d_unmonitor : SERIES_I18N.d_monitor) + '" style="' + epMonStyle + '"' + (!currentMonitored ? ' disabled' : '') + '>' + (epMon ? SVG_MONITOR_ON : SVG_MONITOR_OFF) + '</button>';
@@ -2523,6 +2621,15 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
       });
 
       epContainer.innerHTML = html || '<div class="text-muted text-center py-4">' + esc(SERIES_I18N.d_no_episodes) + '</div>';
+
+      // Bazarr subtitles (visual & detail pass, Task 5): rows are rebuilt from
+      // scratch every time loadEpisodes() runs (initial open, season/episode
+      // monitor toggle, file delete/rename, bulk ops), which wipes out any
+      // markers applied on a previous render — re-apply from the cached map
+      // (if the subtitle fetch already resolved) so they survive every
+      // refresh. A no-op until loadEpisodeSubtitles() has data for this
+      // series.
+      applyEpisodeSubtitleMarkers();
 
       // Bind accordion
       epContainer.querySelectorAll('.season-toggle').forEach(function(h) {
