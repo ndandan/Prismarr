@@ -5701,6 +5701,9 @@ bazarr:
   chips:
     hi_title: Sous-titres pour malentendants
     forced_title: Sous-titres forcés
+  detail:
+    subtitles: Sous-titres
+    search: Rechercher
   auto:
     started: Recherche automatique lancée
     button: Recherche automatique

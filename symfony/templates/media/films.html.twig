@@ -980,6 +980,27 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
             {# Extra files #}
             <div id="film-extras" class="text-muted small mb-3 px-1" style="display:none"></div>
 
+            {# Bazarr subtitles (visual & detail pass, Task 4): languages present/
+               missing for this movie. Hidden by default and reset to hidden at
+               the START of every modal open (see the show.bs.modal handler) so
+               a previous movie's chips never flash before the fetch resolves.
+               Only unhidden client-side when GET /bazarr/api/subtitles/movie/{id}
+               answers {ok:true, tracked:true} with at least one present/missing
+               language — admin-only, mirroring the badge's own gating. #}
+            <div id="film-subtitles" class="card mb-2 d-none">
+              <div class="card-header py-2">
+                <h3 class="card-title mb-0">{{ 'bazarr.detail.subtitles'|trans }}</h3>
+                <div class="card-actions">
+                  <button type="button" id="film-subtitles-search" class="btn btn-outline-secondary btn-sm" data-bazarr-search data-kind="movie">
+                    {{ 'bazarr.detail.search'|trans }}
+                  </button>
+                </div>
+              </div>
+              <div class="card-body py-2">
+                <div id="film-subtitles-chips" class="d-flex flex-wrap gap-1"></div>
+              </div>
+            </div>
+
             {# Rename info (only if hasFile) #}
             <div id="film-rename-info" class="card mb-2" style="display:none">
               <div class="card-header">
@@ -1418,7 +1439,9 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     b_correctly_named_tpl: {{ 'media.films.bulk.films_correctly_named'|trans({count: '__COUNT__'})|json_encode|raw }},
     shelf_downloaded: {{ 'media.films.status.downloaded'|trans|json_encode|raw }},
     shelf_missing: {{ 'media.films.status.missing'|trans|json_encode|raw }},
-    shelf_unmonitored: {{ 'media.films.status.unmonitored'|trans|json_encode|raw }}
+    shelf_unmonitored: {{ 'media.films.status.unmonitored'|trans|json_encode|raw }},
+    subtitle_hi_title: {{ 'bazarr.chips.hi_title'|trans|json_encode|raw }},
+    subtitle_forced_title: {{ 'bazarr.chips.forced_title'|trans|json_encode|raw }}
   };
   function tpl(s, map) {
     if (!s) return '';
@@ -1813,6 +1836,11 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     hideSearchFeedback();
     hideRenameFeedback();
     document.getElementById('releases-area').style.display = 'none';
+
+    // Bazarr subtitles: hidden by default so a previous movie's chips never
+    // flash before this movie's fetch resolves (or fails/stays untracked).
+    resetFilmSubtitles();
+    loadFilmSubtitles(currentId);
   });
 
   modalEl.addEventListener('hidden.bs.modal', function () {
@@ -1820,6 +1848,55 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     currentMovie = null;
     currentId    = null;
   });
+
+  /* ── Bazarr subtitles (visual & detail pass, Task 4) ──
+     Admin-only client fetch, mirroring the badge's own gating. The endpoint
+     (GET /bazarr/api/subtitles/movie/{radarrId}) is always 200 JSON and fails
+     closed — down/gated/untracked all answer {ok:true, tracked:false,
+     present:[], missing:[]} — so any non-ok/non-200/network-error/untracked/
+     empty response just leaves the section hidden; nothing here needs to
+     branch on failure explicitly beyond that early return.
+     The modal is reused across movies, so the id being fetched is captured
+     up front (movieId) and compared against currentId when the response
+     lands — a slow response for a movie the user has since navigated away
+     from (or closed the modal on) is dropped rather than rendered. #}
+  function resetFilmSubtitles() {
+    document.getElementById('film-subtitles').classList.add('d-none');
+    document.getElementById('film-subtitles-chips').innerHTML = '';
+    document.getElementById('film-subtitles-search').removeAttribute('data-id');
+  }
+
+  function renderSubtitleChip(c, cls) {
+    var hi = c.hi ? '<sup title="' + window.escHtml(FILM_I18N.subtitle_hi_title) + '">HI</sup>' : '';
+    var forced = c.forced ? '<sup title="' + window.escHtml(FILM_I18N.subtitle_forced_title) + '">F</sup>' : '';
+    return '<span class="badge poster-chip ' + cls + '">' + window.escHtml(c.lang) + hi + forced + '</span>';
+  }
+
+  function loadFilmSubtitles(movieId) {
+    if (!window.PRISMARR_IS_ADMIN || !movieId) return;
+    fetch('/bazarr/api/subtitles/movie/' + encodeURIComponent(movieId), {
+      headers: { 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        var ct = r.headers.get('content-type') || '';
+        if (!r.ok || ct.indexOf('application/json') === -1) throw new Error('bad-response');
+        return r.json();
+      })
+      .then(function (data) {
+        if (movieId !== currentId) return; // stale: the modal moved on to another movie
+        if (!data || !data.ok || !data.tracked) return;
+        var present = data.present || [];
+        var missing = data.missing || [];
+        if (!present.length && !missing.length) return;
+        var html = present.map(function (c) { return renderSubtitleChip(c, 'is-success'); }).join('')
+          + missing.map(function (c) { return renderSubtitleChip(c, 'is-danger'); }).join('');
+        document.getElementById('film-subtitles-chips').innerHTML = html;
+        document.getElementById('film-subtitles-search').setAttribute('data-id', String(movieId));
+        document.getElementById('film-subtitles').classList.remove('d-none');
+      })
+      .catch(function () { /* fail closed: leave the section hidden */ });
+  }
 
   /* ── Header ── */
   function populateHeader(m) {

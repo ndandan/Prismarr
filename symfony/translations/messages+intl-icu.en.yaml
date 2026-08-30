@@ -5704,6 +5704,9 @@ bazarr:
   chips:
     hi_title: Hearing-impaired subtitles
     forced_title: Forced subtitles
+  detail:
+    subtitles: Subtitles
+    search: Search
   auto:
     started: Automatic search started
     button: Auto search
