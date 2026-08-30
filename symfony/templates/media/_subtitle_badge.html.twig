@@ -8,6 +8,10 @@
       kind: 'movie'|'series' — dispatches to BazarrSubtitleIndex::movieStatus/seriesStatus.
       id:   the Radarr movie id or Sonarr series id.
 
+    `st.count` counts different things per kind — missing *subtitles* for a
+    movie, missing *episodes* for a series — so the tooltip picks the matching
+    ICU message (bazarr.badge.missing_count vs bazarr.badge.missing_episodes).
+
     Renders nothing when Bazarr doesn't track the item (no profile assigned,
     or a series with zero episode files) — that's the 'hidden' state.
 #}
@@ -20,13 +24,20 @@
         {{ 'bazarr.badge.missing'|trans }} {{ st.count }}
       </button>
     {% else %}
+      {# Series subtitle search is per-episode, so the badge drills down to the
+         Bazarr tab instead of opening the search modal. data-bazarr-nav hands
+         the navigation to the capture-phase delegate in
+         bazarr/_search_modal.html.twig: the badge is rendered inside poster
+         cards that are themselves modal togglers, and only capture-phase
+         containment can stop the card from opening at the same time. #}
       <a class="badge bg-warning-lt subtitle-badge" href="{{ path('app_bazarr_series_detail', {seriesId: id}) }}"
-         title="{{ 'bazarr.badge.missing_count'|trans({count: st.count}) }}">
+         data-bazarr-nav
+         title="{{ 'bazarr.badge.missing_episodes'|trans({count: st.count}) }}">
         {{ 'bazarr.badge.missing'|trans }} {{ st.count }}
       </a>
     {% endif %}
   {% elseif st.state == 'missing' %}
-    <span class="badge bg-warning-lt subtitle-badge" title="{{ 'bazarr.badge.missing_count'|trans({count: st.count}) }}">{{ 'bazarr.badge.missing'|trans }} {{ st.count }}</span>
+    <span class="badge bg-warning-lt subtitle-badge" title="{{ kind == 'movie' ? 'bazarr.badge.missing_count'|trans({count: st.count}) : 'bazarr.badge.missing_episodes'|trans({count: st.count}) }}">{{ 'bazarr.badge.missing'|trans }} {{ st.count }}</span>
   {% else %}
     <span class="badge bg-success-lt subtitle-badge" title="{{ 'bazarr.badge.complete'|trans }}">{{ 'bazarr.badge.subs'|trans }}</span>
   {% endif %}

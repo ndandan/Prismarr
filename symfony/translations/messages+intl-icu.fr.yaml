@@ -5693,8 +5693,11 @@ bazarr:
   badge:
     missing: Manquant
     missing_count: '{count, plural, one {# sous-titre manquant} other {# sous-titres manquants}}'
+    missing_episodes: '{count, plural, one {# épisode sans sous-titres} other {# épisodes sans sous-titres}}'
     complete: Sous-titres complets
     subs: Sous-titres
+  auto:
+    started: Recherche automatique lancée
   modal:
     title: Recherche de sous-titres
     download: Télécharger

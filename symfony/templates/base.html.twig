@@ -1844,16 +1844,20 @@
         // on in-library results (attached server-side in MediaController::
         // globalSearch(), omitted for the 'hidden' state and for online/
         // TMDb-only results), so its mere presence is the render gate.
-        // 'missing' is clickable (opens the Bazarr search modal) but only
-        // for admins — the modal itself, and its `[data-bazarr-search]`
+        // A 'missing' MOVIE badge is clickable (opens the Bazarr search modal)
+        // but only for admins — the modal itself, and its `[data-bazarr-search]`
         // delegated listener, don't even exist in the DOM for non-admins.
+        // Series stay inert here on purpose: series subtitle search is
+        // per-episode, so there is nothing this modal could search for a whole
+        // show (the server-side partial makes the same call — its series branch
+        // drills down to the Bazarr tab instead). The badge still renders, it
+        // just reports the count.
         var subtitleBadge = '';
         if (item.subtitle && item.subtitle.state === 'missing') {
-          var subKind = item.type === 'film' ? 'movie' : 'series';
           var subCount = window.escHtml(String(item.subtitle.count));
           var subTitle = window.escHtml((window._i18n && window._i18n['bazarr.badge.missing']) || 'Missing');
-          var subClickAttrs = window.PRISMARR_IS_ADMIN
-            ? ' data-bazarr-search data-kind="' + subKind + '" data-id="' + window.escHtml(String(item.id)) + '" role="button"'
+          var subClickAttrs = (window.PRISMARR_IS_ADMIN && item.type === 'film')
+            ? ' data-bazarr-search data-kind="movie" data-id="' + window.escHtml(String(item.id)) + '" role="button"'
             : '';
           subtitleBadge = '<span class="badge bg-warning-lt ms-1 flex-shrink-0" style="font-size:.7rem;" title="' + subTitle + '"' + subClickAttrs + '>' + subCount + '</span>';
         } else if (item.subtitle && item.subtitle.state === 'complete') {
@@ -2106,13 +2110,9 @@
       // then fail its `.contains(e.target)` check (the orphan node is no
       // longer in the DOM) and wrongly close the dropdown.
       resultsDiv.addEventListener('click', function (e) {
-        // Task 13 — let a click on the subtitle badge bubble past the
-        // "open this result" handling below (which stops propagation) so
-        // it reaches the document-level `[data-bazarr-search]` listener
-        // registered by bazarr/_search_modal.html.twig (admins only —
-        // that partial isn't even in the DOM for non-admins, so this is a
-        // no-op check for everyone else).
-        if (e.target.closest('[data-bazarr-search]')) { return; }
+        // Task 13 — no `[data-bazarr-search]` carve-out needed here: that
+        // listener (bazarr/_search_modal.html.twig) runs in the capture phase
+        // and stops the event before it ever reaches this one.
         var pill = e.target.closest('.prismarr-search-pill');
         if (pill) {
           e.stopPropagation();

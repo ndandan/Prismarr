@@ -58,10 +58,14 @@
 }
 /* Bazarr subtitle-status pill. Font-size floor is !important because it must
    hold at 11px (PRODUCT.md) in every context it's included into, including
-   the .h-badges row whose sibling badges are deliberately smaller. */
+   the .extended-info row whose sibling badges are deliberately smaller. */
 .media-card .subtitle-badge { font-size: .6875rem !important; }
+/* z-index sits above .hover-info (z-index: 5) so the badge stays visible AND
+   clickable while the hover overlay is up — the overlay is pointer-events:none
+   anyway, and the capture-phase delegate in bazarr/_search_modal.html.twig
+   stops the card's own modal toggle from firing underneath the badge. */
 .media-card > .subtitle-badge {
-    position: absolute; top: 1.7rem; left: .4rem;
+    position: absolute; top: 1.7rem; left: .4rem; z-index: 6;
     padding: .05rem .35rem; border-radius: .25rem;
 }
 /* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
@@ -764,7 +768,9 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         {% if movie.hasFile %}<span class="badge bg-success-lt">{{ 'media.films.status.downloaded'|trans }}</span>
         {% elseif movie.monitored %}<span class="badge bg-warning-lt">{{ 'media.films.status.missing'|trans }}</span>
         {% else %}<span class="badge bg-secondary-lt">{{ 'media.films.status.unmonitored'|trans }}</span>{% endif %}
-        {{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: movie.id }) }}
+        {# No subtitle badge here: .hover-info is pointer-events:none, so a copy
+           inside it could never be clicked. The direct child of .media-card
+           (above) carries z-index 6 and stays usable during hover instead. #}
       </div>
       <div class="h-title">{{ movie.title }}</div>
       <div class="h-year">{{ movie.year }}{% if movie.runtime %} · {{ movie.runtime }} min{% endif %}{% if movie.sizeGb %} · {{ movie.sizeGb }} {{ 'media.films.stats.gb_suffix'|trans }}{% endif %}</div>

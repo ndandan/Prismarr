@@ -95,10 +95,24 @@
     border-radius: .25rem; background: rgba(0,0,0,.65); color: #fff;
     backdrop-filter: blur(4px);
 }
-/* Bazarr subtitle-status pill (Task 10). Flex child of .top-indicators, so
-   no positioning of its own — just the 11px PRODUCT.md floor, forced past
-   any denser sibling badge sizing in whichever row it lands in. */
+/* Bazarr subtitle-status pill (Task 10). The 11px PRODUCT.md floor is forced
+   past any denser sibling badge sizing in whichever row it lands in. */
 .media-card .subtitle-badge { font-size: .6875rem !important; padding: .05rem .3rem; flex-shrink: 0; }
+/* On the poster card it is a direct child of .media-card, NOT a member of
+   .top-indicators: that strip fades to opacity 0 on hover while staying
+   hit-testable (invisible exactly when clickable), and the grid's live-refresh
+   rebuilds its innerHTML, which would drop the badge. Parked top-left just
+   *under* the strip — the strip's own occupants (anime emoji, ended check,
+   status dot) all live inside it, and the bottom of the card belongs to
+   .card-overlay. 2rem clears both the tallest strip (.4rem padding + the 16px
+   ended-check = 1.8rem) and the "New" ribbon (Tabler min-height 2rem starting
+   at -.25rem = 1.75rem); it sits lower than the Films grid's 1.7rem precisely
+   because Films has no top strip to clear. z-index clears .hover-info (5) so
+   the badge survives hover too. */
+.media-card > .subtitle-badge {
+    position: absolute; top: 2rem; left: .4rem; z-index: 6;
+    border-radius: .25rem;
+}
 .ep-bar { height: 4px; border-radius: 2px; margin-top: .3rem; background: rgba(255,255,255,.25); overflow: hidden; }
 .ep-bar-fill { height: 100%; border-radius: 2px; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
@@ -132,6 +146,7 @@
 .media-grid.view-table .media-card .no-poster { width: 35px; height: 52px; aspect-ratio: auto; font-size: .5rem; flex-shrink: 0; }
 .media-grid.view-table .media-card .top-indicators,
 .media-grid.view-table .media-card .card-overlay,
+.media-grid.view-table .media-card > .subtitle-badge,
 .media-grid.view-table .media-card .select-cb { display: none !important; }
 .media-card .extended-info { display: none; }
 #series-table-view { display: none; }
@@ -150,6 +165,7 @@
 .media-grid.view-extended .media-card .no-poster { width: 80px; height: 120px; aspect-ratio: auto; font-size: .55rem; flex-shrink: 0; }
 .media-grid.view-extended .media-card .top-indicators,
 .media-grid.view-extended .media-card .card-overlay,
+.media-grid.view-extended .media-card > .subtitle-badge,
 .media-grid.view-extended .media-card .hover-info { display: none !important; }
 .media-grid.view-extended .media-card .extended-info {
     display: flex; flex-direction: column; justify-content: center; padding: .5rem .75rem; flex: 1; min-width: 0;
@@ -191,6 +207,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
 }
 .media-grid.view-wall .media-card .top-indicators,
 .media-grid.view-wall .media-card .card-overlay,
+.media-grid.view-wall .media-card > .subtitle-badge,
 .media-grid.view-wall .media-card .extended-info { display: none !important; }
 .media-grid.view-wall .media-card .hover-info {
     border-radius: 0;
@@ -602,12 +619,16 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     {# Selection checkbox #}
     <div class="select-cb"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg></div>
 
+    {# Bazarr subtitle-status pill — a direct child of .media-card (mirroring
+       the Films grid), NOT part of .top-indicators: that strip fades out on
+       hover and is rebuilt wholesale by the live-refresh below. #}
+    {{ include('media/_subtitle_badge.html.twig', { kind: 'series', id: s.id }) }}
+
     {# Top banner: type badge on the left, checkbox + status dot on the right #}
     <div class="top-indicators">
       {% if s.seriesType == 'anime' %}
         <span style="font-size:.6rem;font-weight:700;margin-right:auto;">{{ 'media.series.status.anime_emoji'|trans }}</span>
       {% endif %}
-      {{ include('media/_subtitle_badge.html.twig', { kind: 'series', id: s.id }) }}
       {% if s.status == 'ended' %}
         <svg class="ended-check" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" title="{{ 'media.series.status.series_ended'|trans }}"><polyline points="20 6 9 17 4 12"/></svg>
       {% endif %}
