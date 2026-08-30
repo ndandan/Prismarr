@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Service\ConfigService;
 use App\Service\Media\BazarrClient;
+use App\Service\Media\BazarrSubtitleIndex;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -14,10 +15,12 @@ use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 /**
- * Admin-only Bazarr subtitle-management section. This task ships the shell +
- * the Wanted tab; Movies/Series/History are added in Task 6 under the same
- * route prefix so ServiceRouteGuardSubscriber's `app_bazarr_` rule covers
- * them too.
+ * Admin-only Bazarr subtitle-management section: the Wanted shell plus the
+ * Movies/Series/History tabs, all under one route prefix so
+ * ServiceRouteGuardSubscriber's `app_bazarr_` rule covers every page. The
+ * `app_bazarr_api_*` JSON routes are carved out of that rule
+ * (`exclude_prefix`) — background fetches need the JSON error shape below,
+ * not a 302 to HTML.
  *
  * Fails closed like every other media-client controller: an unreachable or
  * unconfigured Bazarr renders the shell with the error banner instead of a
@@ -33,6 +36,7 @@ class BazarrController extends AbstractController
         private readonly BazarrClient $bazarr,
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
+        private readonly BazarrSubtitleIndex $bazarrIndex,
     ) {}
 
     #[Route('', name: 'index')]
@@ -212,11 +216,18 @@ class BazarrController extends AbstractController
     /**
      * Download a specific subtitle result for a movie. No CSRF token —
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
+     *
+     * Drops the subtitle-status cache on success: the badge this movie renders
+     * everywhere else is derived from Bazarr's missing-subtitle counts, which
+     * this call just changed (spec §7.4).
      */
     #[Route('/api/download/movie', name: 'api_download_movie', methods: ['POST'])]
     public function apiDownloadMovie(Request $request): JsonResponse
     {
         $ok = $this->bazarr->downloadMovie($request->request->all());
+        if ($ok) {
+            $this->bazarrIndex->invalidate();
+        }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
     }
@@ -229,6 +240,9 @@ class BazarrController extends AbstractController
     public function apiDownloadEpisode(Request $request): JsonResponse
     {
         $ok = $this->bazarr->downloadEpisode($request->request->all());
+        if ($ok) {
+            $this->bazarrIndex->invalidate();
+        }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
     }
@@ -240,6 +254,9 @@ class BazarrController extends AbstractController
     public function apiAutoMovie(int $radarrId): JsonResponse
     {
         $ok = $this->bazarr->searchMissingMovie($radarrId);
+        if ($ok) {
+            $this->bazarrIndex->invalidate();
+        }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
     }
@@ -251,6 +268,9 @@ class BazarrController extends AbstractController
     public function apiAutoSeries(int $seriesId): JsonResponse
     {
         $ok = $this->bazarr->searchMissingSeries($seriesId);
+        if ($ok) {
+            $this->bazarrIndex->invalidate();
+        }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
     }

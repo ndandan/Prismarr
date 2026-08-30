@@ -36,7 +36,7 @@ class SubtitleBadgeExtension extends AbstractExtension
         return match ($kind) {
             'movie'  => $this->index->movieStatus($id),
             'series' => $this->index->seriesStatus($id),
-            default  => ['state' => 'hidden', 'count' => 0, 'hasProfile' => false],
+            default  => ['state' => 'hidden', 'count' => 0],
         };
     }
 }

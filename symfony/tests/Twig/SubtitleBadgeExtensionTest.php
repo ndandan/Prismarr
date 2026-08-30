@@ -13,8 +13,8 @@ class SubtitleBadgeExtensionTest extends TestCase
     public function testStatusDispatchesToIndexByKind(): void
     {
         $index = $this->createMock(BazarrSubtitleIndex::class);
-        $index->method('movieStatus')->willReturn(['state' => 'missing', 'count' => 2, 'hasProfile' => true]);
-        $index->method('seriesStatus')->willReturn(['state' => 'complete', 'count' => 0, 'hasProfile' => true]);
+        $index->method('movieStatus')->willReturn(['state' => 'missing', 'count' => 2]);
+        $index->method('seriesStatus')->willReturn(['state' => 'complete', 'count' => 0]);
         $ext = new SubtitleBadgeExtension($index);
         $this->assertSame('missing', $ext->status('movie', 1)['state']);
         $this->assertSame('complete', $ext->status('series', 5)['state']);

@@ -70,7 +70,7 @@ class MediaControllerSearchSubtitleTest extends TestCase
     public function testMissingStateAttachesReducedSubtitleKey(): void
     {
         $bazarr = $this->createMock(BazarrSubtitleIndex::class);
-        $bazarr->expects($this->once())->method('movieStatus')->with(42)->willReturn(['state' => 'missing', 'count' => 3, 'hasProfile' => true]);
+        $bazarr->expects($this->once())->method('movieStatus')->with(42)->willReturn(['state' => 'missing', 'count' => 3]);
 
         $result = $this->callAttachSubtitleStatus($this->makeController($bazarr), ['id' => 42, 'title' => 'Interstellar'], 'movie');
 
@@ -80,7 +80,7 @@ class MediaControllerSearchSubtitleTest extends TestCase
     public function testCompleteStateAttachesReducedSubtitleKey(): void
     {
         $bazarr = $this->createMock(BazarrSubtitleIndex::class);
-        $bazarr->expects($this->once())->method('seriesStatus')->with(7)->willReturn(['state' => 'complete', 'count' => 0, 'hasProfile' => true]);
+        $bazarr->expects($this->once())->method('seriesStatus')->with(7)->willReturn(['state' => 'complete', 'count' => 0]);
 
         $result = $this->callAttachSubtitleStatus($this->makeController($bazarr), ['id' => 7, 'title' => 'Dune Chronicles'], 'series');
 
@@ -90,7 +90,7 @@ class MediaControllerSearchSubtitleTest extends TestCase
     public function testHiddenStateOmitsSubtitleKeyEntirely(): void
     {
         $bazarr = $this->createMock(BazarrSubtitleIndex::class);
-        $bazarr->expects($this->once())->method('movieStatus')->with(99)->willReturn(['state' => 'hidden', 'count' => 0, 'hasProfile' => false]);
+        $bazarr->expects($this->once())->method('movieStatus')->with(99)->willReturn(['state' => 'hidden', 'count' => 0]);
 
         $result = $this->callAttachSubtitleStatus($this->makeController($bazarr), ['id' => 99, 'title' => 'Unconfigured'], 'movie');
 
