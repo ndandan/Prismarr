@@ -25,52 +25,7 @@
     {% if error %}
       {% include 'error/_service_banner.html.twig' with { service: 'Bazarr', wizard_route: 'admin_settings_index', configured_url: service_url, reason: 'unreachable' } %}
     {% else %}
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">{{ 'bazarr.movies.title'|trans }}</h3>
-        </div>
-        {% if movies is empty %}
-          <div class="card-body">
-            <div class="empty">
-              <p class="empty-title">{{ 'bazarr.movies.empty'|trans }}</p>
-            </div>
-          </div>
-        {% else %}
-          <div class="table-responsive">
-            <table class="table table-vcenter card-table">
-              <thead>
-                <tr>
-                  <th>{{ 'bazarr.movies.column_title'|trans }}</th>
-                  <th>{{ 'bazarr.movies.column_year'|trans }}</th>
-                  <th>{{ 'bazarr.movies.column_language'|trans }}</th>
-                  <th>{{ 'bazarr.movies.column_missing'|trans }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for movie in movies %}
-                  <tr>
-                    <td>{{ movie.title|default('—') }}</td>
-                    <td>{{ movie.year|default('—') }}</td>
-                    <td>{{ movie.audio_language is iterable ? movie.audio_language|column('name')|join(', ') : '—' }}</td>
-                    <td>
-                      {# Mirrors BazarrSubtitleIndex::computeMovieStatus() — a null profileId means
-                         Bazarr isn't tracking this movie, so a missing-count/complete badge would
-                         be misleading. #}
-                      {% if movie.profileId|default(null) is null %}
-                        <span class="badge bg-secondary-lt">{{ 'bazarr.movies.not_tracked'|trans }}</span>
-                      {% elseif movie.missing_subtitles is iterable and movie.missing_subtitles|length > 0 %}
-                        <span class="badge bg-red-lt">{{ movie.missing_subtitles|length }}</span>
-                      {% else %}
-                        <span class="badge bg-green-lt">{{ 'bazarr.movies.none_missing'|trans }}</span>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% endif %}
-      </div>
+      {% include 'bazarr/_grid.html.twig' with { kind: 'movie', cards: cards, languages: languages } only %}
     {% endif %}
 
   </div>

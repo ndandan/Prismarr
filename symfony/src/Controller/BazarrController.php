@@ -7,6 +7,7 @@ use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\BazarrLangs;
+use App\Service\Media\BazarrPosterResolver;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
@@ -41,6 +42,7 @@ class BazarrController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly BazarrSubtitleIndex $bazarrIndex,
         private readonly ServiceInstanceProvider $instances,
+        private readonly BazarrPosterResolver $posters,
     ) {}
 
     #[Route('', name: 'index')]
@@ -77,13 +79,14 @@ class BazarrController extends AbstractController
     public function movies(): Response
     {
         $error = false;
-        $movies = [];
+        $cards = [];
+        $languages = [];
 
         try {
             if (!$this->bazarr->ping()) {
                 $error = true;
             } else {
-                $movies = $this->bazarr->getMovies();
+                ['cards' => $cards, 'languages' => $languages] = $this->buildCards($this->bazarr->getMovies(), 'movie');
             }
         } catch (\Throwable $e) {
             $error = true;
@@ -92,7 +95,8 @@ class BazarrController extends AbstractController
 
         return $this->render('bazarr/movies.html.twig', [
             'error'       => $error,
-            'movies'      => $movies,
+            'cards'       => $cards,
+            'languages'   => $languages,
             'service_url' => $this->config->get('bazarr_url'),
         ]);
     }
@@ -101,13 +105,14 @@ class BazarrController extends AbstractController
     public function series(): Response
     {
         $error = false;
-        $series = [];
+        $cards = [];
+        $languages = [];
 
         try {
             if (!$this->bazarr->ping()) {
                 $error = true;
             } else {
-                $series = $this->bazarr->getSeries();
+                ['cards' => $cards, 'languages' => $languages] = $this->buildCards($this->bazarr->getSeries(), 'series');
             }
         } catch (\Throwable $e) {
             $error = true;
@@ -116,9 +121,72 @@ class BazarrController extends AbstractController
 
         return $this->render('bazarr/series.html.twig', [
             'error'       => $error,
-            'series'      => $series,
+            'cards'       => $cards,
+            'languages'   => $languages,
             'service_url' => $this->config->get('bazarr_url'),
         ]);
+    }
+
+    /**
+     * Enrich Bazarr's OWN movie/series rows into the compact card shape the
+     * poster-grid + filter bar consume client-side.
+     *
+     * The status + missing-language codes are computed DIRECTLY from these rows
+     * (BazarrSubtitleIndex::computeMovieStatus/computeSeriesStatus +
+     * BazarrLangs::extract) — this is Bazarr's own list, keyed by its own
+     * radarrId/sonarrSeriesId, so there is no id-collision risk and neither the
+     * multi-instance gate nor a per-card index lookup applies here.
+     *
+     * Posters come from postersFor() (called ONCE per action, library-gated): a
+     * multi-instance install yields an empty map, so every card degrades to a
+     * no-poster tile while the list + status still render — the correct degraded
+     * state.
+     *
+     * `substate` collapses BazarrSubtitleIndex's 'hidden' state to 'not-tracked'
+     * for the tab (no subtitle profile, or a series with zero episode files).
+     * `languages` is the distinct set of missing-language codes across every
+     * card, feeding the Language filter <select>.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @param 'movie'|'series'            $kind
+     *
+     * @return array{cards: list<array{title: string, year: int|string|null, poster: string|null, substate: string, count: int, missingLangs: list<string>, seriesId: int|null}>, languages: list<string>}
+     */
+    private function buildCards(array $rows, string $kind): array
+    {
+        $posters = $this->posters->postersFor($kind);
+        $idKey   = $kind === 'movie' ? 'radarrId' : 'sonarrSeriesId';
+
+        $cards   = [];
+        $langSet = [];
+        foreach ($rows as $row) {
+            $status = $kind === 'movie'
+                ? BazarrSubtitleIndex::computeMovieStatus($row)
+                : BazarrSubtitleIndex::computeSeriesStatus($row);
+            $substate = $status['state'] === 'hidden' ? 'not-tracked' : $status['state'];
+
+            $codes = [];
+            foreach (BazarrLangs::extract($row)['missing'] as $lang) {
+                $codes[$lang['lang']] = true;
+                $langSet[$lang['lang']] = true;
+            }
+
+            $id = isset($row[$idKey]) ? (int) $row[$idKey] : null;
+
+            $cards[] = [
+                'title'        => (string) ($row['title'] ?? ''),
+                'year'         => $row['year'] ?? null,
+                'poster'       => $id !== null ? ($posters[$id] ?? null) : null,
+                'substate'     => $substate,
+                'count'        => $status['count'],
+                'missingLangs' => array_keys($codes),
+                'seriesId'     => $kind === 'series' ? $id : null,
+            ];
+        }
+
+        ksort($langSet);
+
+        return ['cards' => $cards, 'languages' => array_keys($langSet)];
     }
 
     #[Route('/history', name: 'history')]

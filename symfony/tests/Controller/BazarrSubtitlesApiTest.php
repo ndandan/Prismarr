@@ -7,6 +7,7 @@ use App\Entity\ServiceInstance;
 use App\Entity\Setting;
 use App\Service\ConfigService;
 use App\Service\Media\BazarrClient;
+use App\Service\Media\BazarrPosterResolver;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\ServiceInstanceProvider;
 use App\Tests\AbstractWebTestCase;
@@ -200,6 +201,7 @@ class BazarrSubtitlesApiTest extends AbstractWebTestCase
             new NullLogger(),
             $this->createMock(BazarrSubtitleIndex::class),
             $instances,
+            $this->createMock(BazarrPosterResolver::class),
         );
         $controller->setContainer(new Container());
 

@@ -25,64 +25,7 @@
     {% if error %}
       {% include 'error/_service_banner.html.twig' with { service: 'Bazarr', wizard_route: 'admin_settings_index', configured_url: service_url, reason: 'unreachable' } %}
     {% else %}
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">{{ 'bazarr.series.title'|trans }}</h3>
-        </div>
-        {% if series is empty %}
-          <div class="card-body">
-            <div class="empty">
-              <p class="empty-title">{{ 'bazarr.series.empty'|trans }}</p>
-            </div>
-          </div>
-        {% else %}
-          <div class="table-responsive">
-            <table class="table table-vcenter card-table">
-              <thead>
-                <tr>
-                  <th>{{ 'bazarr.series.column_title'|trans }}</th>
-                  <th>{{ 'bazarr.series.column_year'|trans }}</th>
-                  <th>{{ 'bazarr.series.column_episodes'|trans }}</th>
-                  <th>{{ 'bazarr.series.column_missing'|trans }}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for serie in series %}
-                  <tr>
-                    <td>
-                      {% if serie.sonarrSeriesId|default(null) is not null %}
-                        <a href="{{ path('app_bazarr_series_detail', { seriesId: serie.sonarrSeriesId }) }}">{{ serie.title|default('—') }}</a>
-                      {% else %}
-                        {{ serie.title|default('—') }}
-                      {% endif %}
-                    </td>
-                    <td>{{ serie.year|default('—') }}</td>
-                    <td>{{ serie.episodeFileCount|default(0) }}</td>
-                    <td>
-                      {# Mirrors BazarrSubtitleIndex::computeSeriesStatus() — a null profileId or
-                         zero episodeFileCount means Bazarr isn't tracking this series, so a
-                         missing-count/complete badge would be misleading. #}
-                      {% if serie.profileId|default(null) is null or (serie.episodeFileCount|default(0)) == 0 %}
-                        <span class="badge bg-secondary-lt">{{ 'bazarr.series.not_tracked'|trans }}</span>
-                      {% elseif serie.episodeMissingCount is defined and serie.episodeMissingCount > 0 %}
-                        <span class="badge bg-red-lt">{{ serie.episodeMissingCount }}</span>
-                      {% else %}
-                        <span class="badge bg-green-lt">{{ 'bazarr.series.none_missing'|trans }}</span>
-                      {% endif %}
-                    </td>
-                    <td class="text-end">
-                      {% if serie.sonarrSeriesId|default(null) is not null %}
-                        <button type="button" class="btn btn-sm btn-ghost-primary" data-bazarr-auto data-kind="series" data-id="{{ serie.sonarrSeriesId }}">{{ 'bazarr.auto.button'|trans }}</button>
-                      {% endif %}
-                    </td>
-                  </tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        {% endif %}
-      </div>
+      {% include 'bazarr/_grid.html.twig' with { kind: 'series', cards: cards, languages: languages } only %}
     {% endif %}
 
   </div>

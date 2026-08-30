@@ -5675,6 +5675,19 @@ bazarr:
     column_missing: Missing episodes
     none_missing: Complete
     not_tracked: Not tracked
+  filter:
+    search_placeholder: Search by title…
+    status_all: All
+    status_complete: Complete
+    status_missing: Missing
+    status_not_tracked: Not tracked
+    all_languages: All languages
+    sort_title_asc: Title A→Z
+    sort_missing_desc: Most missing first
+  grid:
+    complete: Complete
+    not_tracked: Not tracked
+    empty_filtered: No items match your filters
   history:
     movies_title: Movie subtitle history
     episodes_title: Episode subtitle history

@@ -5672,6 +5672,19 @@ bazarr:
     column_missing: Épisodes manquants
     none_missing: Complet
     not_tracked: Non suivie
+  filter:
+    search_placeholder: Rechercher par titre…
+    status_all: Tous
+    status_complete: Complet
+    status_missing: Manquant
+    status_not_tracked: Non suivi
+    all_languages: Toutes les langues
+    sort_title_asc: Titre A→Z
+    sort_missing_desc: Le plus de manquants d'abord
+  grid:
+    complete: Complet
+    not_tracked: Non suivi
+    empty_filtered: Aucun élément ne correspond aux filtres
   history:
     movies_title: Historique des sous-titres de films
     episodes_title: Historique des sous-titres d'épisodes
