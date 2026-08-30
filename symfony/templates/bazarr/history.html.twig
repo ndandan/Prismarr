@@ -56,7 +56,7 @@
                         <td>{{ item.action|default('—') }}</td>
                         <td>{{ item.provider|default('—') }}</td>
                         <td>{% if item.language is iterable %}{{ item.language.name|default('—') }}{% else %}{{ item.language|default('—') }}{% endif %}</td>
-                        <td>{{ item.raw_timestamp is defined ? (item.raw_timestamp|relative_date|default('—')) : '—' }}</td>
+                        <td>{{ item.raw_timestamp is defined and item.raw_timestamp ? item.raw_timestamp|relative_date : (item.parsed_timestamp|default(item.timestamp|default('—'))) }}</td>
                       </tr>
                     {% endfor %}
                   </tbody>
@@ -95,7 +95,7 @@
                         <td>{{ item.action|default('—') }}</td>
                         <td>{{ item.provider|default('—') }}</td>
                         <td>{% if item.language is iterable %}{{ item.language.name|default('—') }}{% else %}{{ item.language|default('—') }}{% endif %}</td>
-                        <td>{{ item.raw_timestamp is defined ? (item.raw_timestamp|relative_date|default('—')) : '—' }}</td>
+                        <td>{{ item.raw_timestamp is defined and item.raw_timestamp ? item.raw_timestamp|relative_date : (item.parsed_timestamp|default(item.timestamp|default('—'))) }}</td>
                       </tr>
                     {% endfor %}
                   </tbody>
