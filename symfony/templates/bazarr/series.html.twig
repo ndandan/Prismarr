@@ -44,13 +44,14 @@
                   <th>{{ 'bazarr.series.column_year'|trans }}</th>
                   <th>{{ 'bazarr.series.column_episodes'|trans }}</th>
                   <th>{{ 'bazarr.series.column_missing'|trans }}</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
                 {% for serie in series %}
                   <tr>
                     <td>
-                      {% if serie.sonarrSeriesId is defined %}
+                      {% if serie.sonarrSeriesId|default(null) is not null %}
                         <a href="{{ path('app_bazarr_series_detail', { seriesId: serie.sonarrSeriesId }) }}">{{ serie.title|default('—') }}</a>
                       {% else %}
                         {{ serie.title|default('—') }}
@@ -59,10 +60,20 @@
                     <td>{{ serie.year|default('—') }}</td>
                     <td>{{ serie.episodeFileCount|default(0) }}</td>
                     <td>
-                      {% if serie.episodeMissingCount is defined and serie.episodeMissingCount > 0 %}
+                      {# Mirrors BazarrSubtitleIndex::computeSeriesStatus() — a null profileId or
+                         zero episodeFileCount means Bazarr isn't tracking this series, so a
+                         missing-count/complete badge would be misleading. #}
+                      {% if serie.profileId|default(null) is null or (serie.episodeFileCount|default(0)) == 0 %}
+                        <span class="badge bg-secondary-lt">{{ 'bazarr.series.not_tracked'|trans }}</span>
+                      {% elseif serie.episodeMissingCount is defined and serie.episodeMissingCount > 0 %}
                         <span class="badge bg-red-lt">{{ serie.episodeMissingCount }}</span>
                       {% else %}
                         <span class="badge bg-green-lt">{{ 'bazarr.series.none_missing'|trans }}</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-end">
+                      {% if serie.sonarrSeriesId|default(null) is not null %}
+                        <button type="button" class="btn btn-sm btn-ghost-primary" data-bazarr-auto data-kind="series" data-id="{{ serie.sonarrSeriesId }}">{{ 'bazarr.auto.button'|trans }}</button>
                       {% endif %}
                     </td>
                   </tr>

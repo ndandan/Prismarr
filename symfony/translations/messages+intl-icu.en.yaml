@@ -5665,6 +5665,7 @@ bazarr:
     column_language: Audio language
     column_missing: Missing subtitles
     none_missing: Complete
+    not_tracked: Not tracked
   series:
     title: Series
     empty: No series found
@@ -5673,6 +5674,7 @@ bazarr:
     column_episodes: Episode files
     column_missing: Missing episodes
     none_missing: Complete
+    not_tracked: Not tracked
   history:
     movies_title: Movie subtitle history
     episodes_title: Episode subtitle history
@@ -5701,6 +5703,7 @@ bazarr:
     subs: Subs
   auto:
     started: Automatic search started
+    button: Auto search
   modal:
     title: Subtitle search
     download: Download

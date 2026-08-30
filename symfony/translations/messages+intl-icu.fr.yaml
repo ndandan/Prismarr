@@ -5662,6 +5662,7 @@ bazarr:
     column_language: Langue audio
     column_missing: Sous-titres manquants
     none_missing: Complet
+    not_tracked: Non suivi
   series:
     title: Séries
     empty: Aucune série trouvée
@@ -5670,6 +5671,7 @@ bazarr:
     column_episodes: Fichiers d'épisodes
     column_missing: Épisodes manquants
     none_missing: Complet
+    not_tracked: Non suivie
   history:
     movies_title: Historique des sous-titres de films
     episodes_title: Historique des sous-titres d'épisodes
@@ -5698,6 +5700,7 @@ bazarr:
     subs: Sous-titres
   auto:
     started: Recherche automatique lancée
+    button: Recherche automatique
   modal:
     title: Recherche de sous-titres
     download: Télécharger

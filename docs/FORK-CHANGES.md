@@ -681,7 +681,7 @@ Radarr/Sonarr sidebar dropdown fix, and PHPUnit 14 test hygiene.
 
 ### Bazarr integration (2026-08-29) — [#103](https://github.com/ndandan/Prismarr/issues/103)
 
-New optional [Bazarr](https://bsky.app/profile/bazarr.media) subtitle-management
+New optional [Bazarr](https://www.bazarr.media) subtitle-management
 integration, single-instance flat config under `/admin/settings` (URL + API
 key, kill switch, Test connection), admin-only, and fails closed like every
 other media-client controller.

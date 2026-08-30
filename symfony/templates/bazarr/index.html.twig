@@ -88,12 +88,18 @@
                   <thead>
                     <tr>
                       <th>{{ 'bazarr.wanted.column_title'|trans }}</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for item in wanted_movies %}
                       <tr>
                         <td>{{ item.title|default(item.name|default('—')) }}</td>
+                        <td class="text-end">
+                          {% if item.radarrId|default(null) is not null %}
+                            <button type="button" class="btn btn-sm btn-ghost-primary" data-bazarr-auto data-kind="movie" data-id="{{ item.radarrId }}">{{ 'bazarr.auto.button'|trans }}</button>
+                          {% endif %}
+                        </td>
                       </tr>
                     {% endfor %}
                   </tbody>
@@ -119,12 +125,18 @@
                   <thead>
                     <tr>
                       <th>{{ 'bazarr.wanted.column_title'|trans }}</th>
+                      <th></th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for item in wanted_episodes %}
                       <tr>
                         <td>{{ item.seriesTitle|default(item.title|default('—')) }} {{ item.episode_number|default('') }}</td>
+                        <td class="text-end">
+                          {% if item.sonarrSeriesId|default(null) is not null %}
+                            <button type="button" class="btn btn-sm btn-ghost-primary" data-bazarr-auto data-kind="series" data-id="{{ item.sonarrSeriesId }}">{{ 'bazarr.auto.button'|trans }}</button>
+                          {% endif %}
+                        </td>
                       </tr>
                     {% endfor %}
                   </tbody>

@@ -55,8 +55,8 @@
                         <td>{{ item.title|default('—') }}</td>
                         <td>{{ item.action|default('—') }}</td>
                         <td>{{ item.provider|default('—') }}</td>
-                        <td>{{ item.language|default('—') }}</td>
-                        <td>{{ item.parsed_timestamp|default(item.timestamp|default('—')) }}</td>
+                        <td>{% if item.language is iterable %}{{ item.language.name|default('—') }}{% else %}{{ item.language|default('—') }}{% endif %}</td>
+                        <td>{{ item.raw_timestamp is defined ? (item.raw_timestamp|relative_date|default('—')) : '—' }}</td>
                       </tr>
                     {% endfor %}
                   </tbody>
@@ -94,8 +94,8 @@
                         <td>{{ item.seriesTitle|default('—') }} — {{ item.episodeTitle|default('—') }} {% if item.episode_number is defined %}({{ item.episode_number }}){% endif %}</td>
                         <td>{{ item.action|default('—') }}</td>
                         <td>{{ item.provider|default('—') }}</td>
-                        <td>{{ item.language|default('—') }}</td>
-                        <td>{{ item.parsed_timestamp|default(item.timestamp|default('—')) }}</td>
+                        <td>{% if item.language is iterable %}{{ item.language.name|default('—') }}{% else %}{{ item.language|default('—') }}{% endif %}</td>
+                        <td>{{ item.raw_timestamp is defined ? (item.raw_timestamp|relative_date|default('—')) : '—' }}</td>
                       </tr>
                     {% endfor %}
                   </tbody>

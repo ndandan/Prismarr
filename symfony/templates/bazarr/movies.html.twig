@@ -53,7 +53,12 @@
                     <td>{{ movie.year|default('—') }}</td>
                     <td>{{ movie.audio_language is iterable ? movie.audio_language|column('name')|join(', ') : '—' }}</td>
                     <td>
-                      {% if movie.missing_subtitles is iterable and movie.missing_subtitles|length > 0 %}
+                      {# Mirrors BazarrSubtitleIndex::computeMovieStatus() — a null profileId means
+                         Bazarr isn't tracking this movie, so a missing-count/complete badge would
+                         be misleading. #}
+                      {% if movie.profileId|default(null) is null %}
+                        <span class="badge bg-secondary-lt">{{ 'bazarr.movies.not_tracked'|trans }}</span>
+                      {% elseif movie.missing_subtitles is iterable and movie.missing_subtitles|length > 0 %}
                         <span class="badge bg-red-lt">{{ movie.missing_subtitles|length }}</span>
                       {% else %}
                         <span class="badge bg-green-lt">{{ 'bazarr.movies.none_missing'|trans }}</span>

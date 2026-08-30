@@ -58,9 +58,13 @@
                     <td>{{ ep.audio_language is iterable ? ep.audio_language|column('name')|join(', ') : '—' }}</td>
                     <td>
                       {% if ep.missing_subtitles is iterable and ep.missing_subtitles|length > 0 %}
-                        <button type="button" class="btn btn-sm btn-outline-primary" data-bazarr-search data-kind="episode" data-id="{{ ep.sonarrEpisodeId }}">
-                          {{ 'bazarr.series_detail.search'|trans }}
-                        </button>
+                        {% if ep.sonarrEpisodeId|default(null) is not null %}
+                          <button type="button" class="btn btn-sm btn-outline-primary" data-bazarr-search data-kind="episode" data-id="{{ ep.sonarrEpisodeId }}">
+                            {{ 'bazarr.series_detail.search'|trans }}
+                          </button>
+                        {% else %}
+                          <span class="text-secondary">—</span>
+                        {% endif %}
                       {% else %}
                         <span class="badge bg-green-lt">{{ 'bazarr.series_detail.complete'|trans }}</span>
                       {% endif %}
