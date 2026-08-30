@@ -89,4 +89,26 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertStringContainsString('window.PRISMARR_IS_ADMIN', $base);
         $this->assertStringContainsString("is_granted('ROLE_ADMIN') ? 'true' : 'false'", $base);
     }
+
+    public function testSubtitleChipsPartialExists(): void
+    {
+        // Bazarr visual & detail pass, Task 1: shared per-language chip strip
+        // consumed by Tasks 4/7. Its markup contract (present/missing lists,
+        // poster-chip class names) is load-bearing for that later JS mirror.
+        $this->assertFileExists(self::TEMPLATE_ROOT . 'media/_subtitle_chips.html.twig');
+    }
+
+    public function testFilmsAndSeriesGridsUsePosterChipBacking(): void
+    {
+        $films = file_get_contents(self::TEMPLATE_ROOT . 'media/films.html.twig');
+        $series = file_get_contents(self::TEMPLATE_ROOT . 'media/series.html.twig');
+        $this->assertNotFalse($films);
+        $this->assertNotFalse($series);
+        // Bazarr visual & detail pass, Task 1: the poster-overlaid subtitle
+        // badge must carry the solid-backed .poster-chip treatment so it
+        // doesn't blend into a same-colored poster; the flat table/list-row
+        // badge deliberately does not.
+        $this->assertStringContainsString('poster-chip', $films);
+        $this->assertStringContainsString('poster-chip', $series);
+    }
 }

@@ -113,6 +113,17 @@
     position: absolute; top: 2rem; left: .4rem; z-index: 6;
     border-radius: .25rem;
 }
+/* Solid-backed badge treatment for anything rendered over a poster image —
+   the plain Tabler -lt tints (translucent) can blend into a same-colored
+   poster, so this adds a theme-aware surface fill + dark ring/shadow that
+   reads on any backdrop. Self-contained (own font-size floor) because later
+   tasks (_subtitle_chips.html.twig) drop this class in outside .media-card
+   too. Flat table/list-row badges keep the plain -lt tint, no .poster-chip. */
+.poster-chip {
+    background: var(--tblr-bg-surface);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 1px 2px rgba(0,0,0,.4);
+    font-size: .6875rem !important;
+}
 .ep-bar { height: 4px; border-radius: 2px; margin-top: .3rem; background: rgba(255,255,255,.25); overflow: hidden; }
 .ep-bar-fill { height: 100%; border-radius: 2px; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
@@ -622,7 +633,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     {# Bazarr subtitle-status pill — a direct child of .media-card (mirroring
        the Films grid), NOT part of .top-indicators: that strip fades out on
        hover and is rebuilt wholesale by the live-refresh below. #}
-    {{ include('media/_subtitle_badge.html.twig', { kind: 'series', id: s.id }) }}
+    {{ include('media/_subtitle_badge.html.twig', { kind: 'series', id: s.id, poster: true }) }}
 
     {# Top banner: type badge on the left, checkbox + status dot on the right #}
     <div class="top-indicators">

@@ -68,6 +68,17 @@
     position: absolute; top: 1.7rem; left: .4rem; z-index: 6;
     padding: .05rem .35rem; border-radius: .25rem;
 }
+/* Solid-backed badge treatment for anything rendered over a poster image —
+   the plain Tabler -lt tints (translucent) can blend into a same-colored
+   poster, so this adds a theme-aware surface fill + dark ring/shadow that
+   reads on any backdrop. Self-contained (own font-size floor) because later
+   tasks (_subtitle_chips.html.twig) drop this class in outside .media-card
+   too. Flat table/list-row badges keep the plain -lt tint, no .poster-chip. */
+.poster-chip {
+    background: var(--tblr-bg-surface);
+    box-shadow: 0 0 0 1px rgba(0,0,0,.25), 0 1px 2px rgba(0,0,0,.4);
+    font-size: .6875rem !important;
+}
 /* Tabler .ribbon scaled for the compact poster card (the "New" flag). */
 .media-card .ribbon { font-size: .56rem; font-weight: 700; padding: .05rem .4rem; z-index: 2; letter-spacing: .03em; }
 .queue-progress { height: 4px; border-radius: 2px; background: var(--tblr-bg-surface-secondary); overflow: hidden; margin-top: .25rem; }
@@ -736,7 +747,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
       <div class="quality-badge">{{ movie.quality }}</div>
     {% endif %}
 
-    {{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: movie.id }) }}
+    {{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: movie.id, poster: true }) }}
 
     <div class="card-overlay">
       <div class="card-title-text">{{ movie.title }}</div>

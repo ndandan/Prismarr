@@ -5698,6 +5698,9 @@ bazarr:
     missing_episodes: '{count, plural, one {# épisode sans sous-titres} other {# épisodes sans sous-titres}}'
     complete: Sous-titres complets
     subs: Sous-titres
+  chips:
+    hi_title: Sous-titres pour malentendants
+    forced_title: Sous-titres forcés
   auto:
     started: Recherche automatique lancée
     button: Recherche automatique

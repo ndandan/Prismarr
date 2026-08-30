@@ -1,0 +1,27 @@
+{#
+    Shared subtitle-language chip strip (Bazarr visual & detail pass, Task 1).
+    One chip per language: green for a language that already has subtitles,
+    red for one still missing. Small superscript markers flag hearing-impaired
+    (HI) and forced tracks. Consumed server-side by Tasks 4/7; a later JS task
+    mirrors this exact markup to inject chips client-side, so the class list
+    here (`badge poster-chip bg-success-lt` / `badge poster-chip bg-danger-lt`)
+    must stay stable — don't rename or reorder without updating that JS too.
+
+    Params:
+      present: list of { lang: string, hi: bool, forced: bool } — languages
+               with subtitles already downloaded.
+      missing: list of { lang: string, hi: bool, forced: bool } — languages
+               still wanted.
+
+    Renders nothing when both lists are empty.
+#}
+{% if present is not empty or missing is not empty %}
+  <div class="d-flex flex-wrap gap-1">
+    {% for c in present %}
+      <span class="badge poster-chip bg-success-lt">{{ c.lang }}{% if c.hi %}<sup title="{{ 'bazarr.chips.hi_title'|trans }}">HI</sup>{% endif %}{% if c.forced %}<sup title="{{ 'bazarr.chips.forced_title'|trans }}">F</sup>{% endif %}</span>
+    {% endfor %}
+    {% for c in missing %}
+      <span class="badge poster-chip bg-danger-lt">{{ c.lang }}{% if c.hi %}<sup title="{{ 'bazarr.chips.hi_title'|trans }}">HI</sup>{% endif %}{% if c.forced %}<sup title="{{ 'bazarr.chips.forced_title'|trans }}">F</sup>{% endif %}</span>
+    {% endfor %}
+  </div>
+{% endif %}

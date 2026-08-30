@@ -5,8 +5,14 @@
     one place.
 
     Params:
-      kind: 'movie'|'series' — dispatches to BazarrSubtitleIndex::movieStatus/seriesStatus.
-      id:   the Radarr movie id or Sonarr series id.
+      kind:   'movie'|'series' — dispatches to BazarrSubtitleIndex::movieStatus/seriesStatus.
+      id:     the Radarr movie id or Sonarr series id.
+      poster: bool (default false) — pass true only when this include renders
+              directly over a poster image (the grid card's direct-child
+              badge), so it picks up the `.poster-chip` solid backing that
+              keeps it from blending into a same-colored poster. Leave false
+              (or omit) for table/list-row and extended-info call sites,
+              which sit on a flat background and stay the plain -lt badge.
 
     `st.count` counts different things per kind — missing *subtitles* for a
     movie, missing *episodes* for a series — so the tooltip picks the matching
@@ -16,10 +22,12 @@
     or a series with zero episode files) — that's the 'hidden' state.
 #}
 {% set st = subtitle_status(kind, id) %}
+{% set poster = poster|default(false) %}
+{% set _chip_cls = poster ? ' poster-chip' : '' %}
 {% if st.state != 'hidden' %}
   {% if st.state == 'missing' and is_granted('ROLE_ADMIN') %}
     {% if kind == 'movie' %}
-      <button type="button" class="badge bg-warning-lt border-0 subtitle-badge" data-bazarr-search data-kind="movie" data-id="{{ id }}"
+      <button type="button" class="badge bg-warning-lt border-0 subtitle-badge{{ _chip_cls }}" data-bazarr-search data-kind="movie" data-id="{{ id }}"
               title="{{ 'bazarr.badge.missing_count'|trans({count: st.count}) }}">
         {{ 'bazarr.badge.missing'|trans }} {{ st.count }}
       </button>
@@ -30,15 +38,15 @@
          bazarr/_search_modal.html.twig: the badge is rendered inside poster
          cards that are themselves modal togglers, and only capture-phase
          containment can stop the card from opening at the same time. #}
-      <a class="badge bg-warning-lt subtitle-badge" href="{{ path('app_bazarr_series_detail', {seriesId: id}) }}"
+      <a class="badge bg-warning-lt subtitle-badge{{ _chip_cls }}" href="{{ path('app_bazarr_series_detail', {seriesId: id}) }}"
          data-bazarr-nav
          title="{{ 'bazarr.badge.missing_episodes'|trans({count: st.count}) }}">
         {{ 'bazarr.badge.missing'|trans }} {{ st.count }}
       </a>
     {% endif %}
   {% elseif st.state == 'missing' %}
-    <span class="badge bg-warning-lt subtitle-badge" title="{{ kind == 'movie' ? 'bazarr.badge.missing_count'|trans({count: st.count}) : 'bazarr.badge.missing_episodes'|trans({count: st.count}) }}">{{ 'bazarr.badge.missing'|trans }} {{ st.count }}</span>
+    <span class="badge bg-warning-lt subtitle-badge{{ _chip_cls }}" title="{{ kind == 'movie' ? 'bazarr.badge.missing_count'|trans({count: st.count}) : 'bazarr.badge.missing_episodes'|trans({count: st.count}) }}">{{ 'bazarr.badge.missing'|trans }} {{ st.count }}</span>
   {% else %}
-    <span class="badge bg-success-lt subtitle-badge" title="{{ 'bazarr.badge.complete'|trans }}">{{ 'bazarr.badge.subs'|trans }}</span>
+    <span class="badge bg-success-lt subtitle-badge{{ _chip_cls }}" title="{{ 'bazarr.badge.complete'|trans }}">{{ 'bazarr.badge.subs'|trans }}</span>
   {% endif %}
 {% endif %}

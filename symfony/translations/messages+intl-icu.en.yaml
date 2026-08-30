@@ -5701,6 +5701,9 @@ bazarr:
     missing_episodes: '{count, plural, one {# episode missing subtitles} other {# episodes missing subtitles}}'
     complete: Subtitles complete
     subs: Subs
+  chips:
+    hi_title: Hearing-impaired subtitles
+    forced_title: Forced subtitles
   auto:
     started: Automatic search started
     button: Auto search
