@@ -86,19 +86,6 @@ class BazarrClient implements ResetInterface
         return $this->request('GET', '/system/status') !== null;
     }
 
-    /** @return array<string, mixed> Empty on failure. */
-    public function getSystemStatus(): array
-    {
-        if (!$this->ready()) {
-            return [];
-        }
-        $r = $this->request('GET', '/system/status');
-        if ($r === null) {
-            return [];
-        }
-        return is_array($r['data'] ?? null) ? $r['data'] : $r;
-    }
-
     /** @return array{movies: int, episodes: int, providers: int} Zeros on failure. */
     public function getBadgeCounts(): array
     {
@@ -279,6 +266,19 @@ class BazarrClient implements ResetInterface
         // Circuit breaker: skip the call entirely if Bazarr was just seen
         // down — a widget poll would otherwise stack connect timeouts.
         if ($this->health?->isDown(self::SERVICE)) {
+            // Record a structured error so callers can tell "skipped, the host
+            // was just down" apart from "never called" (getLastError() === null
+            // is what jsonClientError() and BazarrSubtitleIndex's cache-on-
+            // success check both key on). Deliberately NOT logged: badge
+            // rendering can enter this branch dozens of times per page during
+            // a down window, and the failure that opened the breaker was
+            // already logged once by recordError().
+            $this->lastError = [
+                'code'    => 0,
+                'method'  => $method,
+                'path'    => $path,
+                'message' => 'circuit open — Bazarr was unreachable moments ago, retrying shortly',
+            ];
             return null;
         }
 
@@ -318,11 +318,10 @@ class BazarrClient implements ResetInterface
         }
 
         curl_setopt_array($ch, $opts);
-        $rawBody = curl_exec($ch);
-        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $err  = curl_error($ch);
-        curl_close($ch);
+        [$rawBody, $code, $err] = $this->exec($ch);
 
+        // Transport failure (unreachable / DNS / TLS / timeout) — the only
+        // class of failure that may trip the breaker.
         if ($rawBody === false || $err !== '' || $code === 0) {
             $this->recordError($code, $err !== '' ? $err : 'connection failed', $method, $path);
             $this->health?->markDown(self::SERVICE);
@@ -330,8 +329,13 @@ class BazarrClient implements ResetInterface
         }
 
         if ($code < 200 || $code >= 300) {
+            // A reachable host clears the breaker even on an auth error (or a
+            // 404 from an endpoint this Bazarr version doesn't expose) — the
+            // box is up, only this one call failed. Mirrors TautulliClient;
+            // marking down here would blind every OTHER Bazarr call for the
+            // full breaker TTL because of one bad request.
             $this->recordError($code, 'unexpected HTTP status', $method, $path);
-            $this->health?->markDown(self::SERVICE);
+            $this->health?->clear(self::SERVICE);
             return null;
         }
 
@@ -353,6 +357,27 @@ class BazarrClient implements ResetInterface
         $this->health?->clear(self::SERVICE);
         $this->lastError = null;
         return $json;
+    }
+
+    /**
+     * cURL execution seam: performs the transfer and returns the three raw
+     * facts request() classifies on. Split out (and protected) so unit tests
+     * can feed fabricated responses through the classification branches —
+     * transport failure vs non-2xx vs invalid JSON drive different circuit-
+     * breaker decisions, and there is no live Bazarr in the test suite.
+     *
+     * @param \CurlHandle $ch
+     * @return array{0: string|false, 1: int, 2: string} [body, http code, curl error]
+     */
+    protected function exec(\CurlHandle $ch): array
+    {
+        /** @var string|false $body */
+        $body = curl_exec($ch);
+        $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $err  = curl_error($ch);
+        curl_close($ch);
+
+        return [$body, $code, $err];
     }
 
     private function recordError(int $code, string $message, string $method, string $path): void
