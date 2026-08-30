@@ -5657,6 +5657,11 @@ bazarr:
     episodes_title: Episodes missing subtitles
     empty: Nothing wanted
     column_title: Title
+  landing:
+    most_missing_title: Most missing subtitles
+    empty: Nothing missing
+    view_movies: All movies
+    view_series: All series
   movies:
     title: Movies
     empty: No movies found

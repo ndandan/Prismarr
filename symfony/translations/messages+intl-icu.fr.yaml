@@ -5654,6 +5654,11 @@ bazarr:
     episodes_title: Épisodes sans sous-titres
     empty: Rien à rechercher
     column_title: Titre
+  landing:
+    most_missing_title: Sous-titres les plus manquants
+    empty: Aucun sous-titre manquant
+    view_movies: Tous les films
+    view_series: Toutes les séries
   movies:
     title: Films
     empty: Aucun film trouvé

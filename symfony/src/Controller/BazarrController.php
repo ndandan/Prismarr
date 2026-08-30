@@ -36,6 +36,9 @@ class BazarrController extends AbstractController
 {
     use ApiClientErrorTrait;
 
+    /** Landing "most missing" poster row: enough to fill a horizontal scroller without becoming a scroll itself. */
+    private const MOST_MISSING_LIMIT = 16;
+
     public function __construct(
         private readonly BazarrClient $bazarr,
         private readonly ConfigService $config,
@@ -49,8 +52,7 @@ class BazarrController extends AbstractController
     public function index(): Response
     {
         $error = false;
-        $wantedMovies = [];
-        $wantedEpisodes = [];
+        $mostMissing = [];
         $counts = ['movies' => 0, 'episodes' => 0, 'providers' => 0];
 
         try {
@@ -60,6 +62,12 @@ class BazarrController extends AbstractController
                 $counts = $this->bazarr->getBadgeCounts();
                 $wantedMovies = $this->bazarr->getWantedMovies();
                 $wantedEpisodes = $this->bazarr->getWantedEpisodes();
+                $mostMissing = $this->buildMostMissing(
+                    $wantedMovies,
+                    $wantedEpisodes,
+                    $this->posters->postersFor('movie'),
+                    $this->posters->postersFor('series'),
+                );
             }
         } catch (\Throwable $e) {
             $error = true;
@@ -67,12 +75,76 @@ class BazarrController extends AbstractController
         }
 
         return $this->render('bazarr/index.html.twig', [
-            'error'           => $error,
-            'counts'          => $counts,
-            'wanted_movies'   => $wantedMovies,
-            'wanted_episodes' => $wantedEpisodes,
-            'service_url'     => $this->config->get('bazarr_url'),
+            'error'        => $error,
+            'counts'       => $counts,
+            'most_missing' => $mostMissing,
+            'service_url'  => $this->config->get('bazarr_url'),
         ]);
+    }
+
+    /**
+     * Collapse the wanted movie/episode lists into one ranked "most missing"
+     * set for the landing overview's poster row. Each source row (a raw
+     * Bazarr movie/episode dict, same shape buildCards() consumes) becomes a
+     * light {kind, id, title, year, poster, missingCount} tuple; `id` is
+     * whichever of radarrId/sonarrSeriesId the row carries — the SAME id the
+     * per-item auto-search button and the series detail link key off, so a
+     * row missing it just renders with no button/link rather than a broken
+     * one.
+     *
+     * postersFor() is called ONCE per kind by the caller (index()) and the
+     * resulting maps are threaded through here — never re-fetched per row.
+     * A poster miss (multi-instance gate, or the item just isn't in the
+     * library) degrades to a no-poster tile in the template; it never breaks
+     * the row.
+     *
+     * Ranked by missingCount desc (ties broken by title, case-insensitively)
+     * and capped at MOST_MISSING_LIMIT — this is a glanceable "what needs the
+     * most work" strip, not a substitute for the full Movies/Series grids.
+     *
+     * @param list<array<string, mixed>> $wantedMovies
+     * @param list<array<string, mixed>> $wantedEpisodes
+     * @param array<int, string>         $moviePosters
+     * @param array<int, string>         $seriesPosters
+     *
+     * @return list<array{kind: 'movie'|'series', id: int|null, title: string, year: int|string|null, poster: string|null, missingCount: int}>
+     */
+    private function buildMostMissing(array $wantedMovies, array $wantedEpisodes, array $moviePosters, array $seriesPosters): array
+    {
+        $items = [];
+
+        foreach ($wantedMovies as $row) {
+            $id = isset($row['radarrId']) ? (int) $row['radarrId'] : null;
+            $items[] = [
+                'kind'         => 'movie',
+                'id'           => $id,
+                'title'        => (string) ($row['title'] ?? $row['name'] ?? '—'),
+                'year'         => $row['year'] ?? null,
+                'poster'       => $id !== null ? ($moviePosters[$id] ?? null) : null,
+                'missingCount' => is_countable($row['missing_subtitles'] ?? null) ? count($row['missing_subtitles']) : 0,
+            ];
+        }
+
+        foreach ($wantedEpisodes as $row) {
+            $id    = isset($row['sonarrSeriesId']) ? (int) $row['sonarrSeriesId'] : null;
+            $title = trim(((string) ($row['seriesTitle'] ?? $row['title'] ?? '—')) . ' ' . ((string) ($row['episode_number'] ?? '')));
+            $items[] = [
+                'kind'         => 'series',
+                'id'           => $id,
+                'title'        => $title !== '' ? $title : '—',
+                'year'         => null,
+                'poster'       => $id !== null ? ($seriesPosters[$id] ?? null) : null,
+                'missingCount' => is_countable($row['missing_subtitles'] ?? null) ? count($row['missing_subtitles']) : 0,
+            ];
+        }
+
+        usort($items, static function (array $a, array $b): int {
+            $diff = $b['missingCount'] <=> $a['missingCount'];
+
+            return $diff !== 0 ? $diff : strcasecmp($a['title'], $b['title']);
+        });
+
+        return array_slice($items, 0, self::MOST_MISSING_LIMIT);
     }
 
     #[Route('/movies', name: 'movies')]
