@@ -491,7 +491,7 @@ implementer/reviewer exchange that produced it.
   recorded in D2 as amendment M1 during the Opus review, not a post-review drift, but confirmed here
   against the actual constant name for anyone grepping the code from this doc.
 - **`SubtitleStatus` gained a fourth state, `'pending'`**, exactly as D2/I3 specified: rendered as a
-  muted, non-interactive chip (`translations/*.yaml` key `bazarr.pending`: *"Subtitle status is still
+  muted, non-interactive chip (`translations/*.yaml` key `bazarr.badge.pending`: *"Subtitle status is still
   loading from Bazarr"*), and treated identically to `'hidden'` by `attachSubtitleStatus()` so the
   search JSON contract is unchanged.
 - **The per-id fallback shipped exactly where D3/C1 required and nowhere else**:
@@ -546,7 +546,7 @@ implementer/reviewer exchange that produced it.
   ruling above; it is kept (unused, tested) as the mechanism an admin-settings save would reasonably
   want later, per the Task 7 review note — a deliberate keep, not dead-code drift.
 - **Consumer memory limit:** `docker/frankenphp/s6/messenger-worker/run` raises
-  `--memory-limit` from the implicit default to **512M** (D1/I5), documented inline in the run script
+  `--memory-limit` from an explicit **256M to 512M** (D1/I5), documented inline in the run script
   itself: `php.ini`'s `memory_limit = 1024M` is the real ceiling that prevents a fatal, but a
   256M *recycle* threshold would restart the consumer after nearly every Bazarr refresh.
 - **Everything else in D1–D5 shipped as written**: the `beta: 0` `getOrCompute()` call, the
