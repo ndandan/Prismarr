@@ -47,18 +47,22 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
     {
         $rows = $this->client->getMovies();
 
-        // Guardrail 6: only a clean, non-empty fetch may overwrite. An
-        // unreachable Bazarr yields [] plus a recorded lastError; caching
-        // that would blank every badge for the whole hard window. An empty
-        // list with no recorded error is indistinguishable from "the library
-        // is momentarily unreadable" here (mirrors MediaLibraryRefresher) —
-        // leave the previous good value alone either way.
+        // Guardrail 6: only a clean fetch may overwrite. An unreachable
+        // Bazarr yields [] plus a recorded lastError; caching that would
+        // blank every badge for the whole hard window. Unlike
+        // MediaLibraryRefresher, an EMPTY-but-clean result here is not
+        // treated as a failure: BazarrClient::getMovies() also returns []
+        // with lastError === null when Bazarr is simply unconfigured/
+        // disabled (no HTTP call is even made), which is a legitimate,
+        // permanent state — refusing to write in that case would leave every
+        // read a hard miss forever (badges stuck on 'pending', a
+        // RefreshCacheKey dispatched every 30 s, and an overdue-refresh error
+        // logged after 180 s, none of which ever resolves). Every genuine
+        // failure path of BazarrClient::request() DOES set lastError, so the
+        // check above already covers guardrail 6's intent for this dataset.
         if ($this->client->getLastError() !== null) {
             $this->logger->warning('Bazarr movie index refresh failed', ['error' => $this->client->getLastError()]);
 
-            return;
-        }
-        if ($rows === []) {
             return;
         }
 
@@ -83,12 +87,13 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
     private function refreshSeries(): void
     {
         $rows = $this->client->getSeries();
+        // See refreshMovies(): an empty-but-clean result is a legitimate
+        // permanent state (unconfigured/disabled Bazarr, or a genuinely
+        // empty Sonarr library), not a failure — only a recorded lastError
+        // blocks the write.
         if ($this->client->getLastError() !== null) {
             $this->logger->warning('Bazarr series index refresh failed', ['error' => $this->client->getLastError()]);
 
-            return;
-        }
-        if ($rows === []) {
             return;
         }
 

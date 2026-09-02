@@ -16,6 +16,9 @@ use Symfony\Component\Messenger\MessageBusInterface;
 #[AllowMockObjectsWithoutExpectations]
 class BazarrSubtitleIndexTest extends TestCase
 {
+    /** @var list<object> */
+    private array $dispatched = [];
+
     /** ServiceInstanceProvider reporting $radarr enabled Radarr / $sonarr enabled Sonarr instances. */
     private function instances(int $radarr = 1, int $sonarr = 1): ServiceInstanceProvider
     {
@@ -45,8 +48,14 @@ class BazarrSubtitleIndexTest extends TestCase
 
     private function swr(ArrayAdapter $pool): StaleWhileRevalidateCache
     {
-        $bus = new class implements MessageBusInterface {
-            public function dispatch(object $message, array $stamps = []): Envelope { return new Envelope($message); }
+        $bus = new class($this->dispatched) implements MessageBusInterface {
+            /** @param list<object> $sink */
+            public function __construct(private array &$sink) {}
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                $this->sink[] = $message;
+                return new Envelope($message);
+            }
         };
 
         return new StaleWhileRevalidateCache($pool, $pool, $bus, new NullLogger());
@@ -190,9 +199,10 @@ class BazarrSubtitleIndexTest extends TestCase
         $index = $this->index($client, $pool, $this->instances(radarr: 2));
 
         $this->assertSame('hidden', $index->movieStatus(1)['state']);
-        $this->assertFalse(
-            $pool->getItem(BazarrSubtitleIndex::KEY_MOVIES)->isHit(),
-            'the gate must run before any pool read/write',
+        $this->assertSame(
+            [],
+            $this->dispatched,
+            'the gate must run before any pool read/refresh-request — a gated install must not spend a Bazarr fetch',
         );
     }
 

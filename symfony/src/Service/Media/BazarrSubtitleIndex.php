@@ -53,6 +53,12 @@ class BazarrSubtitleIndex implements ResetInterface
     /** Seconds. Outer bound on how long a value may be served stale. */
     public const HARD_TTL = 600;
 
+    /** Cross-request throttle for the "refresh overdue" log line (see requestRefreshOnce()). */
+    private const OVERDUE_LOG_KEY = 'bazarr_subtitle_index.overdue_logged';
+
+    /** Seconds. How long a refresh may go unanswered before it's worth an operator's attention. */
+    private const OVERDUE_THRESHOLD = 180;
+
     /** @var array<int, SubtitleStatus>|null null = hard miss (index not warmed) */
     private ?array $movies = null;
 
@@ -70,22 +76,20 @@ class BazarrSubtitleIndex implements ResetInterface
     private ?bool $radarrGate = null;
     private ?bool $sonarrGate = null;
 
-    /** At most one overdue-refresh error is logged per request. */
-    private bool $overdueLogged = false;
-
     /**
-     * $client and $cacheApp are accepted but intentionally NOT stored: the
-     * badge read path (movieStatus/movieLanguages/seriesStatus) no longer
-     * calls the client or touches the pool directly — both go through $swr
-     * now. They stay as constructor parameters only so this class's public
-     * signature (positional args other services/tests construct it with)
-     * is unchanged apart from the two new arguments appended at the end;
-     * storing an unused copy of either would be dead weight PHPStan would
-     * (rightly) flag as write-only.
+     * $client is accepted but intentionally NOT stored: the badge read path
+     * (movieStatus/movieLanguages/seriesStatus) never calls the client — both
+     * go through $swr now. It stays as a constructor parameter only so this
+     * class's public signature (positional args other services/tests
+     * construct it with) is unchanged apart from the two new arguments
+     * appended at the end; storing an unused copy would be dead weight
+     * PHPStan would (rightly) flag as write-only. $cacheApp IS used — see
+     * requestRefreshOnce() — for the cross-request overdue-log throttle and
+     * the breaker check.
      */
     public function __construct(
         BazarrClient $client,
-        CacheItemPoolInterface $cacheApp,
+        private readonly CacheItemPoolInterface $cacheApp,
         private readonly ServiceInstanceProvider $instances,
         private readonly StaleWhileRevalidateCache $swr,
         private readonly LoggerInterface $logger,
@@ -94,14 +98,13 @@ class BazarrSubtitleIndex implements ResetInterface
 
     public function reset(): void
     {
-        $this->movies        = null;
-        $this->movieLangs    = null;
-        $this->series        = null;
-        $this->moviesLoaded  = false;
-        $this->seriesLoaded  = false;
-        $this->radarrGate    = null;
-        $this->sonarrGate    = null;
-        $this->overdueLogged = false;
+        $this->movies       = null;
+        $this->movieLangs   = null;
+        $this->series       = null;
+        $this->moviesLoaded = false;
+        $this->seriesLoaded = false;
+        $this->radarrGate   = null;
+        $this->sonarrGate   = null;
     }
 
     /**
@@ -275,17 +278,56 @@ class BazarrSubtitleIndex implements ResetInterface
         return $this->series = $map;
     }
 
-    /** Hard miss: ask for a rebuild, and shout once if the consumer never answers. */
+    /**
+     * Hard miss: ask for a rebuild, and — rate-limited across requests, not
+     * just this one — shout if the consumer never answers.
+     *
+     * Everything below the dispatch is wrapped in one try/catch: this runs on
+     * the badge render path (up to 588 times per Films-page load), so a
+     * broken pool adapter here must degrade to "skip the log line", never a
+     * 500. requestRefresh() above already has its own internal try/catch
+     * (StaleWhileRevalidateCache's own contract), so it's excluded from this
+     * one on purpose — a dispatch failure there is already handled/logged.
+     */
     private function requestRefreshOnce(string $key): void
     {
         $this->swr->requestRefresh($key);
 
-        if (!$this->overdueLogged && $this->swr->refreshIsOverdue($key, 180)) {
-            $this->overdueLogged = true;
+        try {
+            if (!$this->swr->refreshIsOverdue($key, self::OVERDUE_THRESHOLD)) {
+                return;
+            }
+
+            // A cold cache means every rendered badge (and every concurrent
+            // request) reaches this branch — throttle the log line itself
+            // across requests via a short-lived pool marker, the same shape
+            // StaleWhileRevalidateCache's own coalescing marker uses.
+            $marker = $this->cacheApp->getItem(self::OVERDUE_LOG_KEY);
+            if ($marker->isHit()) {
+                return;
+            }
+            $marker->set(true);
+            $marker->expiresAfter(self::OVERDUE_THRESHOLD);
+            $this->cacheApp->save($marker);
+
+            if ((new ServiceHealthCache($this->cacheApp))->isDown(BazarrClient::SERVICE)) {
+                // The open breaker is already the actionable signal — don't
+                // also point at the messenger worker, which is likely fine.
+                $this->logger->warning(
+                    'Bazarr subtitle index refresh overdue — Bazarr appears to be down (circuit breaker open)',
+                    ['key' => $key],
+                );
+
+                return;
+            }
+
             $this->logger->error(
                 'Bazarr subtitle index refresh overdue — is the messenger-worker service running?',
                 ['key' => $key],
             );
+        } catch (\Throwable) {
+            // Best-effort operational logging only; never let it affect the
+            // response.
         }
     }
 
