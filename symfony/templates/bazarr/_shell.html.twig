@@ -1,0 +1,39 @@
+{#
+  Bazarr page shell: header + pill nav paint ONCE, and the three tab views
+  (Wanted/Movies/Series) live inside one Turbo Frame so switching tabs swaps
+  only the frame's content instead of re-rendering the whole page chrome.
+  History stays a separate full Turbo Drive page (see _nav.html.twig).
+
+  A direct hit / full-page navigation renders THIS template, which includes
+  _bare.html.twig so the frame's initial content is already the requested
+  view's HTML — Turbo only fetches on a LATER frame-scoped navigation, so a
+  direct hit still costs exactly one request.
+#}
+{% extends 'base.html.twig' %}
+{% block title %}{{ 'bazarr.title'|trans }}{% endblock %}
+{% block stylesheets %}
+{{ parent() }}
+<style>
+/* Busy affordance for the frame swap — Turbo sets/removes the `busy`
+   attribute on the frame element itself around a frame-scoped navigation,
+   no JS needed here. */
+#bazarr-view[busy] { opacity: .5; pointer-events: none; transition: opacity .1s; }
+</style>
+{% endblock %}
+{% block body %}
+<div class="page-header d-print-none">
+  <div class="row align-items-center">
+    <div class="col">
+      <h2 class="page-title">{{ 'bazarr.title'|trans }}</h2>
+      <div class="text-secondary">{{ 'bazarr.subtitle'|trans }}</div>
+    </div>
+    <div class="col-auto ms-auto">{% include 'bazarr/_nav.html.twig' with { view: view } %}</div>
+  </div>
+</div>
+<div class="page-body"><div class="container-xl">
+  {# The frame's initial content IS this view's HTML: Turbo renders
+     server-supplied inner content immediately and only fetches on a later
+     frame-scoped navigation, so a direct hit costs exactly one request. #}
+  {% include 'bazarr/_bare.html.twig' %}
+</div></div>
+{% endblock %}

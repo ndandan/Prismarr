@@ -5693,6 +5693,10 @@ bazarr:
     complete: Complete
     not_tracked: Not tracked
     empty_filtered: No items match your filters
+  warming:
+    title: Loading subtitle data from Bazarr…
+    subtitle: This takes a few seconds the first time after a restart.
+    retry: Retry now
   history:
     movies_title: Movie subtitle history
     episodes_title: Episode subtitle history

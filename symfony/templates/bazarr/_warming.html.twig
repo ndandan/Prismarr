@@ -1,0 +1,63 @@
+{#
+  Cold-cache state: the messenger worker has been asked for a rebuild and we
+  are waiting. Exactly ONE automatic retry, then a manual button — a looping
+  auto-retry against a down Bazarr is a self-inflicted DoS.
+
+  This inline script runs both on a full page render and inside a frame swap:
+  Turbo's FrameRenderer re-creates script elements and the session-stable
+  nonce stays valid, so it does not need the delegated-listener treatment the
+  innerHTML-swapped dashboard widgets need.
+
+  JS comments in here open with slash-star and close with star-slash. A `{#`
+  opened comment closed with `#}` inside a script block shipped a dead modal
+  once (ced9170); TemplateStructureGuardTest now balances them.
+#}
+<div class="empty py-5" id="bazarr-warming" data-retried="0">
+  <div class="empty-icon"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>
+  <p class="empty-title">{{ 'bazarr.warming.title'|trans }}</p>
+  <p class="empty-subtitle text-secondary">{{ 'bazarr.warming.subtitle'|trans }}</p>
+  <div class="empty-action">
+    <button type="button" class="btn btn-primary d-none" id="bazarr-warming-retry">{{ 'bazarr.warming.retry'|trans }}</button>
+  </div>
+</div>
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var el = document.getElementById('bazarr-warming');
+  if (!el || el._bzWarmInit) { return; }
+  el._bzWarmInit = true;
+
+  var btn = document.getElementById('bazarr-warming-retry');
+  var frame = document.getElementById('bazarr-view');
+
+  function reloadView() {
+    if (frame && typeof frame.reload === 'function') { frame.reload(); }
+    else { window.location.reload(); }
+  }
+
+  /* One automatic retry, ~4 s out: long enough for a queued refresh (the
+     consumer polls once a second) plus the Bazarr fetch itself. */
+  var timer = setTimeout(function () {
+    el.setAttribute('data-retried', '1');
+    if (btn) { btn.classList.remove('d-none'); }
+    reloadView();
+  }, 4000);
+
+  if (btn) {
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      /* Force an inline, breaker-gated rebuild — this is the recovery path
+         when the messenger worker itself is down. */
+      fetch({{ path('app_bazarr_api_refresh')|json_encode|raw }}, {
+        method: 'POST',
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      }).then(function () { reloadView(); })
+        .catch(function () { btn.disabled = false; });
+    });
+  }
+
+  function teardown() { clearTimeout(timer); }
+  if (frame) { frame.addEventListener('turbo:before-frame-render', teardown, { once: true }); }
+  document.addEventListener('turbo:before-render', teardown, { once: true });
+})();
+</script>

@@ -1,12 +1,3 @@
-{% extends 'base.html.twig' %}
-
-{% block title %}{{ 'bazarr.title'|trans }}{% endblock %}
-
-{% block stylesheets %}
-{{ parent() }}
-{% endblock %}
-
-{% block body %}
 {#
   Compact landing overview (Task 8 of the visual & detail pass): stat tiles +
   a "most missing" poster row, replacing the two long Wanted tables this page
@@ -64,24 +55,8 @@
 }
 </style>
 
-<div class="page-header d-print-none">
-  <div class="row align-items-center">
-    <div class="col">
-      <h2 class="page-title">{{ 'bazarr.title'|trans }}</h2>
-      <div class="text-secondary">{{ 'bazarr.subtitle'|trans }}</div>
-    </div>
-    <div class="col-auto ms-auto">
-      {% include 'bazarr/_nav.html.twig' %}
-    </div>
-  </div>
-</div>
-
-<div class="page-body">
-  <div class="container-xl">
-
-    {% if error %}
-      {% include 'error/_service_banner.html.twig' with { service: 'Bazarr', wizard_route: 'admin_settings_index', configured_url: service_url, reason: 'unreachable' } %}
-    {% else %}
+{# error and warming states are handled by bazarr/_bare.html.twig before this
+   partial is ever included — this file only renders the ready state. #}
       <div class="row row-cards mb-3">
         <div class="col-sm-6 col-lg-4">
           <div class="card card-sm">
@@ -176,8 +151,3 @@
           </div>
         {% endif %}
       </div>
-    {% endif %}
-
-  </div>
-</div>
-{% endblock %}

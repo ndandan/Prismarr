@@ -5690,6 +5690,10 @@ bazarr:
     complete: Complet
     not_tracked: Non suivi
     empty_filtered: Aucun élément ne correspond aux filtres
+  warming:
+    title: Chargement des données de sous-titres depuis Bazarr…
+    subtitle: Cela prend quelques secondes la première fois après un redémarrage.
+    retry: Réessayer
   history:
     movies_title: Historique des sous-titres de films
     episodes_title: Historique des sous-titres d'épisodes

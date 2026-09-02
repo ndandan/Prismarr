@@ -163,14 +163,41 @@ class TemplateStructureGuardTest extends TestCase
             'media/series.html.twig',
             'media/_subtitle_badge.html.twig',
             'bazarr/index.html.twig',
-            'bazarr/movies.html.twig',
-            'bazarr/series.html.twig',
+            'bazarr/_shell.html.twig',
+            'bazarr/_bare.html.twig',
             'bazarr/_grid.html.twig',
         ] as $file) {
             $this->assertStringNotContainsString(
                 'subtitle_status_single(',
                 (string) file_get_contents($root . $file),
                 $file . ' renders many badges — the per-id lookup would be an N+1 against Bazarr',
+            );
+        }
+    }
+
+    public function testTheGridTearsDownOnBothTheFrameAndTheDocumentEvent(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_grid.html.twig');
+
+        // A frame swap fires neither turbo:before-render nor turbo:render, so
+        // a document-only binding leaks the observer and the debounce timer
+        // and accumulates one dead listener per view switch.
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-render', teardown)"));
+    }
+
+    public function testNewBazarrTemplatesBalanceTwigComments(): void
+    {
+        // ced9170: a JS comment opened with slash-star and closed with `#}`
+        // silently swallowed the rest of a <script> and shipped a dead modal.
+        foreach (['bazarr/_shell.html.twig', 'bazarr/_bare.html.twig', 'bazarr/_warming.html.twig', 'bazarr/_grid.html.twig'] as $file) {
+            $src = (string) file_get_contents(__DIR__ . '/../../templates/' . $file);
+            $this->assertSame(
+                substr_count($src, '{#'),
+                substr_count($src, '#}'),
+                $file . ': unbalanced Twig comment delimiters',
             );
         }
     }

@@ -281,12 +281,20 @@ a.media-card, .media-card[data-bazarr-search] { cursor: pointer; }
 
       // Turbo re-executes body scripts on each visit; the fresh grid element's
       // one-shot flag makes re-init idempotent, and this teardown drops the
-      // observer + document listener so nothing leaks across navigations.
+      // observer + timer so nothing leaks across navigations.
+      //
+      // Teardown must be dual-bound. A frame swap fires
+      // turbo:before-frame-render on the frame element and NO document-level
+      // turbo:before-render; a full-page Turbo Drive visit (direct hit,
+      // History tab) fires only the latter. Removing both is idempotent.
+      var frameEl = document.getElementById('bazarr-view');
       function teardown() {
         if (io) { io.disconnect(); io = null; }
         clearTimeout(searchTimer);
+        if (frameEl) { frameEl.removeEventListener('turbo:before-frame-render', teardown); }
         document.removeEventListener('turbo:before-render', teardown);
       }
+      if (frameEl) { frameEl.addEventListener('turbo:before-frame-render', teardown); }
       document.addEventListener('turbo:before-render', teardown);
 
       apply();

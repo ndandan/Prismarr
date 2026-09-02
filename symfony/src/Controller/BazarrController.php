@@ -51,217 +51,152 @@ class BazarrController extends AbstractController
     ) {}
 
     #[Route('', name: 'index')]
-    public function index(): Response
+    public function index(Request $request): Response
     {
         $error = false;
-        $mostMissing = [];
+        $items = [];
         $counts = ['movies' => 0, 'episodes' => 0, 'providers' => 0];
+        $warming = false;
 
         try {
             if (!$this->bazarr->ping()) {
                 $error = true;
             } else {
-                $counts = $this->bazarr->getBadgeCounts();
-                $wantedMovies = $this->bazarr->getWantedMovies();
-                $wantedEpisodes = $this->bazarr->getWantedEpisodes();
-                $mostMissing = $this->buildMostMissing(
-                    $wantedMovies,
-                    $wantedEpisodes,
-                    $this->posters->postersFor('movie'),
-                    $this->posters->postersFor('series'),
-                );
+                $badges      = $this->bazarrIndex->badgeCounts();
+                $mostMissing = $this->bazarrIndex->mostMissing();
+
+                $counts  = $badges['counts'];
+                $warming = $badges['state'] === 'warming' || $mostMissing['state'] === 'warming';
+
+                $items = $mostMissing['items'];
+                // Merge the two per-kind candidate lists, re-rank across kinds with
+                // the rule the old buildMostMissing() used, and cut to the strip's
+                // size.
+                usort($items, static fn (array $a, array $b): int
+                    => ($b['missingCount'] <=> $a['missingCount']) ?: strcasecmp($a['title'], $b['title']));
+                $items = array_slice($items, 0, self::MOST_MISSING_LIMIT);
+
+                // Posters are joined HERE, from MediaLibraryCache, so their
+                // freshness follows the library rather than the Bazarr window.
+                $moviePosters  = $this->posters->postersFor('movie');
+                $seriesPosters = $this->posters->postersFor('series');
+                foreach ($items as $i => $item) {
+                    $map = $item['kind'] === 'movie' ? $moviePosters : $seriesPosters;
+                    $items[$i]['poster'] = $item['id'] !== null ? ($map[$item['id']] ?? null) : null;
+                }
             }
         } catch (\Throwable $e) {
             $error = true;
             $this->logger->warning('Bazarr index failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
         }
 
-        return $this->render('bazarr/index.html.twig', [
+        return $this->renderBazarrView($request, 'wanted', [
             'error'        => $error,
             'counts'       => $counts,
-            'most_missing' => $mostMissing,
+            'most_missing' => $items,
+            'warming'      => $warming,
             'service_url'  => $this->config->get('bazarr_url'),
         ]);
     }
 
     /**
-     * Collapse the wanted movie/episode lists into one ranked "most missing"
-     * set for the landing overview's poster row. Each source row (a raw
-     * Bazarr movie/episode dict, same shape buildCards() consumes) becomes a
-     * light {kind, id, title, year, poster, missingCount} tuple; `id` is
-     * whichever of radarrId/sonarrSeriesId the row carries — the SAME id the
-     * per-item auto-search button and the series detail link key off, so a
-     * row missing it just renders with no button/link rather than a broken
-     * one.
+     * Two response shapes, one URL:
+     *  - a normal request renders the full page (shell + nav + the frame with
+     *    this view's content already inside it — no double fetch);
+     *  - a Turbo frame navigation (the `Turbo-Frame` request header, set
+     *    automatically by Turbo) renders ONLY the frame.
      *
-     * postersFor() is called ONCE per kind by the caller (index()) and the
-     * resulting maps are threaded through here — never re-fetched per row.
-     * A poster miss (multi-instance gate, or the item just isn't in the
-     * library) degrades to a no-poster tile in the template; it never breaks
-     * the row.
+     * The frame response MUST still contain the <turbo-frame id="bazarr-view">
+     * element: Turbo locates the replacement by matching that id inside the
+     * response, and a bare inner fragment leaves the frame empty with a
+     * "Response has no matching <turbo-frame>" console error. That is what
+     * bazarr/_bare.html.twig exists for.
      *
-     * Ranked by missingCount desc (ties broken by title, case-insensitively)
-     * and capped at MOST_MISSING_LIMIT — this is a glanceable "what needs the
-     * most work" strip, not a substitute for the full Movies/Series grids.
+     * Vary: Turbo-Frame because both shapes share one URL.
      *
-     * @param list<array<string, mixed>> $wantedMovies
-     * @param list<array<string, mixed>> $wantedEpisodes
-     * @param array<int, string>         $moviePosters
-     * @param array<int, string>         $seriesPosters
-     *
-     * @return list<array{kind: 'movie'|'series', id: int|null, title: string, year: int|string|null, poster: string|null, missingCount: int}>
+     * @param array<string, mixed> $params
      */
-    private function buildMostMissing(array $wantedMovies, array $wantedEpisodes, array $moviePosters, array $seriesPosters): array
+    private function renderBazarrView(Request $request, string $view, array $params): Response
     {
-        $items = [];
+        $frame    = $request->headers->get('Turbo-Frame') !== null;
+        $template = $frame ? 'bazarr/_bare.html.twig' : 'bazarr/_shell.html.twig';
 
-        foreach ($wantedMovies as $row) {
-            $id = isset($row['radarrId']) ? (int) $row['radarrId'] : null;
-            $items[] = [
-                'kind'         => 'movie',
-                'id'           => $id,
-                'title'        => (string) ($row['title'] ?? $row['name'] ?? '—'),
-                'year'         => $row['year'] ?? null,
-                'poster'       => $id !== null ? ($moviePosters[$id] ?? null) : null,
-                'missingCount' => is_countable($row['missing_subtitles'] ?? null) ? count($row['missing_subtitles']) : 0,
-            ];
-        }
+        $response = $this->render($template, $params + ['view' => $view]);
+        $response->headers->set('Vary', 'Turbo-Frame');
 
-        foreach ($wantedEpisodes as $row) {
-            $id    = isset($row['sonarrSeriesId']) ? (int) $row['sonarrSeriesId'] : null;
-            $title = trim(((string) ($row['seriesTitle'] ?? $row['title'] ?? '—')) . ' ' . ((string) ($row['episode_number'] ?? '')));
-            $items[] = [
-                'kind'         => 'series',
-                'id'           => $id,
-                'title'        => $title !== '' ? $title : '—',
-                'year'         => null,
-                'poster'       => $id !== null ? ($seriesPosters[$id] ?? null) : null,
-                'missingCount' => is_countable($row['missing_subtitles'] ?? null) ? count($row['missing_subtitles']) : 0,
-            ];
-        }
-
-        usort($items, static function (array $a, array $b): int {
-            $diff = $b['missingCount'] <=> $a['missingCount'];
-
-            return $diff !== 0 ? $diff : strcasecmp($a['title'], $b['title']);
-        });
-
-        return array_slice($items, 0, self::MOST_MISSING_LIMIT);
+        return $response;
     }
 
     #[Route('/movies', name: 'movies')]
-    public function movies(): Response
+    public function movies(Request $request): Response
     {
         $error = false;
         $cards = [];
         $languages = [];
+        $warming = false;
 
         try {
             if (!$this->bazarr->ping()) {
                 $error = true;
             } else {
-                ['cards' => $cards, 'languages' => $languages] = $this->buildCards($this->bazarr->getMovies(), 'movie');
+                $out     = $this->bazarrIndex->movieCards();
+                $warming = $out['state'] === 'warming';
+                $cards     = $out['cards'];
+                $languages = $out['languages'];
+
+                $posters = $this->posters->postersFor('movie');
+                foreach ($cards as $i => $card) {
+                    $cards[$i]['poster'] = $card['movieId'] !== null ? ($posters[$card['movieId']] ?? null) : null;
+                }
             }
         } catch (\Throwable $e) {
             $error = true;
             $this->logger->warning('Bazarr movies failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
         }
 
-        return $this->render('bazarr/movies.html.twig', [
+        return $this->renderBazarrView($request, 'movies', [
             'error'       => $error,
             'cards'       => $cards,
             'languages'   => $languages,
+            'warming'     => $warming,
             'service_url' => $this->config->get('bazarr_url'),
         ]);
     }
 
     #[Route('/series', name: 'series')]
-    public function series(): Response
+    public function series(Request $request): Response
     {
         $error = false;
         $cards = [];
         $languages = [];
+        $warming = false;
 
         try {
             if (!$this->bazarr->ping()) {
                 $error = true;
             } else {
-                ['cards' => $cards, 'languages' => $languages] = $this->buildCards($this->bazarr->getSeries(), 'series');
+                $out     = $this->bazarrIndex->seriesCards();
+                $warming = $out['state'] === 'warming';
+                $cards     = $out['cards'];
+                $languages = $out['languages'];
+
+                $posters = $this->posters->postersFor('series');
+                foreach ($cards as $i => $card) {
+                    $cards[$i]['poster'] = $card['seriesId'] !== null ? ($posters[$card['seriesId']] ?? null) : null;
+                }
             }
         } catch (\Throwable $e) {
             $error = true;
             $this->logger->warning('Bazarr series failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
         }
 
-        return $this->render('bazarr/series.html.twig', [
+        return $this->renderBazarrView($request, 'series', [
             'error'       => $error,
             'cards'       => $cards,
             'languages'   => $languages,
+            'warming'     => $warming,
             'service_url' => $this->config->get('bazarr_url'),
         ]);
-    }
-
-    /**
-     * Enrich Bazarr's OWN movie/series rows into the compact card shape the
-     * poster-grid + filter bar consume client-side.
-     *
-     * The status + missing-language codes are computed DIRECTLY from these rows
-     * (BazarrSubtitleIndex::computeMovieStatus/computeSeriesStatus +
-     * BazarrLangs::extract) — this is Bazarr's own list, keyed by its own
-     * radarrId/sonarrSeriesId, so there is no id-collision risk and neither the
-     * multi-instance gate nor a per-card index lookup applies here.
-     *
-     * Posters come from postersFor() (called ONCE per action, library-gated): a
-     * multi-instance install yields an empty map, so every card degrades to a
-     * no-poster tile while the list + status still render — the correct degraded
-     * state.
-     *
-     * `substate` collapses BazarrSubtitleIndex's 'hidden' state to 'not-tracked'
-     * for the tab (no subtitle profile, or a series with zero episode files).
-     * `languages` is the distinct set of missing-language codes across every
-     * card, feeding the Language filter <select>.
-     *
-     * @param list<array<string, mixed>> $rows
-     * @param 'movie'|'series'            $kind
-     *
-     * @return array{cards: list<array{title: string, year: int|string|null, poster: string|null, substate: string, count: int, missingLangs: list<string>, seriesId: int|null, movieId: int|null}>, languages: list<string>}
-     */
-    private function buildCards(array $rows, string $kind): array
-    {
-        $posters = $this->posters->postersFor($kind);
-        $idKey   = $kind === 'movie' ? 'radarrId' : 'sonarrSeriesId';
-
-        $cards   = [];
-        $langSet = [];
-        foreach ($rows as $row) {
-            $status = $kind === 'movie'
-                ? BazarrSubtitleIndex::computeMovieStatus($row)
-                : BazarrSubtitleIndex::computeSeriesStatus($row);
-            $substate = $status['state'] === 'hidden' ? 'not-tracked' : $status['state'];
-
-            $codes = [];
-            foreach (BazarrLangs::extract($row)['missing'] as $lang) {
-                $codes[$lang['lang']] = true;
-                $langSet[$lang['lang']] = true;
-            }
-
-            $id = isset($row[$idKey]) ? (int) $row[$idKey] : null;
-
-            $cards[] = [
-                'title'        => (string) ($row['title'] ?? ''),
-                'year'         => $row['year'] ?? null,
-                'poster'       => $id !== null ? ($posters[$id] ?? null) : null,
-                'substate'     => $substate,
-                'count'        => $status['count'],
-                'missingLangs' => array_keys($codes),
-                'seriesId'     => $kind === 'series' ? $id : null,
-                'movieId'      => $kind === 'movie' ? $id : null,
-            ];
-        }
-
-        ksort($langSet);
-
-        return ['cards' => $cards, 'languages' => array_keys($langSet)];
     }
 
     #[Route('/history', name: 'history')]
