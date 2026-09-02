@@ -114,4 +114,13 @@ class BazarrControllerTest extends AbstractWebTestCase
         $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
         self::assertFalse($payload['ok']);
     }
+
+    public function testTheRefreshEndpointDeniesAnonymousAccess(): void
+    {
+        $this->client->getCookieJar()->clear();
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'POST api/refresh must redirect anonymous users');
+    }
 }

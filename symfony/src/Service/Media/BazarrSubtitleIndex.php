@@ -60,6 +60,21 @@ class BazarrSubtitleIndex implements ResetInterface
     /** `/api/badges` counts, refreshed alongside the movie dataset (one cheap call, no dedicated message). */
     public const KEY_BADGES = 'bazarr_subtitle_index.badges';
 
+    /**
+     * A plain `cache.app` item (NOT an SWR envelope) journalling recent
+     * per-id mutation patches, keyed "<kind>:<id>" so repeated mutations on
+     * one item collapse to the newest. Read by applyPatchesNewerThan() so a
+     * bulk refresh already in flight when a mutation lands can re-apply that
+     * patch on top of its own (older) result before writing (spec D3 as
+     * amended, defect C2).
+     *
+     * @var string
+     */
+    public const KEY_PATCHES = 'bazarr_subtitle_index.patches';
+
+    /** Seconds a journalled patch is kept — comfortably longer than a Bazarr full-list fetch can take. */
+    public const PATCH_TTL = 120;
+
     /** Candidates kept per kind; the controller merges + re-sorts + slices to 16. */
     public const MOST_MISSING_CANDIDATES = 32;
 
@@ -100,18 +115,15 @@ class BazarrSubtitleIndex implements ResetInterface
     private ?bool $sonarrGate = null;
 
     /**
-     * $client is accepted but intentionally NOT stored: the badge read path
-     * (movieStatus/movieLanguages/seriesStatus) never calls the client — both
-     * go through $swr now. It stays as a constructor parameter only so this
-     * class's public signature (positional args other services/tests
-     * construct it with) is unchanged apart from the two new arguments
-     * appended at the end; storing an unused copy would be dead weight
-     * PHPStan would (rightly) flag as write-only. $cacheApp IS used — see
-     * requestRefreshOnce() — for the cross-request overdue-log throttle and
-     * the breaker check.
+     * $client is used ONLY by refreshItem() — the post-mutation per-id
+     * repair path. The badge read path (movieStatus/movieLanguages/
+     * seriesStatus) never calls it; both go through $swr. $cacheApp is used
+     * both for the patch journal (KEY_PATCHES) and — see
+     * requestRefreshOnce() — the cross-request overdue-log throttle and the
+     * breaker check.
      */
     public function __construct(
-        BazarrClient $client,
+        private readonly BazarrClient $client,
         private readonly CacheItemPoolInterface $cacheApp,
         private readonly ServiceInstanceProvider $instances,
         private readonly StaleWhileRevalidateCache $swr,
@@ -143,6 +155,162 @@ class BazarrSubtitleIndex implements ResetInterface
         foreach (self::ALL_KEYS as $key) {
             $this->swr->delete($key);
         }
+    }
+
+    /**
+     * Queue a bulk rebuild of $key without waiting for the next reader to hit
+     * a hard miss or a stale soft window. Used by mutation endpoints that
+     * cannot patch a specific id in place — e.g. apiDownloadEpisode, which
+     * only knows an episode id, not the series id it belongs to — so the
+     * queue happens synchronously in the request that performed the mutation
+     * (guardrail 9) instead of the fix waiting for someone else's page view.
+     */
+    public function requestRefresh(string $key): void
+    {
+        $this->swr->requestRefresh($key);
+    }
+
+    /**
+     * Post-mutation repair for ONE item. The user who just downloaded a
+     * subtitle must see the new count immediately; everyone else catches up
+     * within one consumer cycle.
+     *
+     * Order of operations matters. The patch is journalled BEFORE the pooled
+     * maps are touched, so a bulk refresh already in flight (which will
+     * overwrite those maps when it lands) can re-apply it — the ordering rule
+     * is "the bulk result is authoritative except for patches recorded at or
+     * after its fetch start" (spec D3 as amended, defect C2).
+     *
+     * A failed or empty per-id fetch leaves the pooled maps and the journal
+     * untouched (guardrail 6): the previous good value is never overwritten
+     * by a hard-missing per-id lookup, and a queued bulk rebuild is still
+     * requested so the item self-heals on the next cycle.
+     *
+     * @param 'movie'|'series' $kind
+     */
+    public function refreshItem(string $kind, int $id): void
+    {
+        $statusKey = $kind === 'movie' ? self::KEY_MOVIES : self::KEY_SERIES;
+        $rows      = $kind === 'movie' ? $this->client->getMovies([$id]) : $this->client->getSeries([$id]);
+
+        if ($this->client->getLastError() !== null || $rows === []) {
+            $this->swr->requestRefresh($statusKey);
+
+            return;
+        }
+
+        $row    = $rows[0];
+        $status = $kind === 'movie' ? self::computeMovieStatus($row) : self::computeSeriesStatus($row);
+        $langs  = $kind === 'movie' ? self::extractMovieLangs($row) : null;
+
+        $this->journalPatch($kind, $id, $status, $langs);
+        $this->patchPooledMap($statusKey, $id, $status);
+        if ($kind === 'movie') {
+            $this->patchPooledMap(self::KEY_MOVIE_LANGS, $id, $langs);
+        }
+
+        // Drop the per-request memo so this request re-reads the patched maps.
+        $this->reset();
+
+        // Everyone else's view, plus the cards/most-missing/badge datasets
+        // derived from the same full-list fetch.
+        $this->swr->requestRefresh($statusKey);
+    }
+
+    /**
+     * Merge one id into a pooled map WITHOUT touching its fetchedAt — a
+     * one-row patch must not make the whole map look freshly fetched (the
+     * soft-TTL self-heal / stale-request logic must still see the map's real
+     * age).
+     */
+    private function patchPooledMap(string $key, int $id, mixed $value): void
+    {
+        $hit = $this->swr->read($key, self::SOFT_TTL);
+        if ($hit === null || !is_array($hit['value'])) {
+            return; // hard miss: the journal + the requested rebuild cover it
+        }
+
+        $map      = $hit['value'];
+        $map[$id] = $value;
+
+        $item = $this->cacheApp->getItem($key);
+        $env  = $item->isHit() ? $item->get() : null;
+        $at   = is_array($env) && isset($env['fetchedAt']) ? (int) $env['fetchedAt'] : time();
+
+        $this->swr->write($key, $map, self::HARD_TTL, $at);
+    }
+
+    /**
+     * Journal one patch under KEY_PATCHES, keyed "<kind>:<id>" so repeated
+     * mutations on the same item collapse to the newest. Entries older than
+     * PATCH_TTL are dropped opportunistically so the journal never grows
+     * unbounded even though the whole item also carries its own
+     * expiresAfter(PATCH_TTL).
+     *
+     * @param 'movie'|'series' $kind
+     * @param SubtitleStatus $status
+     * @param MovieLangs|null $langs
+     */
+    private function journalPatch(string $kind, int $id, array $status, ?array $langs): void
+    {
+        $item    = $this->cacheApp->getItem(self::KEY_PATCHES);
+        $journal = $item->isHit() && is_array($item->get()) ? $item->get() : [];
+
+        $now = time();
+        foreach ($journal as $patchKey => $entry) {
+            if (!is_array($entry) || !isset($entry['at']) || ($now - (int) $entry['at']) >= self::PATCH_TTL) {
+                unset($journal[$patchKey]);
+            }
+        }
+
+        $journal["$kind:$id"] = [
+            'at'     => $now,
+            'kind'   => $kind,
+            'id'     => $id,
+            'status' => $status,
+            'langs'  => $langs,
+        ];
+
+        $item->set($journal);
+        $item->expiresAfter(self::PATCH_TTL);
+        $this->cacheApp->save($item);
+    }
+
+    /**
+     * Apply every journalled patch of $kind recorded at or after
+     * $fetchStartedAt on top of $statusMap/$langsMap. Called by
+     * BazarrIndexRefresher immediately before it writes a freshly fetched
+     * bulk result, so a mutation that landed WHILE that fetch was in flight
+     * is not silently reverted by it (spec D3 as amended, defect C2). A patch
+     * older than $fetchStartedAt is ignored: that fetch's own result already
+     * reflects it.
+     *
+     * @param 'movie'|'series' $kind
+     * @param array<int, mixed> $statusMap
+     * @param array<int, mixed> $langsMap
+     * @return array{0: array<int, mixed>, 1: array<int, mixed>}
+     */
+    public function applyPatchesNewerThan(string $kind, int $fetchStartedAt, array $statusMap, array $langsMap): array
+    {
+        $item    = $this->cacheApp->getItem(self::KEY_PATCHES);
+        $journal = $item->isHit() && is_array($item->get()) ? $item->get() : [];
+
+        foreach ($journal as $entry) {
+            if (!is_array($entry) || ($entry['kind'] ?? null) !== $kind) {
+                continue;
+            }
+            if ((int) ($entry['at'] ?? 0) < $fetchStartedAt) {
+                continue;
+            }
+
+            $id             = (int) ($entry['id'] ?? 0);
+            $statusMap[$id] = $entry['status'];
+            if ($kind === 'movie' && isset($entry['langs']) && is_array($entry['langs'])) {
+                $langsMap[$id] = $entry['langs'];
+            }
+        }
+
+        return [$statusMap, $langsMap];
     }
 
     /** @return SubtitleStatus */

@@ -7,6 +7,7 @@ use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\ServiceHealthCache;
+use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
@@ -26,9 +27,25 @@ class BazarrIndexRefresherTest extends TestCase
         return new StaleWhileRevalidateCache($pool, $pool, $bus, new NullLogger());
     }
 
+    /**
+     * BazarrIndexRefresher's own patch-application collaborator. A plain
+     * BazarrSubtitleIndex over the SAME pool is used (not a mock) so
+     * applyPatchesNewerThan() reads whatever KEY_PATCHES journal is actually
+     * in that pool — none of these tests write to it, so it is a no-op here;
+     * Task 7's ordering-rule behaviour is covered end-to-end in
+     * BazarrSubtitleIndexPatchTest.
+     */
+    private function index(ArrayAdapter $pool, BazarrClient $client): BazarrSubtitleIndex
+    {
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('hasExactlyOneEnabled')->willReturn(true);
+
+        return new BazarrSubtitleIndex($client, $pool, $instances, $this->swr($pool), new NullLogger());
+    }
+
     private function refresher(ArrayAdapter $pool, BazarrClient $client): BazarrIndexRefresher
     {
-        return new BazarrIndexRefresher($client, $this->swr($pool), new ServiceHealthCache($pool), new NullLogger());
+        return new BazarrIndexRefresher($client, $this->swr($pool), new ServiceHealthCache($pool), new NullLogger(), $this->index($pool, $client));
     }
 
     public function testSupportsOnlyTheBazarrDatasetKeys(): void

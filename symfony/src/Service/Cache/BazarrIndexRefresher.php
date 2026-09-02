@@ -21,6 +21,7 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
         private readonly StaleWhileRevalidateCache $swr,
         private readonly ServiceHealthCache $health,
         private readonly LoggerInterface $logger,
+        private readonly BazarrSubtitleIndex $index,
     ) {}
 
     public function supports(string $key): bool
@@ -46,6 +47,11 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
 
     private function refreshMovies(): void
     {
+        // Captured BEFORE the client call so applyPatchesNewerThan() below
+        // can tell apart a mutation patch recorded while this fetch was in
+        // flight (must survive) from one this fetch's own result already
+        // reflects (must not double-apply) — spec D3 as amended, defect C2.
+        $fetchStartedAt = time();
         $rows = $this->client->getMovies();
 
         // Guardrail 6: only a clean fetch may overwrite. An unreachable
@@ -120,6 +126,12 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             => ($b['missingCount'] <=> $a['missingCount']) ?: strcasecmp($a['title'], $b['title']));
         $candidates = array_slice($candidates, 0, BazarrSubtitleIndex::MOST_MISSING_CANDIDATES);
 
+        // A mutation's per-id patch (BazarrSubtitleIndex::refreshItem())
+        // recorded at or after $fetchStartedAt must survive this write —
+        // otherwise a subtitle download that lands mid-fetch would be
+        // silently reverted the moment this bulk result is written below.
+        [$status, $langs] = $this->index->applyPatchesNewerThan('movie', $fetchStartedAt, $status, $langs);
+
         // /api/badges is one cheap call and belongs to the same refresh cycle;
         // giving it its own message would double queue traffic for nothing.
         // BazarrClient::getBadgeCounts() fails CLOSED to all-zeros AND
@@ -155,6 +167,8 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
 
     private function refreshSeries(): void
     {
+        // See refreshMovies(): captured before the client call.
+        $fetchStartedAt = time();
         $rows = $this->client->getSeries();
         // See refreshMovies(): an empty-but-clean result is a legitimate
         // permanent state (unconfigured/disabled Bazarr, or a genuinely
@@ -209,6 +223,11 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
         usort($candidates, static fn (array $a, array $b): int
             => ($b['missingCount'] <=> $a['missingCount']) ?: strcasecmp($a['title'], $b['title']));
         $candidates = array_slice($candidates, 0, BazarrSubtitleIndex::MOST_MISSING_CANDIDATES);
+
+        // See refreshMovies(): a mutation patch recorded at or after
+        // $fetchStartedAt must survive this write. Series has no langs map,
+        // so only the returned status half is used.
+        [$status] = $this->index->applyPatchesNewerThan('series', $fetchStartedAt, $status, []);
 
         $now = time();
         $this->swr->write(BazarrSubtitleIndex::KEY_SERIES_CARDS, ['cards' => $cards, 'languages' => array_keys($langSet)], BazarrSubtitleIndex::HARD_TTL, $now);

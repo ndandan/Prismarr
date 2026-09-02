@@ -4,6 +4,7 @@ namespace App\Controller;
 
 use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Entity\ServiceInstance;
+use App\Service\Cache\BazarrIndexRefresher;
 use App\Service\ConfigService;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\BazarrLangs;
@@ -415,16 +416,22 @@ class BazarrController extends AbstractController
      * Download a specific subtitle result for a movie. No CSRF token —
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
      *
-     * Drops the subtitle-status cache on success: the badge this movie renders
-     * everywhere else is derived from Bazarr's missing-subtitle counts, which
-     * this call just changed (spec §7.4).
+     * Refetches just this movie and patches the badge/langs maps in place on
+     * success — dropping the whole pool (the old invalidate() behaviour)
+     * would make the very next visitor pay a fresh 'pending' hard miss for
+     * the item the user just fixed. See BazarrSubtitleIndex::refreshItem().
      */
     #[Route('/api/download/movie', name: 'api_download_movie', methods: ['POST'])]
     public function apiDownloadMovie(Request $request): JsonResponse
     {
         $ok = $this->bazarr->downloadMovie($request->request->all());
         if ($ok) {
-            $this->bazarrIndex->invalidate();
+            $radarrId = $request->request->getInt('radarrid');
+            if ($radarrId > 0) {
+                $this->bazarrIndex->refreshItem('movie', $radarrId);
+            } else {
+                $this->bazarrIndex->invalidate();
+            }
         }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
@@ -433,6 +440,11 @@ class BazarrController extends AbstractController
     /**
      * Download a specific subtitle result for an episode. No CSRF token —
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
+     *
+     * The POST body carries an episodeid, not a series id, so there is
+     * nothing per-id to patch in the series map here — keep invalidate() but
+     * queue the bulk rebuild immediately (requestRefresh) rather than waiting
+     * for the next reader to hit a hard miss.
      */
     #[Route('/api/download/episode', name: 'api_download_episode', methods: ['POST'])]
     public function apiDownloadEpisode(Request $request): JsonResponse
@@ -440,6 +452,7 @@ class BazarrController extends AbstractController
         $ok = $this->bazarr->downloadEpisode($request->request->all());
         if ($ok) {
             $this->bazarrIndex->invalidate();
+            $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_SERIES);
         }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
@@ -447,29 +460,57 @@ class BazarrController extends AbstractController
 
     /**
      * Trigger Bazarr's automatic "search missing" for one Radarr movie.
+     *
+     * Bazarr's search-missing is asynchronous on its own side, so the
+     * immediate per-id refetch below may still report the old count — the
+     * queued bulk rebuild (refreshItem()'s own requestRefresh) is what
+     * eventually corrects it. Same behaviour as before this task, just
+     * without the 7 s invalidate()-then-refill penalty.
      */
     #[Route('/api/auto/movie/{radarrId}', name: 'api_auto_movie', methods: ['POST'], requirements: ['radarrId' => '\d+'])]
     public function apiAutoMovie(int $radarrId): JsonResponse
     {
         $ok = $this->bazarr->searchMissingMovie($radarrId);
         if ($ok) {
-            $this->bazarrIndex->invalidate();
+            $this->bazarrIndex->refreshItem('movie', $radarrId);
         }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
     }
 
     /**
-     * Trigger Bazarr's automatic "search missing" for one Sonarr series.
+     * Trigger Bazarr's automatic "search missing" for one Sonarr series. See
+     * apiAutoMovie()'s note on Bazarr's own search being asynchronous.
      */
     #[Route('/api/auto/series/{seriesId}', name: 'api_auto_series', methods: ['POST'], requirements: ['seriesId' => '\d+'])]
     public function apiAutoSeries(int $seriesId): JsonResponse
     {
         $ok = $this->bazarr->searchMissingSeries($seriesId);
         if ($ok) {
-            $this->bazarrIndex->invalidate();
+            $this->bazarrIndex->refreshItem('series', $seriesId);
         }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
+    }
+
+    /**
+     * Force an inline rebuild of the Bazarr datasets. This is the ONLY
+     * inline Bazarr fetch left in the app: it is admin-only, explicitly
+     * user-driven (the warming panel's Retry button), rate-limited by the
+     * refresher's own freshness check, and bounded by BazarrClient's own 3 s
+     * connect / 8 s total timeouts. It exists so a dead messenger-worker is
+     * recoverable from the UI instead of leaving the tab warming forever.
+     *
+     * invalidate() runs FIRST so the refresher's own "already fresh"
+     * early-return cannot short-circuit a user-requested retry.
+     */
+    #[Route('/api/refresh', name: 'api_refresh', methods: ['POST'])]
+    public function apiRefresh(BazarrIndexRefresher $refresher): JsonResponse
+    {
+        $this->bazarrIndex->invalidate();
+        $refresher->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+        $refresher->refresh(BazarrSubtitleIndex::KEY_SERIES);
+
+        return $this->json(['ok' => true]);
     }
 }
