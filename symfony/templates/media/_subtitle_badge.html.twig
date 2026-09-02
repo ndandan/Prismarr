@@ -31,7 +31,13 @@
 {% set _missing_cls = poster ? 'poster-chip is-warning' : 'bg-warning-lt' %}
 {% set _complete_cls = poster ? 'poster-chip is-success' : 'bg-success-lt' %}
 {% if st.state != 'hidden' %}
-  {% if st.state == 'missing' and is_granted('ROLE_ADMIN') %}
+  {% if st.state == 'pending' %}
+    {# Index not warmed yet (fresh deploy / Bazarr outage). Rendering NOTHING
+       here would read as "nothing missing", which is a lie — show a neutral,
+       non-interactive chip instead. It self-heals on the next navigation. #}
+    <span class="badge {{ poster ? 'poster-chip' : 'bg-secondary-lt' }} subtitle-badge text-secondary"
+          title="{{ 'bazarr.badge.pending'|trans }}">…</span>
+  {% elseif st.state == 'missing' and is_granted('ROLE_ADMIN') %}
     {% if kind == 'movie' %}
       <button type="button" class="badge {{ _missing_cls }} border-0 subtitle-badge" data-bazarr-search data-kind="movie" data-id="{{ id }}"
               title="{{ 'bazarr.badge.missing_count'|trans({count: st.count}) }}">

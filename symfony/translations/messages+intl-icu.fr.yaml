@@ -5716,6 +5716,7 @@ bazarr:
     missing_episodes: '{count, plural, one {# épisode sans sous-titres} other {# épisodes sans sous-titres}}'
     complete: Sous-titres complets
     subs: Sous-titres
+    pending: Statut des sous-titres en cours de chargement depuis Bazarr
   chips:
     hi_title: Sous-titres pour malentendants
     forced_title: Sous-titres forcés

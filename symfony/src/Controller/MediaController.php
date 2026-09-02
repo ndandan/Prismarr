@@ -2082,7 +2082,9 @@ class MediaController extends AbstractController
             ? $this->bazarrIndex->movieStatus((int) $id)
             : $this->bazarrIndex->seriesStatus((int) $id);
 
-        if ($status['state'] === 'hidden') {
+        // 'pending' means the shared index is cold — omit the key exactly like
+        // 'hidden' so the client's `if (item.subtitle)` branch is unchanged.
+        if ($status['state'] === 'hidden' || $status['state'] === 'pending') {
             return $result;
         }
 

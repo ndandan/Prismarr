@@ -5719,6 +5719,7 @@ bazarr:
     missing_episodes: '{count, plural, one {# episode missing subtitles} other {# episodes missing subtitles}}'
     complete: Subtitles complete
     subs: Subs
+    pending: Subtitle status is still loading from Bazarr
   chips:
     hi_title: Hearing-impaired subtitles
     forced_title: Forced subtitles

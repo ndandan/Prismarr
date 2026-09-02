@@ -19,3 +19,16 @@ parameters:
         # regenerating baselines.
         -
             identifier: missingType.iterableValue
+        # BazarrSubtitleIndex::__construct() keeps $client/$cacheApp as its
+        # first two positional parameters purely so existing call sites (and
+        # the brief-mandated test helper `index($client, $pool, ...)`) only
+        # need the two NEW arguments (StaleWhileRevalidateCache, Logger)
+        # appended, not a full rewrite. Every read now goes through the SWR
+        # cache instead — the badge path must never call the client directly
+        # (enforced by a source-sentinel test) — so both params are
+        # deliberately unused in this class today; a later task in the same
+        # programme (perf-bazarr-responsiveness) may give them a real use.
+        -
+            identifier: constructor.unusedParameter
+            path: src/Service/Media/BazarrSubtitleIndex.php
+            count: 2
