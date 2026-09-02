@@ -878,6 +878,9 @@ class DashboardController extends AbstractController
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $this->translator->trans('dashboard.quicklook.manage'),
             'inLibrary'    => true,
+            // Bare *arr ids, for the quick-look's subtitle badge.
+            'radarrId'     => $type === 'movie' ? $id : null,
+            'sonarrId'     => $type === 'series' ? $id : null,
             'airStatus'    => $airStatus,
             'releaseDates' => $type === 'series'
                 ? $this->seriesReleaseChips(
@@ -975,6 +978,10 @@ class DashboardController extends AbstractController
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $actionLabel,
             'inLibrary'    => $match !== null,
+            // Bare *arr ids of the matched library row, for the quick-look's
+            // subtitle badge. Null when the title is not in the library.
+            'radarrId'     => (!$isTv && $match !== null) ? $match['id'] : null,
+            'sonarrId'     => ($isTv && $match !== null) ? $match['id'] : null,
             'airStatus'    => $airStatus,
             'cast'         => $extras['cast'],
             'providers'    => $extras['providers'],
