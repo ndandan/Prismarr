@@ -103,18 +103,6 @@ parameters:
 			path: src/Controller/DashboardController.php
 
 		-
-			message: '#^Property App\\Controller\\DashboardController\:\:\$moviesCache \(list\<array\<string, mixed\>\>\|null\) does not accept array\<mixed\>\.$#'
-			identifier: assign.propertyType
-			count: 1
-			path: src/Controller/DashboardController.php
-
-		-
-			message: '#^Property App\\Controller\\DashboardController\:\:\$seriesCache \(list\<array\<string, mixed\>\>\|null\) does not accept array\<mixed\>\.$#'
-			identifier: assign.propertyType
-			count: 1
-			path: src/Controller/DashboardController.php
-
-		-
 			message: '#^Left side of && is always true\.$#'
 			identifier: booleanAnd.leftAlwaysTrue
 			count: 2

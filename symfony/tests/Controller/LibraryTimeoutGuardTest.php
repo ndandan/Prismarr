@@ -46,6 +46,11 @@ class LibraryTimeoutGuardTest extends TestCase
             '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
             2,
         ];
+        yield 'DashboardController library calls' => [
+            'Controller/DashboardController.php',
+            '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
+            4, // two branches × movies+series in collectLibrary()
+        ];
     }
 
     #[DataProvider('requiredTimeouts')]
