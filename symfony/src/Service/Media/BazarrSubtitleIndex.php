@@ -115,6 +115,15 @@ class BazarrSubtitleIndex implements ResetInterface
     private ?bool $sonarrGate = null;
 
     /**
+     * Per-request memo for the single-item fallback (movieStatusSingle() /
+     * movieLanguagesSingle()): a quick-look renders the badge and then fetches
+     * the chips, and both must collapse to the SAME one per-id Bazarr call.
+     *
+     * @var array<int, array{status: SubtitleStatus, langs: MovieLangs}>
+     */
+    private array $singles = [];
+
+    /**
      * $client is used ONLY by refreshItem() — the post-mutation per-id
      * repair path. The badge read path (movieStatus/movieLanguages/
      * seriesStatus) never calls it; both go through $swr. $cacheApp is used
@@ -140,6 +149,7 @@ class BazarrSubtitleIndex implements ResetInterface
         $this->seriesLoaded = false;
         $this->radarrGate   = null;
         $this->sonarrGate   = null;
+        $this->singles      = [];
     }
 
     /**
@@ -467,6 +477,75 @@ class BazarrSubtitleIndex implements ResetInterface
         $map = $this->movieLangMap();
 
         return $map === null ? self::UNTRACKED_LANGS : ($map[$radarrId] ?? self::UNTRACKED_LANGS);
+    }
+
+    /**
+     * Badge/chips lookup for a surface that renders exactly ONE item — the
+     * dashboard quick-look. DO NOT call this from a grid, a list or a search
+     * loop: on a cold index it issues one Bazarr call per invocation.
+     * movieStatus() is the method for those (spec D3 as amended, defect C1).
+     * TemplateStructureGuardTest enforces the split on the template side.
+     *
+     * @return SubtitleStatus
+     */
+    public function movieStatusSingle(int $radarrId): array
+    {
+        if (!$this->gate(ServiceInstance::TYPE_RADARR)) {
+            return self::HIDDEN;
+        }
+
+        $status = $this->movieStatus($radarrId);
+        if ($status['state'] !== 'pending') {
+            return $status;
+        }
+
+        return $this->loadSingle($radarrId)['status'];
+    }
+
+    /**
+     * Same contract as movieStatusSingle(), for the quick-look's chips fetch.
+     *
+     * @return MovieLangs
+     */
+    public function movieLanguagesSingle(int $radarrId): array
+    {
+        if (!$this->gate(ServiceInstance::TYPE_RADARR)) {
+            return self::UNTRACKED_LANGS;
+        }
+
+        // A hard-missing map is exactly the case movieStatus() reports as
+        // 'pending' (both maps are filled by the SAME loadMovies() pass); reuse
+        // that probe rather than duplicating the branch.
+        if ($this->movieStatus($radarrId)['state'] !== 'pending') {
+            return $this->movieLanguages($radarrId);
+        }
+
+        return $this->loadSingle($radarrId)['langs'];
+    }
+
+    /**
+     * ONE `radarrid[]`-filtered call, memoized per request so a quick-look
+     * (badge + chips) costs one call, not two. A failure answers the
+     * fail-closed shapes — never 'pending', because the fallback already ran
+     * and there is nothing left to wait for.
+     *
+     * @return array{status: SubtitleStatus, langs: MovieLangs}
+     */
+    private function loadSingle(int $radarrId): array
+    {
+        if (isset($this->singles[$radarrId])) {
+            return $this->singles[$radarrId];
+        }
+
+        $rows = $this->client->getMovies([$radarrId]);
+        if ($this->client->getLastError() !== null || $rows === []) {
+            return $this->singles[$radarrId] = ['status' => self::HIDDEN, 'langs' => self::UNTRACKED_LANGS];
+        }
+
+        return $this->singles[$radarrId] = [
+            'status' => self::computeMovieStatus($rows[0]),
+            'langs'  => self::extractMovieLangs($rows[0]),
+        ];
     }
 
     /** @return SubtitleStatus */

@@ -142,4 +142,36 @@ class TemplateStructureGuardTest extends TestCase
             );
         }
     }
+
+    /**
+     * The per-id Bazarr fallback is a SINGLE-ITEM affordance. Reachable from a
+     * grid template it becomes 588 Bazarr calls per page render (spec defect
+     * C1). Only the quick-look body may use it.
+     */
+    public function testTheSingleItemSubtitleLookupIsUsedOnlyByTheQuickLookBody(): void
+    {
+        $root = self::TEMPLATE_ROOT;
+
+        $this->assertSame(
+            1,
+            substr_count((string) file_get_contents($root . 'dashboard/_quicklook_body.html.twig'), 'subtitle_status_single('),
+            'the quick-look body renders exactly one badge and must use the per-id lookup',
+        );
+
+        foreach ([
+            'media/films.html.twig',
+            'media/series.html.twig',
+            'media/_subtitle_badge.html.twig',
+            'bazarr/index.html.twig',
+            'bazarr/movies.html.twig',
+            'bazarr/series.html.twig',
+            'bazarr/_grid.html.twig',
+        ] as $file) {
+            $this->assertStringNotContainsString(
+                'subtitle_status_single(',
+                (string) file_get_contents($root . $file),
+                $file . ' renders many badges — the per-id lookup would be an N+1 against Bazarr',
+            );
+        }
+    }
 }

@@ -27,7 +27,10 @@ class SubtitleBadgeExtension extends AbstractExtension
 
     public function getFunctions(): array
     {
-        return [new TwigFunction('subtitle_status', [$this, 'status'])];
+        return [
+            new TwigFunction('subtitle_status', [$this, 'status']),
+            new TwigFunction('subtitle_status_single', [$this, 'statusSingle']),
+        ];
     }
 
     /** @return SubtitleStatus */
@@ -35,6 +38,25 @@ class SubtitleBadgeExtension extends AbstractExtension
     {
         return match ($kind) {
             'movie'  => $this->index->movieStatus($id),
+            'series' => $this->index->seriesStatus($id),
+            default  => ['state' => 'hidden', 'count' => 0],
+        };
+    }
+
+    /**
+     * Single-item variant: falls back to ONE per-id Bazarr call when the
+     * shared index is cold. Only for surfaces that render exactly one badge —
+     * see BazarrSubtitleIndex::movieStatusSingle(). The series side has no
+     * bulk-map problem (seriesStatus() is a small map and apiSubtitlesSeries()
+     * already does a true per-id getEpisodes() call), so it falls through to
+     * the same seriesStatus() the bulk function uses.
+     *
+     * @return SubtitleStatus
+     */
+    public function statusSingle(string $kind, int $id): array
+    {
+        return match ($kind) {
+            'movie'  => $this->index->movieStatusSingle($id),
             'series' => $this->index->seriesStatus($id),
             default  => ['state' => 'hidden', 'count' => 0],
         };

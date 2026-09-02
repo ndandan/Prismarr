@@ -248,11 +248,23 @@ class BazarrSubtitleIndexTest extends TestCase
 
         // movieStatus/movieLanguages/seriesStatus are called once per rendered
         // badge — 588 times on the Films page. A client call reachable from
-        // them is an N+1 against Bazarr (spec D3, defect C1).
-        $start = strpos($src, 'public function movieStatus(');
-        $end   = strpos($src, 'private function gate(');
-        $this->assertIsInt($start);
-        $this->assertIsInt($end);
-        $this->assertStringNotContainsString('$this->client', substr($src, $start, $end - $start));
+        // them is an N+1 against Bazarr (spec D3, defect C1). Checked as three
+        // separate spans (not one movieStatus..gate() span) because Task 8's
+        // movieStatusSingle()/movieLanguagesSingle()/loadSingle() now sit
+        // between movieLanguages() and seriesStatus() and DELIBERATELY do
+        // call the client — that's the single-item fallback, gated off the
+        // grid path by TemplateStructureGuardTest instead of this test.
+        $this->assertMethodBodyHasNoClientCall($src, 'public function movieStatus(', 'public function movieLanguages(');
+        $this->assertMethodBodyHasNoClientCall($src, 'public function movieLanguages(', 'public function movieStatusSingle(');
+        $this->assertMethodBodyHasNoClientCall($src, 'public function seriesStatus(', 'public function movieCards(');
+    }
+
+    private function assertMethodBodyHasNoClientCall(string $src, string $startMarker, string $endMarker): void
+    {
+        $start = strpos($src, $startMarker);
+        $end   = strpos($src, $endMarker);
+        $this->assertIsInt($start, $startMarker . ' not found');
+        $this->assertIsInt($end, $endMarker . ' not found');
+        $this->assertStringNotContainsString('$this->client', substr($src, $start, $end - $start), $startMarker . ' must not call the client');
     }
 }

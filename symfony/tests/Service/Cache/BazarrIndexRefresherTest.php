@@ -398,7 +398,10 @@ class BazarrIndexRefresherTest extends TestCase
         $pool = new ArrayAdapter();
         $item = $pool->getItem(BazarrSubtitleIndex::KEY_PATCHES);
         $item->set(['movie:7' => [
-            'at' => time(), 'kind' => 'movie', 'id' => 7,
+            // +5 (not bare time()): the refresher captures its own
+            // $fetchStartedAt a moment after this seed runs, and the "at or
+            // after" comparison must not flake across a second boundary.
+            'at' => time() + 5, 'kind' => 'movie', 'id' => 7,
             'status' => ['state' => 'complete', 'count' => 0], 'langs' => null,
         ]]);
         $pool->save($item);

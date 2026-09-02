@@ -5,9 +5,15 @@
     one place.
 
     Params:
-      kind:   'movie'|'series' — dispatches to BazarrSubtitleIndex::movieStatus/seriesStatus.
-      id:     the Radarr movie id or Sonarr series id.
-      poster: bool (default false) — pass true only when this include renders
+      kind:        'movie'|'series' — dispatches to BazarrSubtitleIndex::movieStatus/seriesStatus.
+      id:          the Radarr movie id or Sonarr series id.
+      st_override: SubtitleStatus (optional) — a pre-resolved status to render
+                   instead of re-looking one up via subtitle_status(kind, id).
+                   Used ONLY by the quick-look body, which must call the
+                   per-id single-item Twig function (see SubtitleBadgeExtension)
+                   rather than the bulk-map lookup this partial calls
+                   internally — see Task 8 / spec defect C1.
+      poster:      bool (default false) — pass true only when this include renders
               directly over a poster image (the grid card's direct-child
               badge). The plain Tabler -lt classes set background-color with
               !important and resolve to a translucent tint that can blend
@@ -26,7 +32,7 @@
     Renders nothing when Bazarr doesn't track the item (no profile assigned,
     or a series with zero episode files) — that's the 'hidden' state.
 #}
-{% set st = subtitle_status(kind, id) %}
+{% set st = st_override ?? subtitle_status(kind, id) %}
 {% set poster = poster|default(false) %}
 {% set _missing_cls = poster ? 'poster-chip is-warning' : 'bg-warning-lt' %}
 {% set _complete_cls = poster ? 'poster-chip is-success' : 'bg-success-lt' %}

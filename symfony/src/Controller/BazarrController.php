@@ -365,16 +365,22 @@ class BazarrController extends AbstractController
      * film-detail modal on open. Fail-closed like the badge it sits beside:
      * a gated (multi-instance) / untracked / absent movie — AND a genuinely
      * unreachable Bazarr — all answer the same 200 `tracked:false`, never a
-     * JSON error. movieLanguages() already degrades to the untracked shape on
-     * every one of those paths (an empty movie-langs map on a failed fetch
-     * simply misses the lookup), so this action has nothing left to branch
-     * on; a modal opening on a down Bazarr just renders no chips instead of
-     * an error toast.
+     * JSON error. Reads via movieLanguagesSingle() (Task 8): the map is
+     * consulted first (fresh or stale, zero extra Bazarr load), and only a
+     * genuine hard miss makes ONE per-id `getMovies([$radarrId])` call rather
+     * than waiting on the bulk 5,382-row refill — this endpoint answers for
+     * exactly one movie per open, so the single-item fallback is safe here
+     * (never call it from a grid/list — see BazarrSubtitleIndex::movieStatusSingle()
+     * docblock and TemplateStructureGuardTest). Every failure path — gated,
+     * untracked, absent, or a failed fallback fetch — still degrades to the
+     * same untracked shape, so this action has nothing left to branch on; a
+     * modal opening on a down Bazarr just renders no chips instead of an
+     * error toast.
      */
     #[Route('/api/subtitles/movie/{radarrId}', name: 'api_subtitles_movie', methods: ['GET'], requirements: ['radarrId' => '\d+'])]
     public function apiSubtitlesMovie(int $radarrId): JsonResponse
     {
-        return $this->json(['ok' => true, ...$this->bazarrIndex->movieLanguages($radarrId)]);
+        return $this->json(['ok' => true, ...$this->bazarrIndex->movieLanguagesSingle($radarrId)]);
     }
 
     /**

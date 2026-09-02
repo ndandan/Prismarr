@@ -34,4 +34,29 @@ class SubtitleBadgeExtensionTest extends TestCase
         $names = array_map(static fn ($f) => $f->getName(), $ext->getFunctions());
         $this->assertContains('subtitle_status', $names);
     }
+
+    public function testGetFunctionsRegistersSubtitleStatusSingle(): void
+    {
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $ext = new SubtitleBadgeExtension($index);
+        $names = array_map(static fn ($f) => $f->getName(), $ext->getFunctions());
+        $this->assertContains('subtitle_status_single', $names);
+    }
+
+    public function testStatusSingleDispatchesToIndexByKind(): void
+    {
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $index->method('movieStatusSingle')->willReturn(['state' => 'missing', 'count' => 2]);
+        $index->method('seriesStatus')->willReturn(['state' => 'complete', 'count' => 0]);
+        $ext = new SubtitleBadgeExtension($index);
+        $this->assertSame('missing', $ext->statusSingle('movie', 1)['state']);
+        $this->assertSame('complete', $ext->statusSingle('series', 5)['state']);
+    }
+
+    public function testStatusSingleUnknownKindIsHidden(): void
+    {
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $ext = new SubtitleBadgeExtension($index);
+        $this->assertSame('hidden', $ext->statusSingle('nope', 1)['state']);
+    }
 }
