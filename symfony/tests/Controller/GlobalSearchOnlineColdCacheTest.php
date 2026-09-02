@@ -20,8 +20,8 @@ class GlobalSearchOnlineColdCacheTest extends AbstractWebTestCase
     public function testSearchOnlineSucceedsOnAColdCache(): void
     {
         $cache = static::getContainer()->get(CacheInterface::class);
-        $cache->delete('prismarr_search_movies_v2');
-        $cache->delete('prismarr_search_series_v2');
+        $cache->delete('prismarr_search_movies_v3');
+        $cache->delete('prismarr_search_series_v3');
 
         $this->client->request('GET', self::URL, ['q' => 'matrix']);
 
@@ -37,11 +37,11 @@ class GlobalSearchOnlineColdCacheTest extends AbstractWebTestCase
     public function testColdCacheStoresAListNotACacheItem(): void
     {
         $cache = static::getContainer()->get(CacheInterface::class);
-        $cache->delete('prismarr_search_movies_v2');
+        $cache->delete('prismarr_search_movies_v3');
 
         $this->client->request('GET', self::URL, ['q' => 'matrix']);
 
-        $cached = $cache->get('prismarr_search_movies_v2', fn() => 'MISS');
+        $cached = $cache->get('prismarr_search_movies_v3', fn() => 'MISS');
         self::assertIsArray($cached, 'the search index must be cached as an array');
     }
 }
