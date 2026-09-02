@@ -43,6 +43,19 @@ class MediaLibraryRefresherTest extends TestCase
         return $p;
     }
 
+    /** A provider whose only radarr instance exists but is DISABLED. */
+    private function instancesWithDisabledInstance(): ServiceInstanceProvider
+    {
+        $inst = new ServiceInstance(ServiceInstance::TYPE_RADARR, 'radarr-1', 'Radarr', 'http://x', 'k');
+        $inst->setEnabled(false);
+        $p = $this->createMock(ServiceInstanceProvider::class);
+        $p->method('getBySlug')->willReturnCallback(
+            static fn (string $type, string $slug) => ($type === ServiceInstance::TYPE_RADARR && $slug === 'radarr-1') ? $inst : null,
+        );
+
+        return $p;
+    }
+
     public function testSupportsOnlyLibraryKeys(): void
     {
         $r = $this->refresher(new ArrayAdapter(), $this->createMock(RadarrClient::class));
@@ -110,6 +123,54 @@ class MediaLibraryRefresherTest extends TestCase
         $radarr->expects($this->never())->method('getMovies');
 
         $this->refresher(new ArrayAdapter(), $radarr)->refresh('media.movies.does-not-exist');
+    }
+
+    /**
+     * Final-review fix-wave: refresh() also no-ops when the slug resolves to
+     * a real instance that has been disabled since the refresh was queued
+     * (the instance branch, not the "unknown slug" branch tested above).
+     */
+    public function testADisabledInstanceIsANoOp(): void
+    {
+        $radarr = $this->createMock(RadarrClient::class);
+        $radarr->expects($this->never())->method('getMovies');
+
+        $refresher = new MediaLibraryRefresher(
+            $this->instancesWithDisabledInstance(),
+            $radarr,
+            $this->createMock(SonarrClient::class),
+            $this->swr(new ArrayAdapter()),
+            new ServiceHealthCache(new ArrayAdapter()),
+            new NullLogger(),
+        );
+
+        $refresher->refresh('media.movies.radarr-1');
+    }
+
+    /**
+     * Final-review fix-wave: an empty slug (a key that is exactly the
+     * prefix, e.g. a malformed "media.movies.") must hit the `$slug === ''`
+     * guard and return before ever consulting the instance provider or
+     * fetching anything.
+     */
+    public function testAnEmptySlugIsANoOp(): void
+    {
+        $radarr = $this->createMock(RadarrClient::class);
+        $radarr->expects($this->never())->method('getMovies');
+
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->expects($this->never())->method('getBySlug');
+
+        $refresher = new MediaLibraryRefresher(
+            $instances,
+            $radarr,
+            $this->createMock(SonarrClient::class),
+            $this->swr(new ArrayAdapter()),
+            new ServiceHealthCache(new ArrayAdapter()),
+            new NullLogger(),
+        );
+
+        $refresher->refresh('media.movies.');
     }
 
     private function refresher(ArrayAdapter $pool, RadarrClient $radarr): MediaLibraryRefresher

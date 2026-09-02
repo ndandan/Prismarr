@@ -475,8 +475,8 @@ separate change with its own measurement, and nothing in D1–D5 depends on it.
 
 ## As built (2026-09-02)
 
-Recorded against `git log --oneline main..HEAD` on `perf/bazarr-responsiveness` (16 commits, Tasks
-0–10). D1–D5 shipped as designed; every deviation below was a lead ruling made during implementation
+Recorded against `git log --oneline main..HEAD` on `perf/bazarr-responsiveness` (21 commits, Tasks
+0–11). D1–D5 shipped as designed; every deviation below was a lead ruling made during implementation
 or review, not a silent drift — each is cross-referenced to the SDD ledger (`progress.md`) for the
 implementer/reviewer exchange that produced it.
 
@@ -497,17 +497,24 @@ implementer/reviewer exchange that produced it.
 - **The per-id fallback shipped exactly where D3/C1 required and nowhere else**:
   `BazarrSubtitleIndex::movieStatusSingle()` / `movieLanguagesSingle()` (map-first, one per-id
   `BazarrClient` call only on a hard miss) are consumed by exactly two call sites —
-  `BazarrController::apiSubtitlesMovie()` / `apiSubtitlesLanguages()` and the Twig function
+  `BazarrController::apiSubtitlesMovie()` and the Twig function
   `subtitle_status_single()`, itself used only by `dashboard/_quicklook_body.html.twig`.
   `movieStatus()` / `movieLanguages()` stay strictly map-only, as designed; a `TemplateStructureGuardTest`
   case (Task 8) pins the zero-uses-elsewhere invariant.
-- **The patch journal shipped as designed**: `BazarrSubtitleIndex::KEY_PATCHES`
-  (`bazarr_subtitle_index.patches`, `expiresAfter(120)`), keyed `"<kind>:<id>"`, written by
-  `refreshItem()` alongside an in-place patch of the pooled maps. `BazarrIndexRefresher::refresh()`
-  captures `$fetchStartedAt` before the client call and re-applies every journal entry with
-  `at >= $fetchStartedAt` onto the freshly fetched maps before writing (C2's ordering rule) — write
-  order is cards → most_missing → badges → langs → status per M2, after a fix round corrected an
-  implementer's first pass that wrote badges last (`progress.md`, Task 6 review → `fa3bbff`).
+- **The patch journal shipped without the designed `card` field.** `BazarrSubtitleIndex::KEY_PATCHES`
+  (`bazarr_subtitle_index.patches`, `expiresAfter(120)`), keyed `"<kind>:<id>"`, is written by
+  `refreshItem()` alongside an in-place patch of the pooled maps, exactly as D3/C2 describe — except the
+  journal entry's shape carries only `status` and `langs`, never the `card` the spec sketched. The
+  acted-on item's own badge/chips are correct immediately either way (they read `status`/`langs`), but
+  its Bazarr-tab **grid card** (title/substate/missingLangs shown on `/bazarr/movies` or `/bazarr/series`)
+  is NOT patched in place — it stays stale until the next bulk `BazarrIndexRefresher` cycle rewrites
+  `KEY_MOVIE_CARDS`/`KEY_SERIES_CARDS` wholesale. Accepted: the Bazarr tab is a low-traffic admin view,
+  not the badge-heavy Films/Series grid, and the staleness is bounded by the same soft TTL as everything
+  else. `BazarrIndexRefresher::refresh()` captures `$fetchStartedAt` before the client call and
+  re-applies every journal entry with `at >= $fetchStartedAt` onto the freshly fetched status/langs maps
+  before writing (C2's ordering rule) — write order is cards → most_missing → badges → langs → status per
+  M2, after a fix round corrected an implementer's first pass that wrote badges last (`progress.md`,
+  Task 6 review → `fa3bbff`).
 - **`POST /bazarr/api/refresh`** (route name `app_bazarr_api_refresh`, `#[IsGranted('ROLE_ADMIN')]`
   inherited from the controller) shipped as the dead-consumer recovery path, wired to the warming
   panel's manual Retry button. Two rulings sharpened it past the original D1/I4 sketch during review
@@ -518,6 +525,16 @@ implementer/reviewer exchange that produced it.
   - it now reports **truthfully**: `ok` is `true` only when both `movies` and `series` keys were
     re-read fresh after the attempt, with `reason` set to `breaker_open` or `fetch_failed` otherwise
     (HTTP always 200, fail-closed shape, never a 500).
+
+  A final-review fix-wave added a third ruling: the endpoint now acquires a `bazarr_subtitle_index.
+  inline_refresh` coalescing marker (`cache.app`, TTL 30 s, best-effort check-then-set) before doing any
+  inline work, so a double-clicked Retry — or two admins — cannot stack two overlapping fetches; a
+  second call while the marker is set answers HTTP 200 `reason: "already_running"` without touching
+  Bazarr, and the marker is left to expire on success like every other coalescing marker in this design.
+  This also corrects I4's own budget: I4 sized the endpoint at a single **8 s**-bounded refresh, but it
+  actually performs three sequential `BazarrIndexRefresher::refresh()` calls worth of client work inline
+  (movies, the piggybacked badges fetch, then series) — worst case bounded at **~3×8 s** (BazarrClient's
+  3 s connect / 8 s total per call), not 8 s.
 - **No blanket `invalidate()` on mutations.** The plan's original D3 text ("`invalidate()` becomes
   `refreshItem(kind, id)`") was overridden during the Task 7 review: a subtitle download / auto-search
   never hard-deletes the shared Bazarr keys — it patches the acted-on item in place (pooled maps +
@@ -526,10 +543,16 @@ implementer/reviewer exchange that produced it.
   benefit over the bounded, already-accepted staleness the patch mechanism gives the acted-on item.
   Cost if this ruling is ever revisited: one stale row for at most one soft-TTL window, which is what
   shipped anyway.
-- **Badge counts are read through the movies refresher, not fetched separately.** `KEY_BADGES` has no
-  Bazarr call of its own — `BazarrIndexRefresher::supports()` and `refresh()` route it onto the same
-  `getMovies()` fetch that fills `KEY_MOVIES`, so a badge-only refresh request costs zero extra Bazarr
-  load; it piggybacks on whichever bulk fetch is already in flight or next scheduled.
+- **Badge counts are read through the movies refresher, not fetched separately — but a badge-only
+  refresh is not always free.** `KEY_BADGES` has no Bazarr call of its own: `BazarrIndexRefresher::
+  supports()` and `refresh()` route it onto the same `getMovies()` fetch that fills `KEY_MOVIES`. When
+  that fetch is already in flight or about to run anyway (the common case — a movie mutation, or
+  `KEY_MOVIES` itself going stale), the badges ride along for free, as originally claimed. But
+  `apiDownloadEpisode()` only knows an episode id, not the series it belongs to, so it cannot patch a
+  row and instead calls `requestRefresh(KEY_BADGES)` on its own; if `KEY_MOVIES` was otherwise fresh and
+  not already coalesced, this dispatches a genuinely new `refresh()` job that pays its own full
+  `getMovies()` fetch — one extra full library call, bounded to at most once per `KEY_BADGES`'s own 30 s
+  coalescing marker window, not "zero extra load".
 - **A clean empty fetch writes empty maps, not a permanent `pending`.** An early draft (Task 5) added
   an `$rows === []` guard that skipped the write entirely on an empty Bazarr response — which is
   correct for "unreachable/errored" but wrong for "this install genuinely has zero wanted items": it

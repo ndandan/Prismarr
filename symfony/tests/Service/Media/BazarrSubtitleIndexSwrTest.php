@@ -302,4 +302,41 @@ class BazarrSubtitleIndexSwrTest extends TestCase
 
         $this->assertCount(1, $records, 'the overdue log line must be throttled across requests, not just within one');
     }
+
+    /**
+     * Final-review fix-wave: requestRefresh() now checks REQUESTABLE_KEYS
+     * (exactly what BazarrIndexRefresher::supports() claims) rather than the
+     * broader ALL_KEYS — a derived-dataset key like KEY_MOVIE_CARDS has no
+     * refresher of its own to route a request to, so queuing one would
+     * silently do nothing forever instead of throwing at the mistake.
+     */
+    public function testRequestRefreshAcceptsOnlyTheThreeRefresherSupportedKeys(): void
+    {
+        $pool  = new ArrayAdapter();
+        $index = $this->index($this->createMock(BazarrClient::class), $pool);
+
+        foreach ([BazarrSubtitleIndex::KEY_MOVIES, BazarrSubtitleIndex::KEY_SERIES, BazarrSubtitleIndex::KEY_BADGES] as $key) {
+            $index->requestRefresh($key);
+        }
+        $this->assertCount(3, $this->dispatched, 'each of the three refresher-supported keys must dispatch its own request');
+    }
+
+    /** @return iterable<string, array{0: string}> */
+    public static function unsupportedRefreshKeys(): iterable
+    {
+        yield 'a derived cards key'        => [BazarrSubtitleIndex::KEY_MOVIE_CARDS];
+        yield 'a derived most-missing key' => [BazarrSubtitleIndex::KEY_MOST_MISSING_SERIES];
+        yield 'the movie langs key'        => [BazarrSubtitleIndex::KEY_MOVIE_LANGS];
+        yield 'the patch journal key'      => [BazarrSubtitleIndex::KEY_PATCHES];
+        yield 'a mistyped key'             => ['bazarr_subtitle_index.movies_typo'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('unsupportedRefreshKeys')]
+    public function testRequestRefreshRejectsEveryOtherKey(string $key): void
+    {
+        $index = $this->index($this->createMock(BazarrClient::class), new ArrayAdapter());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $index->requestRefresh($key);
+    }
 }

@@ -183,9 +183,17 @@ class GlobalSearchNormalizationTest extends TestCase
         // full (A..H) plus only the first 4 of group 2 (A..D); E and F fall
         // off the end. This pins both the cap AND that starts-with-first
         // ordering holds right up to (and across) the cut line.
+        //
+        // Deliberately NOT listed in sorted order: a fixture that already
+        // happens to be pre-sorted would still pass this assertion even if
+        // the controller's usort() were deleted outright (array order alone
+        // would coincidentally match). Interleaving both groups makes the
+        // assertion causal — only an actual sort by "starts-with, then
+        // alphabetical" reproduces the expected order below.
         $titles = [
-            'Zone A', 'Zone B', 'Zone C', 'Zone D', 'Zone E', 'Zone F', 'Zone G', 'Zone H',
-            'Alpha Zone A', 'Alpha Zone B', 'Alpha Zone C', 'Alpha Zone D', 'Alpha Zone E', 'Alpha Zone F',
+            'Zone D', 'Alpha Zone B', 'Zone A', 'Alpha Zone F', 'Zone G', 'Zone C',
+            'Alpha Zone D', 'Zone F', 'Alpha Zone A', 'Zone H', 'Alpha Zone E', 'Zone B',
+            'Alpha Zone C', 'Zone E',
         ];
 
         $bazarr = $this->createMock(BazarrSubtitleIndex::class);

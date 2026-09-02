@@ -269,6 +269,29 @@ class StaleWhileRevalidateCacheTest extends TestCase
         $this->assertNull($swr->read('k', 60), 'a write whose effective TTL has already elapsed must not create a live entry');
     }
 
+    /**
+     * Final-review fix-wave: a write that bails out because its back-dated
+     * $fetchedAt has already expired must also drop the .requested_at stamp
+     * — the demand that stamp represents is moot (this write's data is
+     * already too old to serve), so leaving the stamp behind would only
+     * trip refreshIsOverdue() for a request nothing will ever answer.
+     */
+    public function testWriteSkipsAlsoClearsTheRequestedAtStampWhenAlreadyExpired(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $swr->requestRefresh('k');
+        $this->assertTrue($pool->getItem('k.requested_at')->isHit());
+
+        $swr->write('k', ['a' => 1], 600, time() - 700); // 700 s old vs a 600 s hard TTL
+
+        $this->assertFalse(
+            $pool->getItem('k.requested_at')->isHit(),
+            'an expired back-dated write must clear the now-moot requested-at stamp',
+        );
+    }
+
     public function testWriteWithABackDatedFetchedAtStillWritesWhenHardLifeRemains(): void
     {
         $pool = new ArrayAdapter();

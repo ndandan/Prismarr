@@ -22,6 +22,23 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  */
 class BazarrControllerTest extends AbstractWebTestCase
 {
+    /**
+     * Final-review fix-wave: apiRefresh()'s coalescing marker lives in the
+     * real filesystem cache.app pool, which — unlike the SQLite schema
+     * AbstractWebTestCase resets — is NOT reset between tests in this
+     * process. A test that reaches apiRefresh() successfully (the truthful-
+     * shape test, the breaker-open test, and the already_running test below)
+     * leaves the marker set for 30 s, which would make whichever of those
+     * tests happens to run next within that window answer already_running
+     * instead of whatever it actually means to exercise. Clear it after
+     * every test in this class so order/timing can never matter.
+     */
+    protected function tearDown(): void
+    {
+        static::getContainer()->get('cache.app')->deleteItem('bazarr_subtitle_index.inline_refresh');
+        parent::tearDown();
+    }
+
     public function testBazarrRedirectsToAdminSettingsWhenUnconfigured(): void
     {
         $this->client->request('GET', '/bazarr');
@@ -196,5 +213,35 @@ class BazarrControllerTest extends AbstractWebTestCase
         $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
         self::assertFalse($payload['ok']);
         self::assertSame('breaker_open', $payload['reason']);
+    }
+
+    /**
+     * Final-review fix-wave: a second call while the coalescing marker is
+     * still set (a double-clicked Retry, or a second admin) must not stack
+     * another inline ~3x8s rebuild — it answers `already_running`
+     * immediately. Zero client calls is structurally guaranteed here the
+     * same way the breaker_open test above guarantees it: the marker check
+     * returns before BazarrIndexRefresher::refresh() is ever called, and the
+     * unconfigured Bazarr fixture would 500/JSON-error the moment any actual
+     * HTTP client work happened, which it never does.
+     */
+    public function testASecondRefreshWhileOneIsMarkedInFlightAnswersAlreadyRunningWithoutFetching(): void
+    {
+        $pool = static::getContainer()->get('cache.app');
+        $marker = $pool->getItem('bazarr_subtitle_index.inline_refresh');
+        $marker->set(true);
+        $marker->expiresAfter(30);
+        $pool->save($marker);
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertFalse($this->client->getResponse()->isRedirect());
+        self::assertResponseStatusCodeSame(200);
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertArrayHasKey('ok', $payload);
+        self::assertArrayHasKey('movies', $payload);
+        self::assertArrayHasKey('series', $payload);
+        self::assertFalse($payload['ok']);
+        self::assertSame('already_running', $payload['reason']);
     }
 }

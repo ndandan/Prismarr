@@ -29,15 +29,38 @@
   var btn = document.getElementById('bazarr-warming-retry');
   var frame = document.getElementById('bazarr-view');
   var path = window.location.pathname + window.location.search;
+  var storageKey = 'prismarr:bazarr-warm-retried:' + path;
 
   /* The server always re-renders this markup with no memory of a prior
      retry (there is nothing to read it back FROM — the cache is still
-     cold), so "have we already auto-retried" cannot live in the HTML. It
-     lives on `window` instead: that object survives a frame-scoped reload
-     (only a full document navigation clears it), so one entry per path is
-     exactly "one automatic retry per view per browser tab session", which
-     is what bounds this to a single reload instead of a 4 s loop. */
-  window.__bzWarmRetried = window.__bzWarmRetried || {};
+     cold), so "have we already auto-retried" cannot live in the HTML.
+
+     It lives in sessionStorage, keyed by path, so ONE entry survives both
+     a Turbo frame swap AND the window.location.reload() fallback below —
+     the fallback is a full document navigation, which wipes any plain
+     `window` property, so a window-only flag would forget it had already
+     retried and re-arm a fresh 4 s timer on every reload: an infinite
+     retry loop against a Bazarr that never comes back, in exactly the
+     browsers/contexts that need the fallback. `window` is kept as the
+     fallback for when sessionStorage itself throws (private browsing,
+     disabled storage, a quota error) — worse-bounded (a full navigation
+     still resets it) but never worse than before this fix. */
+  function hasRetried() {
+    try {
+      if (window.sessionStorage) { return sessionStorage.getItem(storageKey) === '1'; }
+    } catch (e) { /* fall through to the window fallback below */ }
+
+    return !!(window.__bzWarmRetried && window.__bzWarmRetried[path]);
+  }
+
+  function markRetried() {
+    try {
+      if (window.sessionStorage) { sessionStorage.setItem(storageKey, '1'); return; }
+    } catch (e) { /* fall through to the window fallback below */ }
+
+    window.__bzWarmRetried = window.__bzWarmRetried || {};
+    window.__bzWarmRetried[path] = true;
+  }
 
   function reloadView() {
     /* frame.reload() is a no-op when the frame has no `src` yet — true on
@@ -53,7 +76,7 @@
   }
 
   var timer = null;
-  if (window.__bzWarmRetried[path]) {
+  if (hasRetried()) {
     // Already auto-retried once this session for this view: skip straight
     // to the manual button instead of reloading (and re-arming a new 4 s
     // timer) again.
@@ -62,7 +85,7 @@
     /* One automatic retry, ~4 s out: long enough for a queued refresh (the
        consumer polls once a second) plus the Bazarr fetch itself. */
     timer = setTimeout(function () {
-      window.__bzWarmRetried[path] = true;
+      markRetried();
       if (btn) { btn.classList.remove('d-none'); }
       reloadView();
     }, 4000);

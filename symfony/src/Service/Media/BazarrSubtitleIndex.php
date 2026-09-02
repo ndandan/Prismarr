@@ -78,12 +78,23 @@ class BazarrSubtitleIndex implements ResetInterface
     /** Candidates kept per kind; the controller merges + re-sorts + slices to 16. */
     public const MOST_MISSING_CANDIDATES = 32;
 
+    /** Every SWR-backed dataset key this class owns — used by invalidate()'s hard reset. */
     private const ALL_KEYS = [
         self::KEY_MOVIES, self::KEY_MOVIE_LANGS, self::KEY_SERIES,
         self::KEY_MOVIE_CARDS, self::KEY_SERIES_CARDS,
         self::KEY_MOST_MISSING_MOVIES, self::KEY_MOST_MISSING_SERIES,
         self::KEY_BADGES,
     ];
+
+    /**
+     * Keys a caller may hand to requestRefresh() — exactly the keys
+     * BazarrIndexRefresher::supports() claims. The derived datasets
+     * (movie/series cards, most-missing, movie langs) are written as a SIDE
+     * EFFECT of one of these three fetches; there is no refresher to route a
+     * request for one of THOSE keys to, so queuing one would silently do
+     * nothing forever.
+     */
+    private const REQUESTABLE_KEYS = [self::KEY_MOVIES, self::KEY_SERIES, self::KEY_BADGES];
 
     /** Seconds. Short enough that a stale badge self-heals without any action. */
     public const SOFT_TTL = 60;
@@ -124,12 +135,13 @@ class BazarrSubtitleIndex implements ResetInterface
     private array $singles = [];
 
     /**
-     * $client is used ONLY by refreshItem() — the post-mutation per-id
-     * repair path. The badge read path (movieStatus/movieLanguages/
-     * seriesStatus) never calls it; both go through $swr. $cacheApp is used
-     * both for the patch journal (KEY_PATCHES) and — see
-     * requestRefreshOnce() — the cross-request overdue-log throttle and the
-     * breaker check.
+     * $client is used by TWO call paths: refreshItem() — the post-mutation
+     * per-id repair path — and loadSingle() — the single-item quick-look
+     * fallback behind movieStatusSingle()/movieLanguagesSingle(). The GRID
+     * badge read path (movieStatus/movieLanguages/seriesStatus) never calls
+     * it directly; those go through $swr only. $cacheApp is used both for
+     * the patch journal (KEY_PATCHES) and — see requestRefreshOnce() — the
+     * cross-request overdue-log throttle and the breaker check.
      */
     public function __construct(
         private readonly BazarrClient $client,
@@ -154,10 +166,15 @@ class BazarrSubtitleIndex implements ResetInterface
 
     /**
      * Drop the memo AND the cross-request pool entries (markers/stamps
-     * included, via the SWR primitive). Called by the Bazarr mutation
-     * endpoints (subtitle download / auto-search), which change the very
-     * numbers the badges display AND the present/missing language lists the
-     * detail modal shows.
+     * included, via the SWR primitive). This is the hard-reset hook, NOT the
+     * mutation-endpoint invalidation path: a subtitle download / auto-search
+     * goes through refreshItem()/requestRefresh() instead (see those
+     * docblocks), which patch the acted-on item in place rather than
+     * blanking every badge on the page for a whole hard window. invalidate()
+     * is for the case where WHICH Bazarr instance is being read has changed
+     * — AdminSettingsController calls it when bazarr_url/bazarr_api_key
+     * actually change, so a stale badge from the old instance cannot live on
+     * for up to HARD_TTL.
      */
     public function invalidate(): void
     {
@@ -175,16 +192,19 @@ class BazarrSubtitleIndex implements ResetInterface
      * queue happens synchronously in the request that performed the mutation
      * (guardrail 9) instead of the fix waiting for someone else's page view.
      *
-     * $key is restricted to ALL_KEYS (fix round 1, IMPORTANT 3) so a caller
-     * cannot accidentally queue an unsupported/mistyped key — including
-     * KEY_PATCHES itself, which is not an SWR-backed dataset and has no
-     * refresher.
+     * $key is restricted to REQUESTABLE_KEYS (fix round 1, IMPORTANT 3;
+     * narrowed from ALL_KEYS in a later fix wave to exactly what
+     * BazarrIndexRefresher::supports() claims) so a caller cannot
+     * accidentally queue an unsupported/mistyped key — including KEY_PATCHES
+     * itself (not an SWR-backed dataset) or one of the derived-dataset keys
+     * (cards/most-missing/langs), which have no refresher of their own to
+     * route a request to.
      *
-     * @throws \InvalidArgumentException if $key is not one of ALL_KEYS
+     * @throws \InvalidArgumentException if $key is not one of REQUESTABLE_KEYS
      */
     public function requestRefresh(string $key): void
     {
-        if (!in_array($key, self::ALL_KEYS, true)) {
+        if (!in_array($key, self::REQUESTABLE_KEYS, true)) {
             throw new \InvalidArgumentException(sprintf('BazarrSubtitleIndex::requestRefresh(): unsupported key "%s".', $key));
         }
 

@@ -134,6 +134,13 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
                 ];
             }
         }
+        // Worker-mode peak-memory guardrail: $rows is the raw ~5k-row Bazarr
+        // response (the ~120-180 MB decode I5 sized the consumer's memory
+        // limit around) and every field this method needs from it is already
+        // copied into $status/$langs/$cards/$candidates above — free it
+        // before the badge-count fetch and the write block below instead of
+        // letting it sit alongside everything else for the rest of the call.
+        unset($rows);
 
         ksort($langSet);
         usort($candidates, static fn (array $a, array $b): int
@@ -232,6 +239,9 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
                 ];
             }
         }
+        // See refreshMovies(): everything this method needs from the raw
+        // fetch is already copied into $status/$cards/$candidates above.
+        unset($rows);
 
         ksort($langSet);
         usort($candidates, static fn (array $a, array $b): int

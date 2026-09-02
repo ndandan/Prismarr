@@ -6,6 +6,15 @@
   back/forward, bookmarks all keep working). History stays a normal Turbo
   Drive page — it is a separate full page with its own data and nothing else
   links to it as a fragment.
+
+  This partial is ALSO included on history.html.twig and series_detail.html.
+  twig, neither of which ships a `#bazarr-view` frame element (both are plain
+  Turbo Drive pages, not the shell). Clicking a Wanted/Movies/Series pill from
+  there still works correctly: `data-turbo-frame="bazarr-view"` targets a
+  frame id that does not exist on the CURRENT page, and Turbo's own
+  missing-frame behaviour is to fall back to a full Drive visit instead of
+  silently no-op'ing — no extra markup or JS is needed here to cover that
+  case; it comes for free from the Turbo Frame contract itself.
 #}
 {% set _tabs = [
   { route: 'app_bazarr_index',   view: 'wanted',  label: 'bazarr.nav.wanted',  frame: true  },

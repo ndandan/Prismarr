@@ -304,6 +304,26 @@ class BazarrClientTest extends TestCase
         $this->assertStringNotContainsString('seriesid[0]', $decoded);
     }
 
+    /**
+     * Final-review fix-wave: getSeries() had only a single-id coverage case
+     * (unlike getMovies(), which is pinned with a multi-id [12, 34] case
+     * above) — add the same multi-id shape here so a regression that
+     * silently dropped anything past the first requested series id would
+     * actually fail a test.
+     */
+    public function testGetSeriesWithMultipleIdsEmitsRepeatedSeriesIdBrackets(): void
+    {
+        $urls = [];
+        $this->urlCapturingClient($urls)->getSeries([5, 9]);
+
+        $decoded = urldecode($urls[0]);
+        $this->assertStringContainsString('seriesid[]=5', $decoded);
+        $this->assertStringContainsString('seriesid[]=9', $decoded);
+        // The PHP-indexed form Bazarr cannot read must NOT appear.
+        $this->assertStringNotContainsString('seriesid[0]', $decoded);
+        $this->assertStringNotContainsString('seriesid[1]', $decoded);
+    }
+
     public function testIdFiltersAreCastToIntSoNothingUnsanitizedReachesTheQuery(): void
     {
         $urls = [];

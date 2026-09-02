@@ -3,6 +3,7 @@
 namespace App\Tests\Controller;
 
 use App\Controller\SetupController;
+use App\Entity\ServiceInstance;
 use App\Entity\Setting;
 use App\Entity\User;
 use App\Service\Cache\StaleWhileRevalidateCache;
@@ -97,6 +98,20 @@ class BazarrFrameRenderTest extends WebTestCase
         $em->persist(new Setting(SetupController::SETUP_DONE_KEY, '1'));
         $em->persist(new Setting('bazarr_url', 'http://127.0.0.1:1'));
         $em->persist(new Setting('bazarr_api_key', 'k'));
+
+        // Final-review fix-wave: BazarrSubtitleIndex's badge/single-item read
+        // paths fail closed to gated ("multi-instance") unless EXACTLY one
+        // Radarr instance is enabled (see BazarrSubtitleIndex::gate()) —
+        // without this, every one of those paths silently takes the gated
+        // branch instead of the real one this suite is meant to exercise.
+        // Mirrors AbstractWebTestCase::seedDefaultInstances(); this class
+        // does not extend that base (see the class docblock), so it is not
+        // seeded automatically.
+        $radarr = new ServiceInstance(ServiceInstance::TYPE_RADARR, 'radarr-1', 'Radarr', 'http://radarr.invalid:7878', 'k');
+        $radarr->setIsDefault(true);
+        $radarr->setEnabled(true);
+        $em->persist($radarr);
+
         $em->flush();
 
         $this->client->loginUser($admin);

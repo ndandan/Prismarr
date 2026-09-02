@@ -9,6 +9,7 @@ use App\Repository\UserRepository;
 use App\Service\ConfigService;
 use App\Service\DashboardLayoutService;
 use App\Service\HealthService;
+use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\RadarrClient;
@@ -394,6 +395,7 @@ class AdminSettingsController extends AbstractController
         #[Autowire('%kernel.environment%')]
         private readonly string $environment = 'prod',
         private readonly ?TranslatorInterface $translator = null,
+        private readonly ?BazarrSubtitleIndex $bazarrIndex = null,
     ) {
     }
 
@@ -1175,12 +1177,33 @@ class AdminSettingsController extends AbstractController
             $payload[$key] = $this->normalizeDisplayValue($spec, $raw);
         }
 
+        // Final-review fix-wave: captured BEFORE setMany() below overwrites
+        // them, so this compares the value the form actually submitted
+        // against what was live until now — resubmitting the SAME
+        // bazarr_url on an unrelated section's save (every field in
+        // self::FIELDS rides along on the one shared settings form) must
+        // NOT count as a change. Only bazarr_api_key's PRESENCE in $payload
+        // is meaningful here (a password field lands in $payload only on a
+        // genuine non-empty resubmission — see the empty-value guard above).
+        $bazarrChanged = (array_key_exists('bazarr_url', $payload) && $payload['bazarr_url'] !== $this->config->get('bazarr_url'))
+            || (array_key_exists('bazarr_api_key', $payload) && $payload['bazarr_api_key'] !== $this->config->get('bazarr_api_key'));
+
         $this->settings->setMany($payload);
         $this->config->invalidate();
         $this->health->invalidate();
         // Purge TMDb/Radarr/Sonarr response cache so data fetched with
         // the previous config doesn't linger up to an hour.
         $this->appCache->clear();
+        if ($bazarrChanged) {
+            // A changed bazarr_url/bazarr_api_key means every cached Bazarr
+            // dataset was fetched against the OLD instance — invalidate()
+            // drops it so a stale badge from that instance cannot live on
+            // for up to BazarrSubtitleIndex::HARD_TTL. Additive to the
+            // blanket appCache->clear() above (which already wipes this
+            // pool on every settings save): explicit here so the behaviour
+            // does not silently depend on that unrelated purge.
+            $this->bazarrIndex?->invalidate();
+        }
         $this->addFlash('success', $this->translator?->trans('admin.flash.saved') ?? 'Configuration saved.');
     }
 

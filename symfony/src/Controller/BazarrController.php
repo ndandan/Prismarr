@@ -12,6 +12,7 @@ use App\Service\Media\BazarrPosterResolver;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\ServiceInstanceProvider;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -40,6 +41,12 @@ class BazarrController extends AbstractController
 
     /** Landing "most missing" poster row: enough to fill a horizontal scroller without becoming a scroll itself. */
     private const MOST_MISSING_LIMIT = 16;
+
+    /** Coalescing marker for apiRefresh()'s inline rebuild — see that method's docblock. */
+    private const INLINE_REFRESH_MARKER = 'bazarr_subtitle_index.inline_refresh';
+
+    /** Seconds. Mirrors StaleWhileRevalidateCache::MARKER_TTL's coalescing window. */
+    private const INLINE_REFRESH_MARKER_TTL = 30;
 
     public function __construct(
         private readonly BazarrClient $bazarr,
@@ -471,11 +478,35 @@ class BazarrController extends AbstractController
      * JSON (HTTP 200, never a 500) even when the breaker is open — the
      * breaker check below never calls the client at all.
      *
-     * @return JsonResponse {ok: bool, movies: 'fresh'|'stale'|'pending', series: 'fresh'|'stale'|'pending', reason: 'breaker_open'|'fetch_failed'|null}
+     * Final-review fix-wave: the ~3x8s inline cost above means a double-
+     * clicked Retry (or two admins) must not stack two of these in flight at
+     * once. Before any of that inline work, a coalescing marker is acquired
+     * in `cache.app` — best-effort check-then-set, the same shape as
+     * StaleWhileRevalidateCache::requestRefresh()'s own `.refreshing` marker
+     * — and a request that finds it already set answers `reason:
+     * "already_running"` immediately, without touching Bazarr at all. The
+     * marker is deliberately never deleted early on success: it simply
+     * expires after MARKER_TTL, capping how often this endpoint's own
+     * worst-case cost can be paid.
+     *
+     * @return JsonResponse {ok: bool, movies: 'fresh'|'stale'|'pending', series: 'fresh'|'stale'|'pending', reason: 'breaker_open'|'fetch_failed'|'already_running'|null}
      */
     #[Route('/api/refresh', name: 'api_refresh', methods: ['POST'])]
-    public function apiRefresh(BazarrIndexRefresher $refresher, ServiceHealthCache $health): JsonResponse
+    public function apiRefresh(BazarrIndexRefresher $refresher, ServiceHealthCache $health, CacheItemPoolInterface $cacheApp): JsonResponse
     {
+        $marker = $cacheApp->getItem(self::INLINE_REFRESH_MARKER);
+        if ($marker->isHit()) {
+            return $this->json([
+                'ok'     => false,
+                'movies' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES),
+                'series' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES),
+                'reason' => 'already_running',
+            ]);
+        }
+        $marker->set(true);
+        $marker->expiresAfter(self::INLINE_REFRESH_MARKER_TTL);
+        $cacheApp->save($marker);
+
         if ($health->isDown(BazarrClient::SERVICE)) {
             return $this->json([
                 'ok'     => false,
