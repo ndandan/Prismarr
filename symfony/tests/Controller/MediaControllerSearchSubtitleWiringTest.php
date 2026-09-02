@@ -23,8 +23,8 @@ class MediaControllerSearchSubtitleWiringTest extends AbstractWebTestCase
     public function testLocalSearchDoesNotCrashAndNeverLeaksSubtitleKeyWhenBazarrIsUnconfigured(): void
     {
         $cache = static::getContainer()->get(CacheInterface::class);
-        $cache->delete('prismarr_search_movies_v2');
-        $cache->delete('prismarr_search_series_v2');
+        $cache->delete('prismarr_search_movies_v3');
+        $cache->delete('prismarr_search_series_v3');
 
         // Radarr/Sonarr are unreachable test hosts (seeded by AbstractWebTestCase),
         // so the search index itself is empty — the real assertion here is that

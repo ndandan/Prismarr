@@ -2,7 +2,11 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\User;
+use App\Service\Media\BazarrClient;
+use App\Service\Media\ServiceHealthCache;
 use App\Tests\AbstractWebTestCase;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
  * Smoke test for the Bazarr section's route guard.
@@ -18,6 +22,23 @@ use App\Tests\AbstractWebTestCase;
  */
 class BazarrControllerTest extends AbstractWebTestCase
 {
+    /**
+     * Final-review fix-wave: apiRefresh()'s coalescing marker lives in the
+     * real filesystem cache.app pool, which — unlike the SQLite schema
+     * AbstractWebTestCase resets — is NOT reset between tests in this
+     * process. A test that reaches apiRefresh() successfully (the truthful-
+     * shape test, the breaker-open test, and the already_running test below)
+     * leaves the marker set for 30 s, which would make whichever of those
+     * tests happens to run next within that window answer already_running
+     * instead of whatever it actually means to exercise. Clear it after
+     * every test in this class so order/timing can never matter.
+     */
+    protected function tearDown(): void
+    {
+        static::getContainer()->get('cache.app')->deleteItem('bazarr_subtitle_index.inline_refresh');
+        parent::tearDown();
+    }
+
     public function testBazarrRedirectsToAdminSettingsWhenUnconfigured(): void
     {
         $this->client->request('GET', '/bazarr');
@@ -113,5 +134,114 @@ class BazarrControllerTest extends AbstractWebTestCase
         self::assertResponseStatusCodeSame(500);
         $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
         self::assertFalse($payload['ok']);
+    }
+
+    public function testTheRefreshEndpointDeniesAnonymousAccess(): void
+    {
+        $this->client->getCookieJar()->clear();
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertTrue($this->client->getResponse()->isRedirect(), 'POST api/refresh must redirect anonymous users');
+    }
+
+    /**
+     * Fix round 1, MINOR 9: a logged-in but non-admin user must be denied too
+     * — #[IsGranted('ROLE_ADMIN')] on the class throws AccessDeniedException,
+     * which the security layer turns into a 403 (not a redirect: the user IS
+     * authenticated, just under-privileged).
+     */
+    public function testTheRefreshEndpointDeniesNonAdminAccess(): void
+    {
+        $user = new User();
+        $user->setEmail('member@test.local');
+        $user->setDisplayName('Member');
+        $user->setPassword(static::getContainer()->get(UserPasswordHasherInterface::class)->hashPassword($user, 'member-password'));
+
+        $em = $this->em();
+        $em->persist($user);
+        $em->flush();
+
+        $this->client->loginUser($user);
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    /**
+     * Fix round 1, IMPORTANT 1: the response must be truthful, not an
+     * unconditional {"ok": true}. Unconfigured Bazarr (this test's fixture)
+     * is a clean-empty fetch — BazarrClient::ready() is false, so getMovies/
+     * getSeries/getBadgeCounts never make an HTTP call and never record a
+     * lastError — so the inline refresh genuinely succeeds by writing fresh
+     * empty maps, and the endpoint must report exactly that.
+     */
+    public function testTheRefreshEndpointReturnsATruthfulShapeForAdmin(): void
+    {
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertFalse($this->client->getResponse()->isRedirect(), 'API routes must never redirect');
+        self::assertResponseStatusCodeSame(200);
+        self::assertJson((string) $this->client->getResponse()->getContent());
+
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertArrayHasKey('ok', $payload);
+        self::assertArrayHasKey('movies', $payload);
+        self::assertArrayHasKey('series', $payload);
+        self::assertArrayHasKey('reason', $payload);
+        self::assertTrue($payload['ok']);
+        self::assertSame('fresh', $payload['movies']);
+        self::assertSame('fresh', $payload['series']);
+        self::assertNull($payload['reason']);
+    }
+
+    /**
+     * Fix round 1, IMPORTANT 1 + MINOR 9: an open breaker must skip the fetch
+     * entirely (structurally guaranteed by apiRefresh() returning before it
+     * ever calls BazarrIndexRefresher::refresh()) and answer ok:false with a
+     * breaker_open reason, never a 500.
+     */
+    public function testTheRefreshEndpointAnswersBreakerOpenWithoutFetching(): void
+    {
+        $pool = static::getContainer()->get('cache.app');
+        (new ServiceHealthCache($pool))->markDown(BazarrClient::SERVICE);
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertResponseStatusCodeSame(200);
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertFalse($payload['ok']);
+        self::assertSame('breaker_open', $payload['reason']);
+    }
+
+    /**
+     * Final-review fix-wave: a second call while the coalescing marker is
+     * still set (a double-clicked Retry, or a second admin) must not stack
+     * another inline ~3x8s rebuild — it answers `already_running`
+     * immediately. Zero client calls is structurally guaranteed here the
+     * same way the breaker_open test above guarantees it: the marker check
+     * returns before BazarrIndexRefresher::refresh() is ever called, and the
+     * unconfigured Bazarr fixture would 500/JSON-error the moment any actual
+     * HTTP client work happened, which it never does.
+     */
+    public function testASecondRefreshWhileOneIsMarkedInFlightAnswersAlreadyRunningWithoutFetching(): void
+    {
+        $pool = static::getContainer()->get('cache.app');
+        $marker = $pool->getItem('bazarr_subtitle_index.inline_refresh');
+        $marker->set(true);
+        $marker->expiresAfter(30);
+        $pool->save($marker);
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertFalse($this->client->getResponse()->isRedirect());
+        self::assertResponseStatusCodeSame(200);
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertArrayHasKey('ok', $payload);
+        self::assertArrayHasKey('movies', $payload);
+        self::assertArrayHasKey('series', $payload);
+        self::assertFalse($payload['ok']);
+        self::assertSame('already_running', $payload['reason']);
     }
 }

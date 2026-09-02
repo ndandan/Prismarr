@@ -36,6 +36,32 @@ class LibraryTimeoutGuardTest extends TestCase
             '/->getRawAllSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
             1,
         ];
+        yield 'BazarrPosterResolver library calls' => [
+            'Service/Media/BazarrPosterResolver.php',
+            '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
+            2, // moviePosters + seriesPosters
+        ];
+        yield 'MediaLibraryRefresher library calls' => [
+            'Service/Cache/MediaLibraryRefresher.php',
+            '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
+            2,
+        ];
+        yield 'DashboardController library calls' => [
+            'Controller/DashboardController.php',
+            '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
+            4, // two branches × movies+series in collectLibrary()
+        ];
+        yield 'MediaController full-library calls' => [
+            'Controller/MediaController.php',
+            '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
+            // films() + series() (the library pages themselves), plus
+            // buildMovieSearchIndex()/buildSeriesSearchIndex() (the perf/search
+            // work that put the Ctrl+K index behind the same shared library
+            // cache — perf(search): pre-normalize commit), plus the three
+            // pre-existing safe call sites this same regex also covers:
+            // filmsFilteredIds(), seriesFilteredIds() and filmsCollections().
+            7,
+        ];
     }
 
     #[DataProvider('requiredTimeouts')]
@@ -56,6 +82,9 @@ class LibraryTimeoutGuardTest extends TestCase
         yield 'SonarrController bare getSeries()' => ['Controller/SonarrController.php', '/->getSeries\(\)/'];
         yield 'RadarrController bare getMovies()' => ['Controller/RadarrController.php', '/->getMovies\(\)/'];
         yield 'TorrentResolverService bare getRawAllSeries()' => ['Service/Media/TorrentResolverService.php', '/->getRawAllSeries\(\)/'];
+        yield 'BazarrPosterResolver bare library calls' => ['Service/Media/BazarrPosterResolver.php', '/->getMovies\(\)|->getSeries\(\)/'];
+        yield 'MediaLibraryRefresher bare library calls' => ['Service/Cache/MediaLibraryRefresher.php', '/->getMovies\(\)|->getSeries\(\)/'];
+        yield 'DashboardController bare library calls' => ['Controller/DashboardController.php', '/->getMovies\(\)|->getSeries\(\)/'];
     }
 
     #[DataProvider('forbiddenBareCalls')]

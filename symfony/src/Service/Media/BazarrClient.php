@@ -86,7 +86,13 @@ class BazarrClient implements ResetInterface
         return $this->request('GET', '/system/status') !== null;
     }
 
-    /** @return array{movies: int, episodes: int, providers: int} Zeros on failure. */
+    /**
+     * @phpstan-impure Mutates $this->lastError (via request()) on failure —
+     * BazarrIndexRefresher checks getLastError() both before and after this
+     * call in the same scope, and PHPStan must not memoize the first
+     * (null) answer across this call.
+     * @return array{movies: int, episodes: int, providers: int} Zeros on failure.
+     */
     public function getBadgeCounts(): array
     {
         $zero = ['movies' => 0, 'episodes' => 0, 'providers' => 0];
@@ -124,24 +130,54 @@ class BazarrClient implements ResetInterface
         return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
 
-    /** @return list<array<string, mixed>> Raw movie dicts; [] on failure. */
-    public function getMovies(): array
+    /**
+     * @param list<int> $radarrIds Optional per-id filter. Empty = the whole
+     *        list (start=0&length=-1), byte-for-byte the previous query.
+     * @return list<array<string, mixed>> Raw movie dicts; [] on failure.
+     */
+    public function getMovies(array $radarrIds = []): array
     {
         if (!$this->ready()) {
             return [];
         }
-        $r = $this->request('GET', '/movies', ['start' => 0, 'length' => -1]);
+        $r = $this->request('GET', '/movies', ['start' => 0, 'length' => -1], [], self::repeatedIds('radarrid', $radarrIds));
+
         return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
 
-    /** @return list<array<string, mixed>> Raw series dicts; [] on failure. */
-    public function getSeries(): array
+    /**
+     * @param list<int> $sonarrSeriesIds Optional per-id filter; empty = the whole list.
+     * @return list<array<string, mixed>> Raw series dicts; [] on failure.
+     */
+    public function getSeries(array $sonarrSeriesIds = []): array
     {
         if (!$this->ready()) {
             return [];
         }
-        $r = $this->request('GET', '/series', ['start' => 0, 'length' => -1]);
+        $r = $this->request('GET', '/series', ['start' => 0, 'length' => -1], [], self::repeatedIds('seriesid', $sonarrSeriesIds));
+
         return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
+    }
+
+    /**
+     * Bazarr's list endpoints take a REPEATED `name[]=` parameter
+     * (flask-restx reqparse, action='append'). http_build_query() emits the
+     * PHP-indexed `name[0]=` form instead, which request.args.getlist('name[]')
+     * never sees — so this fragment is built by hand and appended after the
+     * encoded query. Ids are cast to int, so nothing unsanitized reaches the URL.
+     *
+     * @param list<mixed> $ids
+     */
+    private static function repeatedIds(string $name, array $ids): string
+    {
+        if ($ids === []) {
+            return '';
+        }
+
+        return implode('&', array_map(
+            static fn ($id): string => rawurlencode($name . '[]') . '=' . ((int) $id),
+            $ids,
+        ));
     }
 
     /** @return list<array<string, mixed>> Raw movie subtitle-history dicts; [] on failure. */
@@ -257,11 +293,14 @@ class BazarrClient implements ResetInterface
      * Honors + feeds the cross-request circuit breaker so a downed Bazarr
      * doesn't cost an 8 s timeout on every poll.
      *
-     * @param array<string, mixed> $query Appended as a query string.
-     * @param array<string, mixed> $body  Form-encoded body for POST/PATCH.
+     * @param array<string, mixed> $query    Appended as a query string.
+     * @param array<string, mixed> $body     Form-encoded body for POST/PATCH.
+     * @param string               $rawQuery Pre-encoded extra query fragment for
+     *                                       parameters http_build_query() cannot
+     *                                       express (Bazarr's repeated `name[]=`).
      * @return array<string, mixed>|null
      */
-    private function request(string $method, string $path, array $query = [], array $body = []): ?array
+    private function request(string $method, string $path, array $query = [], array $body = [], string $rawQuery = ''): ?array
     {
         // Circuit breaker: skip the call entirely if Bazarr was just seen
         // down — a widget poll would otherwise stack connect timeouts.
@@ -291,7 +330,11 @@ class BazarrClient implements ResetInterface
             return null;
         }
 
-        $url = $endpoint . ($query !== [] ? '?' . http_build_query($query) : '');
+        $qs = http_build_query($query);
+        if ($rawQuery !== '') {
+            $qs = $qs === '' ? $rawQuery : $qs . '&' . $rawQuery;
+        }
+        $url = $endpoint . ($qs !== '' ? '?' . $qs : '');
 
         $ch = curl_init($url);
         if ($ch === false) {

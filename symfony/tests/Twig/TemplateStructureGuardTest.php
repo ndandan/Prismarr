@@ -129,6 +129,7 @@ class TemplateStructureGuardTest extends TestCase
             'bazarr/_grid.html.twig',
             'bazarr/index.html.twig',
             'bazarr/history.html.twig',
+            'bazarr/series_detail.html.twig',
             'media/_subtitle_chips.html.twig',
         ];
         foreach ($files as $relPath) {
@@ -141,5 +142,194 @@ class TemplateStructureGuardTest extends TestCase
                     . '(often a JS `/* … */` comment mistakenly closed with `#}`).'
             );
         }
+    }
+
+    /**
+     * The per-id Bazarr fallback is a SINGLE-ITEM affordance. Reachable from a
+     * grid template it becomes 588 Bazarr calls per page render (spec defect
+     * C1). Only the quick-look body may use it.
+     */
+    public function testTheSingleItemSubtitleLookupIsUsedOnlyByTheQuickLookBody(): void
+    {
+        $root = self::TEMPLATE_ROOT;
+
+        $this->assertSame(
+            1,
+            substr_count((string) file_get_contents($root . 'dashboard/_quicklook_body.html.twig'), 'subtitle_status_single('),
+            'the quick-look body renders exactly one badge and must use the per-id lookup',
+        );
+
+        foreach ([
+            'media/films.html.twig',
+            'media/series.html.twig',
+            'media/_subtitle_badge.html.twig',
+            'bazarr/index.html.twig',
+            'bazarr/_shell.html.twig',
+            'bazarr/_bare.html.twig',
+            'bazarr/_grid.html.twig',
+            'bazarr/history.html.twig',
+            'bazarr/series_detail.html.twig',
+        ] as $file) {
+            $this->assertStringNotContainsString(
+                'subtitle_status_single(',
+                (string) file_get_contents($root . $file),
+                $file . ' renders many badges — the per-id lookup would be an N+1 against Bazarr',
+            );
+        }
+    }
+
+    public function testTheGridTearsDownOnBothTheFrameAndTheDocumentEvent(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_grid.html.twig');
+
+        // A frame swap fires neither turbo:before-render nor turbo:render, so
+        // a document-only binding leaks the observer and the debounce timer
+        // and accumulates one dead listener per view switch.
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-render', teardown)"));
+    }
+
+    public function testNewBazarrTemplatesBalanceTwigComments(): void
+    {
+        // ced9170: a JS comment opened with slash-star and closed with `#}`
+        // silently swallowed the rest of a <script> and shipped a dead modal.
+        foreach ([
+            'bazarr/_shell.html.twig', 'bazarr/_bare.html.twig', 'bazarr/_warming.html.twig', 'bazarr/_grid.html.twig',
+            'bazarr/history.html.twig', 'bazarr/series_detail.html.twig',
+        ] as $file) {
+            $src = (string) file_get_contents(__DIR__ . '/../../templates/' . $file);
+            $this->assertSame(
+                substr_count($src, '{#'),
+                substr_count($src, '#}'),
+                $file . ': unbalanced Twig comment delimiters',
+            );
+        }
+    }
+
+    /**
+     * Fix round 1, CRITICAL 1. Every link INSIDE #bazarr-view targets the
+     * frame by default (that is what the frame element does); a link to a
+     * page that is not one of the frame's own views must escape with
+     * data-turbo-frame="_top", or Turbo tries to satisfy the frame-scoped
+     * fetch by finding id="bazarr-view" in that OTHER page's response, fails,
+     * and replaces the current tab with "Content missing". The series-detail
+     * drill-down is exactly such a page.
+     */
+    public function testGridSeriesCardLinksEscapeToTheTopLevel(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_grid.html.twig');
+
+        $this->assertStringContainsString(
+            "el.setAttribute('data-turbo-frame', '_top')",
+            $src,
+            '_grid.html.twig: the series-card <a> (built in buildCard(), linking to /bazarr/series/{id}) must escape the frame',
+        );
+    }
+
+    /**
+     * Fix round 1, CRITICAL 2. error/_service_banner.html.twig is rendered
+     * inside #bazarr-view by bazarr/_bare.html.twig's error branch; its CTA
+     * links to the settings page, which is not one of the frame's views.
+     */
+    public function testServiceBannerCtaEscapesToTheTopLevel(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/error/_service_banner.html.twig');
+
+        $this->assertMatchesRegularExpression(
+            '/<a href="\{\{ path\(_target_route\) \}\}" data-turbo-frame="_top"/',
+            $src,
+            '_service_banner.html.twig: the CTA anchor must carry data-turbo-frame="_top"',
+        );
+    }
+
+    /**
+     * Fix round 1, IMPORTANT 4 + CRITICAL 1 audit. The landing page's "View
+     * movies"/"View series" buttons stay inside the frame's own view set, so
+     * they target the frame + advance history like the pill nav; the
+     * series-detail link in the same file is NOT one of the frame's views,
+     * so it must escape instead.
+     */
+    public function testLandingPageLinksAreCorrectlyFrameScoped(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/index.html.twig');
+
+        $this->assertSame(
+            2,
+            substr_count($src, 'data-turbo-frame="bazarr-view" data-turbo-action="advance"'),
+            'index.html.twig: "View movies" and "View series" must both target the frame and advance history',
+        );
+        $this->assertStringContainsString(
+            'data-bazarr-nav data-turbo-frame="_top"',
+            $src,
+            'index.html.twig: the series-detail link must escape the frame',
+        );
+    }
+
+    /**
+     * Fix round 1, CRITICAL 3. The server always re-renders the warming
+     * markup with no memory of a prior retry (there is nothing to read it
+     * back from — the cache is still cold), so the "already retried once"
+     * flag cannot be server state; it has to live out-of-band, keyed by
+     * path. And frame.reload() is a no-op on a direct hit (the shell ships
+     * the frame with no `src`), so the reload must go through
+     * Turbo.visit(url, {frame}) instead, which assigns `src` either way.
+     *
+     * Final-review fix-wave: the out-of-band marker's PRIMARY store is now
+     * sessionStorage, not a bare `window` property — `window.location.
+     * reload()` (the fallback reload path, taken when Turbo.visit isn't
+     * available) is a full document navigation that wipes any plain
+     * `window` property, so a window-only flag would forget it had already
+     * retried on every such reload and loop forever against a Bazarr that
+     * never comes back. `window` is kept only as the fallback for when
+     * sessionStorage itself throws (private browsing / disabled storage).
+     */
+    public function testWarmingReloadsViaTurboVisitWithAnOutOfBandRetryMarker(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_warming.html.twig');
+
+        $this->assertStringContainsString(
+            "window.Turbo.visit(path, { frame: 'bazarr-view' })",
+            $src,
+            '_warming.html.twig: reload must go through Turbo.visit(), not frame.reload() (a no-op with no src)',
+        );
+        $this->assertStringContainsString(
+            'sessionStorage',
+            $src,
+            '_warming.html.twig: the one-shot auto-retry marker must survive the window.location.reload() fallback path, so it must live in sessionStorage, not only on `window`',
+        );
+        $this->assertStringContainsString(
+            "'prismarr:bazarr-warm-retried:' + path",
+            $src,
+            '_warming.html.twig: the sessionStorage marker must be keyed by path, same as the window fallback',
+        );
+        $this->assertStringContainsString(
+            'window.__bzWarmRetried',
+            $src,
+            '_warming.html.twig: a window fallback must remain for when sessionStorage throws (private browsing / disabled storage)',
+        );
+        $this->assertStringNotContainsString(
+            'data-retried',
+            $src,
+            '_warming.html.twig: the dead data-retried attribute (written but never read) must be removed',
+        );
+    }
+
+    /**
+     * Fix round 1, MINOR 6. Same leak class as _grid.html.twig's teardown
+     * (testTheGridTearsDownOnBothTheFrameAndTheDocumentEvent above): a frame
+     * swap fires no document-level turbo:before-render, so a document-only
+     * binding would leave the 4 s timer armed after the view it belongs to
+     * is gone.
+     */
+    public function testWarmingTearsDownOnBothTheFrameAndTheDocumentEvent(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_warming.html.twig');
+
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-render', teardown)"));
     }
 }

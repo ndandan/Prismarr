@@ -60,7 +60,7 @@ class BazarrPosterResolver
 
         $rows = $this->libraryCache->movies(
             $instance->getSlug(),
-            fn () => $this->radarr->withInstance($instance)->getMovies(),
+            fn () => $this->radarr->withInstance($instance)->getMovies(RadarrClient::LIBRARY_TIMEOUT),
         );
 
         return $this->posterMap($rows);
@@ -76,7 +76,7 @@ class BazarrPosterResolver
 
         $rows = $this->libraryCache->series(
             $instance->getSlug(),
-            fn () => $this->sonarr->withInstance($instance)->getSeries(),
+            fn () => $this->sonarr->withInstance($instance)->getSeries(SonarrClient::LIBRARY_TIMEOUT),
         );
 
         return $this->posterMap($rows);

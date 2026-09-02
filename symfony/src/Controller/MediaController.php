@@ -2006,55 +2006,126 @@ class MediaController extends AbstractController
             return $this->json([]);
         }
 
-        $results = [];
-
         // Phase D — flatten every enabled Radarr/Sonarr instance into the
         // search index. Each item is tagged with `instance: {slug, name}`
         // so the Ctrl+K dropdown can show "Le Parrain — Radarr 4K" and
         // navigate to /medias/<slug>/films?open=X for the right instance.
-        // Cache key bumped to _v2 so the v1 single-instance cache from a
-        // previous build doesn't keep serving stale, untagged results.
-        $movies = $this->cache->get('prismarr_search_movies_v2', $this->buildMovieSearchIndex(...));
+        // Cache key bumped to _v3: rows now carry pre-normalized _n_* fields,
+        // and a pre-_n_* cached array from a previous build would silently
+        // match nothing.
+        $movies = $this->cache->get('prismarr_search_movies_v3', $this->buildMovieSearchIndex(...));
 
-        $series = $this->cache->get('prismarr_search_series_v2', $this->buildSeriesSearchIndex(...));
+        $series = $this->cache->get('prismarr_search_series_v3', $this->buildSeriesSearchIndex(...));
 
-        // Local filter, case- and accent-insensitive. transliterator_transliterate()
-        // returns false on failure; without the fallback the normalized term would
-        // become '' and str_contains() would then match the whole library.
-        $normalize = fn(string $s) => mb_strtolower(transliterator_transliterate('Any-Latin; Latin-ASCII; Lower()', $s) ?: $s);
-        $termNorm = $normalize($term);
+        $results = [];
+        foreach ($this->matchAndRank($movies, $term) as $m) {
+            $results[] = array_merge($m, ['type' => 'film', 'inLibrary' => true]);
+        }
+        foreach ($this->matchAndRank($series, $term) as $s) {
+            $results[] = array_merge($s, ['type' => 'serie', 'inLibrary' => true]);
+        }
 
-        foreach ($movies as $m) {
-            if (str_contains($normalize($m['title'] ?? ''), $termNorm)
-                || str_contains($normalize($m['originalTitle'] ?? ''), $termNorm)
-                || str_contains($normalize($m['sortTitle'] ?? ''), $termNorm)) {
-                $results[] = $this->attachSubtitleStatus(
-                    array_merge($m, ['type' => 'film', 'inLibrary' => true]),
-                    'movie'
-                );
+        // Re-rank across the two kinds with the same rule, then cut to 12 and
+        // only THEN look up subtitle status — it used to run for every match.
+        $results = $this->matchAndRank($results, $term);
+        $results = array_slice($results, 0, 12);
+
+        foreach ($results as $i => $r) {
+            $results[$i] = $this->attachSubtitleStatus($r, ($r['type'] ?? '') === 'film' ? 'movie' : 'series');
+        }
+
+        return $this->json($this->stripIndexHelpers($results));
+    }
+
+    /** ICU transliteration is expensive; ONE reusable instance per build, never the procedural per-call form. */
+    private static function transliterator(): ?\Transliterator
+    {
+        static $t = null;
+        $t ??= \Transliterator::create('Any-Latin; Latin-ASCII; Lower()');
+
+        return $t;
+    }
+
+    private static function normalizeTerm(string $s): string
+    {
+        $t = self::transliterator();
+        $out = $t?->transliterate($s);
+
+        // transliterate() returns false on failure; without the fallback the
+        // normalized term would be '' and str_contains() would match the
+        // WHOLE library.
+        return mb_strtolower(is_string($out) ? $out : $s);
+    }
+
+    /**
+     * Add the pre-normalized search fields to one index row. Called once per
+     * row per 60 s cache build instead of once per row per request.
+     *
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function normalizeIndexRow(array $row): array
+    {
+        $row['_n_title']    = self::normalizeTerm((string) ($row['title'] ?? ''));
+        $row['_n_original'] = self::normalizeTerm((string) ($row['originalTitle'] ?? ''));
+        $row['_n_sort']     = self::normalizeTerm((string) ($row['sortTitle'] ?? ''));
+
+        return $row;
+    }
+
+    /**
+     * Filter + rank against the PRE-normalized fields: plain byte
+     * str_contains, zero ICU calls, and a comparator that reads _n_title
+     * instead of re-transliterating both sides of every comparison. Order is
+     * unchanged: starts-with first, then strcasecmp on the RAW title.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function matchAndRank(array $rows, string $term): array
+    {
+        $needle = self::normalizeTerm($term);
+
+        $hits = [];
+        foreach ($rows as $r) {
+            if (str_contains((string) ($r['_n_title'] ?? ''), $needle)
+                || str_contains((string) ($r['_n_original'] ?? ''), $needle)
+                || str_contains((string) ($r['_n_sort'] ?? ''), $needle)) {
+                $hits[] = $r;
             }
         }
 
-        foreach ($series as $s) {
-            if (str_contains($normalize($s['title'] ?? ''), $termNorm)
-                || str_contains($normalize($s['originalTitle'] ?? ''), $termNorm)
-                || str_contains($normalize($s['sortTitle'] ?? ''), $termNorm)) {
-                $results[] = $this->attachSubtitleStatus(
-                    array_merge($s, ['type' => 'serie', 'inLibrary' => true]),
-                    'series'
-                );
+        usort($hits, static function (array $a, array $b) use ($needle): int {
+            $aStarts = str_starts_with((string) ($a['_n_title'] ?? ''), $needle);
+            $bStarts = str_starts_with((string) ($b['_n_title'] ?? ''), $needle);
+            if ($aStarts !== $bStarts) {
+                return $bStarts <=> $aStarts;
             }
-        }
 
-        // Sort: titles starting with the term first, then alphabetical
-        usort($results, function ($a, $b) use ($termNorm, $normalize) {
-            $aStarts = str_starts_with($normalize($a['title'] ?? ''), $termNorm);
-            $bStarts = str_starts_with($normalize($b['title'] ?? ''), $termNorm);
-            if ($aStarts !== $bStarts) return $bStarts <=> $aStarts;
-            return strcasecmp($a['title'], $b['title']);
+            return strcasecmp((string) ($a['title'] ?? ''), (string) ($b['title'] ?? ''));
         });
 
-        return $this->json(array_slice($results, 0, 12));
+        return $hits;
+    }
+
+    /**
+     * The Ctrl+K renderer JSON.stringify()s each whole result into a
+     * data-item attribute, so every key ships to the DOM — the helper fields
+     * must be removed, not merely ignored.
+     *
+     * @param list<array<string, mixed>> $rows
+     * @return list<array<string, mixed>>
+     */
+    private function stripIndexHelpers(array $rows): array
+    {
+        return array_map(
+            static function (array $r): array {
+                unset($r['_n_title'], $r['_n_original'], $r['_n_sort']);
+
+                return $r;
+            },
+            $rows,
+        );
     }
 
     /**
@@ -2082,7 +2153,9 @@ class MediaController extends AbstractController
             ? $this->bazarrIndex->movieStatus((int) $id)
             : $this->bazarrIndex->seriesStatus((int) $id);
 
-        if ($status['state'] === 'hidden') {
+        // 'pending' means the shared index is cold — omit the key exactly like
+        // 'hidden' so the client's `if (item.subtitle)` branch is unchanged.
+        if ($status['state'] === 'hidden' || $status['state'] === 'pending') {
             return $result;
         }
 
@@ -2106,11 +2179,11 @@ class MediaController extends AbstractController
         // of local ids cross-instance to make sure "already in library" is
         // truthful for users running multiple Radarr / Sonarr.
         $localMovieIds = array_column(
-            $this->cache->get('prismarr_search_movies_v2', $this->buildMovieSearchIndex(...)),
+            $this->cache->get('prismarr_search_movies_v3', $this->buildMovieSearchIndex(...)),
             'id'
         );
         $localSeriesIds = array_column(
-            $this->cache->get('prismarr_search_series_v2', $this->buildSeriesSearchIndex(...)),
+            $this->cache->get('prismarr_search_series_v3', $this->buildSeriesSearchIndex(...)),
             'id'
         );
 
@@ -2171,7 +2244,10 @@ class MediaController extends AbstractController
         $out = [];
         foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
             try {
-                $raw = $this->radarr->withInstance($inst)->getRawMovies(RadarrClient::LIBRARY_TIMEOUT);
+                $rows = $this->libraryCache->movies(
+                    $inst->getSlug(),
+                    fn () => $this->radarr->withInstance($inst)->getMovies(RadarrClient::LIBRARY_TIMEOUT),
+                );
             } catch (\Throwable $e) {
                 $this->logger->warning('Media globalSearch radarr failed', [
                     'instance' => $inst->getSlug(),
@@ -2180,17 +2256,17 @@ class MediaController extends AbstractController
                 ]);
                 continue;
             }
-            foreach ($raw as $m) {
-                $out[] = [
+            foreach ($rows as $m) {
+                $out[] = $this->normalizeIndexRow([
                     'id'            => $m['id'] ?? null,
                     'title'         => $m['title'] ?? '—',
                     'originalTitle' => $m['originalTitle'] ?? null,
                     'sortTitle'     => $m['sortTitle'] ?? '',
                     'year'          => $m['year'] ?? null,
                     'hasFile'       => (bool) ($m['hasFile'] ?? false),
-                    'poster'        => $this->extractPoster($m),
+                    'poster'        => $m['poster'] ?? null,
                     'instance'      => ['slug' => $inst->getSlug(), 'name' => $inst->getName()],
-                ];
+                ]);
             }
         }
 
@@ -2208,7 +2284,10 @@ class MediaController extends AbstractController
         $out = [];
         foreach ($this->instances->getEnabled(ServiceInstance::TYPE_SONARR) as $inst) {
             try {
-                $raw = $this->sonarr->withInstance($inst)->getRawAllSeries(SonarrClient::LIBRARY_TIMEOUT);
+                $rows = $this->libraryCache->series(
+                    $inst->getSlug(),
+                    fn () => $this->sonarr->withInstance($inst)->getSeries(SonarrClient::LIBRARY_TIMEOUT),
+                );
             } catch (\Throwable $e) {
                 $this->logger->warning('Media globalSearch sonarr failed', [
                     'instance' => $inst->getSlug(),
@@ -2217,17 +2296,17 @@ class MediaController extends AbstractController
                 ]);
                 continue;
             }
-            foreach ($raw as $s) {
-                $out[] = [
+            foreach ($rows as $s) {
+                $out[] = $this->normalizeIndexRow([
                     'id'            => $s['id'] ?? null,
                     'title'         => $s['title'] ?? '—',
-                    'originalTitle' => $s['originalTitle'] ?? null,
+                    'originalTitle' => null,
                     'sortTitle'     => $s['sortTitle'] ?? '',
                     'year'          => $s['year'] ?? null,
                     'hasFile'       => true,
-                    'poster'        => $this->extractPoster($s),
+                    'poster'        => $s['poster'] ?? null,
                     'instance'      => ['slug' => $inst->getSlug(), 'name' => $inst->getName()],
-                ];
+                ]);
             }
         }
 
@@ -2235,17 +2314,5 @@ class MediaController extends AbstractController
     }
 
     // Prowlarr indexers — moved to ProwlarrController
-
-    /** Extract the poster URL from raw Radarr/Sonarr data */
-    private function extractPoster(array $item): ?string
-    {
-        foreach ($item['images'] ?? [] as $img) {
-            if (($img['coverType'] ?? '') === 'poster') {
-                $url = $img['remoteUrl'] ?? ($img['url'] ?? null);
-                return $url ?: null;
-            }
-        }
-        return null;
-    }
 
 }

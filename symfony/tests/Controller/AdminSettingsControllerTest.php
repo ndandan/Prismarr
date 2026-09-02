@@ -6,6 +6,7 @@ use App\Controller\AdminSettingsController;
 use App\Repository\SettingRepository;
 use App\Service\ConfigService;
 use App\Service\HealthService;
+use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -25,6 +26,7 @@ class AdminSettingsControllerTest extends TestCase
         ?ServiceInstanceProvider $instances = null,
         array $services = [],
         ?\App\Service\DashboardLayoutService $layout = null,
+        ?BazarrSubtitleIndex $bazarrIndex = null,
     ): AdminSettingsController {
         $appVersion = $this->createMock(\App\Service\AppVersion::class);
         $appVersion->method('current')->willReturn('test');
@@ -47,6 +49,7 @@ class AdminSettingsControllerTest extends TestCase
             $layout ?? new \App\Service\DashboardLayoutService($config),
             projectDir: sys_get_temp_dir(),
             environment: 'test',
+            bazarrIndex: $bazarrIndex,
         );
 
         $container = $this->createMock(ContainerInterface::class);
@@ -225,6 +228,71 @@ class AdminSettingsControllerTest extends TestCase
         ));
 
         $this->controller($settings, $config, $health)->index($request);
+    }
+
+    /**
+     * Final-review fix-wave: a URL/key change for a service whose caches
+     * outlive a single request (Bazarr's subtitle index, soft/hard-TTL
+     * cached) must drop those cached datasets — otherwise a badge fetched
+     * against the OLD Bazarr instance can keep showing for up to HARD_TTL
+     * after the admin repoints the URL.
+     */
+    public function testSavingAChangedBazarrUrlInvalidatesTheSubtitleIndex(): void
+    {
+        $settings = $this->createMock(SettingRepository::class);
+        $settings->method('setMany');
+
+        $config = $this->createMock(ConfigService::class);
+        $config->method('get')->willReturnCallback(
+            static fn (string $k) => $k === 'bazarr_url' ? 'http://old-bazarr:6767' : null,
+        );
+
+        $health = $this->createMock(HealthService::class);
+
+        $bazarrIndex = $this->createMock(BazarrSubtitleIndex::class);
+        $bazarrIndex->expects($this->once())->method('invalidate');
+
+        $request = Request::create('/admin/settings', 'POST', [
+            '_csrf_token' => 'valid',
+            'bazarr_url'  => 'http://new-bazarr:6767',
+        ]);
+        $request->setSession(new \Symfony\Component\HttpFoundation\Session\Session(
+            new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage()
+        ));
+
+        $this->controller($settings, $config, $health, bazarrIndex: $bazarrIndex)->index($request);
+    }
+
+    /**
+     * The companion negative case: resubmitting the SAME bazarr_url (every
+     * field in self::FIELDS rides along on the one shared settings form, so
+     * saving an unrelated section still resubmits it) must NOT invalidate
+     * the subtitle index on every save.
+     */
+    public function testSavingAnUnchangedBazarrUrlDoesNotInvalidateTheSubtitleIndex(): void
+    {
+        $settings = $this->createMock(SettingRepository::class);
+        $settings->method('setMany');
+
+        $config = $this->createMock(ConfigService::class);
+        $config->method('get')->willReturnCallback(
+            static fn (string $k) => $k === 'bazarr_url' ? 'http://same-bazarr:6767' : null,
+        );
+
+        $health = $this->createMock(HealthService::class);
+
+        $bazarrIndex = $this->createMock(BazarrSubtitleIndex::class);
+        $bazarrIndex->expects($this->never())->method('invalidate');
+
+        $request = Request::create('/admin/settings', 'POST', [
+            '_csrf_token' => 'valid',
+            'bazarr_url'  => 'http://same-bazarr:6767',
+        ]);
+        $request->setSession(new \Symfony\Component\HttpFoundation\Session\Session(
+            new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage()
+        ));
+
+        $this->controller($settings, $config, $health, bazarrIndex: $bazarrIndex)->index($request);
     }
 
     /**

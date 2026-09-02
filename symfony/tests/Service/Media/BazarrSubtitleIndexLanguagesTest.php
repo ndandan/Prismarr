@@ -3,13 +3,16 @@
 namespace App\Tests\Service\Media;
 
 use App\Entity\ServiceInstance;
+use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
-use Psr\Cache\CacheItemPoolInterface;
+use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Per-movie subtitle-language detail: BazarrSubtitleIndex::movieLanguages(),
@@ -46,41 +49,59 @@ class BazarrSubtitleIndexLanguagesTest extends TestCase
         return $provider;
     }
 
+    private function swr(ArrayAdapter $pool): StaleWhileRevalidateCache
+    {
+        $bus = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope { return new Envelope($message); }
+        };
+
+        return new StaleWhileRevalidateCache($pool, $pool, $bus, new NullLogger());
+    }
+
     private function index(
         BazarrClient $client,
-        ?CacheItemPoolInterface $pool = null,
+        ?ArrayAdapter $pool = null,
         ?ServiceInstanceProvider $instances = null,
     ): BazarrSubtitleIndex {
-        return new BazarrSubtitleIndex($client, $pool ?? new ArrayAdapter(), $instances ?? $this->instances());
+        $pool ??= new ArrayAdapter();
+
+        return new BazarrSubtitleIndex($client, $pool, $instances ?? $this->instances(), $this->swr($pool), new NullLogger());
     }
 
     public function testMovieLanguagesReturnsPresentMissingTracked(): void
     {
-        $client = $this->createMock(BazarrClient::class);
-        $client->method('getMovies')->willReturn([[
+        // Badge/language reads never fetch (Task 5): warm the cache directly
+        // via the SWR primitive, the way BazarrIndexRefresher would from one
+        // getMovies() pass.
+        $movie = [
             'radarrId'          => 5,
             'profileId'         => 1,
             'subtitles'         => [['name' => 'English', 'code2' => 'en', 'hi' => false, 'forced' => false]],
             'missing_subtitles' => [['name' => 'French', 'code2' => 'fr', 'hi' => false, 'forced' => false]],
-        ]]);
-        $client->method('getLastError')->willReturn(null);
+        ];
+
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIES, [5 => BazarrSubtitleIndex::computeMovieStatus($movie)], BazarrSubtitleIndex::HARD_TTL);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, [5 => BazarrSubtitleIndex::extractMovieLangs($movie)], BazarrSubtitleIndex::HARD_TTL);
 
         $this->assertSame([
             'present' => [['lang' => 'en', 'hi' => false, 'forced' => false]],
             'missing' => [['lang' => 'fr', 'hi' => false, 'forced' => false]],
             'tracked' => true,
-        ], $this->index($client)->movieLanguages(5));
+        ], $this->index($this->createMock(BazarrClient::class), $pool)->movieLanguages(5));
     }
 
     public function testAbsentMovieIsUntracked(): void
     {
-        $client = $this->createMock(BazarrClient::class);
-        $client->method('getMovies')->willReturn([['radarrId' => 5, 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => []]]);
-        $client->method('getLastError')->willReturn(null);
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIES, [5 => ['state' => 'complete', 'count' => 0]], BazarrSubtitleIndex::HARD_TTL);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, [5 => ['present' => [], 'missing' => [], 'tracked' => true]], BazarrSubtitleIndex::HARD_TTL);
 
         $this->assertSame(
             ['present' => [], 'missing' => [], 'tracked' => false],
-            $this->index($client)->movieLanguages(999),
+            $this->index($this->createMock(BazarrClient::class), $pool)->movieLanguages(999),
         );
     }
 
@@ -88,18 +109,21 @@ class BazarrSubtitleIndexLanguagesTest extends TestCase
     {
         // Untracked in Bazarr (no subtitle profile) → tracked:false, empty
         // lists, even though the raw dict carries a subtitles array.
-        $client = $this->createMock(BazarrClient::class);
-        $client->method('getMovies')->willReturn([[
+        $movie = [
             'radarrId'          => 5,
             'profileId'         => null,
             'subtitles'         => [['code2' => 'en']],
             'missing_subtitles' => [],
-        ]]);
-        $client->method('getLastError')->willReturn(null);
+        ];
+
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIES, [5 => BazarrSubtitleIndex::computeMovieStatus($movie)], BazarrSubtitleIndex::HARD_TTL);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, [5 => BazarrSubtitleIndex::extractMovieLangs($movie)], BazarrSubtitleIndex::HARD_TTL);
 
         $this->assertSame(
             ['present' => [], 'missing' => [], 'tracked' => false],
-            $this->index($client)->movieLanguages(5),
+            $this->index($this->createMock(BazarrClient::class), $pool)->movieLanguages(5),
         );
     }
 
@@ -118,66 +142,62 @@ class BazarrSubtitleIndexLanguagesTest extends TestCase
         );
     }
 
-    public function testOneFetchFillsBothStatusAndLanguageMaps(): void
+    public function testAHardMissForBothMapsRequestsExactlyOneRefresh(): void
     {
-        $client = $this->createMock(BazarrClient::class);
-        $client->expects($this->once())->method('getMovies')->willReturn([[
-            'radarrId'          => 5,
-            'profileId'         => 1,
-            'subtitles'         => [['code2' => 'en']],
-            'missing_subtitles' => [['code2' => 'fr']],
-        ]]);
-        $client->method('getSeries')->willReturn([]);
-        $client->method('getLastError')->willReturn(null);
+        // movieStatus() and movieLanguages() share one loadMovies() pass per
+        // request (moviesLoaded guard) — a cold cache for both maps must
+        // still only ask the messenger-worker for ONE rebuild, not two.
+        $dispatched = [];
+        $pool       = new ArrayAdapter();
+        $bus        = new class($dispatched) implements MessageBusInterface {
+            /** @param list<object> $sink */
+            public function __construct(private array &$sink) {}
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                $this->sink[] = $message;
+                return new Envelope($message);
+            }
+        };
+        $swr = new StaleWhileRevalidateCache($pool, $pool, $bus, new NullLogger());
 
-        $index = $this->index($client);
-        $this->assertSame('missing', $index->movieStatus(5)['state']); // builds the tuple map
-        $this->assertTrue($index->movieLanguages(5)['tracked']);       // reuses the SAME fetch
+        $index = new BazarrSubtitleIndex($this->createMock(BazarrClient::class), $pool, $this->instances(), $swr, new NullLogger());
+
+        $this->assertSame('pending', $index->movieStatus(5)['state']);
+        $this->assertFalse($index->movieLanguages(5)['tracked']);
+        $this->assertCount(1, $dispatched);
     }
 
     public function testLanguageMapCachedAcrossRequests(): void
     {
-        $pool   = new ArrayAdapter();
-        $client = $this->createMock(BazarrClient::class);
-        $client->expects($this->once())->method('getMovies')->willReturn([[
+        $movie = [
             'radarrId'          => 5,
             'profileId'         => 1,
             'subtitles'         => [['code2' => 'en']],
             'missing_subtitles' => [],
-        ]]);
-        $client->method('getLastError')->willReturn(null);
+        ];
 
-        $this->assertTrue($this->index($client, $pool)->movieLanguages(5)['tracked']);
-        // Fresh service, same cache.app pool → served from cache, no 2nd fetch.
-        $this->assertTrue($this->index($client, $pool)->movieLanguages(5)['tracked']);
-    }
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIES, [5 => BazarrSubtitleIndex::computeMovieStatus($movie)], BazarrSubtitleIndex::HARD_TTL);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, [5 => BazarrSubtitleIndex::extractMovieLangs($movie)], BazarrSubtitleIndex::HARD_TTL);
 
-    public function testFailedFetchLeavesLanguageMapUncached(): void
-    {
-        $pool   = new ArrayAdapter();
         $client = $this->createMock(BazarrClient::class);
-        $client->method('getMovies')->willReturn([]);
-        $client->method('getLastError')->willReturn(['code' => 0, 'method' => 'GET', 'path' => '/movies', 'message' => 'circuit open']);
+        $client->expects($this->never())->method('getMovies');
 
-        $this->assertSame(
-            ['present' => [], 'missing' => [], 'tracked' => false],
-            $this->index($client, $pool)->movieLanguages(5),
-        );
-        $this->assertFalse($pool->getItem('bazarr_subtitle_index.movie_langs')->isHit());
+        $this->assertTrue($this->index($client, $pool)->movieLanguages(5)['tracked']);
+        // Fresh service, same cache.app pool → served from cache, no fetch.
+        $this->assertTrue($this->index($client, $pool)->movieLanguages(5)['tracked']);
     }
 
     public function testInvalidateDropsLanguageCacheKey(): void
     {
-        $pool   = new ArrayAdapter();
-        $client = $this->createMock(BazarrClient::class);
-        $client->method('getMovies')->willReturn([['radarrId' => 5, 'profileId' => 1, 'subtitles' => [['code2' => 'en']], 'missing_subtitles' => []]]);
-        $client->method('getLastError')->willReturn(null);
+        $pool = new ArrayAdapter();
+        $this->swr($pool)->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, [5 => ['present' => [], 'missing' => [], 'tracked' => true]], BazarrSubtitleIndex::HARD_TTL);
 
-        $index = $this->index($client, $pool);
-        $index->movieLanguages(5);
-        $this->assertTrue($pool->getItem('bazarr_subtitle_index.movie_langs')->isHit());
+        $index = $this->index($this->createMock(BazarrClient::class), $pool);
+        $this->assertTrue($pool->getItem(BazarrSubtitleIndex::KEY_MOVIE_LANGS)->isHit());
 
         $index->invalidate();
-        $this->assertFalse($pool->getItem('bazarr_subtitle_index.movie_langs')->isHit());
+        $this->assertFalse($pool->getItem(BazarrSubtitleIndex::KEY_MOVIE_LANGS)->isHit());
     }
 }

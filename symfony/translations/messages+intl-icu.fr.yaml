@@ -5690,6 +5690,10 @@ bazarr:
     complete: Complet
     not_tracked: Non suivi
     empty_filtered: Aucun élément ne correspond aux filtres
+  warming:
+    title: Chargement des données de sous-titres depuis Bazarr…
+    subtitle: Cela prend quelques secondes la première fois après un redémarrage.
+    retry: Réessayer
   history:
     movies_title: Historique des sous-titres de films
     episodes_title: Historique des sous-titres d'épisodes
@@ -5716,6 +5720,7 @@ bazarr:
     missing_episodes: '{count, plural, one {# épisode sans sous-titres} other {# épisodes sans sous-titres}}'
     complete: Sous-titres complets
     subs: Sous-titres
+    pending: Statut des sous-titres en cours de chargement depuis Bazarr
   chips:
     hi_title: Sous-titres pour malentendants
     forced_title: Sous-titres forcés
