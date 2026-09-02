@@ -313,7 +313,7 @@ class BazarrController extends AbstractController
      * than waiting on the bulk 5,382-row refill — this endpoint answers for
      * exactly one movie per open, so the single-item fallback is safe here
      * (never call it from a grid/list — see BazarrSubtitleIndex::movieStatusSingle()
-     * docblock and TemplateStructureGuardTest). Every failure path — gated,
+     * docblock and BazarrTemplateGuardTest). Every failure path — gated,
      * untracked, absent, or a failed fallback fetch — still degrades to the
      * same untracked shape, so this action has nothing left to branch on; a
      * modal opening on a down Bazarr just renders no chips instead of an

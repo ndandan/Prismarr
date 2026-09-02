@@ -503,7 +503,7 @@ class BazarrSubtitleIndex implements ResetInterface
      * dashboard quick-look. DO NOT call this from a grid, a list or a search
      * loop: on a cold index it issues one Bazarr call per invocation.
      * movieStatus() is the method for those.
-     * TemplateStructureGuardTest enforces the split on the template side.
+     * BazarrTemplateGuardTest enforces the split on the template side.
      *
      * @return array{state: string, count: int}
      */
