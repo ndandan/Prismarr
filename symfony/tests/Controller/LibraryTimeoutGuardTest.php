@@ -36,6 +36,16 @@ class LibraryTimeoutGuardTest extends TestCase
             '/->getRawAllSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
             1,
         ];
+        yield 'BazarrPosterResolver library calls' => [
+            'Service/Media/BazarrPosterResolver.php',
+            '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
+            2, // moviePosters + seriesPosters
+        ];
+        yield 'MediaLibraryRefresher library calls' => [
+            'Service/Cache/MediaLibraryRefresher.php',
+            '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
+            2,
+        ];
     }
 
     #[DataProvider('requiredTimeouts')]
@@ -56,6 +66,8 @@ class LibraryTimeoutGuardTest extends TestCase
         yield 'SonarrController bare getSeries()' => ['Controller/SonarrController.php', '/->getSeries\(\)/'];
         yield 'RadarrController bare getMovies()' => ['Controller/RadarrController.php', '/->getMovies\(\)/'];
         yield 'TorrentResolverService bare getRawAllSeries()' => ['Service/Media/TorrentResolverService.php', '/->getRawAllSeries\(\)/'];
+        yield 'BazarrPosterResolver bare library calls' => ['Service/Media/BazarrPosterResolver.php', '/->getMovies\(\)|->getSeries\(\)/'];
+        yield 'MediaLibraryRefresher bare library calls' => ['Service/Cache/MediaLibraryRefresher.php', '/->getMovies\(\)|->getSeries\(\)/'];
     }
 
     #[DataProvider('forbiddenBareCalls')]

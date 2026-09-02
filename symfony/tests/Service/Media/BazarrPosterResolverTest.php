@@ -3,6 +3,7 @@
 namespace App\Tests\Service\Media;
 
 use App\Entity\ServiceInstance;
+use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\BazarrPosterResolver;
 use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\RadarrClient;
@@ -10,7 +11,10 @@ use App\Service\Media\SonarrClient;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
 
 /**
  * Maps Bazarr's radarrId/sonarrSeriesId to OUR Radarr/Sonarr library poster
@@ -44,6 +48,15 @@ class BazarrPosterResolverTest extends TestCase
         return $provider;
     }
 
+    private function swr(ArrayAdapter $pool): StaleWhileRevalidateCache
+    {
+        $bus = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope { return new Envelope($message); }
+        };
+
+        return new StaleWhileRevalidateCache($pool, $pool, $bus, new NullLogger());
+    }
+
     private function resolver(
         ?RadarrClient $radarr = null,
         ?SonarrClient $sonarr = null,
@@ -57,7 +70,7 @@ class BazarrPosterResolverTest extends TestCase
             $instances ?? $this->instances(),
             $radarr,
             $sonarr,
-            $libraryCache ?? new MediaLibraryCache(new ArrayAdapter()),
+            $libraryCache ?? new MediaLibraryCache($this->swr(new ArrayAdapter())),
         );
     }
 
@@ -151,7 +164,7 @@ class BazarrPosterResolverTest extends TestCase
             ['id' => 5, 'poster' => '/p/5.jpg'],
         ]);
 
-        $resolver = $this->resolver($radarr, libraryCache: new MediaLibraryCache($pool));
+        $resolver = $this->resolver($radarr, libraryCache: new MediaLibraryCache($this->swr($pool)));
 
         $this->assertSame([5 => '/p/5.jpg'], $resolver->postersFor('movie'));
         $this->assertSame([5 => '/p/5.jpg'], $resolver->postersFor('movie'));
