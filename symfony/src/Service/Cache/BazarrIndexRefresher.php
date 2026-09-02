@@ -80,10 +80,18 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             $id          = (int) $m['radarrId'];
             $st          = BazarrSubtitleIndex::computeMovieStatus($m);
             $status[$id] = $st;
-            $langs[$id]  = BazarrSubtitleIndex::extractMovieLangs($m);
+            $ml          = BazarrSubtitleIndex::extractMovieLangs($m);
+            $langs[$id]  = $ml;
 
+            // Reuse the already-extracted 'missing' list rather than calling
+            // BazarrLangs::extract($m) a second time per row — same result
+            // (extractMovieLangs() already runs it under the hood), half the
+            // work over a 5k-row library. This also correctly yields an
+            // empty list for an untracked movie (no subtitle profile), since
+            // extractMovieLangs() answers UNTRACKED_LANGS for those rather
+            // than the raw (possibly non-empty) missing_subtitles payload.
             $codes = [];
-            foreach (BazarrLangs::extract($m)['missing'] as $lang) {
+            foreach ($ml['missing'] as $lang) {
                 $codes[$lang['lang']]   = true;
                 $langSet[$lang['lang']] = true;
             }
@@ -114,19 +122,35 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
 
         // /api/badges is one cheap call and belongs to the same refresh cycle;
         // giving it its own message would double queue traffic for nothing.
+        // BazarrClient::getBadgeCounts() fails CLOSED to all-zeros AND
+        // records lastError on failure — unlike the [] getMovies()/
+        // getSeries() "clean and empty" case above, an all-zero badge count
+        // is NEVER a legitimate value to cache as success (there is no
+        // "unconfigured badges" state the way there is an "unconfigured
+        // Bazarr" state), so a lastError here must skip ONLY this write. The
+        // movie datasets from the fetch above are unaffected and still get
+        // written below — Bazarr answering getMovies() and then failing
+        // getBadgeCounts() moments later must not blank the grid too.
         $counts = $this->client->getBadgeCounts();
+        $badgesFailed = $this->client->getLastError() !== null;
+        if ($badgesFailed) {
+            $this->logger->warning('Bazarr badge count refresh failed', ['error' => $this->client->getLastError()]);
+        }
 
         // One timestamp for every key written from this fetch, so the group
-        // shares a soft window instead of drifting apart. Badge maps are
-        // written LAST so the shortest-lived surface is the last to flip
-        // (keys cannot be written atomically together); cards/most_missing
-        // precede the status/langs maps other callers gate their reads on.
+        // shares a soft window instead of drifting apart. Write order per
+        // the architecture doc (M2): cards -> most_missing -> badges ->
+        // langs -> status, so the longest-lived read paths (movieStatus/
+        // seriesStatus, gating hundreds of badge renders) are the last to
+        // flip.
         $now = time();
         $this->swr->write(BazarrSubtitleIndex::KEY_MOVIE_CARDS, ['cards' => $cards, 'languages' => array_keys($langSet)], BazarrSubtitleIndex::HARD_TTL, $now);
         $this->swr->write(BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES, $candidates, BazarrSubtitleIndex::HARD_TTL, $now);
+        if (!$badgesFailed) {
+            $this->swr->write(BazarrSubtitleIndex::KEY_BADGES, $counts, BazarrSubtitleIndex::HARD_TTL, $now);
+        }
         $this->swr->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, $langs, BazarrSubtitleIndex::HARD_TTL, $now);
         $this->swr->write(BazarrSubtitleIndex::KEY_MOVIES, $status, BazarrSubtitleIndex::HARD_TTL, $now);
-        $this->swr->write(BazarrSubtitleIndex::KEY_BADGES, $counts, BazarrSubtitleIndex::HARD_TTL, $now);
     }
 
     private function refreshSeries(): void

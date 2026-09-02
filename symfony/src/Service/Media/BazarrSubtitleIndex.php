@@ -206,7 +206,7 @@ class BazarrSubtitleIndex implements ResetInterface
      * its own page (not overlaid on Radarr/Sonarr grids) and the underlying
      * fetch is already scoped to Bazarr's one paired Radarr/Sonarr instance.
      *
-     * @return array{state: 'ready'|'warming', cards: list<array<string, mixed>>, languages: list<string>}
+     * @return array{state: 'ready'|'warming', cards: list<array{title: string, year: int|string|null, substate: string, count: int, missingLangs: list<string>, seriesId: int|null, movieId: int|null}>, languages: list<string>}
      */
     public function movieCards(): array
     {
@@ -222,7 +222,7 @@ class BazarrSubtitleIndex implements ResetInterface
      * Grid cards for the Bazarr Series tab. Same shape and contract as
      * movieCards(); see that method's docblock.
      *
-     * @return array{state: 'ready'|'warming', cards: list<array<string, mixed>>, languages: list<string>}
+     * @return array{state: 'ready'|'warming', cards: list<array{title: string, year: int|string|null, substate: string, count: int, missingLangs: list<string>, seriesId: int|null, movieId: int|null}>, languages: list<string>}
      */
     public function seriesCards(): array
     {

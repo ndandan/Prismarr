@@ -146,4 +146,71 @@ class BazarrSubtitleIndexDatasetsTest extends TestCase
             $this->assertNull($swr->read($key, 60), $key . ' must be dropped by invalidate()');
         }
     }
+
+    public function testMovieCardsServesStaleDataAndRequestsARefresh(): void
+    {
+        $pool = new ArrayAdapter();
+        $this->swr($pool)->write(BazarrSubtitleIndex::KEY_MOVIE_CARDS, [
+            'cards' => [['title' => 'A', 'year' => null, 'substate' => 'missing', 'count' => 1, 'missingLangs' => [], 'seriesId' => null, 'movieId' => 1]],
+            'languages' => [],
+        ], BazarrSubtitleIndex::HARD_TTL, time() - 300);
+
+        $out = $this->index($this->createMock(BazarrClient::class), $pool)->movieCards();
+
+        $this->assertSame('ready', $out['state'], 'stale data is still served');
+        $this->assertCount(1, $out['cards']);
+        $this->assertCount(1, $this->dispatched, 'exactly one refresh must be requested for the stale key');
+    }
+
+    public function testSeriesCardsServesStaleDataAndRequestsARefresh(): void
+    {
+        $pool = new ArrayAdapter();
+        $this->swr($pool)->write(BazarrSubtitleIndex::KEY_SERIES_CARDS, [
+            'cards' => [['title' => 'S', 'year' => null, 'substate' => 'missing', 'count' => 1, 'missingLangs' => [], 'seriesId' => 9, 'movieId' => null]],
+            'languages' => [],
+        ], BazarrSubtitleIndex::HARD_TTL, time() - 300);
+
+        $out = $this->index($this->createMock(BazarrClient::class), $pool)->seriesCards();
+
+        $this->assertSame('ready', $out['state'], 'stale data is still served');
+        $this->assertCount(1, $out['cards']);
+        $this->assertCount(1, $this->dispatched, 'exactly one refresh must be requested for the stale key');
+    }
+
+    public function testMostMissingServesStaleDataAndRequestsARefreshForTheStaleHalf(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        // Only the movies half is stale; the series half is fresh, so only
+        // ONE refresh (KEY_MOVIES) should be requested.
+        $swr->write(BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES, [
+            ['kind' => 'movie', 'id' => 7, 'title' => 'A', 'year' => 2001, 'missingCount' => 3],
+        ], BazarrSubtitleIndex::HARD_TTL, time() - 300);
+        $swr->write(BazarrSubtitleIndex::KEY_MOST_MISSING_SERIES, [
+            ['kind' => 'series', 'id' => 9, 'title' => 'B', 'year' => null, 'missingCount' => 11],
+        ], BazarrSubtitleIndex::HARD_TTL);
+
+        $out = $this->index($this->createMock(BazarrClient::class), $pool)->mostMissing();
+
+        $this->assertSame('ready', $out['state'], 'stale data is still served');
+        $this->assertCount(2, $out['items']);
+        $this->assertCount(1, $this->dispatched, 'exactly one refresh must be requested, for the stale half only');
+    }
+
+    public function testBadgeCountsServesStaleDataAndRequestsARefresh(): void
+    {
+        $pool = new ArrayAdapter();
+        $this->swr($pool)->write(
+            BazarrSubtitleIndex::KEY_BADGES,
+            ['movies' => 6219, 'episodes' => 13758, 'providers' => 2],
+            BazarrSubtitleIndex::HARD_TTL,
+            time() - 300,
+        );
+
+        $out = $this->index($this->createMock(BazarrClient::class), $pool)->badgeCounts();
+
+        $this->assertSame('ready', $out['state'], 'stale data is still served');
+        $this->assertSame(6219, $out['counts']['movies']);
+        $this->assertCount(1, $this->dispatched, 'exactly one refresh must be requested for the stale key');
+    }
 }

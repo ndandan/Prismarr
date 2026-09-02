@@ -86,7 +86,13 @@ class BazarrClient implements ResetInterface
         return $this->request('GET', '/system/status') !== null;
     }
 
-    /** @return array{movies: int, episodes: int, providers: int} Zeros on failure. */
+    /**
+     * @phpstan-impure Mutates $this->lastError (via request()) on failure —
+     * BazarrIndexRefresher checks getLastError() both before and after this
+     * call in the same scope, and PHPStan must not memoize the first
+     * (null) answer across this call.
+     * @return array{movies: int, episodes: int, providers: int} Zeros on failure.
+     */
     public function getBadgeCounts(): array
     {
         $zero = ['movies' => 0, 'episodes' => 0, 'providers' => 0];

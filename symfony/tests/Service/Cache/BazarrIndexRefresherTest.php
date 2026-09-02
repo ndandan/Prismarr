@@ -273,17 +273,78 @@ class BazarrIndexRefresherTest extends TestCase
         $this->assertSame(9, $mm[0]['missingCount']);
     }
 
-    public function testAFailedBadgeCallDoesNotBlockTheMovieDatasets(): void
+    public function testAFailedBadgeCallDoesNotBlockTheMovieDatasetsAndDoesNotCacheFabricatedZeros(): void
     {
-        $pool   = new ArrayAdapter();
+        // Fix round 1 / IMPORTANT 1: BazarrClient::getBadgeCounts() fails
+        // CLOSED to all-zeros and records lastError on failure. Bazarr can
+        // become unreachable BETWEEN the successful getMovies() call and the
+        // getBadgeCounts() call moments later — caching that fabricated
+        // all-zero count as success would violate "never cache a failed
+        // fetch as success" for a full HARD_TTL (600 s) window. Only the
+        // badge write must be skipped; the movie datasets from the earlier
+        // clean fetch are unaffected.
+        $pool = new ArrayAdapter();
+        $this->swr($pool)->write(BazarrSubtitleIndex::KEY_BADGES, ['movies' => 42, 'episodes' => 7, 'providers' => 1], BazarrSubtitleIndex::HARD_TTL);
+
         $client = $this->createMock(BazarrClient::class);
         $client->method('getMovies')->willReturn([['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => []]]);
         $client->method('getBadgeCounts')->willReturn(['movies' => 0, 'episodes' => 0, 'providers' => 0]);
-        // getLastError() is checked right after getMovies(), before the badge call.
+        // getLastError() is checked twice: once right after getMovies() (must
+        // answer null so the movie datasets are written), once right after
+        // getBadgeCounts() (must answer an error so the fabricated zeros are
+        // NOT written).
+        $calls = 0;
+        $client->method('getLastError')->willReturnCallback(function () use (&$calls) {
+            $calls++;
+
+            return $calls === 1 ? null : ['code' => 0, 'method' => 'GET', 'path' => '/badges', 'message' => 'connection failed'];
+        });
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $swr = $this->swr($pool);
+        $this->assertNotNull($swr->read(BazarrSubtitleIndex::KEY_MOVIES, 60), 'the movie status map must still be written');
+        $this->assertNotNull($swr->read(BazarrSubtitleIndex::KEY_MOVIE_LANGS, 60), 'the movie langs map must still be written');
+        $this->assertNotNull($swr->read(BazarrSubtitleIndex::KEY_MOVIE_CARDS, 60), 'the movie cards must still be written');
+        $this->assertNotNull($swr->read(BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES, 60), 'the most-missing candidates must still be written');
+
+        $badges = $swr->read(BazarrSubtitleIndex::KEY_BADGES, 60);
+        $this->assertNotNull($badges, 'the previous good badge value must survive');
+        $this->assertSame(['movies' => 42, 'episodes' => 7, 'providers' => 1], $badges['value'], 'a failed badge fetch must never overwrite the previous good value with fabricated zeros');
+    }
+
+    public function testMovieDatasetWriteOrderFollowsTheArchitectureDocM2(): void
+    {
+        // M2: cards -> most_missing -> badges -> langs -> status, so the
+        // longest-lived read paths (movieStatus/movieLanguages, which gate
+        // hundreds of per-request badge renders) are the last to flip.
+        $order = [];
+        $pool  = new class($order) extends ArrayAdapter {
+            /** @param list<string> $order */
+            public function __construct(private array &$order) { parent::__construct(); }
+            public function save(\Psr\Cache\CacheItemInterface $item): bool
+            {
+                $this->order[] = $item->getKey();
+
+                return parent::save($item);
+            }
+        };
+
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('getMovies')->willReturn([
+            ['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => []],
+        ]);
+        $client->method('getBadgeCounts')->willReturn(['movies' => 1, 'episodes' => 2, 'providers' => 1]);
         $client->method('getLastError')->willReturn(null);
 
         $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
 
-        $this->assertNotNull($this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOVIES, 60));
+        $this->assertSame([
+            BazarrSubtitleIndex::KEY_MOVIE_CARDS,
+            BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES,
+            BazarrSubtitleIndex::KEY_BADGES,
+            BazarrSubtitleIndex::KEY_MOVIE_LANGS,
+            BazarrSubtitleIndex::KEY_MOVIES,
+        ], $order);
     }
 }
