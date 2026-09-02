@@ -6,6 +6,7 @@ use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
+use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\MovieLibraryFilter;
 use App\Service\Media\MovieLibraryQuery;
@@ -44,6 +45,7 @@ class MediaController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
         private readonly MediaLibraryCache $libraryCache,
+        private readonly BazarrSubtitleIndex $bazarrIndex,
     ) {}
 
     /**
@@ -2003,9 +2005,14 @@ class MediaController extends AbstractController
             $results[] = array_merge($s, ['type' => 'serie', 'inLibrary' => true]);
         }
 
-        // Re-rank across the two kinds with the same rule, then cut to 12.
+        // Re-rank across the two kinds with the same rule, cut to 12, and
+        // only THEN look up subtitle status — 12 lookups, not one per match.
         $results = $this->matchAndRank($results, $term);
         $results = array_slice($results, 0, 12);
+
+        foreach ($results as $i => $r) {
+            $results[$i] = $this->attachSubtitleStatus($r, ($r['type'] ?? '') === 'film' ? 'movie' : 'series');
+        }
 
         return $this->json($this->stripIndexHelpers($results));
     }
@@ -2099,6 +2106,42 @@ class MediaController extends AbstractController
             },
             $rows,
         );
+    }
+
+    /**
+     * Attach a `subtitle: {state, count}` key to a local (in-library) search
+     * result from `BazarrSubtitleIndex`, dropped entirely for the 'hidden'
+     * state (no profile assigned, or a series with zero episode files) so
+     * the client-side renderer's `if (item.subtitle)` check is the only
+     * branch it needs. Looked up fresh on every search request — the movie
+     * and series index arrays are cached for 60s in `buildMovieSearchIndex()`
+     * / `buildSeriesSearchIndex()`, but subtitle status is intentionally
+     * NOT baked into that cache, since it can change independently (and much
+     * more frequently) than the library listing itself.
+     *
+     * @param array<string, mixed> $result
+     * @return array<string, mixed>
+     */
+    private function attachSubtitleStatus(array $result, string $kind): array
+    {
+        $id = $result['id'] ?? null;
+        if (!is_int($id) && !is_numeric($id)) {
+            return $result;
+        }
+
+        $status = $kind === 'movie'
+            ? $this->bazarrIndex->movieStatus((int) $id)
+            : $this->bazarrIndex->seriesStatus((int) $id);
+
+        // 'pending' means the shared index is cold — omit the key exactly like
+        // 'hidden' so the client's `if (item.subtitle)` branch is unchanged.
+        if ($status['state'] === 'hidden' || $status['state'] === 'pending') {
+            return $result;
+        }
+
+        $result['subtitle'] = ['state' => $status['state'], 'count' => $status['count']];
+
+        return $result;
     }
 
     #[Route('/search/online', name: 'search_online', methods: ['GET'])]
