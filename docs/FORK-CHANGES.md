@@ -694,6 +694,52 @@ other media-client controller.
   search results — so subtitle coverage is visible without opening the
   Bazarr tab.
 
+### Bazarr/library responsiveness — stale-while-revalidate caching (2026-09-02)
+
+The Bazarr integration above and the pre-existing Radarr/Sonarr library cache both had the same
+shape of problem: a slow external refill (Bazarr's `/movies?length=-1`, 4–8 s on 5,382 rows; the
+45 s-TTL library payload) sat directly in a user request's critical path, and the Bazarr tab itself
+had no cross-request cache at all — 7–12 s on the landing page, 4–8 s on Movies, on *every* load.
+Full architecture record and the "as built" deviations from it:
+`docs/perf/2026-09-01-optimization-architecture.md`.
+
+- **One shared cache primitive, `App\Service\Cache\StaleWhileRevalidateCache`**, wraps `cache.app`
+  with an explicit soft/hard TTL per key: a read past the soft TTL still serves the stale value and
+  asks for a refresh; a read past the hard TTL is a true miss. `MediaLibraryCache` (Radarr/Sonarr) and
+  the new `BazarrSubtitleIndex` datasets (movie/series tuples, langs, grid cards, most-missing, badge
+  counts) are both built on it, so a slow Bazarr or *arr fetch no longer blocks the request that
+  triggered it — it renders from whatever's cached (or a muted "pending" badge state on a genuine cold
+  start) while the refill runs out-of-band.
+- **Refreshes run in the existing `messenger-worker` s6 service**, previously-dormant plumbing:
+  `App\Message\RefreshCacheKey` is dispatched to the `async` transport (routed in `messenger.yaml`)
+  and picked up by `App\MessageHandler\RefreshCacheKeyHandler`, which hands it to whichever
+  `App\Service\Cache\CacheRefresherInterface` (`BazarrIndexRefresher` / `MediaLibraryRefresher`)
+  supports that key. A cache-level coalescing marker keeps concurrent requests from queuing duplicate
+  refreshes. The consumer's `--memory-limit` is raised 256M → 512M (a 5,382-row Bazarr decode peaks
+  around 120–180 MB; at 256M the consumer would recycle after nearly every refresh).
+- **The subtitle-status badge gains a `pending` state**, visually distinct from "nothing missing" —
+  needed because a hard cache miss (e.g. right after a deploy, before any refresh has run) is
+  otherwise indistinguishable from a genuinely clean item. A subtitle download or auto-search still
+  patches that item's own badge immediately, independent of the background refresh cycle.
+- **The Bazarr tab (`/bazarr`, `/bazarr/movies`, `/bazarr/series`) is now one Turbo Frame shell**: the
+  header and pill navigation render once, and switching views swaps only the framed content against
+  the same cache the badges read, instead of three separate full-page loads each re-fetching Bazarr's
+  entire wanted lists.
+- **Global search (`Ctrl+K`) got the same treatment as the library cache**: its per-request title
+  index is pre-normalized once per 60 s cache window instead of re-transliterating every title (and
+  again inside the sort comparator) on every keystroke.
+
+**Files**: `symfony/src/Service/Cache/` (new — `StaleWhileRevalidateCache`,
+`CacheRefresherInterface`, `BazarrIndexRefresher`, `MediaLibraryRefresher`), `symfony/src/Message/`
+and `symfony/src/MessageHandler/` (new — both upstream-neutral namespaces),
+`symfony/config/packages/messenger.yaml` (one routing entry), `docker/frankenphp/s6/messenger-worker/run`
+(memory-limit bump), plus surgical edits to `BazarrSubtitleIndex`, `BazarrController`,
+`MediaController`, `DashboardController`, `MediaLibraryCache` and the Bazarr templates. No upstream
+file, service, route or public method was renamed or moved — every new class lives in a namespace
+upstream doesn't use, and every touched shared file (`MediaController`, `DashboardController`,
+`MediaLibraryCache`, `_subtitle_badge.html.twig`, `_quicklook_body.html.twig`) kept its existing
+public surface.
+
 ---
 
 ## 4. Fork-only — declined upstream
