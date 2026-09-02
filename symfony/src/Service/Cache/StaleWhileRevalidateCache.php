@@ -166,7 +166,13 @@ final class StaleWhileRevalidateCache
             // must not create a live entry: writing it anyway (even with a
             // clamped near-zero TTL) risks the pool briefly serving an
             // envelope that is already past its own hard life, breaking
-            // "hard miss == pool miss".
+            // "hard miss == pool miss". The demand this write would have
+            // answered is moot for the same reason — the data it carries is
+            // already too old to serve — so drop the requested-at stamp too;
+            // otherwise it lingers and can trip refreshIsOverdue() for a
+            // request nothing will ever answer.
+            $this->cacheApp->deleteItem($key . '.requested_at');
+
             return;
         }
 
@@ -188,6 +194,18 @@ final class StaleWhileRevalidateCache
     public function delete(string $key): void
     {
         $this->cacheApp->deleteItems([$key, $key . '.refreshing', $key . '.requested_at']);
+    }
+
+    /**
+     * Exposes the underlying pool so a caller can co-locate its OWN small
+     * throttle markers (e.g. MediaLibraryCache's overdue-log marker) next to
+     * the ones this class already keeps, without wiring a second
+     * CacheItemPoolInterface dependency through everything that already holds
+     * a StaleWhileRevalidateCache.
+     */
+    public function getPool(): CacheItemPoolInterface
+    {
+        return $this->cacheApp;
     }
 
     /**

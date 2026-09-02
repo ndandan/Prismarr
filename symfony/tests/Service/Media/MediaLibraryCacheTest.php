@@ -5,6 +5,8 @@ namespace App\Tests\Service\Media;
 use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\MediaLibraryCache;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Messenger\Envelope;
@@ -148,5 +150,67 @@ class MediaLibraryCacheTest extends TestCase
 
         $this->assertSame([['id' => 7]], $rows);
         $this->assertSame(1, $calls, 'the page cannot render without the library, so a hard miss blocks');
+    }
+
+    /** @param list<array{level: mixed, message: string, context: array<string, mixed>}> $records */
+    private function recordingLogger(array &$records): LoggerInterface
+    {
+        return new class($records) extends AbstractLogger {
+            /** @param list<array{level: mixed, message: string, context: array<string, mixed>}> $records */
+            public function __construct(private array &$records) {}
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
+            }
+        };
+    }
+
+    /**
+     * A stale read that has been overdue (requested >180 s ago, never
+     * answered) for longer than the throttle window must log exactly ONE
+     * error line across repeated reads, not one per read — the throttle
+     * marker is cross-request, not per-object.
+     */
+    public function testAStaleOverdueReadLogsExactlyOneErrorAcrossTwoReads(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write('media.movies.radarr-1', [['id' => 1]], MediaLibraryCache::HARD_TTL, time() - 120);
+
+        // Prime an overdue refresh request: asked for well past the 180 s
+        // threshold and never answered.
+        $swr->requestRefresh('media.movies.radarr-1');
+        $stamp = $pool->getItem('media.movies.radarr-1.requested_at');
+        $stamp->set(time() - 200);
+        $stamp->expiresAfter(900);
+        $pool->save($stamp);
+        // Clear the .refreshing marker set by requestRefresh() above so the
+        // subsequent reads below re-enter the stale branch cleanly.
+        $pool->deleteItem('media.movies.radarr-1.refreshing');
+
+        $records = [];
+        $cache   = new MediaLibraryCache($swr, $this->recordingLogger($records));
+
+        $cache->movies('radarr-1', fn() => [['id' => 2]]);
+        $cache->movies('radarr-1', fn() => [['id' => 2]]);
+
+        $errors = array_filter($records, static fn(array $r) => $r['level'] === 'error');
+        $this->assertCount(1, $errors, 'the overdue log line must be throttled, not logged on every stale read');
+        $this->assertStringContainsString('media.movies.radarr-1', $errors[array_key_first($errors)]['message']);
+    }
+
+    public function testAStaleReadNotYetOverdueLogsNothing(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write('media.movies.radarr-1', [['id' => 1]], MediaLibraryCache::HARD_TTL, time() - 120);
+
+        $records = [];
+        $cache   = new MediaLibraryCache($swr, $this->recordingLogger($records));
+
+        $cache->movies('radarr-1', fn() => [['id' => 2]]);
+
+        $this->assertSame([], $records, 'a stale-but-not-yet-overdue read must not log anything');
     }
 }
