@@ -201,4 +201,110 @@ class TemplateStructureGuardTest extends TestCase
             );
         }
     }
+
+    /**
+     * Fix round 1, CRITICAL 1. Every link INSIDE #bazarr-view targets the
+     * frame by default (that is what the frame element does); a link to a
+     * page that is not one of the frame's own views must escape with
+     * data-turbo-frame="_top", or Turbo tries to satisfy the frame-scoped
+     * fetch by finding id="bazarr-view" in that OTHER page's response, fails,
+     * and replaces the current tab with "Content missing". The series-detail
+     * drill-down is exactly such a page.
+     */
+    public function testGridSeriesCardLinksEscapeToTheTopLevel(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_grid.html.twig');
+
+        $this->assertStringContainsString(
+            "el.setAttribute('data-turbo-frame', '_top')",
+            $src,
+            '_grid.html.twig: the series-card <a> (built in buildCard(), linking to /bazarr/series/{id}) must escape the frame',
+        );
+    }
+
+    /**
+     * Fix round 1, CRITICAL 2. error/_service_banner.html.twig is rendered
+     * inside #bazarr-view by bazarr/_bare.html.twig's error branch; its CTA
+     * links to the settings page, which is not one of the frame's views.
+     */
+    public function testServiceBannerCtaEscapesToTheTopLevel(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/error/_service_banner.html.twig');
+
+        $this->assertMatchesRegularExpression(
+            '/<a href="\{\{ path\(_target_route\) \}\}" data-turbo-frame="_top"/',
+            $src,
+            '_service_banner.html.twig: the CTA anchor must carry data-turbo-frame="_top"',
+        );
+    }
+
+    /**
+     * Fix round 1, IMPORTANT 4 + CRITICAL 1 audit. The landing page's "View
+     * movies"/"View series" buttons stay inside the frame's own view set, so
+     * they target the frame + advance history like the pill nav; the
+     * series-detail link in the same file is NOT one of the frame's views,
+     * so it must escape instead.
+     */
+    public function testLandingPageLinksAreCorrectlyFrameScoped(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/index.html.twig');
+
+        $this->assertSame(
+            2,
+            substr_count($src, 'data-turbo-frame="bazarr-view" data-turbo-action="advance"'),
+            'index.html.twig: "View movies" and "View series" must both target the frame and advance history',
+        );
+        $this->assertStringContainsString(
+            'data-bazarr-nav data-turbo-frame="_top"',
+            $src,
+            'index.html.twig: the series-detail link must escape the frame',
+        );
+    }
+
+    /**
+     * Fix round 1, CRITICAL 3. The server always re-renders the warming
+     * markup with no memory of a prior retry (there is nothing to read it
+     * back from — the cache is still cold), so the "already retried once"
+     * flag cannot be server state; it has to live out-of-band on `window`,
+     * keyed by path. And frame.reload() is a no-op on a direct hit (the
+     * shell ships the frame with no `src`), so the reload must go through
+     * Turbo.visit(url, {frame}) instead, which assigns `src` either way.
+     */
+    public function testWarmingReloadsViaTurboVisitWithAnOutOfBandRetryMarker(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_warming.html.twig');
+
+        $this->assertStringContainsString(
+            "window.Turbo.visit(path, { frame: 'bazarr-view' })",
+            $src,
+            '_warming.html.twig: reload must go through Turbo.visit(), not frame.reload() (a no-op with no src)',
+        );
+        $this->assertStringContainsString(
+            'window.__bzWarmRetried',
+            $src,
+            '_warming.html.twig: the one-shot auto-retry marker must live out-of-band on window, not in server-rendered markup',
+        );
+        $this->assertStringNotContainsString(
+            'data-retried',
+            $src,
+            '_warming.html.twig: the dead data-retried attribute (written but never read) must be removed',
+        );
+    }
+
+    /**
+     * Fix round 1, MINOR 6. Same leak class as _grid.html.twig's teardown
+     * (testTheGridTearsDownOnBothTheFrameAndTheDocumentEvent above): a frame
+     * swap fires no document-level turbo:before-render, so a document-only
+     * binding would leave the 4 s timer armed after the view it belongs to
+     * is gone.
+     */
+    public function testWarmingTearsDownOnBothTheFrameAndTheDocumentEvent(): void
+    {
+        $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_warming.html.twig');
+
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "addEventListener('turbo:before-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-frame-render', teardown)"));
+        $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-render', teardown)"));
+    }
 }

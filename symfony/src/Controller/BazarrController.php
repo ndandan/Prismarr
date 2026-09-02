@@ -122,7 +122,7 @@ class BazarrController extends AbstractController
         $template = $frame ? 'bazarr/_bare.html.twig' : 'bazarr/_shell.html.twig';
 
         $response = $this->render($template, $params + ['view' => $view]);
-        $response->headers->set('Vary', 'Turbo-Frame');
+        $response->setVary('Turbo-Frame');
 
         return $response;
     }

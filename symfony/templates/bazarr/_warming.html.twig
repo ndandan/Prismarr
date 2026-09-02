@@ -12,7 +12,7 @@
   opened comment closed with `#}` inside a script block shipped a dead modal
   once (ced9170); TemplateStructureGuardTest now balances them.
 #}
-<div class="empty py-5" id="bazarr-warming" data-retried="0">
+<div class="empty py-5" id="bazarr-warming">
   <div class="empty-icon"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>
   <p class="empty-title">{{ 'bazarr.warming.title'|trans }}</p>
   <p class="empty-subtitle text-secondary">{{ 'bazarr.warming.subtitle'|trans }}</p>
@@ -28,19 +28,45 @@
 
   var btn = document.getElementById('bazarr-warming-retry');
   var frame = document.getElementById('bazarr-view');
+  var path = window.location.pathname + window.location.search;
+
+  /* The server always re-renders this markup with no memory of a prior
+     retry (there is nothing to read it back FROM — the cache is still
+     cold), so "have we already auto-retried" cannot live in the HTML. It
+     lives on `window` instead: that object survives a frame-scoped reload
+     (only a full document navigation clears it), so one entry per path is
+     exactly "one automatic retry per view per browser tab session", which
+     is what bounds this to a single reload instead of a 4 s loop. */
+  window.__bzWarmRetried = window.__bzWarmRetried || {};
 
   function reloadView() {
-    if (frame && typeof frame.reload === 'function') { frame.reload(); }
-    else { window.location.reload(); }
+    /* frame.reload() is a no-op when the frame has no `src` yet — true on
+       a direct hit / full-page render, since the shell ships this markup
+       as the frame's initial server-rendered content rather than fetching
+       it. Turbo.visit(url, {frame}) instead ASSIGNS the frame's `src`,
+       which works whether or not one was already set. */
+    if (frame && window.Turbo && typeof window.Turbo.visit === 'function') {
+      window.Turbo.visit(path, { frame: 'bazarr-view' });
+    } else {
+      window.location.reload();
+    }
   }
 
-  /* One automatic retry, ~4 s out: long enough for a queued refresh (the
-     consumer polls once a second) plus the Bazarr fetch itself. */
-  var timer = setTimeout(function () {
-    el.setAttribute('data-retried', '1');
+  var timer = null;
+  if (window.__bzWarmRetried[path]) {
+    // Already auto-retried once this session for this view: skip straight
+    // to the manual button instead of reloading (and re-arming a new 4 s
+    // timer) again.
     if (btn) { btn.classList.remove('d-none'); }
-    reloadView();
-  }, 4000);
+  } else {
+    /* One automatic retry, ~4 s out: long enough for a queued refresh (the
+       consumer polls once a second) plus the Bazarr fetch itself. */
+    timer = setTimeout(function () {
+      window.__bzWarmRetried[path] = true;
+      if (btn) { btn.classList.remove('d-none'); }
+      reloadView();
+    }, 4000);
+  }
 
   if (btn) {
     btn.addEventListener('click', function () {
@@ -56,8 +82,17 @@
     });
   }
 
-  function teardown() { clearTimeout(timer); }
-  if (frame) { frame.addEventListener('turbo:before-frame-render', teardown, { once: true }); }
-  document.addEventListener('turbo:before-render', teardown, { once: true });
+  // Dual-bound like _grid.html.twig's teardown: a frame swap fires
+  // turbo:before-frame-render on the frame element and NO document-level
+  // turbo:before-render; a full-page Turbo Drive visit fires only the
+  // latter. Removing both from one teardown, regardless of which fired,
+  // keeps this idempotent.
+  function teardown() {
+    if (timer) { clearTimeout(timer); timer = null; }
+    if (frame) { frame.removeEventListener('turbo:before-frame-render', teardown); }
+    document.removeEventListener('turbo:before-render', teardown);
+  }
+  if (frame) { frame.addEventListener('turbo:before-frame-render', teardown); }
+  document.addEventListener('turbo:before-render', teardown);
 })();
 </script>

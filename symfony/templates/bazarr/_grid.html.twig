@@ -182,6 +182,13 @@ a.media-card, .media-card[data-bazarr-search] { cursor: pointer; }
           el = document.createElement('a');
           el.href = '/bazarr/series/' + encodeURIComponent(c.seriesId);
           el.className = 'media-card';
+          // The series-detail page is a separate full page, not one of the
+          // views inside #bazarr-view — every link INTO the frame targets
+          // it by id, but a link OUT of it must escape to the top level or
+          // Turbo tries to satisfy the frame-scoped fetch by finding
+          // id="bazarr-view" in the detail page's response, fails, and
+          // replaces the Series tab with "Content missing".
+          el.setAttribute('data-turbo-frame', '_top');
         } else if (kind === 'movie' && c.movieId !== null && c.movieId !== undefined) {
           // Clicking a movie card opens the shared subtitle-search modal for
           // that Radarr movie (search + download) — the capture-phase handler
