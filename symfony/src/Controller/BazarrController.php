@@ -10,6 +10,7 @@ use App\Service\Media\BazarrClient;
 use App\Service\Media\BazarrLangs;
 use App\Service\Media\BazarrPosterResolver;
 use App\Service\Media\BazarrSubtitleIndex;
+use App\Service\Media\ServiceHealthCache;
 use App\Service\ServiceInstanceProvider;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -420,6 +421,14 @@ class BazarrController extends AbstractController
      * success — dropping the whole pool (the old invalidate() behaviour)
      * would make the very next visitor pay a fresh 'pending' hard miss for
      * the item the user just fixed. See BazarrSubtitleIndex::refreshItem().
+     *
+     * Without a usable radarrid there is nothing to patch in place: queue a
+     * bulk rebuild of the movies + badges datasets instead of invalidate()'s
+     * blanket delete (fix round 1, IMPORTANT 3) — invalidate() would also
+     * blank the langs/cards/most-missing maps this mutation never touched,
+     * turning every badge on the Films page 'pending' until the next full
+     * rebuild lands. A stale-with-one-stale-row index beats a hard-missing
+     * one; the queued rebuild fixes it within one consumer cycle either way.
      */
     #[Route('/api/download/movie', name: 'api_download_movie', methods: ['POST'])]
     public function apiDownloadMovie(Request $request): JsonResponse
@@ -430,7 +439,8 @@ class BazarrController extends AbstractController
             if ($radarrId > 0) {
                 $this->bazarrIndex->refreshItem('movie', $radarrId);
             } else {
-                $this->bazarrIndex->invalidate();
+                $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_MOVIES);
+                $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_BADGES);
             }
         }
 
@@ -442,17 +452,19 @@ class BazarrController extends AbstractController
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
      *
      * The POST body carries an episodeid, not a series id, so there is
-     * nothing per-id to patch in the series map here — keep invalidate() but
-     * queue the bulk rebuild immediately (requestRefresh) rather than waiting
-     * for the next reader to hit a hard miss.
+     * nothing per-id to patch in place — queue a bulk rebuild of the series
+     * map and the badge counts instead of invalidate()'s blanket delete (fix
+     * round 1, IMPORTANT 3): invalidate() would also blank movies/cards/
+     * most-missing that this mutation never touched, turning every badge on
+     * the Films page 'pending' until the next full rebuild lands.
      */
     #[Route('/api/download/episode', name: 'api_download_episode', methods: ['POST'])]
     public function apiDownloadEpisode(Request $request): JsonResponse
     {
         $ok = $this->bazarr->downloadEpisode($request->request->all());
         if ($ok) {
-            $this->bazarrIndex->invalidate();
             $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_SERIES);
+            $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_BADGES);
         }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);
@@ -494,23 +506,56 @@ class BazarrController extends AbstractController
     }
 
     /**
-     * Force an inline rebuild of the Bazarr datasets. This is the ONLY
-     * inline Bazarr fetch left in the app: it is admin-only, explicitly
-     * user-driven (the warming panel's Retry button), rate-limited by the
-     * refresher's own freshness check, and bounded by BazarrClient's own 3 s
-     * connect / 8 s total timeouts. It exists so a dead messenger-worker is
-     * recoverable from the UI instead of leaving the tab warming forever.
+     * Force an inline rebuild of the Bazarr datasets and report truthfully on
+     * what it achieved. This is the ONLY inline Bazarr fetch left in the app:
+     * admin-only, explicitly user-driven (the warming panel's Retry button),
+     * rate-limited by the refresher's own freshness check, and bounded by
+     * BazarrClient's own 3 s connect / 8 s total timeouts — up to THREE
+     * client calls can happen inline (getMovies + getBadgeCounts for the
+     * movies refresh, getSeries for the series refresh), so the worst case is
+     * roughly 3x8s (~24s) before this responds. It exists so a dead
+     * messenger-worker is recoverable from the UI instead of leaving the tab
+     * warming forever.
      *
-     * invalidate() runs FIRST so the refresher's own "already fresh"
-     * early-return cannot short-circuit a user-requested retry.
+     * Fix round 1, IMPORTANT 1: does NOT invalidate() up front. A stuck index
+     * is already hard-missing or stale — that is why an admin is clicking
+     * Retry — so BazarrIndexRefresher::refresh()'s own "already fresh"
+     * early-return does not fire anyway. Blanking the pool first would leave
+     * every badge hard-missing for the whole inline fetch, AND leave nothing
+     * rebuilt at all if the fetch fails or the breaker is open — exactly the
+     * case an admin needing Retry is most likely to be in, which would make
+     * the response's unconditional old `{"ok": true}` a lie. Instead this
+     * reads the resulting freshness back through the index's non-blocking
+     * datasetState() afterwards and reports it, and answers with fail-closed
+     * JSON (HTTP 200, never a 500) even when the breaker is open — the
+     * breaker check below never calls the client at all.
+     *
+     * @return JsonResponse {ok: bool, movies: 'fresh'|'stale'|'pending', series: 'fresh'|'stale'|'pending', reason: 'breaker_open'|'fetch_failed'|null}
      */
     #[Route('/api/refresh', name: 'api_refresh', methods: ['POST'])]
-    public function apiRefresh(BazarrIndexRefresher $refresher): JsonResponse
+    public function apiRefresh(BazarrIndexRefresher $refresher, ServiceHealthCache $health): JsonResponse
     {
-        $this->bazarrIndex->invalidate();
+        if ($health->isDown(BazarrClient::SERVICE)) {
+            return $this->json([
+                'ok'     => false,
+                'movies' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES),
+                'series' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES),
+                'reason' => 'breaker_open',
+            ]);
+        }
+
         $refresher->refresh(BazarrSubtitleIndex::KEY_MOVIES);
         $refresher->refresh(BazarrSubtitleIndex::KEY_SERIES);
 
-        return $this->json(['ok' => true]);
+        $movies = $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES);
+        $series = $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES);
+        $ok     = $movies === 'fresh' && $series === 'fresh';
+
+        return $this->json([
+            'ok'     => $ok,
+            'movies' => $movies,
+            'series' => $series,
+            'reason' => $ok ? null : 'fetch_failed',
+        ]);
     }
 }

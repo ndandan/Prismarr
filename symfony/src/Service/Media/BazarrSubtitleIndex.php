@@ -164,10 +164,40 @@ class BazarrSubtitleIndex implements ResetInterface
      * only knows an episode id, not the series id it belongs to — so the
      * queue happens synchronously in the request that performed the mutation
      * (guardrail 9) instead of the fix waiting for someone else's page view.
+     *
+     * $key is restricted to ALL_KEYS (fix round 1, IMPORTANT 3) so a caller
+     * cannot accidentally queue an unsupported/mistyped key — including
+     * KEY_PATCHES itself, which is not an SWR-backed dataset and has no
+     * refresher.
+     *
+     * @throws \InvalidArgumentException if $key is not one of ALL_KEYS
      */
     public function requestRefresh(string $key): void
     {
+        if (!in_array($key, self::ALL_KEYS, true)) {
+            throw new \InvalidArgumentException(sprintf('BazarrSubtitleIndex::requestRefresh(): unsupported key "%s".', $key));
+        }
+
         $this->swr->requestRefresh($key);
+    }
+
+    /**
+     * Freshness of one dataset key WITHOUT triggering a refresh request, a
+     * client call, or touching the per-request memo — a genuinely
+     * non-blocking read used only to report truthfully on what an inline
+     * rebuild actually achieved (BazarrController::apiRefresh(), fix round 1
+     * IMPORTANT 1). Contrast with the private readDataset()/loadMovies()
+     * helpers, which DO request a refresh on a miss/stale read — that
+     * behaviour is exactly what apiRefresh() must NOT trigger a second time
+     * on top of its own explicit inline refresh() calls.
+     *
+     * @return 'fresh'|'stale'|'pending'
+     */
+    public function datasetState(string $key): string
+    {
+        $hit = $this->swr->read($key, self::SOFT_TTL);
+
+        return $hit === null ? 'pending' : $hit['state'];
     }
 
     /**
@@ -181,10 +211,18 @@ class BazarrSubtitleIndex implements ResetInterface
      * is "the bulk result is authoritative except for patches recorded at or
      * after its fetch start" (spec D3 as amended, defect C2).
      *
-     * A failed or empty per-id fetch leaves the pooled maps and the journal
-     * untouched (guardrail 6): the previous good value is never overwritten
-     * by a hard-missing per-id lookup, and a queued bulk rebuild is still
-     * requested so the item self-heals on the next cycle.
+     * A failed or empty per-id fetch — or one whose response doesn't actually
+     * contain the requested id (guardrail: never trust $rows[0] blindly; see
+     * findRowById()) — leaves the pooled maps and the journal untouched
+     * (guardrail 6): the previous good value is never overwritten by a
+     * hard-missing or misattributed per-id lookup, and a queued bulk rebuild
+     * is still requested so the item self-heals on the next cycle.
+     *
+     * The pool writes (journalPatch/patchPooledMap) are wrapped in their own
+     * try/catch (fix round 1, MINOR 7): this runs on the request that just
+     * performed a successful Bazarr mutation, so a broken pool adapter here
+     * must degrade to "the bulk rebuild will fix it eventually", never turn
+     * a successful download into a 500.
      *
      * @param 'movie'|'series' $kind
      */
@@ -199,14 +237,34 @@ class BazarrSubtitleIndex implements ResetInterface
             return;
         }
 
-        $row    = $rows[0];
+        $row = $this->findRowById($kind, $rows, $id);
+        if ($row === null) {
+            // The per-id filter was ignored (or Bazarr answered with a
+            // differently-shaped list) and the requested id isn't actually in
+            // the response — writing $rows[0] under $id would patch the WRONG
+            // item. Treat exactly like a failed fetch.
+            $this->logger->warning('Bazarr per-id refresh: requested id not found in response', ['kind' => $kind, 'id' => $id]);
+            $this->swr->requestRefresh($statusKey);
+
+            return;
+        }
+
         $status = $kind === 'movie' ? self::computeMovieStatus($row) : self::computeSeriesStatus($row);
         $langs  = $kind === 'movie' ? self::extractMovieLangs($row) : null;
 
-        $this->journalPatch($kind, $id, $status, $langs);
-        $this->patchPooledMap($statusKey, $id, $status);
-        if ($kind === 'movie') {
-            $this->patchPooledMap(self::KEY_MOVIE_LANGS, $id, $langs);
+        try {
+            $this->journalPatch($kind, $id, $status, $langs);
+            $this->patchPooledMap($statusKey, $id, $status);
+            if ($kind === 'movie') {
+                $this->patchPooledMap(self::KEY_MOVIE_LANGS, $id, $langs);
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('Bazarr per-id patch failed', [
+                'kind'      => $kind,
+                'id'        => $id,
+                'exception' => $e::class,
+                'message'   => $e->getMessage(),
+            ]);
         }
 
         // Drop the per-request memo so this request re-reads the patched maps.
@@ -218,10 +276,45 @@ class BazarrSubtitleIndex implements ResetInterface
     }
 
     /**
+     * Find the row matching $id in a per-id Bazarr response by its own id
+     * field, rather than trusting $rows[0] — a filter param Bazarr ignored,
+     * or a client mock/stub in a test, can hand back a list that doesn't
+     * start with (or doesn't contain) the requested id at all.
+     *
+     * @param 'movie'|'series' $kind
+     * @param list<array<string, mixed>> $rows
+     * @return array<string, mixed>|null
+     */
+    private function findRowById(string $kind, array $rows, int $id): ?array
+    {
+        $idField = $kind === 'movie' ? 'radarrId' : 'sonarrSeriesId';
+
+        foreach ($rows as $row) {
+            if (isset($row[$idField]) && (int) $row[$idField] === $id) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Merge one id into a pooled map WITHOUT touching its fetchedAt — a
      * one-row patch must not make the whole map look freshly fetched (the
      * soft-TTL self-heal / stale-request logic must still see the map's real
      * age).
+     *
+     * Read-then-write race (fix round 1, MINOR 8): the read of $key above and
+     * the write below are two separate, non-atomic pool operations (PSR-6 has
+     * no compare-and-swap). If a bulk refresh's own write for the same $key
+     * lands in that window, this patch's write — carrying the OLD map plus
+     * one merged row, stamped with the OLD fetchedAt — overwrites the bulk
+     * result. This is self-healing, not silently wrong: the back-dated
+     * fetchedAt means the map reads 'stale' on its very next read, which asks
+     * for another bulk refresh; and applyPatchesNewerThan() is what actually
+     * guarantees the mutation itself is never lost across a concurrent bulk
+     * write (see refreshItem()/applyPatchesNewerThan() docblocks) — this
+     * method only has to avoid CORRUPTING the map, not win every race.
      */
     private function patchPooledMap(string $key, int $id, mixed $value): void
     {
@@ -230,12 +323,20 @@ class BazarrSubtitleIndex implements ResetInterface
             return; // hard miss: the journal + the requested rebuild cover it
         }
 
-        $map      = $hit['value'];
-        $map[$id] = $value;
-
         $item = $this->cacheApp->getItem($key);
         $env  = $item->isHit() ? $item->get() : null;
-        $at   = is_array($env) && isset($env['fetchedAt']) ? (int) $env['fetchedAt'] : time();
+        if (!is_array($env) || !isset($env['fetchedAt'])) {
+            // Fix round 1, MINOR 6: an envelope whose fetchedAt cannot be
+            // read must not be defaulted to time() — that would fabricate
+            // freshness for a map this method never actually re-fetched. Bail
+            // on the pool patch; the memo reset + requestRefresh() the caller
+            // still performs cover it.
+            return;
+        }
+
+        $map      = $hit['value'];
+        $map[$id] = $value;
+        $at       = (int) $env['fetchedAt'];
 
         $this->swr->write($key, $map, self::HARD_TTL, $at);
     }
@@ -246,6 +347,18 @@ class BazarrSubtitleIndex implements ResetInterface
      * PATCH_TTL are dropped opportunistically so the journal never grows
      * unbounded even though the whole item also carries its own
      * expiresAfter(PATCH_TTL).
+     *
+     * Read-modify-write race (fix round 1, MINOR 8): the whole journal is one
+     * PSR-6 item, read here, mutated in memory, and saved back — PSR-6 has no
+     * compare-and-swap, so two concurrent mutations (e.g. two subtitle
+     * downloads landing in the same instant) can both read the same journal,
+     * and whichever saves last wins, silently dropping the other's entry.
+     * This is bounded and self-healing, not a correctness hole: the loser's
+     * OWN pooled-map patch (patchPooledMap(), a separate write) still lands
+     * regardless, so that mutation's badge is still correct immediately; only
+     * its protection against being clobbered by a same-second in-flight bulk
+     * refresh (the C2 ordering rule) is what can be lost, and that is bounded
+     * by SOFT_TTL — the map self-heals to fresh well within the next minute.
      *
      * @param 'movie'|'series' $kind
      * @param SubtitleStatus $status
@@ -300,6 +413,13 @@ class BazarrSubtitleIndex implements ResetInterface
                 continue;
             }
             if ((int) ($entry['at'] ?? 0) < $fetchStartedAt) {
+                continue;
+            }
+            // Fix round 1, MINOR 5: a malformed entry (a foreign cache.app
+            // write reusing this key, a future/older build's shape) must
+            // never null out an otherwise-good map row — skip it entirely
+            // rather than assign a missing/non-array 'status'.
+            if (!isset($entry['status']) || !is_array($entry['status'])) {
                 continue;
             }
 

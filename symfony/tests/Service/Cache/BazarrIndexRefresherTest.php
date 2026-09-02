@@ -31,9 +31,9 @@ class BazarrIndexRefresherTest extends TestCase
      * BazarrIndexRefresher's own patch-application collaborator. A plain
      * BazarrSubtitleIndex over the SAME pool is used (not a mock) so
      * applyPatchesNewerThan() reads whatever KEY_PATCHES journal is actually
-     * in that pool — none of these tests write to it, so it is a no-op here;
-     * Task 7's ordering-rule behaviour is covered end-to-end in
-     * BazarrSubtitleIndexPatchTest.
+     * in that pool — most of these tests never write to it, so it is a no-op
+     * for them; the C2 ordering-rule tests below (and the full behaviour of
+     * refreshItem()) are covered end-to-end in BazarrSubtitleIndexPatchTest.
      */
     private function index(ArrayAdapter $pool, BazarrClient $client): BazarrSubtitleIndex
     {
@@ -48,14 +48,34 @@ class BazarrIndexRefresherTest extends TestCase
         return new BazarrIndexRefresher($client, $this->swr($pool), new ServiceHealthCache($pool), new NullLogger(), $this->index($pool, $client));
     }
 
-    public function testSupportsOnlyTheBazarrDatasetKeys(): void
+    public function testSupportsTheBazarrDatasetKeys(): void
     {
         $r = $this->refresher(new ArrayAdapter(), $this->createMock(BazarrClient::class));
 
         $this->assertTrue($r->supports(BazarrSubtitleIndex::KEY_MOVIES));
         $this->assertTrue($r->supports(BazarrSubtitleIndex::KEY_SERIES));
+        // Fix round 1, IMPORTANT 3: KEY_BADGES is now requestable too (it
+        // piggybacks on the movies fetch — see the class docblock) so a
+        // mutation endpoint that only knows badges changed (an episode
+        // subtitle download) has something real to queue.
+        $this->assertTrue($r->supports(BazarrSubtitleIndex::KEY_BADGES));
         $this->assertFalse($r->supports('media.movies.radarr-1'));
         $this->assertFalse($r->supports(BazarrSubtitleIndex::KEY_MOVIE_LANGS)); // written BY the movies refresh, never requested on its own
+    }
+
+    public function testRefreshingTheBadgesKeyRoutesThroughTheMovieFetch(): void
+    {
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $client->expects($this->once())->method('getMovies')->willReturn([
+            ['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => []],
+        ]);
+        $client->method('getBadgeCounts')->willReturn(['movies' => 1, 'episodes' => 2, 'providers' => 1]);
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_BADGES);
+
+        $this->assertSame(1, $this->swr($pool)->read(BazarrSubtitleIndex::KEY_BADGES, 60)['value']['movies']);
     }
 
     public function testRefreshWritesBothTheStatusAndLanguageMapsFromOneFetch(): void
@@ -363,5 +383,73 @@ class BazarrIndexRefresherTest extends TestCase
             BazarrSubtitleIndex::KEY_MOVIE_LANGS,
             BazarrSubtitleIndex::KEY_MOVIES,
         ], $order);
+    }
+
+    /**
+     * Fix round 1, IMPORTANT 4: prove the C2 ordering rule THROUGH the
+     * refresher, not just against applyPatchesNewerThan() directly
+     * (BazarrSubtitleIndexPatchTest already covers that in isolation). A
+     * patch journalled at (or after) the moment refreshMovies() captures its
+     * own $fetchStartedAt must survive being written under a bulk result that
+     * reflects the PRE-mutation row.
+     */
+    public function testAPatchRecordedAtTheFetchStartSurvivesTheWrittenBulkResult(): void
+    {
+        $pool = new ArrayAdapter();
+        $item = $pool->getItem(BazarrSubtitleIndex::KEY_PATCHES);
+        $item->set(['movie:7' => [
+            'at' => time(), 'kind' => 'movie', 'id' => 7,
+            'status' => ['state' => 'complete', 'count' => 0], 'langs' => null,
+        ]]);
+        $pool->save($item);
+
+        $client = $this->createMock(BazarrClient::class);
+        // The bulk fetch's own result is the PRE-mutation row (still missing
+        // two subtitles) — as if it started before the patch landed.
+        $client->method('getMovies')->willReturn([
+            ['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => [['code2' => 'fr'], ['code2' => 'en']]],
+        ]);
+        $client->method('getBadgeCounts')->willReturn(['movies' => 0, 'episodes' => 0, 'providers' => 0]);
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $this->assertSame(
+            'complete',
+            $this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOVIES, 60)['value'][7]['state'],
+            'the patch must survive being written under the pre-mutation bulk result',
+        );
+    }
+
+    /**
+     * Mirror of the above with the patch back-dated to BEFORE the fetch could
+     * possibly have started: the bulk fetch's own (pre-mutation) result wins,
+     * because that fetch's result already reflects everything up to its own
+     * start — a patch older than that adds nothing new.
+     */
+    public function testAPatchOlderThanTheFetchStartLosesToTheWrittenBulkResult(): void
+    {
+        $pool = new ArrayAdapter();
+        $item = $pool->getItem(BazarrSubtitleIndex::KEY_PATCHES);
+        $item->set(['movie:7' => [
+            'at' => time() - 10, 'kind' => 'movie', 'id' => 7,
+            'status' => ['state' => 'complete', 'count' => 0], 'langs' => null,
+        ]]);
+        $pool->save($item);
+
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('getMovies')->willReturn([
+            ['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => [['code2' => 'fr'], ['code2' => 'en']]],
+        ]);
+        $client->method('getBadgeCounts')->willReturn(['movies' => 0, 'episodes' => 0, 'providers' => 0]);
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $this->assertSame(
+            'missing',
+            $this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOVIES, 60)['value'][7]['state'],
+            'a patch older than this fetch adds nothing — the bulk result stands',
+        );
     }
 }

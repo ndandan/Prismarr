@@ -2,7 +2,11 @@
 
 namespace App\Tests\Controller;
 
+use App\Entity\User;
+use App\Service\Media\BazarrClient;
+use App\Service\Media\ServiceHealthCache;
 use App\Tests\AbstractWebTestCase;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
 /**
  * Smoke test for the Bazarr section's route guard.
@@ -122,5 +126,75 @@ class BazarrControllerTest extends AbstractWebTestCase
         $this->client->request('POST', '/bazarr/api/refresh');
 
         self::assertTrue($this->client->getResponse()->isRedirect(), 'POST api/refresh must redirect anonymous users');
+    }
+
+    /**
+     * Fix round 1, MINOR 9: a logged-in but non-admin user must be denied too
+     * — #[IsGranted('ROLE_ADMIN')] on the class throws AccessDeniedException,
+     * which the security layer turns into a 403 (not a redirect: the user IS
+     * authenticated, just under-privileged).
+     */
+    public function testTheRefreshEndpointDeniesNonAdminAccess(): void
+    {
+        $user = new User();
+        $user->setEmail('member@test.local');
+        $user->setDisplayName('Member');
+        $user->setPassword(static::getContainer()->get(UserPasswordHasherInterface::class)->hashPassword($user, 'member-password'));
+
+        $em = $this->em();
+        $em->persist($user);
+        $em->flush();
+
+        $this->client->loginUser($user);
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertResponseStatusCodeSame(403);
+    }
+
+    /**
+     * Fix round 1, IMPORTANT 1: the response must be truthful, not an
+     * unconditional {"ok": true}. Unconfigured Bazarr (this test's fixture)
+     * is a clean-empty fetch — BazarrClient::ready() is false, so getMovies/
+     * getSeries/getBadgeCounts never make an HTTP call and never record a
+     * lastError — so the inline refresh genuinely succeeds by writing fresh
+     * empty maps, and the endpoint must report exactly that.
+     */
+    public function testTheRefreshEndpointReturnsATruthfulShapeForAdmin(): void
+    {
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertFalse($this->client->getResponse()->isRedirect(), 'API routes must never redirect');
+        self::assertResponseStatusCodeSame(200);
+        self::assertJson((string) $this->client->getResponse()->getContent());
+
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertArrayHasKey('ok', $payload);
+        self::assertArrayHasKey('movies', $payload);
+        self::assertArrayHasKey('series', $payload);
+        self::assertArrayHasKey('reason', $payload);
+        self::assertTrue($payload['ok']);
+        self::assertSame('fresh', $payload['movies']);
+        self::assertSame('fresh', $payload['series']);
+        self::assertNull($payload['reason']);
+    }
+
+    /**
+     * Fix round 1, IMPORTANT 1 + MINOR 9: an open breaker must skip the fetch
+     * entirely (structurally guaranteed by apiRefresh() returning before it
+     * ever calls BazarrIndexRefresher::refresh()) and answer ok:false with a
+     * breaker_open reason, never a 500.
+     */
+    public function testTheRefreshEndpointAnswersBreakerOpenWithoutFetching(): void
+    {
+        $pool = static::getContainer()->get('cache.app');
+        (new ServiceHealthCache($pool))->markDown(BazarrClient::SERVICE);
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertResponseStatusCodeSame(200);
+        $payload = json_decode((string) $this->client->getResponse()->getContent(), true);
+        self::assertFalse($payload['ok']);
+        self::assertSame('breaker_open', $payload['reason']);
     }
 }

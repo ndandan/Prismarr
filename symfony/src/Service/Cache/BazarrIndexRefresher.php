@@ -9,10 +9,20 @@ use App\Service\Media\ServiceHealthCache;
 use Psr\Log\LoggerInterface;
 
 /**
- * Rebuilds the Bazarr datasets inside the messenger-worker process. Exactly
- * two keys are *requestable* — KEY_MOVIES and KEY_SERIES — and each one fetch
- * writes every map derived from it, so a refresh costs at most one Bazarr call
- * per dataset per soft window (CONTEXT constraint #2).
+ * Rebuilds the Bazarr datasets inside the messenger-worker process. Three
+ * keys are *requestable* — KEY_MOVIES, KEY_SERIES, and KEY_BADGES — and each
+ * one fetch writes every map derived from it, so a refresh costs at most one
+ * Bazarr call per dataset per soft window (CONTEXT constraint #2).
+ *
+ * KEY_BADGES (fix round 1, IMPORTANT 3) piggybacks on the SAME getMovies()
+ * fetch as KEY_MOVIES — there is no separate badges-only Bazarr call. It
+ * exists as its own requestable key because a mutation that only affects
+ * badge counts and has no per-id row to patch (an episode subtitle download,
+ * which carries an episode id, not a series id) needs a way to queue "the
+ * badges are stale" without also implying "the movie list is stale" to a
+ * caller that only cares about the former. Both keys share the same $now
+ * (see refreshMovies()), so checking KEY_BADGES's own freshness still
+ * coalesces correctly with a concurrent KEY_MOVIES-triggered refresh.
  */
 final class BazarrIndexRefresher implements CacheRefresherInterface
 {
@@ -26,7 +36,9 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
 
     public function supports(string $key): bool
     {
-        return $key === BazarrSubtitleIndex::KEY_MOVIES || $key === BazarrSubtitleIndex::KEY_SERIES;
+        return $key === BazarrSubtitleIndex::KEY_MOVIES
+            || $key === BazarrSubtitleIndex::KEY_SERIES
+            || $key === BazarrSubtitleIndex::KEY_BADGES;
     }
 
     public function refresh(string $key): void
@@ -42,7 +54,9 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             return;
         }
 
-        $key === BazarrSubtitleIndex::KEY_MOVIES ? $this->refreshMovies() : $this->refreshSeries();
+        // KEY_BADGES has no fetch of its own — see the class docblock — so it
+        // takes the same branch as KEY_MOVIES.
+        $key === BazarrSubtitleIndex::KEY_SERIES ? $this->refreshSeries() : $this->refreshMovies();
     }
 
     private function refreshMovies(): void
