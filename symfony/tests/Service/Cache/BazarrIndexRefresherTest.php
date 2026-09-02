@@ -206,4 +206,84 @@ class BazarrIndexRefresherTest extends TestCase
 
         $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
     }
+
+    public function testOneMovieFetchFillsStatusLangsCardsMostMissingAndBadges(): void
+    {
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $client->expects($this->once())->method('getMovies')->with([])->willReturn([
+            ['radarrId' => 7, 'title' => 'A', 'year' => 2001, 'profileId' => 1,
+             'subtitles' => [], 'missing_subtitles' => [['code2' => 'fr'], ['code2' => 'en']]],
+            ['radarrId' => 8, 'title' => 'B', 'year' => 1999, 'profileId' => 1,
+             'subtitles' => [['code2' => 'en']], 'missing_subtitles' => []],
+        ]);
+        $client->expects($this->once())->method('getBadgeCounts')->willReturn(['movies' => 6219, 'episodes' => 13758, 'providers' => 2]);
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $swr   = $this->swr($pool);
+        $cards = $swr->read(BazarrSubtitleIndex::KEY_MOVIE_CARDS, 60)['value'];
+        $this->assertCount(2, $cards['cards']);
+        $this->assertSame(['en', 'fr'], $cards['languages'], 'language options are the sorted distinct missing codes');
+
+        $mm = $swr->read(BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES, 60)['value'];
+        $this->assertSame(7, $mm[0]['id']);
+        $this->assertSame(2, $mm[0]['missingCount']);
+        $this->assertCount(1, $mm, 'only rows with a positive missing count are candidates');
+
+        $this->assertSame(6219, $swr->read(BazarrSubtitleIndex::KEY_BADGES, 60)['value']['movies']);
+    }
+
+    public function testMostMissingCandidatesAreCappedAndSortedDescending(): void
+    {
+        $rows = [];
+        for ($i = 1; $i <= 50; $i++) {
+            $rows[] = ['radarrId' => $i, 'title' => 'M' . $i, 'profileId' => 1, 'subtitles' => [],
+                       'missing_subtitles' => array_fill(0, $i, ['code2' => 'fr'])];
+        }
+
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('getMovies')->willReturn($rows);
+        $client->method('getBadgeCounts')->willReturn(['movies' => 0, 'episodes' => 0, 'providers' => 0]);
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $mm = $this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES, 60)['value'];
+        $this->assertCount(BazarrSubtitleIndex::MOST_MISSING_CANDIDATES, $mm);
+        $this->assertSame(50, $mm[0]['missingCount']);
+    }
+
+    public function testSeriesMostMissingRanksByAggregateEpisodeMissingCount(): void
+    {
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('getSeries')->willReturn([
+            ['sonarrSeriesId' => 1, 'title' => 'S1', 'profileId' => 1, 'episodeFileCount' => 10, 'episodeMissingCount' => 4],
+            ['sonarrSeriesId' => 2, 'title' => 'S2', 'profileId' => 1, 'episodeFileCount' => 10, 'episodeMissingCount' => 9],
+        ]);
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_SERIES);
+
+        $mm = $this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOST_MISSING_SERIES, 60)['value'];
+        $this->assertSame(2, $mm[0]['id']);
+        $this->assertSame(9, $mm[0]['missingCount']);
+    }
+
+    public function testAFailedBadgeCallDoesNotBlockTheMovieDatasets(): void
+    {
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('getMovies')->willReturn([['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => []]]);
+        $client->method('getBadgeCounts')->willReturn(['movies' => 0, 'episodes' => 0, 'providers' => 0]);
+        // getLastError() is checked right after getMovies(), before the badge call.
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $this->assertNotNull($this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOVIES, 60));
+    }
 }

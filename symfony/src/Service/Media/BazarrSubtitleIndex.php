@@ -45,7 +45,30 @@ class BazarrSubtitleIndex implements ResetInterface
     public const KEY_MOVIE_LANGS = 'bazarr_subtitle_index.movie_langs';
     public const KEY_SERIES      = 'bazarr_subtitle_index.series';
 
-    private const ALL_KEYS = [self::KEY_MOVIES, self::KEY_MOVIE_LANGS, self::KEY_SERIES];
+    /** Bazarr Movies-tab grid cards, derived at refresh time from the same getMovies() pass as KEY_MOVIES. */
+    public const KEY_MOVIE_CARDS = 'bazarr_subtitle_index.movie_cards';
+
+    /** Bazarr Series-tab grid cards, derived at refresh time from the same getSeries() pass as KEY_SERIES. */
+    public const KEY_SERIES_CARDS = 'bazarr_subtitle_index.series_cards';
+
+    /** Top-N (MOST_MISSING_CANDIDATES) movie candidates for the "most missing" strip. */
+    public const KEY_MOST_MISSING_MOVIES = 'bazarr_subtitle_index.most_missing_movies';
+
+    /** Top-N (MOST_MISSING_CANDIDATES) series candidates, ranked by aggregate episodeMissingCount. */
+    public const KEY_MOST_MISSING_SERIES = 'bazarr_subtitle_index.most_missing_series';
+
+    /** `/api/badges` counts, refreshed alongside the movie dataset (one cheap call, no dedicated message). */
+    public const KEY_BADGES = 'bazarr_subtitle_index.badges';
+
+    /** Candidates kept per kind; the controller merges + re-sorts + slices to 16. */
+    public const MOST_MISSING_CANDIDATES = 32;
+
+    private const ALL_KEYS = [
+        self::KEY_MOVIES, self::KEY_MOVIE_LANGS, self::KEY_SERIES,
+        self::KEY_MOVIE_CARDS, self::KEY_SERIES_CARDS,
+        self::KEY_MOST_MISSING_MOVIES, self::KEY_MOST_MISSING_SERIES,
+        self::KEY_BADGES,
+    ];
 
     /** Seconds. Short enough that a stale badge self-heals without any action. */
     public const SOFT_TTL = 60;
@@ -168,6 +191,123 @@ class BazarrSubtitleIndex implements ResetInterface
         $map = $this->seriesMap();
 
         return $map === null ? self::PENDING : ($map[$sonarrSeriesId] ?? self::HIDDEN);
+    }
+
+    /**
+     * Grid cards for the Bazarr Movies tab, derived at refresh time from the
+     * SAME getMovies() pass that fills the badge maps — the tab used to run
+     * its own full-list fetch on every view (4-8 s).
+     *
+     * Posters are deliberately absent: BazarrController joins
+     * BazarrPosterResolver::postersFor('movie') at render time so poster
+     * freshness follows MediaLibraryCache, not Bazarr's soft window.
+     *
+     * Not multi-instance gated: unlike the per-id badge lookups, the tab is
+     * its own page (not overlaid on Radarr/Sonarr grids) and the underlying
+     * fetch is already scoped to Bazarr's one paired Radarr/Sonarr instance.
+     *
+     * @return array{state: 'ready'|'warming', cards: list<array<string, mixed>>, languages: list<string>}
+     */
+    public function movieCards(): array
+    {
+        $hit = $this->readDataset(self::KEY_MOVIE_CARDS, self::KEY_MOVIES);
+        if ($hit === null || !is_array($hit['cards'] ?? null) || !is_array($hit['languages'] ?? null)) {
+            return ['state' => 'warming', 'cards' => [], 'languages' => []];
+        }
+
+        return ['state' => 'ready', 'cards' => array_values($hit['cards']), 'languages' => array_values($hit['languages'])];
+    }
+
+    /**
+     * Grid cards for the Bazarr Series tab. Same shape and contract as
+     * movieCards(); see that method's docblock.
+     *
+     * @return array{state: 'ready'|'warming', cards: list<array<string, mixed>>, languages: list<string>}
+     */
+    public function seriesCards(): array
+    {
+        $hit = $this->readDataset(self::KEY_SERIES_CARDS, self::KEY_SERIES);
+        if ($hit === null || !is_array($hit['cards'] ?? null) || !is_array($hit['languages'] ?? null)) {
+            return ['state' => 'warming', 'cards' => [], 'languages' => []];
+        }
+
+        return ['state' => 'ready', 'cards' => array_values($hit['cards']), 'languages' => array_values($hit['languages'])];
+    }
+
+    /**
+     * The Bazarr landing page's "most missing" candidates: BOTH kinds,
+     * concatenated and unsorted across kinds (the controller merges + sorts
+     * by missingCount desc with a title tie-break, then slices to
+     * BazarrController::MOST_MISSING_LIMIT). 'warming' is returned when
+     * EITHER half is a hard miss, since the strip needs both to be meaningful.
+     *
+     * @return array{state: 'ready'|'warming', items: list<array{kind: 'movie'|'series', id: int|null, title: string, year: int|string|null, missingCount: int}>}
+     */
+    public function mostMissing(): array
+    {
+        $movies = $this->readDataset(self::KEY_MOST_MISSING_MOVIES, self::KEY_MOVIES);
+        $series = $this->readDataset(self::KEY_MOST_MISSING_SERIES, self::KEY_SERIES);
+
+        if ($movies === null || $series === null) {
+            return ['state' => 'warming', 'items' => []];
+        }
+
+        /** @var list<array{kind: 'movie'|'series', id: int|null, title: string, year: int|string|null, missingCount: int}> $items */
+        $items = array_merge(array_values($movies), array_values($series));
+
+        return ['state' => 'ready', 'items' => $items];
+    }
+
+    /**
+     * `/api/badges` counts for the Bazarr topbar/tab chips. Refreshed
+     * alongside the movie dataset (see BazarrIndexRefresher) since it is one
+     * cheap call — giving it its own refresh key would double queue traffic
+     * for no benefit.
+     *
+     * @return array{state: 'ready'|'warming', counts: array{movies: int, episodes: int, providers: int}}
+     */
+    public function badgeCounts(): array
+    {
+        $hit = $this->readDataset(self::KEY_BADGES, self::KEY_MOVIES);
+        if (!is_array($hit)) {
+            return ['state' => 'warming', 'counts' => ['movies' => 0, 'episodes' => 0, 'providers' => 0]];
+        }
+
+        return [
+            'state'  => 'ready',
+            'counts' => [
+                'movies'    => (int) ($hit['movies'] ?? 0),
+                'episodes'  => (int) ($hit['episodes'] ?? 0),
+                'providers' => (int) ($hit['providers'] ?? 0),
+            ],
+        ];
+    }
+
+    /**
+     * Shared read for the tab datasets: serve fresh or stale, ask the
+     * consumer for a rebuild of $refreshKey when stale or missing, and never
+     * fetch. Deliberately not memoized per-request (unlike movieMap() /
+     * seriesMap()): each of the four dataset reads is called at most once per
+     * page render, and memoizing a large card list on the service would work
+     * against worker-mode-safety guardrail 3 (no unbounded cross-request
+     * retention).
+     *
+     * @return array<mixed>|null null = hard miss (caller renders "warming")
+     */
+    private function readDataset(string $key, string $refreshKey): ?array
+    {
+        $hit = $this->swr->read($key, self::SOFT_TTL);
+        if ($hit === null) {
+            $this->requestRefreshOnce($refreshKey);
+
+            return null;
+        }
+
+        if ($hit['state'] === 'stale') {
+            $this->swr->requestRefresh($refreshKey);
+        }
+
+        return is_array($hit['value']) ? $hit['value'] : null;
     }
 
     /**

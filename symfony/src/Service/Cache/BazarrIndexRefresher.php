@@ -3,6 +3,7 @@
 namespace App\Service\Cache;
 
 use App\Service\Media\BazarrClient;
+use App\Service\Media\BazarrLangs;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\ServiceHealthCache;
 use Psr\Log\LoggerInterface;
@@ -66,22 +67,66 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             return;
         }
 
-        $status = [];
-        $langs  = [];
+        $status  = [];
+        $langs   = [];
+        $cards   = [];
+        $langSet = [];
+        $candidates = [];
+
         foreach ($rows as $m) {
             if (!isset($m['radarrId'])) {
                 continue;
             }
             $id          = (int) $m['radarrId'];
-            $status[$id] = BazarrSubtitleIndex::computeMovieStatus($m);
+            $st          = BazarrSubtitleIndex::computeMovieStatus($m);
+            $status[$id] = $st;
             $langs[$id]  = BazarrSubtitleIndex::extractMovieLangs($m);
+
+            $codes = [];
+            foreach (BazarrLangs::extract($m)['missing'] as $lang) {
+                $codes[$lang['lang']]   = true;
+                $langSet[$lang['lang']] = true;
+            }
+
+            $cards[] = [
+                'title'        => (string) ($m['title'] ?? ''),
+                'year'         => $m['year'] ?? null,
+                'substate'     => $st['state'] === 'hidden' ? 'not-tracked' : $st['state'],
+                'count'        => $st['count'],
+                'missingLangs' => array_keys($codes),
+                'seriesId'     => null,
+                'movieId'      => $id,
+            ];
+
+            if ($st['state'] === 'missing') {
+                $candidates[] = [
+                    'kind'         => 'movie', 'id' => $id,
+                    'title'        => (string) ($m['title'] ?? '—'), 'year' => $m['year'] ?? null,
+                    'missingCount' => $st['count'],
+                ];
+            }
         }
 
+        ksort($langSet);
+        usort($candidates, static fn (array $a, array $b): int
+            => ($b['missingCount'] <=> $a['missingCount']) ?: strcasecmp($a['title'], $b['title']));
+        $candidates = array_slice($candidates, 0, BazarrSubtitleIndex::MOST_MISSING_CANDIDATES);
+
+        // /api/badges is one cheap call and belongs to the same refresh cycle;
+        // giving it its own message would double queue traffic for nothing.
+        $counts = $this->client->getBadgeCounts();
+
         // One timestamp for every key written from this fetch, so the group
-        // shares a soft window instead of drifting apart.
+        // shares a soft window instead of drifting apart. Badge maps are
+        // written LAST so the shortest-lived surface is the last to flip
+        // (keys cannot be written atomically together); cards/most_missing
+        // precede the status/langs maps other callers gate their reads on.
         $now = time();
+        $this->swr->write(BazarrSubtitleIndex::KEY_MOVIE_CARDS, ['cards' => $cards, 'languages' => array_keys($langSet)], BazarrSubtitleIndex::HARD_TTL, $now);
+        $this->swr->write(BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES, $candidates, BazarrSubtitleIndex::HARD_TTL, $now);
         $this->swr->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, $langs, BazarrSubtitleIndex::HARD_TTL, $now);
         $this->swr->write(BazarrSubtitleIndex::KEY_MOVIES, $status, BazarrSubtitleIndex::HARD_TTL, $now);
+        $this->swr->write(BazarrSubtitleIndex::KEY_BADGES, $counts, BazarrSubtitleIndex::HARD_TTL, $now);
     }
 
     private function refreshSeries(): void
@@ -97,13 +142,53 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             return;
         }
 
-        $status = [];
+        $status     = [];
+        $cards      = [];
+        $langSet    = [];
+        $candidates = [];
+
         foreach ($rows as $s) {
-            if (isset($s['sonarrSeriesId'])) {
-                $status[(int) $s['sonarrSeriesId']] = BazarrSubtitleIndex::computeSeriesStatus($s);
+            if (!isset($s['sonarrSeriesId'])) {
+                continue;
+            }
+            $id          = (int) $s['sonarrSeriesId'];
+            $st          = BazarrSubtitleIndex::computeSeriesStatus($s);
+            $status[$id] = $st;
+
+            $codes = [];
+            foreach (BazarrLangs::extract($s)['missing'] as $lang) {
+                $codes[$lang['lang']]   = true;
+                $langSet[$lang['lang']] = true;
+            }
+
+            $cards[] = [
+                'title'        => (string) ($s['title'] ?? ''),
+                'year'         => $s['year'] ?? null,
+                'substate'     => $st['state'] === 'hidden' ? 'not-tracked' : $st['state'],
+                'count'        => $st['count'],
+                'missingLangs' => array_keys($codes),
+                'seriesId'     => $id,
+                'movieId'      => null,
+            ];
+
+            $missingCount = (int) ($s['episodeMissingCount'] ?? 0);
+            if ($missingCount > 0) {
+                $candidates[] = [
+                    'kind'         => 'series', 'id' => $id,
+                    'title'        => (string) ($s['title'] ?? '—'), 'year' => $s['year'] ?? null,
+                    'missingCount' => $missingCount,
+                ];
             }
         }
 
-        $this->swr->write(BazarrSubtitleIndex::KEY_SERIES, $status, BazarrSubtitleIndex::HARD_TTL, time());
+        ksort($langSet);
+        usort($candidates, static fn (array $a, array $b): int
+            => ($b['missingCount'] <=> $a['missingCount']) ?: strcasecmp($a['title'], $b['title']));
+        $candidates = array_slice($candidates, 0, BazarrSubtitleIndex::MOST_MISSING_CANDIDATES);
+
+        $now = time();
+        $this->swr->write(BazarrSubtitleIndex::KEY_SERIES_CARDS, ['cards' => $cards, 'languages' => array_keys($langSet)], BazarrSubtitleIndex::HARD_TTL, $now);
+        $this->swr->write(BazarrSubtitleIndex::KEY_MOST_MISSING_SERIES, $candidates, BazarrSubtitleIndex::HARD_TTL, $now);
+        $this->swr->write(BazarrSubtitleIndex::KEY_SERIES, $status, BazarrSubtitleIndex::HARD_TTL, $now);
     }
 }
