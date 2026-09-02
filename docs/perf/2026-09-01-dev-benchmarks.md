@@ -53,21 +53,29 @@ hard miss — the change that makes the live wall-clock improvement possible in 
   D2 caches only; the Turbo-Frame branch and the full-page branch are both exercised without a live
   Bazarr fetch.
 
-## `:beta` timing table — TO BE FILLED
+## `:beta` timing table — FILLED 2026-09-02 (live Unraid, image 31d6f99)
 
-| Route | Baseline cold / warm | `:beta` cold / warm | Δ | Target | Pass? |
+| Route | Baseline cold / warm | `:beta` cold / warm | Δ (warm) | Target | Pass? |
 |---|---|---|---|---|---|
-| Films `/medias/radarr-1/films?status=all&sort=title-asc` | 11,515 / 318 ms | | | ≤3.5 s worst case once per 10 min; ≈320 ms otherwise; Bazarr never in the path | |
-| Movie quick-look `quicklook/movie/radarr-1/8172` | 11,488 / 232 ms | | | <1 s cold (one per-id call), ≈230 ms warm | |
-| Global search `?q=mat` | 9,780 / 1,613 ms | | | tens of ms warm | |
-| Global search `?q=the` (series slug) | — / 4,980 ms | | | tens of ms warm | |
-| Global search `?q=zzzzqq` (0 results) | — / 1,613 ms | | | tens of ms warm | |
-| Bazarr landing `/bazarr` | 10,170 / 7,019 ms | | | shell <50 ms, view tens of ms warm | |
-| Bazarr Movies `/bazarr/movies` | 4,171 / 7,494 ms | | | same | |
-| Bazarr Series `/bazarr/series` | 664 / 5 ms | | | no regression | |
-| Dashboard `widget/recent` | 3,766 / 240 ms | | | shares the library entry; cold paid once per hard window | |
-| Discover `/decouverte` (control, Bazarr-free) | 4,146 / 3,516 ms | | | unchanged — this is the control that validates the run | |
-| Series `/medias/sonarr-1/series` | 1,172 / 66 ms | | | no regression | |
+| Films `/medias/radarr-1/films?status=all&sort=title-asc` | 11,515 / 318 ms | 320 / 318 ms (p95 325 over 15) | cold −97 %, warm 0 % | ≤3.5 s worst case once per 10 min; ≈320 ms otherwise; Bazarr never in the path | ✅ (no cold spike in 220 s probe; 592 badges, 0 pending) |
+| Movie quick-look `quicklook/movie/radarr-1/8172` | 11,488 / 232 ms | 218 / 237 ms (probe max 224 over 20 ticks) | cold −98 %, warm +2 % | <1 s cold, ≈230 ms warm | ✅ |
+| Global search `?q=mat` | 9,780 / 1,613 ms | 377 / 26 ms (p95 41) | −98 % | tens of ms warm | ✅ |
+| Global search `?q=the` (series slug) | — / 4,980 ms | 32 / 31 ms | −99 % | tens of ms warm | ✅ |
+| Global search `?q=zzzzqq` (0 results) | — / 1,613 ms | 15 / 13 ms | −99 % | tens of ms warm | ✅ |
+| Bazarr landing `/bazarr` | 10,170 / 7,019 ms | 218 / 221 ms (full load DCL 348 ms) | −97 % | shell <50 ms, view tens of ms warm | ✅ (view served from cache; shell+view in one response) |
+| Bazarr Movies `/bazarr/movies` | 4,171 / 7,494 ms | 234 / 240 ms | −97 % | same | ✅ |
+| Bazarr Series `/bazarr/series` | 664 / 5 ms | 14 / 17 ms | +12 ms | no regression | ✅ (noise-level) |
+| Bazarr History `/bazarr/history` | 5 / 5 ms (162 KB — see note) | 9,179 / 9,124 ms (3.9 MB) | not comparable | out of scope (unchanged code) | ⚠️ pre-existing inline fetch; fast-follow |
+| Dashboard `widget/recent` | 3,766 / 240 ms | 246 / 261 ms | cold −93 %, warm +9 % | shares the library entry; cold paid once per hard window | ✅ (3.7 s seen only on the very first load after the container restart) |
+| Discover `/decouverte` (control, Bazarr-free) | 4,146 / 3,516 ms | 4,084 / 3,686 ms | +5 % (TMDb noise) | unchanged — control | ✅ |
+| Series `/medias/sonarr-1/series` | 1,172 / 66 ms | 91 / 85 ms (p95 82 over 15) | cold −92 %, warm +19 ms | no regression | ✅ (noise-level) |
+| Health `/api/health/services` | 3 / 2 ms | 3 / 2 ms | 0 | — | ✅ |
+| Live widgets poll `widgets?w=…` | 335 / 339 ms (p95 901) | 607 / 335 ms (p95 491) | 0 | — | ✅ |
+| Tautulli / UniFi / Prowlarr / Calendar shells | 11 / 5 / 163 / 186 ms | 14 / 4 / 155 / 189 ms | 0 | — | ✅ |
+
+Note on History: the baseline sample returned 162 KB in 5 ms, identical in size to the Movies page, which is not a plausible render of the history lists; the `:beta` number (3.9 MB of history rows, 9 s) is the real cost of the unchanged inline `/movies/history` + `/episodes/history` fetches. Nothing on this branch touches that path (verified by `git diff 8a3e4c5..HEAD`). Fast-follow: page or cache History through the SWR primitive.
+
+Measured 2026-09-02 ~13:00–13:20 local on the same Unraid host, same libraries, same method (in-page fetch TTFB, N=5; N=15 for the tail table; 220 s probe). Full write-up: [2026-09-02-beta-live-comparison.md](2026-09-02-beta-live-comparison.md).
 
 ## Acceptance rules
 
