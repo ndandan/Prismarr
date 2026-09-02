@@ -5,10 +5,13 @@ namespace App\Tests\Service\Cache;
 use App\Message\RefreshCacheKey;
 use App\Service\Cache\StaleWhileRevalidateCache;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Contracts\Cache\CacheInterface;
 
 class StaleWhileRevalidateCacheTest extends TestCase
 {
@@ -36,6 +39,32 @@ class StaleWhileRevalidateCacheTest extends TestCase
         return new StaleWhileRevalidateCache($pool, $pool, $this->bus($throwingBus), new NullLogger());
     }
 
+    /** @param list<array{level: mixed, message: string, context: array<string, mixed>}> $records */
+    private function recordingLogger(array &$records): LoggerInterface
+    {
+        return new class($records) extends AbstractLogger {
+            /** @param list<array{level: mixed, message: string, context: array<string, mixed>}> $records */
+            public function __construct(private array &$records) {}
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
+            }
+        };
+    }
+
+    /** A CacheInterface that always hands back a malformed (non-envelope) result, regardless of $callback. */
+    private function malformedCache(): CacheInterface
+    {
+        return new class implements CacheInterface {
+            public function get(string $key, callable $callback, ?float $beta = null, ?array &$metadata = null): mixed
+            {
+                return ['not' => 'the expected shape'];
+            }
+            public function delete(string $key): bool { return true; }
+        };
+    }
+
     public function testReadReturnsNullOnHardMiss(): void
     {
         $this->assertNull($this->swr(new ArrayAdapter())->read('k', 60));
@@ -60,6 +89,20 @@ class StaleWhileRevalidateCacheTest extends TestCase
         $this->assertNotNull($hit);
         $this->assertSame('stale', $hit['state']);
         $this->assertSame(['a' => 1], $hit['value']);
+    }
+
+    public function testReadTreatsACorruptEnvelopeAsAMissAndDropsIt(): void
+    {
+        $pool = new ArrayAdapter();
+        $item = $pool->getItem('k');
+        $item->set(['unexpected' => 'shape']); // no fetchedAt/value keys
+        $item->expiresAfter(600);
+        $pool->save($item);
+
+        $swr = $this->swr($pool);
+
+        $this->assertNull($swr->read('k', 60));
+        $this->assertFalse($pool->getItem('k')->isHit(), 'a corrupt entry must be dropped, not just skipped');
     }
 
     public function testGetOrComputeFetchesOnceThenServesFromCache(): void
@@ -91,6 +134,66 @@ class StaleWhileRevalidateCacheTest extends TestCase
         $this->assertSame(2, $calls, 'an empty result must expire immediately so the next load retries');
     }
 
+    public function testGetOrComputeTreatsACorruptEnvelopeAsAMissAndRecomputes(): void
+    {
+        $pool = new ArrayAdapter();
+        $item = $pool->getItem('k');
+        $item->set(['unexpected' => 'shape']);
+        $item->expiresAfter(600);
+        $pool->save($item);
+
+        $swr   = $this->swr($pool);
+        $calls = 0;
+        $fetch = function () use (&$calls) { $calls++; return ['row']; };
+
+        $result = $swr->getOrCompute('k', 60, 600, $fetch);
+
+        $this->assertSame(['row'], $result['value']);
+        $this->assertSame('fresh', $result['state']);
+        $this->assertSame(1, $calls);
+    }
+
+    public function testGetOrComputeDoesNotTrustAMalformedContractsCacheResult(): void
+    {
+        // Empty pool: read() reports a genuine hard miss, so getOrCompute()
+        // proceeds to the (here, deliberately broken) contracts cache.
+        $pool  = new ArrayAdapter();
+        $swr   = new StaleWhileRevalidateCache($this->malformedCache(), $pool, $this->bus(), new NullLogger());
+        $calls = 0;
+
+        $result = $swr->getOrCompute('k', 60, 600, function () use (&$calls) { $calls++; return ['fallback']; });
+
+        $this->assertSame(['fallback'], $result['value']);
+        $this->assertSame('fresh', $result['state']);
+        $this->assertSame(1, $calls, 'a malformed contracts-cache result must never be trusted — recompute directly instead');
+    }
+
+    public function testGetOrComputePropagatesAThrowingFetchAndLeavesNoEntry(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $this->expectException(\RuntimeException::class);
+        try {
+            $swr->getOrCompute('k', 60, 600, function (): array {
+                throw new \RuntimeException('upstream down');
+            });
+        } finally {
+            $this->assertFalse($pool->getItem('k')->isHit(), 'a throwing fetch must not leave a partial/cached entry behind');
+        }
+    }
+
+    public function testGetOrComputeCanReturnStaleWhenSoftTtlIsAlreadyZero(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $result = $swr->getOrCompute('k', 0, 600, fn () => ['row']);
+
+        $this->assertSame(['row'], $result['value']);
+        $this->assertSame('stale', $result['state'], 'state must be derived from fetchedAt like read() does, never hardcoded fresh');
+    }
+
     public function testRequestRefreshDispatchesOnceInsideTheMarkerWindow(): void
     {
         $pool = new ArrayAdapter();
@@ -115,6 +218,80 @@ class StaleWhileRevalidateCacheTest extends TestCase
         $this->assertFalse(
             $pool->getItem('k.refreshing')->isHit(),
             'a failed dispatch must not leave the coalescing marker behind for 30 s',
+        );
+    }
+
+    public function testDispatchFailureIsLoggedAsAnError(): void
+    {
+        $pool    = new ArrayAdapter();
+        $records = [];
+        $swr     = new StaleWhileRevalidateCache($pool, $pool, $this->bus(throw: true), $this->recordingLogger($records));
+
+        $swr->requestRefresh('k');
+
+        $this->assertCount(1, $records);
+        $this->assertSame('error', $records[0]['level']);
+        $this->assertSame('k', $records[0]['context']['key']);
+        $this->assertSame(\RuntimeException::class, $records[0]['context']['exception']);
+    }
+
+    public function testRequestRefreshSwallowsAThrowingPoolAndLogsAnError(): void
+    {
+        $pool    = new ArrayAdapter();
+        $records = [];
+        $swr     = new StaleWhileRevalidateCache($pool, $pool, $this->bus(), $this->recordingLogger($records));
+
+        // ArrayAdapter (like every PSR-6 adapter) throws on a reserved
+        // character in the key: {}()/\@: — this must never propagate out of
+        // requestRefresh(), which runs on the main request path.
+        $swr->requestRefresh('bad{key}');
+
+        $this->assertCount(1, $records);
+        $this->assertSame('error', $records[0]['level']);
+        $this->assertSame('bad{key}', $records[0]['context']['key']);
+    }
+
+    public function testWriteRejectsANonPositiveHardTtl(): void
+    {
+        $swr = $this->swr(new ArrayAdapter());
+
+        $this->expectException(\InvalidArgumentException::class);
+        $swr->write('k', ['a' => 1], 0);
+    }
+
+    public function testWriteSkipsWhenTheBackDatedFetchedAtHasAlreadyExpired(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $swr->write('k', ['a' => 1], 600, time() - 700); // 700 s old vs a 600 s hard TTL
+
+        $this->assertNull($swr->read('k', 60), 'a write whose effective TTL has already elapsed must not create a live entry');
+    }
+
+    public function testWriteWithABackDatedFetchedAtStillWritesWhenHardLifeRemains(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $swr->write('k', ['a' => 1], 600, time() - 400); // 200 s of hard life left
+
+        $hit = $swr->read('k', 1_000_000); // huge soft TTL so it reads back regardless of state
+        $this->assertNotNull($hit);
+        $this->assertSame(['a' => 1], $hit['value']);
+    }
+
+    public function testWriteDoesNotClearAnExistingRefreshingMarker(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->requestRefresh('k'); // sets .refreshing + .requested_at
+
+        $swr->write('k', ['a' => 1], 600);
+
+        $this->assertTrue(
+            $pool->getItem('k.refreshing')->isHit(),
+            'write() only clears the request stamp — the coalescing marker is left to expire on its own',
         );
     }
 
