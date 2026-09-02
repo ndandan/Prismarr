@@ -244,4 +244,80 @@ class BazarrClientTest extends TestCase
         $this->assertSame('/system/status', $err['path']);
         $this->assertStringContainsString('circuit open', $err['message']);
     }
+
+    /**
+     * Capture the effective URL each request builds, so the repeated-bracket
+     * query string is asserted for real instead of by inspection. exec() is a
+     * protected seam precisely for this.
+     *
+     * @param list<string> $urls
+     */
+    private function urlCapturingClient(array &$urls): BazarrClient
+    {
+        return new class ($this->config([
+            'bazarr_url' => 'http://bazarr.test:6767', 'bazarr_api_key' => 'k',
+        ]), new NullLogger(), new ServiceHealthCache(new ArrayAdapter()), $urls) extends BazarrClient {
+            /** @param list<string> $urls */
+            public function __construct($config, $logger, $health, private array &$urls)
+            {
+                parent::__construct($config, $logger, $health);
+            }
+
+            protected function exec(\CurlHandle $ch): array
+            {
+                $this->urls[] = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
+                curl_close($ch);
+
+                return ['{"data":[]}', 200, ''];
+            }
+        };
+    }
+
+    public function testGetMoviesWithNoFilterKeepsTheFullListQuery(): void
+    {
+        $urls = [];
+        $this->urlCapturingClient($urls)->getMovies();
+
+        $this->assertStringContainsString('/api/movies?start=0&length=-1', urldecode($urls[0]));
+        $this->assertStringNotContainsString('radarrid', $urls[0]);
+    }
+
+    public function testGetMoviesWithIdsEmitsRepeatedRadarrIdBrackets(): void
+    {
+        $urls = [];
+        $this->urlCapturingClient($urls)->getMovies([12, 34]);
+
+        $decoded = urldecode($urls[0]);
+        $this->assertStringContainsString('radarrid[]=12', $decoded);
+        $this->assertStringContainsString('radarrid[]=34', $decoded);
+        // The PHP-indexed form Bazarr cannot read must NOT appear.
+        $this->assertStringNotContainsString('radarrid[0]', $decoded);
+    }
+
+    public function testGetSeriesWithIdsEmitsRepeatedSeriesIdBrackets(): void
+    {
+        $urls = [];
+        $this->urlCapturingClient($urls)->getSeries([5]);
+
+        $decoded = urldecode($urls[0]);
+        $this->assertStringContainsString('seriesid[]=5', $decoded);
+        $this->assertStringNotContainsString('seriesid[0]', $decoded);
+    }
+
+    public function testIdFiltersAreCastToIntSoNothingUnsanitizedReachesTheQuery(): void
+    {
+        $urls = [];
+        /** @phpstan-ignore-next-line deliberate mixed input */
+        $this->urlCapturingClient($urls)->getMovies(['7abc', 9]);
+
+        $decoded = urldecode($urls[0]);
+        $this->assertStringContainsString('radarrid[]=7', $decoded);
+        $this->assertStringContainsString('radarrid[]=9', $decoded);
+        $this->assertStringNotContainsString('abc', $decoded);
+    }
+
+    public function testGetMoviesWithIdsIsStillEmptyWhenUnconfigured(): void
+    {
+        $this->assertSame([], $this->client([])->getMovies([1]));
+    }
 }
