@@ -51,14 +51,27 @@ class SubtitleBadgeExtension extends AbstractExtension
      * already does a true per-id getEpisodes() call), so it falls through to
      * the same seriesStatus() the bulk function uses.
      *
+     * Wrapped in its own try/catch (fix round 1, IMPORTANT 3): unlike
+     * subtitle_status()/status() above, this variant can reach a live Bazarr
+     * call (movieStatusSingle()'s per-id fallback) straight from a Twig
+     * render — the dashboard quick-look — with no controller action in
+     * between to catch a surprise exception. This extension has no logger to
+     * report through, so a failure here degrades silently to the same
+     * `hidden` shape the badge already renders for a gated/absent item,
+     * rather than turning a quick-look open into a 500.
+     *
      * @return SubtitleStatus
      */
     public function statusSingle(string $kind, int $id): array
     {
-        return match ($kind) {
-            'movie'  => $this->index->movieStatusSingle($id),
-            'series' => $this->index->seriesStatus($id),
-            default  => ['state' => 'hidden', 'count' => 0],
-        };
+        try {
+            return match ($kind) {
+                'movie'  => $this->index->movieStatusSingle($id),
+                'series' => $this->index->seriesStatus($id),
+                default  => ['state' => 'hidden', 'count' => 0],
+            };
+        } catch (\Throwable) {
+            return ['state' => 'hidden', 'count' => 0];
+        }
     }
 }

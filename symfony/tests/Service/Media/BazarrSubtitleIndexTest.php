@@ -246,17 +246,24 @@ class BazarrSubtitleIndexTest extends TestCase
         $src = file_get_contents(__DIR__ . '/../../../src/Service/Media/BazarrSubtitleIndex.php');
         $this->assertNotFalse($src);
 
-        // movieStatus/movieLanguages/seriesStatus are called once per rendered
-        // badge — 588 times on the Films page. A client call reachable from
-        // them is an N+1 against Bazarr (spec D3, defect C1). Checked as three
-        // separate spans (not one movieStatus..gate() span) because Task 8's
-        // movieStatusSingle()/movieLanguagesSingle()/loadSingle() now sit
-        // between movieLanguages() and seriesStatus() and DELIBERATELY do
-        // call the client — that's the single-item fallback, gated off the
-        // grid path by TemplateStructureGuardTest instead of this test.
+        // movieStatus/movieLanguages/seriesStatus (plus everything from
+        // seriesStatus() through gate() — movieCards/seriesCards/mostMissing/
+        // badgeCounts/readDataset, all called on ordinary page renders) are
+        // never allowed to call the client. Checked as two separate spans
+        // (not one movieStatus..gate() span) ONLY because Task 8's
+        // movieStatusSingle()/movieLanguagesSingle()/loadSingle() sit between
+        // movieLanguages() and seriesStatus() and DELIBERATELY do call the
+        // client — that's the single-item fallback, gated off the grid path
+        // by TemplateStructureGuardTest instead of this test. Fix round 1,
+        // IMPORTANT 2: the third span's end marker goes back to
+        // 'private function gate(' (not 'public function movieCards(') so
+        // movieCards()/seriesCards()/mostMissing()/badgeCounts()/
+        // readDataset() are scanned again — they sit AFTER seriesStatus() and
+        // never contained the *Single()/loadSingle() methods to begin with,
+        // so no sub-span exclusion is needed for this span.
         $this->assertMethodBodyHasNoClientCall($src, 'public function movieStatus(', 'public function movieLanguages(');
         $this->assertMethodBodyHasNoClientCall($src, 'public function movieLanguages(', 'public function movieStatusSingle(');
-        $this->assertMethodBodyHasNoClientCall($src, 'public function seriesStatus(', 'public function movieCards(');
+        $this->assertMethodBodyHasNoClientCall($src, 'public function seriesStatus(', 'private function gate(');
     }
 
     private function assertMethodBodyHasNoClientCall(string $src, string $startMarker, string $endMarker): void

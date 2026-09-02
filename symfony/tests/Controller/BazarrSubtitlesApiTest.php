@@ -13,11 +13,13 @@ use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\ServiceInstanceProvider;
 use App\Tests\AbstractWebTestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\NullLogger;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\DependencyInjection\Container;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * The subtitle-language JSON endpoints the film-detail and series-detail
@@ -67,28 +69,41 @@ class BazarrSubtitlesApiTest extends AbstractWebTestCase
 
     /**
      * Seed the index's cross-request cache so the real index serves radarrId 5
-     * as tracked (English present / French missing). loadMovies() only skips
-     * its live fetch when BOTH pool keys are warm, so seed both.
+     * as tracked (English present / French missing) from a genuinely WARM
+     * map. loadMovies() only skips its live fetch when BOTH pool keys are
+     * warm, so seed both — and (fix round 1, MINOR) via
+     * StaleWhileRevalidateCache::write(), which wraps each value in the
+     * `{fetchedAt, value}` envelope StaleWhileRevalidateCache::read() actually
+     * expects. A bare `$pool->getItem($key)->set($rawArray)` (the previous
+     * version of this helper) fails that shape check and is silently treated
+     * as a hard miss, so every test using it was actually exercising the
+     * cold-index / hard-miss fallback path rather than a warm map, without
+     * anyone noticing because both paths can produce the same JSON for the
+     * absent-id case.
      */
     private function seedMovie5(): void
     {
         $pool = static::getContainer()->get('cache.app');
+        $swr  = $this->swr($pool);
 
-        $status = $pool->getItem('bazarr_subtitle_index.movies');
-        $status->set([5 => ['state' => 'missing', 'count' => 1]]);
-        $pool->save($status);
-
-        $langs = $pool->getItem('bazarr_subtitle_index.movie_langs');
-        $langs->set([5 => [
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIES, [5 => ['state' => 'missing', 'count' => 1]], BazarrSubtitleIndex::HARD_TTL);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIE_LANGS, [5 => [
             'present' => [['lang' => 'en', 'hi' => false, 'forced' => false]],
             'missing' => [['lang' => 'fr', 'hi' => false, 'forced' => false]],
             'tracked' => true,
-        ]]);
-        $pool->save($langs);
+        ]], BazarrSubtitleIndex::HARD_TTL);
     }
 
-    /** Bare in-memory StaleWhileRevalidateCache — same shape as the Service-layer BazarrSubtitleIndex tests. */
-    private function swr(ArrayAdapter $pool): StaleWhileRevalidateCache
+    /**
+     * Same shape as the Service-layer BazarrSubtitleIndex tests. Accepts
+     * either the in-memory ArrayAdapter (the movie "tracked" happy-path test)
+     * or the real `cache.app` pool from the container (seedMovie5(), which
+     * needs to write through the SAME pool the real BazarrSubtitleIndex
+     * service reads from) — both implement CacheItemPoolInterface AND
+     * CacheInterface, which is all StaleWhileRevalidateCache's constructor
+     * actually needs.
+     */
+    private function swr(CacheItemPoolInterface&CacheInterface $pool): StaleWhileRevalidateCache
     {
         $bus = new class implements MessageBusInterface {
             public function dispatch(object $message, array $stamps = []): Envelope
@@ -144,9 +159,19 @@ class BazarrSubtitlesApiTest extends AbstractWebTestCase
         self::assertSame([['lang' => 'fr', 'hi' => false, 'forced' => false]], $data['missing']);
     }
 
+    /**
+     * Movie 5 is in a genuinely WARM map (seedMovie5() now writes proper SWR
+     * envelopes — fix round 1, MINOR), but 999 is not → movieStatus(999)
+     * resolves straight to the map's own fail-closed `hidden` entry (never
+     * `pending`), so movieLanguagesSingle() takes the "anything but pending"
+     * branch and returns movieLanguages(999) directly — zero per-id Bazarr
+     * calls, proven at the unit level by
+     * BazarrSubtitleIndexSingleTest::testAWarmMapCostsNoBazarrCallAtAll()
+     * (this HTTP-level test only has the real, unmockable container client to
+     * assert against, so it checks the resulting shape, not the call count).
+     */
     public function testAbsentMovieIsUntracked(): void
     {
-        // Movie 5 is in the map, but 999 is not → fail-closed untracked shape.
         $this->seedMovie5();
 
         $this->client->request('GET', '/bazarr/api/subtitles/movie/999');

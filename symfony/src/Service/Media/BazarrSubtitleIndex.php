@@ -529,6 +529,16 @@ class BazarrSubtitleIndex implements ResetInterface
      * fail-closed shapes — never 'pending', because the fallback already ran
      * and there is nothing left to wait for.
      *
+     * Identity-verified via findRowById() (fix round 1, IMPORTANT 1) — the
+     * same guard refreshItem() uses: a filter param Bazarr ignored, or a
+     * mock/stub in a test, can hand back a list that doesn't contain the
+     * requested id at all, and blindly trusting $rows[0] would then compute
+     * and memoize the WRONG movie's status/langs under this id. A row that
+     * doesn't verify is treated exactly like an empty/error response — the
+     * fail-closed shape is memoized (so a repeated badge+chips lookup in the
+     * same request doesn't retry), and nothing is ever written to the pool
+     * from this method to begin with.
+     *
      * @return array{status: SubtitleStatus, langs: MovieLangs}
      */
     private function loadSingle(int $radarrId): array
@@ -542,9 +552,14 @@ class BazarrSubtitleIndex implements ResetInterface
             return $this->singles[$radarrId] = ['status' => self::HIDDEN, 'langs' => self::UNTRACKED_LANGS];
         }
 
+        $row = $this->findRowById('movie', $rows, $radarrId);
+        if ($row === null) {
+            return $this->singles[$radarrId] = ['status' => self::HIDDEN, 'langs' => self::UNTRACKED_LANGS];
+        }
+
         return $this->singles[$radarrId] = [
-            'status' => self::computeMovieStatus($rows[0]),
-            'langs'  => self::extractMovieLangs($rows[0]),
+            'status' => self::computeMovieStatus($row),
+            'langs'  => self::extractMovieLangs($row),
         ];
     }
 
