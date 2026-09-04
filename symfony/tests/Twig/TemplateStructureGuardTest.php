@@ -135,11 +135,21 @@ class TemplateStructureGuardTest extends TestCase
         foreach ($files as $relPath) {
             $src = file_get_contents(self::TEMPLATE_ROOT . $relPath);
             $this->assertNotFalse($src);
-            $this->assertSame(
-                substr_count($src, '{#'),
-                substr_count($src, '#}'),
-                $relPath . ': unbalanced Twig comment delimiters — a `#}` with no matching `{#` '
-                    . '(often a JS `/* … */` comment mistakenly closed with `#}`).'
+            // Model Twig's real (non-nesting) comment lexing: strip the shortest
+            // `{# ... #}` spans, then any surviving delimiter is an orphan — an
+            // unmatched `#}` (a JS `/* … */` mistakenly closed with `#}`) OR a
+            // comment that quotes a delimiter as prose and closes itself early.
+            $stripped = (string) preg_replace('/\{#.*?#\}/s', '', (string) $src);
+            $this->assertStringNotContainsString(
+                '#}',
+                $stripped,
+                $relPath . ': orphan `#}` outside a Twig comment (often a JS `/* … */` closed with `#}`, '
+                    . 'or a comment quoting `#}` as literal text and closing itself early).'
+            );
+            $this->assertStringNotContainsString(
+                '{#',
+                $stripped,
+                $relPath . ': orphan `{#` after stripping balanced comments — an unclosed Twig comment.'
             );
         }
     }
@@ -195,15 +205,32 @@ class TemplateStructureGuardTest extends TestCase
     {
         // ced9170: a JS comment opened with slash-star and closed with `#}`
         // silently swallowed the rest of a <script> and shipped a dead modal.
+        //
+        // NOTE: a symmetric substr_count('{#') === substr_count('#}') check is
+        // NOT enough — it is fooled by a comment whose own text mentions each
+        // delimiter once (the counts stay balanced while the nesting is
+        // broken). _warming.html.twig shipped exactly that regression: its
+        // comment quoted `{#` and `#}` as prose, so the first `#}` closed the
+        // block early and the tail leaked onto the page. We model Twig's real
+        // lexing instead: comments do NOT nest, so strip the shortest
+        // `{# ... #}` spans (non-greedy = first opener to first closer) and
+        // assert no orphan delimiter survives.
         foreach ([
             'bazarr/_shell.html.twig', 'bazarr/_bare.html.twig', 'bazarr/_warming.html.twig', 'bazarr/_grid.html.twig',
             'bazarr/history.html.twig', 'bazarr/series_detail.html.twig',
         ] as $file) {
             $src = (string) file_get_contents(__DIR__ . '/../../templates/' . $file);
-            $this->assertSame(
-                substr_count($src, '{#'),
-                substr_count($src, '#}'),
-                $file . ': unbalanced Twig comment delimiters',
+            $stripped = (string) preg_replace('/\{#.*?#\}/s', '', $src);
+            $this->assertStringNotContainsString(
+                '#}',
+                $stripped,
+                $file . ': orphan `#}` outside a Twig comment — a comment likely quotes `#}` as'
+                    . ' literal text, so the first terminator closed the block early and the rest leaks onto the page',
+            );
+            $this->assertStringNotContainsString(
+                '{#',
+                $stripped,
+                $file . ': orphan `{#` after stripping balanced comments — an unclosed Twig comment',
             );
         }
     }
@@ -280,12 +307,21 @@ class TemplateStructureGuardTest extends TestCase
      * sessionStorage, not a bare `window` property — `window.location.
      * reload()` (the fallback reload path, taken when Turbo.visit isn't
      * available) is a full document navigation that wipes any plain
-     * `window` property, so a window-only flag would forget it had already
-     * retried on every such reload and loop forever against a Bazarr that
-     * never comes back. `window` is kept only as the fallback for when
-     * sessionStorage itself throws (private browsing / disabled storage).
+     * `window` property, so a window-only marker would forget how far the
+     * retry schedule had advanced on every such reload and restart it
+     * against a Bazarr that never comes back. `window` is kept only as the
+     * fallback for when sessionStorage itself throws (private browsing /
+     * disabled storage).
+     *
+     * The marker is now a bounded-backoff attempt COUNT (`{n, t}`), not a
+     * one-shot boolean: a healthy-but-still-warming index (the only state
+     * this partial renders in — the controller pings first and a down
+     * Bazarr shows the error banner) heals across a few automatic retries,
+     * then the schedule caps and the manual button appears for the
+     * dead-worker case. The count must survive both reload paths for the
+     * bound to hold.
      */
-    public function testWarmingReloadsViaTurboVisitWithAnOutOfBandRetryMarker(): void
+    public function testWarmingReloadsViaTurboVisitWithABoundedOutOfBandRetryCounter(): void
     {
         $src = (string) file_get_contents(__DIR__ . '/../../templates/bazarr/_warming.html.twig');
 
@@ -297,17 +333,27 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertStringContainsString(
             'sessionStorage',
             $src,
-            '_warming.html.twig: the one-shot auto-retry marker must survive the window.location.reload() fallback path, so it must live in sessionStorage, not only on `window`',
+            '_warming.html.twig: the auto-retry counter must survive the window.location.reload() fallback path, so it must live in sessionStorage, not only on `window`',
         );
         $this->assertStringContainsString(
-            "'prismarr:bazarr-warm-retried:' + path",
+            "'prismarr:bazarr-warm-attempts:' + path",
             $src,
-            '_warming.html.twig: the sessionStorage marker must be keyed by path, same as the window fallback',
+            '_warming.html.twig: the sessionStorage counter must be keyed by path, same as the window fallback',
         );
         $this->assertStringContainsString(
-            'window.__bzWarmRetried',
+            'window.__bzWarmAttempts',
             $src,
             '_warming.html.twig: a window fallback must remain for when sessionStorage throws (private browsing / disabled storage)',
+        );
+        $this->assertStringContainsString(
+            'var SCHEDULE = [',
+            $src,
+            '_warming.html.twig: the auto-retry must be a BOUNDED backoff schedule (SCHEDULE array), not a single 4 s retry',
+        );
+        $this->assertStringContainsString(
+            'state.n < SCHEDULE.length',
+            $src,
+            '_warming.html.twig: retries must stop once the schedule length is reached (bound the poll for a dead worker)',
         );
         $this->assertStringNotContainsString(
             'data-retried',

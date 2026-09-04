@@ -281,7 +281,7 @@ class BazarrFrameRenderTest extends WebTestCase
         // structurally instead, in TemplateStructureGuardTest.
     }
 
-    public function testWarmingStateRendersRetrySkeletonWithOneShotMarker(): void
+    public function testWarmingStateRendersRetrySkeletonWithBoundedBackoffMarker(): void
     {
         $this->boot(true);
         // No cache primed at all: movieCards() is a hard miss → 'warming'.
@@ -295,8 +295,10 @@ class BazarrFrameRenderTest extends WebTestCase
         $this->assertStringNotContainsString('alert-danger', $html);
         // Fix round 1, CRITICAL 3: the auto-retry marker must be out-of-band
         // (window-keyed), never server-rendered state — there is nothing
-        // for the server to read it back from.
-        $this->assertStringContainsString('window.__bzWarmRetried', $html);
+        // for the server to read it back from. It is now a bounded-backoff
+        // attempt counter rather than a one-shot boolean.
+        $this->assertStringContainsString('window.__bzWarmAttempts', $html);
+        $this->assertStringContainsString('var SCHEDULE = [', $html);
         $this->assertStringNotContainsString('data-retried', $html, 'the dead attribute must be gone');
     }
 
