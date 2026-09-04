@@ -18,9 +18,15 @@ class BazarrTemplateGuardTest extends TestCase
      * comment with a slash-star but closed it with `#}`. lint:twig cannot see
      * it (a bare `#}` with no `{#` opener is literal text to Twig) and no test
      * executes the JS, so the stray `#}` swallowed the modal's populate
-     * functions into the comment and shipped an empty modal shell. A
-     * well-formed template has balanced Twig comment delimiters; an unmatched
-     * `#}` (the exact signature of that bug) makes the counts diverge.
+     * functions into the comment and shipped an empty modal shell.
+     *
+     * A symmetric substr_count('{#') === substr_count('#}') check is NOT
+     * enough: it is fooled by a comment whose own text quotes each delimiter
+     * once (the counts stay balanced while the nesting is broken) - exactly
+     * how _warming.html.twig once leaked its own comment onto the page. So we
+     * model Twig's real lexing instead: comments do NOT nest, so strip the
+     * shortest `{# ... #}` spans (non-greedy = first opener to first closer)
+     * and assert no orphan delimiter survives.
      */
     public function testTwigCommentDelimitersAreBalanced(): void
     {
@@ -40,11 +46,17 @@ class BazarrTemplateGuardTest extends TestCase
         ] as $relPath) {
             $src = file_get_contents(self::TEMPLATE_ROOT . $relPath);
             $this->assertNotFalse($src, $relPath . ' is missing');
-            $this->assertSame(
-                substr_count($src, '{#'),
-                substr_count($src, '#}'),
-                $relPath . ': unbalanced Twig comment delimiters - a `#}` with no matching `{#` '
-                    . '(often a JS block comment mistakenly closed with `#}`).'
+            $stripped = (string) preg_replace('/\{#.*?#\}/s', '', $src);
+            $this->assertStringNotContainsString(
+                '#}',
+                $stripped,
+                $relPath . ': orphan `#}` outside a Twig comment - a JS `/* ... */` closed with `#}`, '
+                    . 'or a comment quoting `#}` as literal text and closing itself early.'
+            );
+            $this->assertStringNotContainsString(
+                '{#',
+                $stripped,
+                $relPath . ': orphan `{#` after stripping balanced comments - an unclosed Twig comment.'
             );
         }
     }
@@ -170,23 +182,36 @@ class BazarrTemplateGuardTest extends TestCase
     }
 
     /**
-     * The server always re-renders the warming markup with no memory of a
-     * prior retry (the cache is still cold, so there is nothing to read back),
-     * which makes the "already retried once" flag out-of-band state keyed by
-     * path. sessionStorage is the primary store because the fallback reload
-     * path is a full document navigation that wipes any plain `window`
-     * property - a window-only flag would forget and loop forever against a
-     * Bazarr that never comes back. And frame.reload() is a no-op on a direct
-     * hit (the shell ships the frame with no `src`), so the reload goes
-     * through Turbo.visit(url, {frame}), which assigns `src` either way.
+     * The server always re-renders the warming markup with no memory of prior
+     * retries (the cache is still cold, so there is nothing to read back),
+     * which makes the retry marker out-of-band state keyed by path.
+     * sessionStorage is the primary store because the fallback reload path is
+     * a full document navigation that wipes any plain `window` property - a
+     * window-only marker would forget how far the retry schedule had advanced
+     * and restart it forever against a Bazarr that never comes back. And
+     * frame.reload() is a no-op on a direct hit (the shell ships the frame
+     * with no `src`), so the reload goes through Turbo.visit(url, {frame}),
+     * which assigns `src` either way.
+     *
+     * The marker is a bounded-backoff attempt COUNT (`{n, t}`), not a
+     * one-shot boolean: this partial only renders when Bazarr is reachable
+     * (the controller pings first; a down Bazarr shows the error banner), so
+     * a healthy-but-still-warming index heals across a few automatic retries,
+     * then the schedule caps and the manual button appears for the
+     * dead-worker case.
      */
-    public function testWarmingReloadsOnceViaTurboVisit(): void
+    public function testWarmingReloadsViaTurboVisitWithABoundedBackoff(): void
     {
         $src = (string) file_get_contents(self::TEMPLATE_ROOT . 'bazarr/_warming.html.twig');
 
         $this->assertStringContainsString("window.Turbo.visit(path, { frame: 'bazarr-view' })", $src);
-        $this->assertStringContainsString("'prismarr:bazarr-warm-retried:' + path", $src);
+        $this->assertStringContainsString("'prismarr:bazarr-warm-attempts:' + path", $src);
         $this->assertStringContainsString('sessionStorage', $src);
-        $this->assertStringContainsString('window.__bzWarmRetried', $src);
+        $this->assertStringContainsString('window.__bzWarmAttempts', $src);
+        // The auto-retry must be a BOUNDED backoff schedule, not a single
+        // retry, and must stop once the schedule length is reached (so a dead
+        // worker cannot drive an unbounded poll).
+        $this->assertStringContainsString('var SCHEDULE = [', $src);
+        $this->assertStringContainsString('state.n < SCHEDULE.length', $src);
     }
 }
