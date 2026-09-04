@@ -1,16 +1,29 @@
 {#
   Cold-cache state: the messenger worker has been asked for a rebuild and we
-  are waiting. Exactly ONE automatic retry, then a manual button — a looping
-  auto-retry against a down Bazarr is a self-inflicted DoS.
+  are waiting. This partial renders ONLY when Bazarr is reachable
+  (BazarrController pings first; a down Bazarr renders the error banner
+  instead), so the state we are polling is "healthy but still warming", never
+  "down". So: a small, bounded backoff of automatic retries heals that case
+  on its own, then we fall back to a manual button.
+
+  A re-fetch of the frame is cheap — a ping plus a stale-while-revalidate
+  cache read; the heavy inline Bazarr fetch happens ONLY on the manual
+  button's /api/refresh. The bound is what stops an INFINITE poll when the
+  worker itself is dead (the cache then never warms): after the schedule is
+  exhausted we surface the manual button, whose breaker-gated inline rebuild
+  is the actual dead-worker recovery path.
 
   This inline script runs both on a full page render and inside a frame swap:
   Turbo's FrameRenderer re-creates script elements and the session-stable
   nonce stays valid, so it does not need the delegated-listener treatment the
   innerHTML-swapped dashboard widgets need.
 
-  JS comments in here open with slash-star and close with star-slash. A `{#`
-  opened comment closed with `#}` inside a script block shipped a dead modal
-  once (ced9170); TemplateStructureGuardTest now balances them.
+  JS comments in here open with slash-star and close with star-slash. A JS
+  block comment closed with a Twig comment terminator inside a script block
+  shipped a dead modal once (ced9170) -- and NEVER write a Twig comment
+  terminator (or opener) as literal text in a Twig comment: Twig comments do
+  not nest, so the first terminator closes this whole block and the rest
+  leaks onto the page. TemplateStructureGuardTest models that lexing now.
 #}
 <div class="empty py-5" id="bazarr-warming">
   <div class="empty-icon"><div class="spinner-border spinner-border-sm text-primary" role="status"></div></div>
@@ -29,37 +42,58 @@
   var btn = document.getElementById('bazarr-warming-retry');
   var frame = document.getElementById('bazarr-view');
   var path = window.location.pathname + window.location.search;
-  var storageKey = 'prismarr:bazarr-warm-retried:' + path;
+  var storageKey = 'prismarr:bazarr-warm-attempts:' + path;
 
-  /* The server always re-renders this markup with no memory of a prior
-     retry (there is nothing to read it back FROM — the cache is still
-     cold), so "have we already auto-retried" cannot live in the HTML.
+  /* Bounded backoff schedule (ms). Its length is the max number of automatic
+     retries; a healthy-but-warming index almost always resolves inside it.
+     The steps lengthen so we probe quickly at first (a warm cache is often
+     one consumer cycle away) then back off. */
+  var SCHEDULE = [3000, 5000, 8000];
 
-     It lives in sessionStorage, keyed by path, so ONE entry survives both
-     a Turbo frame swap AND the window.location.reload() fallback below —
-     the fallback is a full document navigation, which wipes any plain
-     `window` property, so a window-only flag would forget it had already
-     retried and re-arm a fresh 4 s timer on every reload: an infinite
-     retry loop against a Bazarr that never comes back, in exactly the
-     browsers/contexts that need the fallback. `window` is kept as the
-     fallback for when sessionStorage itself throws (private browsing,
-     disabled storage, a quota error) — worse-bounded (a full navigation
-     still resets it) but never worse than before this fix. */
-  function hasRetried() {
+  /* A warming state seen more than this after the FIRST attempt of a burst
+     counts as a NEW cold cycle (e.g. Bazarr was restarted again in the same
+     tab session) and restarts the schedule from zero, rather than staying
+     stuck on the manual button forever. */
+  var WINDOW_MS = 60000;
+
+  /* The server re-renders this markup with no memory of prior retries (the
+     cache is still cold — there is nothing to read it back FROM), so the
+     attempt count lives out-of-band, keyed by path, so ONE record survives
+     both a Turbo frame swap AND the window.location.reload() fallback below.
+     The fallback is a full document navigation, which wipes any plain
+     `window` property, so a window-only counter would forget how many times
+     it had retried and re-arm the whole schedule on every reload: an
+     unbounded poll in exactly the browsers/contexts that need the fallback.
+     sessionStorage is the primary store; `window` is kept as the fallback
+     for when sessionStorage itself throws (private browsing, disabled
+     storage, a quota error) — worse-bounded (a full navigation still resets
+     it) but never worse than a single retry. */
+  function readState() {
+    var now = Date.now();
+    var fresh = { n: 0, t: now };
     try {
-      if (window.sessionStorage) { return sessionStorage.getItem(storageKey) === '1'; }
+      if (window.sessionStorage) {
+        var raw = sessionStorage.getItem(storageKey);
+        if (raw) {
+          var parsed = JSON.parse(raw);
+          if (parsed && (now - parsed.t) <= WINDOW_MS) { return { n: parsed.n | 0, t: parsed.t }; }
+        }
+        return fresh;
+      }
     } catch (e) { /* fall through to the window fallback below */ }
 
-    return !!(window.__bzWarmRetried && window.__bzWarmRetried[path]);
+    var w = window.__bzWarmAttempts && window.__bzWarmAttempts[path];
+    if (w && (now - w.t) <= WINDOW_MS) { return { n: w.n | 0, t: w.t }; }
+    return fresh;
   }
 
-  function markRetried() {
+  function writeState(state) {
     try {
-      if (window.sessionStorage) { sessionStorage.setItem(storageKey, '1'); return; }
+      if (window.sessionStorage) { sessionStorage.setItem(storageKey, JSON.stringify(state)); return; }
     } catch (e) { /* fall through to the window fallback below */ }
 
-    window.__bzWarmRetried = window.__bzWarmRetried || {};
-    window.__bzWarmRetried[path] = true;
+    window.__bzWarmAttempts = window.__bzWarmAttempts || {};
+    window.__bzWarmAttempts[path] = state;
   }
 
   function reloadView() {
@@ -76,19 +110,19 @@
   }
 
   var timer = null;
-  if (hasRetried()) {
-    // Already auto-retried once this session for this view: skip straight
-    // to the manual button instead of reloading (and re-arming a new 4 s
-    // timer) again.
-    if (btn) { btn.classList.remove('d-none'); }
-  } else {
-    /* One automatic retry, ~4 s out: long enough for a queued refresh (the
-       consumer polls once a second) plus the Bazarr fetch itself. */
+  var state = readState();
+  if (state.n < SCHEDULE.length) {
+    /* Still inside the bounded schedule: arm the next backoff step. Persist
+       the incremented count (carrying the original burst timestamp) BEFORE
+       reloading so the next render — frame swap or full reload — picks up
+       where we left off instead of restarting the schedule. */
     timer = setTimeout(function () {
-      markRetried();
-      if (btn) { btn.classList.remove('d-none'); }
+      writeState({ n: state.n + 1, t: state.t });
       reloadView();
-    }, 4000);
+    }, SCHEDULE[state.n]);
+  } else if (btn) {
+    // Schedule exhausted (likely a dead worker): manual button only, no timer.
+    btn.classList.remove('d-none');
   }
 
   if (btn) {
