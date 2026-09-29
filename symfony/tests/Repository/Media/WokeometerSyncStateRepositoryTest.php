@@ -199,6 +199,123 @@ class WokeometerSyncStateRepositoryTest extends KernelTestCase
         $this->assertSame(4000, $s['run_started_at']);
     }
 
+    /** Leave a free (released) but unfinished run of $mode behind, as a stop on out_of_credits would. */
+    private function interruptedRun(string $mode): void
+    {
+        $this->assertSame('fresh', $this->repo->acquireLock('run-1', 1000, 1000 - 1800, $mode, 'manual'));
+        $this->repo->update([
+            'run_phase'              => 'tv',
+            'run_cursor'             => 'c-42',
+            'run_idempotency_key'    => 'idem-1',
+            'run_requests'           => 9,
+            'run_records'            => 450,
+            'run_transient_failures' => 1,
+        ]);
+        $this->assertTrue($this->repo->releaseLock('run-1'));
+    }
+
+    private function assertFreshRun(string $runId, string $mode, int $now): void
+    {
+        $s = $this->repo->get();
+        $this->assertSame($runId, $s['lock_run_id']);
+        $this->assertSame($mode, $s['run_mode']);
+        $this->assertSame('movie', $s['run_phase']);
+        $this->assertNull($s['run_cursor']);
+        $this->assertNull($s['run_idempotency_key']);
+        $this->assertSame(0, $s['run_requests']);
+        $this->assertSame(0, $s['run_records']);
+        $this->assertSame(0, $s['run_transient_failures']);
+        $this->assertSame($now, $s['run_started_at']);
+        $this->assertSame($now, $s['last_run_started_at']);
+    }
+
+    public function testFreeInterruptedIncrementalIsSupersededByForcedFull(): void
+    {
+        $this->interruptedRun('incremental');
+
+        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'full', 'manual'));
+
+        $this->assertFreshRun('run-2', 'full', 90_000);
+    }
+
+    public function testFreeInterruptedFullIsSupersededByIncremental(): void
+    {
+        $this->interruptedRun('full');
+
+        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'incremental', 'schedule'));
+
+        $this->assertFreshRun('run-2', 'incremental', 90_000);
+    }
+
+    public function testFreeInterruptedIncrementalResumesForIncremental(): void
+    {
+        $this->interruptedRun('incremental');
+
+        $this->assertSame('resumed', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'incremental', 'schedule'));
+
+        $s = $this->repo->get();
+        $this->assertSame('run-2', $s['lock_run_id']);
+        $this->assertSame('incremental', $s['run_mode']);
+        $this->assertSame('tv', $s['run_phase']);
+        $this->assertSame('c-42', $s['run_cursor']);
+        $this->assertSame('idem-1', $s['run_idempotency_key']);
+        $this->assertSame(9, $s['run_requests']);
+        $this->assertSame(450, $s['run_records']);
+        $this->assertSame(1, $s['run_transient_failures']);
+        $this->assertSame(1000, $s['run_started_at']);
+        $this->assertSame('schedule', $s['run_trigger']);
+    }
+
+    public function testUpdateCannotTouchLockColumns(): void
+    {
+        $this->repo->tryAcquireLock('run-1', 1000, 1000 - 1800, 'full', 'manual');
+
+        foreach (['lock_run_id' => 'run-evil', 'lock_heartbeat_at' => 99_999] as $col => $value) {
+            try {
+                $this->repo->update([$col => $value]);
+                $this->fail("update() must reject lock column $col");
+            } catch (\InvalidArgumentException) {
+            }
+        }
+
+        $s = $this->repo->get();
+        $this->assertSame('run-1', $s['lock_run_id']);
+        $this->assertSame(1000, $s['lock_heartbeat_at']);
+    }
+
+    /**
+     * get() must be read-only once the row exists (INSERT OR IGNORE would take
+     * SQLite's write lock on every settings-card status poll). Verified with a
+     * spy subclass counting ensureRow() calls: one seed on the first read of an
+     * empty table, none afterwards.
+     */
+    public function testGetOnlySeedsOnMiss(): void
+    {
+        $spy = new class(self::getContainer()->get('doctrine')) extends WokeometerSyncStateRepository {
+            public int $ensureCalls = 0;
+
+            public function ensureRow(): void
+            {
+                $this->ensureCalls++;
+                parent::ensureRow();
+            }
+        };
+
+        $this->assertSame(0, $this->rowCount());
+        $this->assertSame(1, $spy->get()['id']);
+        $this->assertSame(1, $spy->ensureCalls, 'first read of an empty table seeds the row');
+
+        $spy->get();
+        $spy->get();
+        $this->assertSame(1, $spy->ensureCalls, 'later reads perform no INSERT');
+        $this->assertSame(1, $this->rowCount());
+
+        // Self-heal: a hand-deleted row is re-seeded on the next read.
+        $this->db->executeStatement('DELETE FROM wokeometer_sync_state');
+        $this->assertSame(0, $spy->get()['total_requests']);
+        $this->assertSame(2, $spy->ensureCalls);
+    }
+
     public function testHeartbeatOnlyForHolder(): void
     {
         $this->repo->tryAcquireLock('run-1', 1000, 1000 - 1800, 'full', 'manual');

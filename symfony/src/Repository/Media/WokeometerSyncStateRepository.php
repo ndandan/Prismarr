@@ -13,28 +13,36 @@ use Doctrine\Persistence\ManagerRegistry;
  * (no ORM identity map in the long-lived messenger consumer).
  *
  * The row is seeded by the migration AND `INSERT OR IGNORE`d here before
- * every write/read that needs it (tests build the schema with SchemaTool,
- * which never runs the migration seed; it also self-heals a deleted row).
+ * every write that needs it (tests build the schema with SchemaTool, which
+ * never runs the migration seed; it also self-heals a deleted row). get()
+ * is read-only on the hot path: it SELECTs first and only seeds on a miss,
+ * so the settings-card status poll never takes SQLite's write lock while
+ * the worker is syncing.
  *
  * Run lock (spec D4) — compare-and-set on the row, no symfony/lock. The
  * lock is "available" when it is free (`lock_run_id IS NULL`) or stale
- * (`lock_heartbeat_at` older than `$staleBefore`, or missing). An available
- * lock is then taken in one of two ways, reported by acquireLock():
+ * (`lock_heartbeat_at` older than `$staleBefore`; a held lock with a NULL
+ * heartbeat is also treated as stale — unreachable through this API, since
+ * only acquireLock/heartbeat/releaseLock write the lock columns and they
+ * always set/clear both together, but it self-heals a hand-edited row). An
+ * available lock is then taken in one of two ways, reported by
+ * acquireLock(); "unfinished" means `run_phase` non-null and not 'done':
  *
- *  - 'resumed' — the persisted run is unfinished (`run_phase` non-null and
- *    not 'done'): a crashed/stale run, or one that stopped on
- *    out_of_credits / rate_limited / transient with its cursor kept. Only
+ *  - 'resumed' — an unfinished run that is either (a) a stale crashed run
+ *    (lock still held) — resumed whatever `$mode` was requested — or (b) a
+ *    free, interrupted run (stopped on out_of_credits / rate_limited /
+ *    transient with its cursor kept) whose `run_mode` equals `$mode`. Only
  *    `lock_run_id`, `lock_heartbeat_at` and `run_trigger` are replaced;
  *    `run_mode`, `run_phase`, `run_cursor`, `run_idempotency_key`,
  *    `run_started_at`, `run_requests`, `run_records` and
  *    `run_transient_failures` are kept so the run continues where it stopped
  *    (with the same idempotency key → free replay of the in-flight page).
- *    The caller's `$mode` is ignored on resume; a caller that wants to
- *    discard an unfinished run must first `update(['run_phase' => null])`.
- *  - 'fresh' — no unfinished run (`run_phase` null or 'done'): a new run is
- *    initialised with the given mode/trigger, `run_started_at =
- *    last_run_started_at = $now`, phase 'movie', cursor/idempotency key
- *    cleared, run counters zeroed.
+ *  - 'fresh' — no unfinished run (`run_phase` null or 'done'), OR a free,
+ *    interrupted run of a DIFFERENT mode (e.g. a forced full resync
+ *    supersedes an interrupted incremental one, atomically in the same
+ *    UPDATE): a new run is initialised with the given mode/trigger,
+ *    `run_started_at = last_run_started_at = $now`, phase 'movie',
+ *    cursor/idempotency key cleared, run counters zeroed.
  *
  * Each branch is a single conditional UPDATE, so two concurrent acquirers
  * can never both win: whichever UPDATE lands first changes `lock_run_id`,
@@ -53,9 +61,14 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
         'run_idempotency_key', 'last_status', 'last_error_message',
     ];
 
-    /** Columns update() may write (everything except the `id` key). */
+    /**
+     * Columns update() may write: everything except the `id` key and the
+     * lock columns (`lock_run_id`, `lock_heartbeat_at`), which only
+     * acquireLock()/heartbeat()/releaseLock() may touch — update() must not
+     * be a way around the compare-and-set.
+     */
     private const WRITABLE_COLUMNS = [
-        'watermark', 'full_sync_completed_at', 'lock_run_id', 'lock_heartbeat_at',
+        'watermark', 'full_sync_completed_at',
         'run_mode', 'run_trigger', 'run_started_at', 'run_phase', 'run_cursor',
         'run_idempotency_key', 'run_requests', 'run_records', 'run_transient_failures',
         'last_run_started_at', 'last_run_finished_at', 'last_success_at', 'last_status',
@@ -84,10 +97,15 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
      */
     public function get(): array
     {
-        $this->ensureRow();
-        $row = $this->db()->fetchAssociative('SELECT * FROM wokeometer_sync_state WHERE id = 1');
+        $db  = $this->db();
+        $row = $db->fetchAssociative('SELECT * FROM wokeometer_sync_state WHERE id = 1');
         if ($row === false) {
-            throw new \RuntimeException('wokeometer_sync_state row missing after ensureRow()');
+            // Only a missing row (SchemaTool schema, hand-deleted row) writes.
+            $this->ensureRow();
+            $row = $db->fetchAssociative('SELECT * FROM wokeometer_sync_state WHERE id = 1');
+            if ($row === false) {
+                throw new \RuntimeException('wokeometer_sync_state row missing after ensureRow()');
+            }
         }
 
         $out = [];
@@ -122,27 +140,33 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
         $this->ensureRow();
         $db = $this->db();
 
-        // 1. Resume an unfinished run (stale lock or free-but-interrupted).
+        // 1. Resume an unfinished run: a stale crashed run (lock still held)
+        //    regardless of mode, or a free interrupted run of the same mode.
         $resumed = $db->executeStatement(
             'UPDATE wokeometer_sync_state
                 SET lock_run_id = :run, lock_heartbeat_at = :now, run_trigger = :trigger
               WHERE id = 1 AND ' . self::LOCK_AVAILABLE . "
-                AND run_phase IS NOT NULL AND run_phase <> 'done'",
-            ['run' => $runId, 'now' => $now, 'trigger' => $trigger, 'stale' => $staleBefore],
+                AND run_phase IS NOT NULL AND run_phase <> 'done'
+                AND (lock_run_id IS NOT NULL OR run_mode = :mode)",
+            ['run' => $runId, 'now' => $now, 'trigger' => $trigger, 'stale' => $staleBefore, 'mode' => $mode],
             ['now' => ParameterType::INTEGER, 'stale' => ParameterType::INTEGER],
         );
         if ($resumed === 1) {
             return self::ACQUIRED_RESUMED;
         }
 
-        // 2. Start a fresh run.
+        // 2. Start a fresh run: nothing unfinished, or a free interrupted run
+        //    of a different mode (superseded atomically by this UPDATE).
+        //    `run_mode IS NULL` keeps a (malformed) unfinished row with no
+        //    mode from wedging both branches.
         $fresh = $db->executeStatement(
             'UPDATE wokeometer_sync_state
                 SET lock_run_id = :run, lock_heartbeat_at = :now, run_mode = :mode, run_trigger = :trigger,
                     run_started_at = :now, run_phase = :phase, run_cursor = NULL, run_idempotency_key = NULL,
                     run_requests = 0, run_records = 0, run_transient_failures = 0, last_run_started_at = :now
               WHERE id = 1 AND ' . self::LOCK_AVAILABLE . "
-                AND (run_phase IS NULL OR run_phase = 'done')",
+                AND (run_phase IS NULL OR run_phase = 'done'
+                     OR (lock_run_id IS NULL AND (run_mode IS NULL OR run_mode <> :mode)))",
             ['run' => $runId, 'now' => $now, 'mode' => $mode, 'trigger' => $trigger, 'phase' => 'movie', 'stale' => $staleBefore],
             ['now' => ParameterType::INTEGER, 'stale' => ParameterType::INTEGER],
         );
