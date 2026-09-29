@@ -12,6 +12,7 @@ use App\Service\Media\RadarrClient;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\WokeometerClient;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -45,6 +46,7 @@ class ClientResetTest extends TestCase
             [JellyseerrClient::class],
             [GluetunClient::class],
             [QBittorrentClient::class],
+            [WokeometerClient::class],
         ];
     }
 
