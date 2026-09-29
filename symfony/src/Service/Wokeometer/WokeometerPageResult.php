@@ -22,7 +22,9 @@ namespace App\Service\Wokeometer;
  *
  * `rows` are normalized (see WokeometerClient::normalizeRow()); `message` is
  * the sanitized provider message (control chars stripped, key redacted,
- * ≤ 255 chars) — never the raw body.
+ * ≤ 255 chars) — never the raw body. `droppedRows` counts `data` entries
+ * that failed normalization (no usable id, or a `media_type` outside
+ * movie|tv); a non-empty page where EVERY entry was dropped is `invalid`.
  *
  * @phpstan-type WokeometerRow array{
  *     wokeometerId: string,
@@ -67,6 +69,7 @@ final readonly class WokeometerPageResult
         public bool $replayed = false,
         public ?int $retryAfter = null,
         public ?string $message = null,
+        public int $droppedRows = 0,
     ) {}
 
     public function isOk(): bool

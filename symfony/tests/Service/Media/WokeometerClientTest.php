@@ -40,6 +40,9 @@ class WokeometerClientTest extends TestCase
 
     private int $calls = 0;
 
+    /** Stored-key reads through ConfigService (secret-redaction read budget). */
+    private int $keyReads = 0;
+
     /** @var list<array{level: mixed, message: string, context: array<string, mixed>}> */
     private array $logs = [];
 
@@ -49,6 +52,7 @@ class WokeometerClientTest extends TestCase
         $this->urls        = [];
         $this->sentHeaders = [];
         $this->calls       = 0;
+        $this->keyReads    = 0;
         $this->logs        = [];
     }
 
@@ -57,9 +61,13 @@ class WokeometerClientTest extends TestCase
         $c = $this->createMock(ConfigService::class);
         // Read through $this->values at call time so a test can change the
         // stored settings mid-test (reset() coverage).
-        $c->method('get')->willReturnCallback(
-            fn(string $k) => ($this->values[$k] ?? '') !== '' ? $this->values[$k] : null,
-        );
+        $c->method('get')->willReturnCallback(function (string $k) {
+            if ($k === WokeometerSettings::KEY_API_KEY) {
+                $this->keyReads++;
+            }
+
+            return ($this->values[$k] ?? '') !== '' ? $this->values[$k] : null;
+        });
 
         return new WokeometerSettings($c);
     }
@@ -333,6 +341,12 @@ class WokeometerClientTest extends TestCase
                     'external_id'     => '0',          // not > 0 → null
                     'last_updated'    => '2026-09-01T00:00:00Z',
                 ],
+                // Present media_type is trimmed + lowercased.
+                ['id' => 'aaaaaaaa-0000-4000-8000-000000000005', 'title' => 'Cased', 'media_type' => ' Movie '],
+                // Present media_type outside movie|tv → dropped (counted).
+                ['id' => 'aaaaaaaa-0000-4000-8000-000000000006', 'title' => 'A game', 'media_type' => 'game'],
+                // Present but non-string media_type → dropped too.
+                ['id' => 'aaaaaaaa-0000-4000-8000-000000000007', 'title' => 'Odd', 'media_type' => ['movie']],
             ],
             'request_id'      => 'req-1',
             'credits_charged' => 1,
@@ -356,9 +370,11 @@ class WokeometerClientTest extends TestCase
         $this->assertFalse($result->replayed);
         $this->assertNull($result->retryAfter);
         $this->assertNull($result->message);
-        $this->assertCount(4, $result->rows, 'id-less and non-object rows are dropped');
+        $this->assertCount(5, $result->rows, 'id-less, non-object and foreign-type rows are dropped');
+        $this->assertSame(4, $result->droppedRows, 'every dropped entry is counted, the page stays ok');
 
-        [$matrix, $season, $odd, $zero] = $result->rows;
+        [$matrix, $season, $odd, $zero, $cased] = $result->rows;
+        $this->assertSame('movie', $cased['mediaType'], '" Movie " → movie');
 
         $this->assertSame([
             'wokeometerId'       => 'aaaaaaaa-0000-4000-8000-000000000001',
@@ -434,6 +450,38 @@ class WokeometerClientTest extends TestCase
         $this->assertNull($result->creditsRemaining);
         $this->assertNull($result->creditsCharged);
         $this->assertFalse($result->replayed);
+        $this->assertSame(0, $result->droppedRows, 'an empty page drops nothing and stays ok');
+    }
+
+    public function testPageWhereEveryEntryIsDroppedIsInvalid(): void
+    {
+        $body = self::json([
+            'data' => [
+                ['title' => 'no id', 'media_type' => 'movie'],
+                ['id' => 'aaaaaaaa-0000-4000-8000-000000000009', 'media_type' => 'book'],
+                'garbage',
+            ],
+            'next_cursor' => 'aaaaaaaa-0000-4000-8000-000000000009',
+        ]);
+        $result = $this->client([self::response(200, $body, ['X-API-Credits-Remaining' => '10'])])
+            ->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame(WokeometerPageResult::INVALID, $result->outcome, 'schema drift must stop the sync, not advance the cursor');
+        $this->assertSame('no usable rows in page', $result->message);
+        $this->assertSame(200, $result->httpCode);
+        $this->assertSame([], $result->rows);
+        $this->assertNull($result->nextCursor, 'the cursor is never handed back on invalid');
+        $this->assertSame(10, $result->creditsRemaining, 'the billed page still reports the balance');
+        $this->assertCount(1, $this->logs);
+    }
+
+    public function testErrorEnvelopeOnA2xxSurfacesTheProviderMessage(): void
+    {
+        $body = self::json(['error' => ['code' => 'schema', 'message' => 'Envelope changed']]);
+        $result = $this->client([self::response(200, $body)])->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame(WokeometerPageResult::INVALID, $result->outcome);
+        $this->assertSame('Envelope changed', $result->message);
     }
 
     public function testOkPageDoesNotLog(): void
@@ -558,6 +606,34 @@ class WokeometerClientTest extends TestCase
         $this->assertSame(60, $result->retryAfter);
     }
 
+    /** @return array<string, array{0: array<string, string>, 1: string, 2: int}> */
+    public static function retryAfterCases(): array
+    {
+        return [
+            'header 0, no body value → 60'   => [['Retry-After' => '0'], '{}', 60],
+            'header 0 falls through to body' => [['Retry-After' => '0'], '{"retry_after": 20}', 20],
+            'negative header → 60'           => [['Retry-After' => '-5'], '{}', 60],
+            'header 7200 clamped to 3600'    => [['Retry-After' => '7200'], '{}', 3600],
+            'body 7200 clamped to 3600'      => [[], '{"retry_after": 7200}', 3600],
+            'decimal body floored'           => [[], '{"retry_after": 12.7}', 12],
+            'decimal header floored'         => [['Retry-After' => '2.5'], '{}', 2],
+            'sub-second body → 60'           => [[], '{"retry_after": 0.5}', 60],
+            'body 0 → 60'                    => [[], '{"retry_after": 0}', 60],
+            'string body digits'             => [[], '{"retry_after": "15"}', 15],
+            'header 1 kept (lower bound)'    => [['Retry-After' => '1'], '{}', 1],
+        ];
+    }
+
+    /** @param array<string, string> $headers */
+    #[DataProvider('retryAfterCases')]
+    public function testRetryAfterIsPositiveAndClamped(array $headers, string $body, int $expected): void
+    {
+        $result = $this->client([self::response(429, $body, $headers)])->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame(WokeometerPageResult::RATE_LIMITED, $result->outcome);
+        $this->assertSame($expected, $result->retryAfter);
+    }
+
     public function testRateLimitedWithNeitherDefaultsToSixty(): void
     {
         $result = $this->client([self::response(429, 'Too Many Requests', ['Retry-After' => 'Wed, 21 Oct 2026 07:28:00 GMT'])])
@@ -680,6 +756,43 @@ class WokeometerClientTest extends TestCase
         $this->assertCount(1, $this->logs);
         $this->assertSame(WokeometerPageResult::UNCONFIGURED, $this->logs[0]['context']['outcome']);
         $this->assertNoKeyMaterialLogged();
+    }
+
+    public function testRedactsBothTheSentKeyAndTheCurrentlyStoredKey(): void
+    {
+        $newKey = 'wok_' . str_repeat('fe', 32);
+        $client = $this->client([self::response(401, self::json(['error' => [
+            'code'    => 'k',
+            'message' => 'sent ' . self::KEY . ' stored ' . $newKey . ' hex ' . substr(self::KEY, 4),
+        ]]))]);
+
+        $this->assertTrue($client->ready()); // memoizes the OLD key — the one that will be sent
+        $this->values['wokeometer_api_key'] = $newKey; // admin saves a new key mid-request (no reset yet)
+
+        $result = $client->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame(['Authorization: Bearer ' . self::KEY], array_slice($this->sentHeaders[0], 0, 1), 'the memoized key is what was sent');
+        $message = (string) $result->message;
+        $this->assertStringNotContainsString(self::KEY, $message);
+        $this->assertStringNotContainsString(substr(self::KEY, 4), $message);
+        $this->assertStringNotContainsString($newKey, $message);
+        $this->assertStringNotContainsString(substr($newKey, 4), $message);
+        $this->assertSame('sent [redacted] stored [redacted] hex [redacted]', $message);
+
+        $dump = (string) json_encode($this->logs);
+        $this->assertStringNotContainsString(substr(self::KEY, 4), $dump);
+        $this->assertStringNotContainsString(substr($newKey, 4), $dump);
+    }
+
+    public function testAFailureReadsTheStoredKeyOnce(): void
+    {
+        $client = $this->client([self::response(503, self::json(['error' => ['code' => 'x', 'message' => 'down']]))]);
+        $client->ready(); // load the memo first so only the failure path is counted
+        $this->keyReads = 0;
+
+        $client->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame(1, $this->keyReads, 'secrets are gathered once per failure, not once per sanitized string');
     }
 
     public function testNullLoggerIsAccepted(): void

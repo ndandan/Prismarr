@@ -39,6 +39,8 @@ class WokeometerClient implements ResetInterface
     private const PATH                = '/media';
     private const TYPES               = ['movie', 'tv'];
     private const DEFAULT_RETRY_AFTER = 60;
+    private const MIN_RETRY_AFTER     = 1;
+    private const MAX_RETRY_AFTER     = 3600;
     private const MESSAGE_MAX         = 255;
 
     /** Printable ASCII, no spaces — anything else could split the header. */
@@ -152,14 +154,24 @@ class WokeometerClient implements ResetInterface
 
         if ($code >= 200 && $code < 300) {
             if ($json === null || array_is_list($json) || !isset($json['data']) || !is_array($json['data']) || !array_is_list($json['data'])) {
-                return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'invalid JSON response', $creditsRemaining, $creditsCharged, $replayed);
+                return $this->fail(WokeometerPageResult::INVALID, $code, $type, self::errorMessage($json) ?? 'invalid JSON response', $creditsRemaining, $creditsCharged, $replayed);
             }
 
-            $rows = [];
+            $rows    = [];
+            $dropped = 0;
             foreach ($json['data'] as $item) {
                 if (is_array($item) && ($row = self::normalizeRow($item, $type)) !== null) {
                     $rows[] = $row;
+                } else {
+                    $dropped++;
                 }
+            }
+
+            // Entries present but none readable = schema drift. `invalid`
+            // stops the sync so the cursor never advances past a page we
+            // could not store.
+            if ($rows === [] && $dropped > 0) {
+                return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'no usable rows in page', $creditsRemaining, $creditsCharged, $replayed);
             }
             $cursor = $json['next_cursor'] ?? null;
 
@@ -171,6 +183,7 @@ class WokeometerClient implements ResetInterface
                 creditsRemaining: $creditsRemaining,
                 creditsCharged: $creditsCharged,
                 replayed: $replayed,
+                droppedRows: $dropped,
             );
         }
 
@@ -186,10 +199,14 @@ class WokeometerClient implements ResetInterface
 
         $retryAfter = null;
         if ($outcome === WokeometerPageResult::RATE_LIMITED) {
-            // Header (integer seconds) → edge body `retry_after` → 60 s.
-            $retryAfter = self::nonNegativeIntOrNull($headers['retry-after'] ?? null)
-                ?? self::nonNegativeIntOrNull($json['retry_after'] ?? null)
+            // Header (seconds) → edge body `retry_after` → 60 s. A zero /
+            // negative / HTTP-date value counts as absent (0 would make the
+            // caller hammer a rate-limited API); the result is clamped to
+            // [1, 3600] so a hostile value cannot park the sync for days.
+            $retryAfter = self::retrySeconds($headers['retry-after'] ?? null)
+                ?? self::retrySeconds($json['retry_after'] ?? null)
                 ?? self::DEFAULT_RETRY_AFTER;
+            $retryAfter = max(self::MIN_RETRY_AFTER, min(self::MAX_RETRY_AFTER, $retryAfter));
         }
 
         return $this->fail(
@@ -250,11 +267,12 @@ class WokeometerClient implements ResetInterface
         bool $replayed = false,
         ?int $retryAfter = null,
     ): WokeometerPageResult {
-        $message = $this->sanitize($message);
+        $secrets = $this->secrets();
+        $message = self::sanitize($message, $secrets);
 
         $this->logger->warning('Wokeometer request failed', [
             'path'    => self::PATH,
-            'type'    => $this->sanitize($type),
+            'type'    => self::sanitize($type, $secrets),
             'code'    => $code,
             'outcome' => $outcome,
             'message' => $message,
@@ -271,17 +289,41 @@ class WokeometerClient implements ResetInterface
         );
     }
 
-    /** Strip control chars, redact the key (and its `wok_`-less body), cap at 255 chars. */
-    private function sanitize(string $text): string
+    /**
+     * Strings to redact: the key actually sent (memo) AND the currently
+     * stored one (they differ if the admin saved a new key mid-request),
+     * each also without its `wok_` prefix. Longest first so a full key is
+     * replaced before its hex body. Reads settings once per call.
+     *
+     * @return list<string>
+     */
+    private function secrets(): array
     {
-        $text = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text));
-
-        $key = $this->settings->apiKey();
-        if ($key !== null && $key !== '') {
-            $secrets = [$key];
+        $secrets = [];
+        foreach ([$this->apiKey, (string) $this->settings->apiKey()] as $key) {
+            if ($key === '') {
+                continue;
+            }
+            $secrets[] = $key;
             if (str_starts_with($key, 'wok_') && strlen($key) > 8) {
                 $secrets[] = substr($key, 4);
             }
+        }
+        $secrets = array_values(array_unique($secrets));
+        usort($secrets, static fn(string $a, string $b): int => strlen($b) <=> strlen($a));
+
+        return $secrets;
+    }
+
+    /**
+     * Strip control chars, redact the given secrets, cap at 255 chars.
+     *
+     * @param list<string> $secrets
+     */
+    private static function sanitize(string $text, array $secrets): string
+    {
+        $text = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text));
+        if ($secrets !== []) {
             $text = str_replace($secrets, '[redacted]', $text);
         }
 
@@ -338,7 +380,8 @@ class WokeometerClient implements ResetInterface
 
     /**
      * Tolerant row normalization: missing keys → null, unknown keys ignored,
-     * wrong scalar types coerced or nulled. Rows without an `id` are dropped.
+     * wrong scalar types coerced or nulled. Rows without an `id`, or whose
+     * present `media_type` is not movie|tv, are dropped (null).
      *
      * @param array<mixed> $item
      * @return WokeometerRow|null
@@ -348,6 +391,17 @@ class WokeometerClient implements ResetInterface
         $id = self::stringOrNull($item['id'] ?? null);
         if ($id === null) {
             return null;
+        }
+
+        // Absent / null → the type we asked for. A present value must be
+        // movie|tv once trimmed + lowercased, else the row is dropped.
+        $mediaType = $requestedType;
+        if (($item['media_type'] ?? null) !== null) {
+            $rawType   = self::stringOrNull($item['media_type']);
+            $mediaType = $rawType !== null ? strtolower($rawType) : '';
+            if (!in_array($mediaType, self::TYPES, true)) {
+                return null;
+            }
         }
 
         $score = self::intOrNull($item['woke_score'] ?? null);
@@ -369,7 +423,7 @@ class WokeometerClient implements ResetInterface
 
         return [
             'wokeometerId'       => $id,
-            'mediaType'          => self::stringOrNull($item['media_type'] ?? null) ?? $requestedType,
+            'mediaType'          => $mediaType,
             'title'              => self::stringOrNull($item['title'] ?? null, trim: false) ?? '',
             'releaseDate'        => $release !== null ? substr($release, 0, 10) : null,
             'wokeScore'          => $score,
@@ -424,6 +478,26 @@ class WokeometerClient implements ResetInterface
         $int = self::intOrNull($value);
 
         return $int !== null && $int >= 0 ? $int : null;
+    }
+
+    /** Positive seconds from an int, a float (floored) or a numeric string; else null. */
+    private static function retrySeconds(mixed $value): ?int
+    {
+        if (is_string($value)) {
+            $value = trim($value);
+            if (!is_numeric($value)) {
+                return null;
+            }
+            $value = (float) $value;
+        }
+        if (is_int($value)) {
+            return $value > 0 ? $value : null;
+        }
+        if (is_float($value) && is_finite($value) && $value >= 1 && $value < PHP_INT_MAX) {
+            return (int) floor($value);
+        }
+
+        return null;
     }
 
     private static function boolOrNull(mixed $value): ?bool
