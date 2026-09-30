@@ -32,6 +32,13 @@
   .ql-badge.is-downloaded { background: rgba(34,197,94,.18); color: #22c55e; }
   .ql-badge.is-monitored { background: rgba(99,102,241,.18); color: #6366f1; }
   .ql-badge.is-missing { background: rgba(245,158,11,.18); color: #f59e0b; }
+  /* Wokeometer — deliberately neutral (no traffic-light colours: the score is an automated assessment, not a verdict). */
+  .ql-badge.ql-woke { background: rgba(var(--tblr-secondary-rgb), .15); color: var(--tblr-body-color); text-transform: none; letter-spacing: 0; }
+  .ql-woke-block { margin-bottom: 1rem; padding: .7rem .85rem; border-radius: 8px; background: rgba(var(--tblr-secondary-rgb), .08); }
+  .ql-woke-block .ql-date-label { margin-bottom: .3rem; }
+  .ql-woke-block .ql-woke-tldr { margin-bottom: .6rem; }
+  .ql-woke-block .ql-woke-link { display: inline-flex; margin-bottom: .5rem; }
+  .ql-woke-attrib { font-size: .7rem; color: var(--tblr-secondary); line-height: 1.4; }
   .ql-overview { font-size: .88rem; line-height: 1.55; color: var(--tblr-body-color); margin-bottom: 1rem; }
   .ql-action {
     display: inline-flex; align-items: center; gap: .4rem;
@@ -87,6 +94,7 @@
     .ql-badge,
     .ql-date-label,
     .ql-airstatus,
+    .ql-woke-attrib,
     .ql-cast-name { font-size: .6875rem; }
   }
 </style>

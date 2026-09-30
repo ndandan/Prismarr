@@ -16,6 +16,7 @@ use App\Service\Media\TmdbClient;
 use App\Service\Media\UnifiClient;
 use App\Service\Media\UnraidClient;
 use App\Service\ServiceInstanceProvider;
+use App\Service\Wokeometer\WokeometerLookup;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Request;
@@ -87,6 +88,9 @@ class DashboardController extends AbstractController implements ResetInterface
         // sites finally reach the dashboard. Nullable + last so legacy
         // positional test constructors keep working.
         private readonly ?MediaLibraryCache $libraryCache = null,
+        // Wokeometer score/TL;DR in the quick-look (local SQLite read only).
+        // Nullable + last so legacy positional test constructors keep working.
+        private readonly ?WokeometerLookup $wokeometer = null,
     ) {}
 
     /**
@@ -1043,6 +1047,10 @@ class DashboardController extends AbstractController implements ResetInterface
             'radarrId'     => $type === 'movie' ? $id : null,
             'sonarrId'     => $type === 'series' ? $id : null,
             'airStatus'    => $airStatus,
+            // Deliberately NOT `tmdbId`: that key would flip the body into the
+            // watchlist/TMDb-button branch with an empty tmdbType. The lookup
+            // key is read from the library row and consumed right here.
+            'wokeometer'   => $this->wokeometerFor($type === 'series' ? 'tv' : 'movie', (int) ($row['tmdbId'] ?? 0)),
             'releaseDates' => $type === 'series'
                 ? $this->seriesReleaseChips(
                     $row['firstAired'] ?? null,
@@ -1058,6 +1066,25 @@ class DashboardController extends AbstractController implements ResetInterface
                     new \DateTimeImmutable('today'),
                 ),
         ];
+    }
+
+    /**
+     * Local Wokeometer view for a title, or null: service absent, no TMDb id,
+     * no match, integration off, or any failure (the quick-look must render
+     * regardless). $mediaType is the TMDb vocabulary ('movie'|'tv').
+     *
+     * @return array<string, mixed>|null
+     */
+    private function wokeometerFor(string $mediaType, int $tmdbId): ?array
+    {
+        if ($this->wokeometer === null || $tmdbId <= 0) {
+            return null;
+        }
+        try {
+            return $this->wokeometer->forTmdb($mediaType, $tmdbId);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function tmdbImage(?string $path, string $size): ?string
@@ -1148,6 +1175,7 @@ class DashboardController extends AbstractController implements ResetInterface
             'imdbId'       => $extras['imdbId'],
             'tmdbId'       => $id,
             'tmdbType'     => $type,
+            'wokeometer'   => $this->wokeometerFor($type, $id),
             'releaseDates' => $isTv
                 ? $this->seriesReleaseChips(
                     $this->parseDate($data['first_air_date'] ?? null),

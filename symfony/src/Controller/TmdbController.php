@@ -10,6 +10,7 @@ use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TmdbClient;
 use App\Service\ServiceInstanceProvider;
+use App\Service\Wokeometer\WokeometerLookup;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -33,6 +34,9 @@ class TmdbController extends AbstractController
         private readonly LoggerInterface $logger,
         private readonly TranslatorInterface $translator,
         private readonly ServiceInstanceProvider   $instances,
+        // Wokeometer score/TL;DR (local SQLite read only). Nullable + last so
+        // positional test constructors keep working.
+        private readonly ?WokeometerLookup $wokeometer = null,
     ) {}
 
     #[Route('/decouverte', name: 'tmdb_index')]
@@ -380,6 +384,25 @@ class TmdbController extends AbstractController
         ]);
     }
 
+    /**
+     * Local Wokeometer view (SQLite only — never an API call) or null: service
+     * absent, no match, integration off, or any failure. $mediaType is the
+     * TMDb vocabulary ('movie'|'tv').
+     *
+     * @return array<string, mixed>|null
+     */
+    private function wokeometerFor(string $mediaType, int $tmdbId): ?array
+    {
+        if ($this->wokeometer === null || $tmdbId <= 0) {
+            return null;
+        }
+        try {
+            return $this->wokeometer->forTmdb($mediaType, $tmdbId);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
     #[Route('/decouverte/detail/{type}/{id}', name: 'tmdb_detail', requirements: ['type' => 'movie|tv', 'id' => '\d+'])]
     public function detail(string $type, int $id): JsonResponse
     {
@@ -590,6 +613,7 @@ class TmdbController extends AbstractController
             'in_library'      => $inLibrary,
             'lib_status'      => $libInfo['status'] ?? null,
             'lib_id'          => $libInfo['id'] ?? null,
+            'wokeometer'      => $this->wokeometerFor($isMovie ? 'movie' : 'tv', (int) $d['id']),
         ]);
     }
 

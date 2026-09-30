@@ -75,6 +75,27 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertStringContainsString('ql.sonarrId', $body);
     }
 
+    public function testQuicklookBodyGuardsTheWokeometerSurfaceOnData(): void
+    {
+        $body = (string) file_get_contents(self::TEMPLATE_ROOT . 'dashboard/_quicklook_body.html.twig');
+        // The block renders only for a non-null view-model key and the score
+        // badge only for a non-null score (0/10 is a real score).
+        $this->assertStringContainsString('ql.wokeometer|default(null)', $body);
+        $this->assertStringContainsString('ql.wokeometer.score is not null', $body);
+        $this->assertStringContainsString('target="_blank" rel="noopener" class="ql-action-secondary ql-woke-link"', $body);
+    }
+
+    public function testQuicklookWokeometerTextClassJoinsTheMobileFloor(): void
+    {
+        $shell = (string) file_get_contents(self::TEMPLATE_ROOT . '_quicklook.html.twig');
+        // PRODUCT.md: no sub-11px text below the lg breakpoint. The floor rule
+        // lists every small `.ql-*` text class; the attribution line is one.
+        $this->assertMatchesRegularExpression(
+            '/@media \(max-width: 991\.98px\) \{[^}]*\.ql-woke-attrib[^}]*\}/s',
+            $shell,
+        );
+    }
+
     public function testSearchRenderItemRendersSubtitleBadge(): void
     {
         $base = file_get_contents(self::TEMPLATE_ROOT . 'base.html.twig');
@@ -131,6 +152,8 @@ class TemplateStructureGuardTest extends TestCase
             'bazarr/history.html.twig',
             'bazarr/series_detail.html.twig',
             'media/_subtitle_chips.html.twig',
+            'dashboard/_quicklook_body.html.twig',
+            '_quicklook.html.twig',
         ];
         foreach ($files as $relPath) {
             $src = file_get_contents(self::TEMPLATE_ROOT . $relPath);

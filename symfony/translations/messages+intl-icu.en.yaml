@@ -5879,3 +5879,10 @@ flash:
     mismatch: The two new passwords don't match.
   csrf:
     invalid: Invalid CSRF token.
+
+wokeometer:
+  title: "Wokeometer"
+  score: "{score}/10"
+  badge_title: "Wokeometer score (automated assessment)"
+  view_full: "View full analysis"
+  attribution: "Score and summary by Wokeometer — automated assessment, not a statement of fact."

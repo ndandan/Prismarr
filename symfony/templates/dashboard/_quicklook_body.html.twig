@@ -20,6 +20,7 @@
         {% if ql.statusBadge %}<span class="ql-badge is-{{ ql.statusBadge.kind }}">{{ ql.statusBadge.label }}</span>{% endif %}
         {% if ql.radarrId is defined and ql.radarrId %}{{ include('media/_subtitle_badge.html.twig', { kind: 'movie', id: ql.radarrId, st_override: subtitle_status_single('movie', ql.radarrId) }) }}{% elseif ql.sonarrId is defined and ql.sonarrId %}{{ include('media/_subtitle_badge.html.twig', { kind: 'series', id: ql.sonarrId }) }}{% endif %}
         {% if ql.rating %}<span class="ql-rating">{{ ico.icon('star-filled', '', 14) }} {{ ql.rating|round(1) }}/10</span>{% endif %}
+        {% if ql.wokeometer|default(null) and ql.wokeometer.score is not null %}<span class="ql-badge ql-woke" title="{{ 'wokeometer.badge_title'|trans }}">{{ 'wokeometer.score'|trans({score: ql.wokeometer.score}) }}</span>{% endif %}
         {% if ql.metaLine %}<span>{{ ql.metaLine }}</span>{% endif %}
         {% for g in ql.genres %}<span class="ql-chip">{{ g }}</span>{% endfor %}
       </div>
@@ -37,6 +38,15 @@
       </div>
       {% endif %}
       {% if ql.overview %}<p class="ql-overview">{{ ql.overview }}</p>{% endif %}
+
+      {% if ql.wokeometer|default(null) %}
+      <div class="ql-woke-block">
+        <div class="ql-date-label">{{ 'wokeometer.title'|trans }}</div>
+        {% if ql.wokeometer.tldr %}<p class="ql-overview ql-woke-tldr">{{ ql.wokeometer.tldr }}</p>{% endif %}
+        {% if ql.wokeometer.url %}<a href="{{ ql.wokeometer.url }}" target="_blank" rel="noopener" class="ql-action-secondary ql-woke-link">{{ 'wokeometer.view_full'|trans }} ↗</a>{% endif %}
+        <div class="ql-woke-attrib">{{ 'wokeometer.attribution'|trans }}</div>
+      </div>
+      {% endif %}
 
       {% if ql.providers|default([])|length %}
       <div class="ql-providers" aria-label="{{ 'dashboard.quicklook.providers'|trans }}">

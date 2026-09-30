@@ -5876,3 +5876,10 @@ flash:
     mismatch: Les deux nouveaux mots de passe ne correspondent pas.
   csrf:
     invalid: Jeton CSRF invalide.
+
+wokeometer:
+  title: "Wokeometer"
+  score: "{score}/10"
+  badge_title: "Score Wokeometer (évaluation automatisée)"
+  view_full: "Voir l'analyse complète"
+  attribution: "Score et résumé fournis par Wokeometer — évaluation automatisée, et non l'énoncé d'un fait."

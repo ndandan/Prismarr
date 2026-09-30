@@ -724,4 +724,177 @@ class DashboardControllerTest extends TestCase
         self::assertContains('first_aired', $kinds);
         self::assertContains('next_episode', $kinds);
     }
+
+    // ── Wokeometer quick-look integration ───────────────────────────────
+
+    /**
+     * @param array<string, mixed> $row
+     */
+    private function wokeLibraryController(string $type, array $row, ?\App\Service\Wokeometer\WokeometerLookup $woke): DashboardController
+    {
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(fn(string $k, callable $cb) => $cb($this->cacheItem()));
+
+        $isSeries  = $type === 'series';
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $t): array => $t === ($isSeries ? ServiceInstance::TYPE_SONARR : ServiceInstance::TYPE_RADARR)
+                ? [$this->instance($isSeries ? 'sonarr-1' : 'radarr-1', 'Inst')] : []
+        );
+
+        $radarr = $this->createMock(RadarrClient::class);
+        $radarr->method('withInstance')->willReturnSelf();
+        $radarr->method('getMovies')->willReturn($isSeries ? [] : [$row]);
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('withInstance')->willReturnSelf();
+        $sonarr->method('getSeries')->willReturn($isSeries ? [$row] : []);
+
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $radarr, $sonarr,
+            $this->createMock(JellyseerrClient::class), $this->createMock(TmdbClient::class),
+            $this->createMock(WatchlistItemRepository::class), $instances, new NullLogger(),
+            $translator, $cache, $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+            wokeometer: $woke,
+        );
+        $this->attachRouter($controller);
+
+        return $controller;
+    }
+
+    /** @return array<string, mixed> */
+    private function wokeView(): array
+    {
+        return ['score' => 7, 'tldr' => 'Summary.', 'url' => 'https://wokeometer.app/media/movie/x', 'analyzed' => true, 'title' => 'X', 'updatedAt' => 1];
+    }
+
+    private function invokeQuickLookLibrary(DashboardController $c, string $type, string $slug, int $id): mixed
+    {
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookLibrary');
+        $m->setAccessible(true);
+        return $m->invoke($c, $type, $slug, $id);
+    }
+
+    public function testQuickLookLibraryMovieExposesWokeometerAndStillLacksTmdbId(): void
+    {
+        $woke = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $woke->expects($this->once())->method('forTmdb')->with('movie', 603)->willReturn($this->wokeView());
+
+        $row = ['id' => 42, 'title' => 'The Matrix', 'tmdbId' => 603, 'hasFile' => true, 'monitored' => true, '_instanceSlug' => 'radarr-1'];
+        $vm  = $this->invokeQuickLookLibrary($this->wokeLibraryController('movie', $row, $woke), 'movie', 'radarr-1', 42);
+
+        self::assertSame($this->wokeView(), $vm['wokeometer']);
+        // TRAP #1: a tmdbId on the library view-model would render a watchlist/TMDb button with an empty type.
+        self::assertArrayNotHasKey('tmdbId', $vm);
+        self::assertArrayNotHasKey('tmdbType', $vm);
+    }
+
+    public function testQuickLookLibrarySeriesLooksUpWithTvVocabulary(): void
+    {
+        $woke = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $woke->expects($this->once())->method('forTmdb')->with('tv', 95396)->willReturn($this->wokeView());
+
+        $row = ['id' => 7, 'title' => 'Severance', 'tmdbId' => 95396, 'monitored' => true, '_instanceSlug' => 'sonarr-1'];
+        $vm  = $this->invokeQuickLookLibrary($this->wokeLibraryController('series', $row, $woke), 'series', 'sonarr-1', 7);
+
+        self::assertSame($this->wokeView(), $vm['wokeometer']);
+    }
+
+    public function testQuickLookLibraryRowWithoutTmdbIdSkipsTheLookup(): void
+    {
+        $woke = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $woke->expects($this->never())->method('forTmdb');
+
+        $row = ['id' => 42, 'title' => 'No TMDb', '_instanceSlug' => 'radarr-1'];
+        $vm  = $this->invokeQuickLookLibrary($this->wokeLibraryController('movie', $row, $woke), 'movie', 'radarr-1', 42);
+
+        self::assertArrayHasKey('wokeometer', $vm);
+        self::assertNull($vm['wokeometer']);
+    }
+
+    public function testQuickLookLibraryWithoutWokeometerServiceYieldsNull(): void
+    {
+        $row = ['id' => 42, 'title' => 'X', 'tmdbId' => 603, '_instanceSlug' => 'radarr-1'];
+        $vm  = $this->invokeQuickLookLibrary($this->wokeLibraryController('movie', $row, null), 'movie', 'radarr-1', 42);
+
+        self::assertNull($vm['wokeometer']);
+        self::assertSame('X', $vm['title']);
+    }
+
+    public function testQuickLookLibraryLookupFailureLeavesTheViewModelIntact(): void
+    {
+        $woke = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $woke->method('forTmdb')->willThrowException(new \RuntimeException('db gone'));
+
+        $row = ['id' => 42, 'title' => 'The Matrix', 'tmdbId' => 603, '_instanceSlug' => 'radarr-1'];
+        $vm  = $this->invokeQuickLookLibrary($this->wokeLibraryController('movie', $row, $woke), 'movie', 'radarr-1', 42);
+
+        self::assertNotNull($vm, 'a Wokeometer failure must not take the quick-look down');
+        self::assertSame('The Matrix', $vm['title']);
+        self::assertNull($vm['wokeometer']);
+    }
+
+    public function testQuickLookTmdbExposesWokeometerForBothTypes(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getMovie')->willReturn(['id' => 603, 'title' => 'The Matrix', 'release_date' => '1999-03-31']);
+        $tmdb->method('getTv')->willReturn(['id' => 95396, 'name' => 'Severance', 'first_air_date' => '2022-02-18']);
+
+        $woke  = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $calls = [];
+        $woke->method('forTmdb')->willReturnCallback(function (string $t, int $id) use (&$calls) {
+            $calls[] = [$t, $id];
+            return $this->wokeView();
+        });
+
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+            wokeometer: $woke,
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+
+        $movie = $m->invoke($controller, 'movie', 603);
+        $tv    = $m->invoke($controller, 'tv', 95396);
+
+        self::assertSame($this->wokeView(), $movie['wokeometer']);
+        self::assertSame($this->wokeView(), $tv['wokeometer']);
+        self::assertSame([['movie', 603], ['tv', 95396]], $calls);
+    }
+
+    public function testQuickLookTmdbWithoutWokeometerServiceHasNullKey(): void
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getMovie')->willReturn(['id' => 603, 'title' => 'The Matrix']);
+        $translator = $this->createMock(TranslatorInterface::class);
+        $translator->method('trans')->willReturnCallback(fn(string $k) => $k);
+
+        $controller = new DashboardController(
+            $this->createMock(HealthService::class), $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class), $this->createMock(JellyseerrClient::class),
+            $tmdb, $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class), new NullLogger(),
+            $translator, $this->createMock(CacheInterface::class), $this->createMock(TautulliClient::class),
+            new \App\Service\DashboardLayoutService($this->createMock(\App\Service\ConfigService::class)),
+        );
+        $this->attachRouter($controller);
+        $m = new ReflectionMethod(DashboardController::class, 'quickLookTmdb');
+        $m->setAccessible(true);
+
+        $vm = $m->invoke($controller, 'movie', 603);
+        self::assertArrayHasKey('wokeometer', $vm);
+        self::assertNull($vm['wokeometer']);
+    }
 }
