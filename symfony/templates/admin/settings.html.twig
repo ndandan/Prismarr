@@ -586,7 +586,7 @@
             {% if wok_status not in wok_known_status %}{% set wok_status = 'error' %}{% endif %}
             {% set wok_can_sync = (wst.enabled ?? false) and not (wst.running ?? false) %}
 
-            <div style="font-size:.75rem; color:var(--tblr-secondary); font-weight:600; margin: 1.25rem 0 .6rem;">
+            <div data-wokeometer-group style="font-size:.75rem; color:var(--tblr-secondary); font-weight:600; margin: 1.25rem 0 .6rem;">
               {{ 'admin.services.group.enrichment'|trans }}
             </div>
 

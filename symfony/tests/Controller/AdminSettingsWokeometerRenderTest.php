@@ -95,18 +95,21 @@ final class AdminSettingsWokeometerRenderTest extends AbstractWebTestCase
     {
         $this->seedKey();
 
-        $this->client->request('GET', '/admin/settings');
-        $html = (string) $this->client->getResponse()->getContent();
+        // The page also renders the fork CHANGELOG (fetched from GitHub main,
+        // English whatever the locale), so the locale checks are scoped to the
+        // card's own group heading — never to the whole page.
+        $crawler = $this->client->request('GET', '/admin/settings');
+        $html    = (string) $this->client->getResponse()->getContent();
         $this->assertStringNotContainsString('admin.wokeometer.', $html);
         $this->assertStringNotContainsString('admin.services.group.enrichment', $html);
-        $this->assertStringContainsString('Metadata enrichment', $html);
+        $this->assertSame('Metadata enrichment', trim($crawler->filter('[data-wokeometer-group]')->text()));
 
-        $this->client->request('GET', '/admin/settings?_locale=fr');
-        $html = (string) $this->client->getResponse()->getContent();
+        $crawler = $this->client->request('GET', '/admin/settings?_locale=fr');
+        $html    = (string) $this->client->getResponse()->getContent();
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertStringNotContainsString('admin.wokeometer.', $html);
         $this->assertStringNotContainsString('admin.services.group.enrichment', $html);
-        $this->assertStringNotContainsString('Metadata enrichment', $html);
+        $this->assertSame('Enrichissement des métadonnées', trim($crawler->filter('[data-wokeometer-group]')->text()));
     }
 
     public function testCardLinksToTheDeveloperPageSafely(): void
