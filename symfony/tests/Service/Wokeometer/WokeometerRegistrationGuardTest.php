@@ -71,6 +71,37 @@ class WokeometerRegistrationGuardTest extends TestCase
         }
     }
 
+    public function testLibraryModalsSkipTheLookupFetchWhenWokeometerIsOff(): void
+    {
+        foreach (['templates/media/films.html.twig' => 'loadFilmWokeometer', 'templates/media/series.html.twig' => 'loadSerieWokeometer'] as $path => $loader) {
+            $tpl = $this->read($path);
+            self::assertStringContainsString("var WOKE_ENABLED = {{ wokeometer_enabled() ? 'true' : 'false' }};", $tpl, $path);
+            self::assertMatchesRegularExpression(
+                '/function ' . $loader . '\([^)]*\) \{\s*(?:if \(!WOKE_ENABLED\) return;|if \(!WOKE_ENABLED \|\| )/',
+                $tpl,
+                "$path: $loader must bail out before fetching when WOKE_ENABLED is false",
+            );
+        }
+    }
+
+    public function testWokeometerEnabledTwigFunctionFollowsTheSettings(): void
+    {
+        foreach ([true, false] as $enabled) {
+            $settings = $this->createStub(\App\Service\Wokeometer\WokeometerSettings::class);
+            $settings->method('isEnabled')->willReturn($enabled);
+            $functions = (new \App\Twig\WokeometerExtension($settings))->getFunctions();
+
+            self::assertSame('wokeometer_enabled', $functions[0]->getName());
+            $callable = $functions[0]->getCallable();
+            self::assertIsCallable($callable);
+            self::assertSame($enabled, $callable());
+        }
+
+        $broken = $this->createStub(\App\Service\Wokeometer\WokeometerSettings::class);
+        $broken->method('isEnabled')->willThrowException(new \RuntimeException('db'));
+        self::assertFalse((new \App\Twig\WokeometerExtension($broken))->isEnabled(), 'fails closed');
+    }
+
     public function testIconExistsAndIsAttributed(): void
     {
         self::assertFileExists(self::ROOT . '/public/img/services/wokeometer.svg');

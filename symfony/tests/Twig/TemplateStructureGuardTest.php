@@ -165,9 +165,16 @@ class TemplateStructureGuardTest extends TestCase
 
     public function testEveryWokeometerModalTemplateWiresTheExistingTranslationKeys(): void
     {
-        foreach (['media/films.html.twig', 'media/series.html.twig', 'decouverte/index.html.twig'] as $rel) {
+        // Header pills use the self-describing `score_labelled`; only the
+        // Films/Series Wokeometer card badge (under its own title) keeps `score`.
+        $common = ['wokeometer.title', 'wokeometer.score_labelled', 'wokeometer.view_full', 'wokeometer.attribution', 'wokeometer.badge_title'];
+        foreach ([
+            'media/films.html.twig'      => [...$common, 'wokeometer.score'],
+            'media/series.html.twig'     => [...$common, 'wokeometer.score'],
+            'decouverte/index.html.twig' => $common,
+        ] as $rel => $keys) {
             $src = (string) file_get_contents(self::TEMPLATE_ROOT . $rel);
-            foreach (['wokeometer.title', 'wokeometer.score', 'wokeometer.view_full', 'wokeometer.attribution', 'wokeometer.badge_title'] as $key) {
+            foreach ($keys as $key) {
                 $this->assertStringContainsString("'" . $key . "'|trans", $src, $rel . ': missing ' . $key);
             }
         }

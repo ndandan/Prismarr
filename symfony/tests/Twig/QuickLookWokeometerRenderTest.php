@@ -112,7 +112,7 @@ class QuickLookWokeometerRenderTest extends KernelTestCase
         self::assertStringContainsString('A plain summary.', $html);
     }
 
-    public function testMissingTldrAndUrlOmitOnlyThoseParts(): void
+    public function testScoreAloneKeepsTheBlockWithoutTldrOrLink(): void
     {
         $html = $this->render($this->ql(['wokeometer' => $this->woke(['tldr' => null, 'url' => null])]));
 
@@ -120,6 +120,24 @@ class QuickLookWokeometerRenderTest extends KernelTestCase
         self::assertStringNotContainsString('ql-woke-tldr', $html);
         self::assertStringNotContainsString('ql-woke-link', $html);
         self::assertStringContainsString('ql-woke-attrib', $html);
+    }
+
+    public function testMissingScoreAndTldrRendersNothingEvenWithALink(): void
+    {
+        // Flipped from "omit only those parts": a bare link promises an
+        // analysis that is not there (WokeometerLookup::view() returns null
+        // for such rows; the template applies the same gate).
+        $html = $this->render($this->ql(['wokeometer' => $this->woke(['score' => null, 'tldr' => null])]));
+
+        self::assertStringNotContainsString('ql-woke', $html);
+        self::assertStringNotContainsString('wokeometer.app', $html);
+    }
+
+    public function testHeaderBadgeIsSelfDescribing(): void
+    {
+        $html = $this->render($this->ql(['wokeometer' => $this->woke(['score' => 4])]));
+
+        self::assertMatchesRegularExpression('~<span class="ql-badge ql-woke"[^>]*>Wokeometer 4/10</span>~', $html);
     }
 
     public function testNothingRendersWithoutData(): void

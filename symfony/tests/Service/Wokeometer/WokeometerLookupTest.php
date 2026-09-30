@@ -108,6 +108,27 @@ class WokeometerLookupTest extends TestCase
         $this->assertNull($view['url']);
     }
 
+    public function testARowWithNeitherScoreNorTldrIsHidden(): void
+    {
+        $empty = $this->dbRow(['woke_score' => null, 'tldr' => null]);
+        $blank = $this->dbRow(['wokeometer_id' => 'uuid-2', 'tmdb_id' => 604, 'woke_score' => null, 'tldr' => '']);
+        $repo  = $this->createMock(WokeometerTitleRepository::class);
+        $repo->method('findForTmdb')->willReturn($empty);
+        $repo->method('findForTmdbMany')->willReturn([603 => $empty, 604 => $blank, 605 => $this->dbRow(['tmdb_id' => 605, 'tldr' => null])]);
+
+        $lookup = new WokeometerLookup($this->settings(true), $repo, $this->logger());
+        $this->assertNull($lookup->forTmdb('movie', 603), 'a slug alone is no content: no bare "view full analysis" link');
+        $lookup->reset();
+        $this->assertSame([605], array_keys($lookup->forTmdbMany('movie', [603, 604, 605])), 'score 0 without TL;DR still shows');
+
+        $lookup->reset();
+        $repo2 = $this->createMock(WokeometerTitleRepository::class);
+        $repo2->method('findForTmdb')->willReturn($this->dbRow(['woke_score' => null, 'tldr' => 'Only a summary.']));
+        $view = (new WokeometerLookup($this->settings(true), $repo2, $this->logger()))->forTmdb('movie', 603);
+        $this->assertNotNull($view, 'a TL;DR alone is content');
+        $this->assertNull($view['score']);
+    }
+
     public function testNoMatchReturnsNull(): void
     {
         $repo = $this->createMock(WokeometerTitleRepository::class);

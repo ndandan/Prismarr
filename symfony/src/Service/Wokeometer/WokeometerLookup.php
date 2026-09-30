@@ -19,7 +19,10 @@ use Symfony\Contracts\Service\ResetInterface;
  * between FrankenPHP worker requests.
  *
  * View shape: {score: ?int, tldr: ?string, url: ?string, analyzed: ?bool,
- * title: string, updatedAt: int}. `url` only for a safe slug.
+ * title: string, updatedAt: int}. `url` only for a safe slug. A row with
+ * neither a score nor a TL;DR has no content to show and yields null (a
+ * bare "View full analysis" link would promise an analysis that is not
+ * there) — every surface then renders nothing at all.
  *
  * @phpstan-type WokeometerView array{score: ?int, tldr: ?string, url: ?string, analyzed: ?bool, title: string, updatedAt: int}
  */
@@ -131,9 +134,9 @@ class WokeometerLookup implements ResetInterface
 
     /**
      * @param array<string, mixed> $row repository row (snake_case columns)
-     * @return WokeometerView
+     * @return WokeometerView|null null when there is neither a score nor a TL;DR
      */
-    private function view(array $row): array
+    private function view(array $row): ?array
     {
         $score    = $row['woke_score'] ?? null;
         $tldr     = $row['tldr'] ?? null;
@@ -141,9 +144,15 @@ class WokeometerLookup implements ResetInterface
         $analyzed = $row['is_analyzed'] ?? null;
         $type     = $row['media_type'] ?? '';
 
+        $score = is_int($score) ? $score : null;
+        $tldr  = is_string($tldr) && $tldr !== '' ? $tldr : null;
+        if ($score === null && $tldr === null) {
+            return null;
+        }
+
         return [
-            'score'     => is_int($score) ? $score : null,
-            'tldr'      => is_string($tldr) && $tldr !== '' ? $tldr : null,
+            'score'     => $score,
+            'tldr'      => $tldr,
             'url'       => $this->settings->publicUrl(is_string($type) ? $type : '', is_string($slug) ? $slug : null),
             'analyzed'  => is_bool($analyzed) ? $analyzed : null,
             'title'     => (string) ($row['title'] ?? ''),

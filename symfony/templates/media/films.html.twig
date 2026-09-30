@@ -1005,7 +1005,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
               </div>
             </div>
 
-            {# Wokeometer (Task 5): TL;DR + link to the full analysis, read from the
+            {# Wokeometer: TL;DR + link to the full analysis, read from the
                LOCAL catalog mirror (GET /wokeometer/api/lookup/movie/{tmdbId}).
                Hidden by default and reset to hidden at the START of every modal
                open; only unhidden client-side when the endpoint answers a match.
@@ -1465,11 +1465,16 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     shelf_unmonitored: {{ 'media.films.status.unmonitored'|trans|json_encode|raw }},
     subtitle_hi_title: {{ 'bazarr.chips.hi_title'|trans|json_encode|raw }},
     subtitle_forced_title: {{ 'bazarr.chips.forced_title'|trans|json_encode|raw }},
-    // Wokeometer (Task 5). The score template keeps a placeholder for the
-    // number, replaced in JS (the ICU message itself is rendered server-side).
+    // Wokeometer. The score templates keep a placeholder for the number,
+    // replaced in JS (the ICU messages themselves are rendered server-side):
+    // the header pill is self-describing, the card badge sits under the
+    // Wokeometer title.
     woke_score_tpl: {{ 'wokeometer.score'|trans({score: '__SCORE__'})|json_encode|raw }},
-    woke_badge_title: {{ 'wokeometer.badge_title'|trans|json_encode|raw }}
+    woke_score_labelled_tpl: {{ 'wokeometer.score_labelled'|trans({score: '__SCORE__'})|json_encode|raw }}
   };
+  // Wokeometer switched on with a usable key? When not, the modal never
+  // calls the (local) lookup endpoint at all.
+  var WOKE_ENABLED = {{ wokeometer_enabled() ? 'true' : 'false' }};
   function tpl(s, map) {
     if (!s) return '';
     Object.keys(map || {}).forEach(function(k){
@@ -1930,7 +1935,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
       .catch(function () { /* fail closed: leave the section hidden */ });
   }
 
-  /* ── Wokeometer (Task 5) ──
+  /* ── Wokeometer ──
      Fetch-on-open of the LOCAL lookup endpoint (an indexed read of the catalog
      mirror; no external call). It always answers 200 JSON of the shape
      ok / match, where match is null or an object with score, tldr, url. Any
@@ -1956,14 +1961,14 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     var hasScore = typeof match.score === 'number' && isFinite(match.score);
     var hasTldr = typeof match.tldr === 'string' && match.tldr !== '';
     var hasLink = typeof match.url === 'string' && match.url.indexOf('https://wokeometer.app/') === 0;
-    if (!hasScore && !hasTldr && !hasLink) return;
+    // Same gate as WokeometerLookup::view(): a score or a TL;DR (a bare link is no content).
+    if (!hasScore && !hasTldr) return;
     if (hasScore) {
-      var label = FILM_I18N.woke_score_tpl.replace('__SCORE__', String(match.score));
       var pill = document.getElementById('film-rating-woke');
-      pill.textContent = label;
+      pill.textContent = FILM_I18N.woke_score_labelled_tpl.replace('__SCORE__', String(match.score));
       pill.style.display = '';
       var score = document.getElementById('film-wokeometer-score');
-      score.textContent = label;
+      score.textContent = FILM_I18N.woke_score_tpl.replace('__SCORE__', String(match.score));
       score.classList.remove('d-none');
     }
     if (hasTldr) {
@@ -1980,7 +1985,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   }
 
   function loadFilmWokeometer(tmdbId, movieId) {
-    if (!tmdbId) return;
+    if (!WOKE_ENABLED || !tmdbId) return;
     fetch('/wokeometer/api/lookup/movie/' + encodeURIComponent(tmdbId), {
       headers: { 'Accept': 'application/json' },
       credentials: 'same-origin'

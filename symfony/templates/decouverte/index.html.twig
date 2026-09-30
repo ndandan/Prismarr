@@ -795,7 +795,7 @@
                 <p id="td-overview" class="text-muted mb-0" style="line-height:1.65; font-size:.9rem;"></p>
               </div>
 
-              {# Wokeometer (Task 5): TL;DR + link to the full analysis. The data comes
+              {# Wokeometer: TL;DR + link to the full analysis. The data comes
                  from the local catalog mirror through the wokeometer key of the
                  detail JSON (no fetch from this page). Hidden by default, reset on
                  every render, and the text is third-party: textContent only. #}
@@ -1174,9 +1174,10 @@
       many_one:    {{ 'decouverte.modal.seasons_episodes'|trans({seasons: 9, episodes: 1})|json_encode|raw }},
       many_many:   {{ 'decouverte.modal.seasons_episodes'|trans({seasons: 9, episodes: 9})|json_encode|raw }},
     },
-    // Wokeometer (Task 5). The score template keeps a placeholder for the
-    // number, replaced in JS (the ICU message itself is rendered server-side).
-    woke_score_tpl: {{ 'wokeometer.score'|trans({score: '__SCORE__'})|json_encode|raw }}
+    // Wokeometer. The score template keeps a placeholder for the number,
+    // replaced in JS (the ICU message itself is rendered server-side). The
+    // header pill is self-describing.
+    woke_score_labelled_tpl: {{ 'wokeometer.score_labelled'|trans({score: '__SCORE__'})|json_encode|raw }}
   };
   function seasonsEpisodes(s, e) {
     var key = (s === 1 ? 'one' : 'many') + '_' + (e === 1 ? 'one' : 'many');
@@ -1361,7 +1362,7 @@
     return 'bad';
   }
 
-  /* Wokeometer (Task 5): the detail JSON carries a wokeometer key that is either
+  /* Wokeometer: the detail JSON carries a wokeometer key that is either
      null or an object with score, tldr, url (read from the local catalog mirror
      by TmdbController::detail, so there is no fetch here). The text is
      third-party: only ever written through textContent, and the link is only
@@ -1383,10 +1384,11 @@
     var hasScore = typeof w.score === 'number' && isFinite(w.score);
     var hasTldr = typeof w.tldr === 'string' && w.tldr !== '';
     var hasLink = typeof w.url === 'string' && w.url.indexOf('https://wokeometer.app/') === 0;
-    if (!hasScore && !hasTldr && !hasLink) return;
+    // Same gate as WokeometerLookup::view(): a score or a TL;DR (a bare link is no content).
+    if (!hasScore && !hasTldr) return;
     if (hasScore) {
       var pill = document.getElementById('td-rating-woke');
-      pill.textContent = TMDB_I18N.woke_score_tpl.replace('__SCORE__', String(w.score));
+      pill.textContent = TMDB_I18N.woke_score_labelled_tpl.replace('__SCORE__', String(w.score));
       pill.style.display = '';
     }
     if (hasTldr) {
@@ -1399,7 +1401,8 @@
       link.setAttribute('href', w.url);
       link.classList.remove('d-none');
     }
-    if (hasTldr || hasLink) document.getElementById('td-wokeometer').classList.remove('d-none');
+    // Whatever is shown (score, TL;DR and/or link) carries the attribution block.
+    document.getElementById('td-wokeometer').classList.remove('d-none');
   }
 
   function renderDetail(d) {
