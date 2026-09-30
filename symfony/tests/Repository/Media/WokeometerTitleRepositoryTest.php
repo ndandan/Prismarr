@@ -278,6 +278,47 @@ class WokeometerTitleRepositoryTest extends KernelTestCase
         $this->assertSame(0, $this->repo->sweepUnseen(1500));
     }
 
+    public function testSweepUnseenCanBeRestrictedToOneMediaType(): void
+    {
+        $this->repo->upsertRows([$this->row('old-movie'), $this->row('old-show', ['mediaType' => 'tv'])], 1000, 1000);
+        $this->repo->upsertRows([$this->row('new-show', ['mediaType' => 'tv'])], 2000, 2000);
+
+        $this->assertSame(1, $this->repo->sweepUnseen(1500, 'tv'));
+        $wids = $this->db->fetchFirstColumn('SELECT wokeometer_id FROM wokeometer_media ORDER BY wokeometer_id');
+        $this->assertSame(['new-show', 'old-movie'], $wids, 'movies untouched by a tv sweep');
+        $this->assertSame(0, $this->repo->sweepUnseen(1500, 'series'), 'library vocabulary is not a media type');
+        $this->assertSame(1, $this->repo->sweepUnseen(1500, 'movie'));
+    }
+
+    public function testCountSeenSince(): void
+    {
+        $this->repo->upsertRows([$this->row('m-old')], 1000, 1000);
+        $this->repo->upsertRows([$this->row('m-new'), $this->row('t-new', ['mediaType' => 'tv'])], 2000, 2000);
+
+        $this->assertSame(1, $this->repo->countSeenSince('movie', 2000));
+        $this->assertSame(2, $this->repo->countSeenSince('movie', 1000));
+        $this->assertSame(1, $this->repo->countSeenSince('tv', 1500));
+        $this->assertSame(0, $this->repo->countSeenSince('tv', 2001));
+        $this->assertSame(0, $this->repo->countSeenSince('series', 0));
+    }
+
+    public function testRowsCarryingASeasonNumberNeverMatch(): void
+    {
+        // A season row whose parent id the API left out: parent NULL, season set.
+        $this->repo->upsertRows([
+            $this->row('season-no-parent', ['mediaType' => 'tv', 'tmdbId' => 70, 'seasonNumber' => 2]),
+            $this->row('odd-movie', ['tmdbId' => 71, 'seasonNumber' => 1]),
+            $this->row('show', ['mediaType' => 'tv', 'tmdbId' => 72]),
+        ], 1000, 1000);
+
+        $this->assertNull($this->repo->findForTmdb('tv', 70));
+        $this->assertNull($this->repo->findForTmdb('movie', 71));
+        $this->assertSame([72], array_keys($this->repo->findForTmdbMany('tv', [70, 72])));
+        $this->assertSame([], $this->repo->findForTmdbMany('movie', [71]));
+        $this->assertSame(1, $this->repo->countMatching('tv', [70, 72]));
+        $this->assertSame(0, $this->repo->countMatching('movie', [71]));
+    }
+
     public function testTruncate(): void
     {
         $this->repo->upsertRows([$this->row('a'), $this->row('b')], 1000, 1000);

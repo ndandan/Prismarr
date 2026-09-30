@@ -45,6 +45,17 @@ class WokeometerSettings
         return $key !== '' ? $key : null;
     }
 
+    /**
+     * Drop ConfigService's per-request memo so the next read sees the
+     * current `setting` rows. The sync calls it before every page: a
+     * long-lived worker chunk must notice a key change or an "off" switch
+     * saved while it runs.
+     */
+    public function refresh(): void
+    {
+        $this->config->invalidate();
+    }
+
     public function isAutoSyncEnabled(): bool
     {
         return $this->config->get(self::KEY_AUTO_SYNC) !== '0';

@@ -29,24 +29,34 @@ use Doctrine\Persistence\ManagerRegistry;
  * acquireLock(); "unfinished" means `run_phase` non-null and not 'done':
  *
  *  - 'resumed' — an unfinished run that is either (a) a stale crashed run
- *    (lock still held) — resumed whatever `$mode` was requested — or (b) a
- *    free, interrupted run (stopped on out_of_credits / rate_limited /
- *    transient with its cursor kept) whose `run_mode` equals `$mode`. Only
- *    `lock_run_id`, `lock_heartbeat_at` and `run_trigger` are replaced;
- *    `run_mode`, `run_phase`, `run_cursor`, `run_idempotency_key`,
- *    `run_started_at`, `run_requests`, `run_records` and
- *    `run_transient_failures` are kept so the run continues where it stopped
- *    (with the same idempotency key → free replay of the in-flight page).
+ *    (lock still held) — resumed whatever `$mode` / `$forceFull` was
+ *    requested (a forced full start then converts it in place while holding
+ *    the lock) — or (b) a free, interrupted run (a resumable stop kept its
+ *    cursor) when the start is NOT forced, whatever `$mode` was requested:
+ *    the run continues in its OWN `run_mode`. Only `lock_run_id`,
+ *    `lock_heartbeat_at` and `run_trigger` are replaced; `run_mode`,
+ *    `run_phase`, `run_cursor`, `run_idempotency_key`, `run_started_at`,
+ *    `run_requests`, `run_records` and `run_transient_failures` are kept so
+ *    the run continues where it stopped (with the same idempotency key →
+ *    free replay of the in-flight page).
  *  - 'fresh' — no unfinished run (`run_phase` null or 'done'), OR a free,
- *    interrupted run of a DIFFERENT mode (e.g. a forced full resync
- *    supersedes an interrupted incremental one, atomically in the same
- *    UPDATE): a new run is initialised with the given mode/trigger,
- *    `run_started_at = last_run_started_at = $now`, phase 'movie',
- *    cursor/idempotency key cleared, run counters zeroed.
+ *    interrupted run superseded by a FORCED full start (atomically, in the
+ *    same UPDATE), OR a free unfinished row without a usable `run_mode`
+ *    (malformed — it must not wedge both branches): a new run is initialised
+ *    with the given mode/trigger, `run_started_at = last_run_started_at =
+ *    $now`, phase 'movie', cursor/idempotency key cleared, counters zeroed.
+ *
+ * Resume-vs-fresh is decided HERE, inside the compare-and-set, never from a
+ * state row the caller read earlier (read-then-decide races other starters).
  *
  * Each branch is a single conditional UPDATE, so two concurrent acquirers
  * can never both win: whichever UPDATE lands first changes `lock_run_id`,
  * and the other's WHERE no longer matches.
+ *
+ * Owner-checked writes: update($fields, $runId) adds `AND lock_run_id = ?`
+ * and returns the affected-row count, so a run that lost the lock (stale
+ * takeover) can never overwrite its successor's state — the sync service
+ * treats 0 as "not the owner any more" and stops writing.
  *
  * @extends ServiceEntityRepository<WokeometerSyncState>
  */
@@ -125,40 +135,42 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
      * Boolean form of acquireLock(): true when the lock was taken (fresh or
      * resumed), false when another live run holds it.
      */
-    public function tryAcquireLock(string $runId, int $now, int $staleBefore, string $mode, string $trigger): bool
+    public function tryAcquireLock(string $runId, int $now, int $staleBefore, string $mode, string $trigger, bool $forceFull = false): bool
     {
-        return $this->acquireLock($runId, $now, $staleBefore, $mode, $trigger) !== null;
+        return $this->acquireLock($runId, $now, $staleBefore, $mode, $trigger, $forceFull) !== null;
     }
 
     /**
-     * Compare-and-set lock acquisition (see class docblock).
+     * Compare-and-set lock acquisition (see class docblock). `$mode` is used
+     * only by a FRESH run; a resumed run keeps its own mode.
      *
      * @return self::ACQUIRED_*|null null when a live run holds the lock
      */
-    public function acquireLock(string $runId, int $now, int $staleBefore, string $mode, string $trigger): ?string
+    public function acquireLock(string $runId, int $now, int $staleBefore, string $mode, string $trigger, bool $forceFull = false): ?string
     {
         $this->ensureRow();
-        $db = $this->db();
+        $db    = $this->db();
+        $force = $forceFull ? 1 : 0;
 
         // 1. Resume an unfinished run: a stale crashed run (lock still held)
-        //    regardless of mode, or a free interrupted run of the same mode.
+        //    whatever was requested, or — unless forced — a free interrupted
+        //    run with a usable mode (it keeps that mode).
         $resumed = $db->executeStatement(
             'UPDATE wokeometer_sync_state
                 SET lock_run_id = :run, lock_heartbeat_at = :now, run_trigger = :trigger
               WHERE id = 1 AND ' . self::LOCK_AVAILABLE . "
                 AND run_phase IS NOT NULL AND run_phase <> 'done'
-                AND (lock_run_id IS NOT NULL OR run_mode = :mode)",
-            ['run' => $runId, 'now' => $now, 'trigger' => $trigger, 'stale' => $staleBefore, 'mode' => $mode],
-            ['now' => ParameterType::INTEGER, 'stale' => ParameterType::INTEGER],
+                AND (lock_run_id IS NOT NULL OR (:force = 0 AND run_mode IN ('full', 'incremental')))",
+            ['run' => $runId, 'now' => $now, 'trigger' => $trigger, 'stale' => $staleBefore, 'force' => $force],
+            ['now' => ParameterType::INTEGER, 'stale' => ParameterType::INTEGER, 'force' => ParameterType::INTEGER],
         );
         if ($resumed === 1) {
             return self::ACQUIRED_RESUMED;
         }
 
-        // 2. Start a fresh run: nothing unfinished, or a free interrupted run
-        //    of a different mode (superseded atomically by this UPDATE).
-        //    `run_mode IS NULL` keeps a (malformed) unfinished row with no
-        //    mode from wedging both branches.
+        // 2. Start a fresh run: nothing unfinished, a free interrupted run
+        //    superseded by a FORCED full start (atomically, in this UPDATE),
+        //    or a free unfinished row without a usable mode (malformed).
         $fresh = $db->executeStatement(
             'UPDATE wokeometer_sync_state
                 SET lock_run_id = :run, lock_heartbeat_at = :now, run_mode = :mode, run_trigger = :trigger,
@@ -166,9 +178,10 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
                     run_requests = 0, run_records = 0, run_transient_failures = 0, last_run_started_at = :now
               WHERE id = 1 AND ' . self::LOCK_AVAILABLE . "
                 AND (run_phase IS NULL OR run_phase = 'done'
-                     OR (lock_run_id IS NULL AND (run_mode IS NULL OR run_mode <> :mode)))",
-            ['run' => $runId, 'now' => $now, 'mode' => $mode, 'trigger' => $trigger, 'phase' => 'movie', 'stale' => $staleBefore],
-            ['now' => ParameterType::INTEGER, 'stale' => ParameterType::INTEGER],
+                     OR (lock_run_id IS NULL
+                         AND (:force = 1 OR run_mode IS NULL OR run_mode NOT IN ('full', 'incremental'))))",
+            ['run' => $runId, 'now' => $now, 'mode' => $mode, 'trigger' => $trigger, 'phase' => 'movie', 'stale' => $staleBefore, 'force' => $force],
+            ['now' => ParameterType::INTEGER, 'stale' => ParameterType::INTEGER, 'force' => ParameterType::INTEGER],
         );
 
         return $fresh === 1 ? self::ACQUIRED_FRESH : null;
@@ -207,13 +220,19 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
      * Write arbitrary state columns. Keys are validated against a column
      * whitelist BEFORE anything is written; values are always bound.
      *
+     * With `$ownerRunId` the write only lands while that run holds the lock
+     * (`AND lock_run_id = ?`): a run that was taken over writes nothing.
+     * Controller / settings writes pass no owner.
+     *
      * @param array<string, int|string|bool|null> $fields column => value
+     * @return int affected rows — 1, or 0 when `$ownerRunId` no longer holds
+     *             the lock (always 0 for an empty `$fields`)
      * @throws \InvalidArgumentException on an unknown column
      */
-    public function update(array $fields): void
+    public function update(array $fields, ?string $ownerRunId = null): int
     {
         if ($fields === []) {
-            return;
+            return 0;
         }
 
         $sets   = [];
@@ -235,9 +254,17 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
             };
         }
 
+        $where = 'id = 1';
+        if ($ownerRunId !== null) {
+            $where   .= ' AND lock_run_id = ?';
+            $params[] = $ownerRunId;
+            $types[]  = ParameterType::STRING;
+        }
+
         $this->ensureRow();
-        $this->db()->executeStatement(
-            'UPDATE wokeometer_sync_state SET ' . implode(', ', $sets) . ' WHERE id = 1',
+
+        return (int) $this->db()->executeStatement(
+            'UPDATE wokeometer_sync_state SET ' . implode(', ', $sets) . ' WHERE ' . $where,
             $params,
             $types,
         );

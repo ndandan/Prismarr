@@ -19,6 +19,8 @@ use Doctrine\Persistence\ManagerRegistry;
  * `tv` lookups match only SERIES rows (`parent_wokeometer_id IS NULL`).
  * Season rows are stored and counted but never matched — a season's
  * external id may be a TMDb season id that collides with an unrelated show.
+ * Belt and braces, a row carrying a `season_number` never matches either
+ * (a season row whose parent id the API left out).
  *
  * Row shape returned by findForTmdb()/findForTmdbMany() (snake_case columns,
  * integer columns cast to int, is_analyzed to bool, nulls preserved):
@@ -57,8 +59,8 @@ class WokeometerTitleRepository extends ServiceEntityRepository
         WHERE excluded.wokeometer_updated_at >= wokeometer_media.wokeometer_updated_at
         SQL;
 
-    /** SQL fragment appended to every match query (spec D8). */
-    private const MATCHABLE = "(media_type = 'movie' OR parent_wokeometer_id IS NULL)";
+    /** SQL fragment appended to every match query (spec D8 + season guard). */
+    private const MATCHABLE = "((media_type = 'movie' OR parent_wokeometer_id IS NULL) AND season_number IS NULL)";
 
     private const INT_COLUMNS = ['id', 'tmdb_id', 'season_number', 'woke_score', 'wokeometer_updated_at', 'last_seen_at', 'synced_at'];
 
@@ -256,16 +258,46 @@ class WokeometerTitleRepository extends ServiceEntityRepository
 
     /**
      * Deletion sweep after a completed FULL run: removes rows the run never
-     * returned (`last_seen_at < $before`, i.e. before the run's start).
+     * returned (`last_seen_at < $before`, i.e. before the run's start),
+     * restricted to one media type when `$mediaType` is given (the sync
+     * sweeps each phase separately, and only a phase that saw rows).
      *
      * @return int rows deleted
      */
-    public function sweepUnseen(int $before): int
+    public function sweepUnseen(int $before, ?string $mediaType = null): int
     {
+        if ($mediaType === null) {
+            return (int) $this->db()->executeStatement(
+                'DELETE FROM wokeometer_media WHERE last_seen_at < ?',
+                [$before],
+                [ParameterType::INTEGER],
+            );
+        }
+        if (!in_array($mediaType, self::MEDIA_TYPES, true)) {
+            return 0;
+        }
+
         return (int) $this->db()->executeStatement(
-            'DELETE FROM wokeometer_media WHERE last_seen_at < ?',
-            [$before],
-            [ParameterType::INTEGER],
+            'DELETE FROM wokeometer_media WHERE last_seen_at < ? AND media_type = ?',
+            [$before, $mediaType],
+            [ParameterType::INTEGER, ParameterType::STRING],
+        );
+    }
+
+    /**
+     * Rows of one media type seen at or after `$since` (the sweep marker a
+     * run stamps on every row it returned). 0 for an unknown type.
+     */
+    public function countSeenSince(string $mediaType, int $since): int
+    {
+        if (!in_array($mediaType, self::MEDIA_TYPES, true)) {
+            return 0;
+        }
+
+        return (int) $this->db()->fetchOne(
+            'SELECT COUNT(*) FROM wokeometer_media WHERE media_type = ? AND last_seen_at >= ?',
+            [$mediaType, $since],
+            [ParameterType::STRING, ParameterType::INTEGER],
         );
     }
 

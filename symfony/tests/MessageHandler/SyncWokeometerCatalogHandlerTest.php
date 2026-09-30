@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\AbstractLogger;
 use Psr\Log\LoggerInterface;
 use Psr\Log\NullLogger;
+use Symfony\Component\Messenger\Attribute\AsMessageHandler;
 use Symfony\Component\Messenger\Envelope;
 use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Messenger\Stamp\DelayStamp;
@@ -83,9 +84,38 @@ class SyncWokeometerCatalogHandlerTest extends TestCase
         $this->assertSame([], $this->sent, 'done → no continuation');
     }
 
+    public function testHandlerIsBoundToTheAsyncTransportOnly(): void
+    {
+        $attrs = (new \ReflectionClass(SyncWokeometerCatalogHandler::class))->getAttributes(AsMessageHandler::class);
+        $this->assertCount(1, $attrs);
+        $this->assertSame('async', $attrs[0]->newInstance()->fromTransport, 'never run a paid sync inline in a web request');
+    }
+
+    public function testQueuedScheduledStartRechecksIsDueBeforeStarting(): void
+    {
+        $sync = $this->createMock(WokeometerSyncService::class);
+        $sync->expects($this->once())->method('isDue')->willReturn(false);
+        $sync->expects($this->never())->method('start');
+        $sync->expects($this->never())->method('runChunk');
+
+        (new SyncWokeometerCatalogHandler($sync, $this->bus(), new NullLogger()))(new SyncWokeometerCatalog(null, 'schedule', false));
+
+        $this->assertSame([], $this->sent);
+    }
+
+    public function testManualStartDoesNotConsultIsDue(): void
+    {
+        $sync = $this->createMock(WokeometerSyncService::class);
+        $sync->expects($this->never())->method('isDue');
+        $sync->expects($this->once())->method('start')->with('manual', false)->willReturn(null);
+
+        (new SyncWokeometerCatalogHandler($sync, $this->bus(), new NullLogger()))(new SyncWokeometerCatalog(null, 'manual', false));
+    }
+
     public function testRefusedStartDoesNothing(): void
     {
         $sync = $this->createMock(WokeometerSyncService::class);
+        $sync->expects($this->once())->method('isDue')->willReturn(true);
         $sync->expects($this->once())->method('start')->willReturn(null);
         $sync->expects($this->never())->method('runChunk');
         $records = [];

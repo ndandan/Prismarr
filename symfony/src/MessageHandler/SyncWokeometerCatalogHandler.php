@@ -21,8 +21,15 @@ use Symfony\Component\Messenger\Stamp\DelayStamp;
  * name only — never getMessage(), which could carry provider text) and acked.
  * If the continuation dispatch itself fails, the run's lock simply goes
  * stale and the next hourly tick takes it over from the persisted cursor.
+ *
+ * Bound to the `async` transport only (`fromTransport`): the run must be
+ * executed by the single built-in messenger worker, never inline in a web
+ * request (a `sync://` transport DSN is unsupported for this feature). A
+ * queued SCHEDULED start re-checks isDue() when it is consumed — the state
+ * may have changed since the tick queued it (a manual run started, the admin
+ * switched auto-sync off, a runaway stop paused scheduling).
  */
-#[AsMessageHandler]
+#[AsMessageHandler(fromTransport: 'async')]
 final class SyncWokeometerCatalogHandler
 {
     /** Continuation delay bounds (seconds). */
@@ -38,7 +45,13 @@ final class SyncWokeometerCatalogHandler
     public function __invoke(SyncWokeometerCatalog $message): void
     {
         try {
-            $runId = $message->runId ?? $this->sync->start($message->trigger, $message->forceFull);
+            $runId = $message->runId;
+            if ($runId === null) {
+                if ($message->trigger === 'schedule' && !$this->sync->isDue(time())) {
+                    return;
+                }
+                $runId = $this->sync->start($message->trigger, $message->forceFull);
+            }
             if ($runId === null) {
                 // disabled / backoff / locked — expected, nothing to record
                 // (the app logger drops info, and the state row is untouched).

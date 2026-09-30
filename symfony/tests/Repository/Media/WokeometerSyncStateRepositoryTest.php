@@ -233,18 +233,78 @@ class WokeometerSyncStateRepositoryTest extends KernelTestCase
     {
         $this->interruptedRun('incremental');
 
-        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'full', 'manual'));
+        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'full', 'manual', true));
 
         $this->assertFreshRun('run-2', 'full', 90_000);
     }
 
-    public function testFreeInterruptedFullIsSupersededByIncremental(): void
+    public function testFreeInterruptedFullIsSupersededByForcedFull(): void
     {
+        // Same mode, but forced: "Full resync" means start over (decided in the CAS).
         $this->interruptedRun('full');
 
-        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'incremental', 'schedule'));
+        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'full', 'manual', true));
 
+        $this->assertFreshRun('run-2', 'full', 90_000);
+    }
+
+    public function testNonForcedStartOfAnyModeResumesAFreeInterruptedRunInItsOwnMode(): void
+    {
+        foreach ([['full', 'incremental'], ['incremental', 'full'], ['full', 'full']] as [$runMode, $requested]) {
+            $this->repo->update(['run_phase' => null]);
+            $this->interruptedRun($runMode);
+
+            $this->assertSame('resumed', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, $requested, 'schedule'), "$runMode ← $requested");
+
+            $s = $this->repo->get();
+            $this->assertSame($runMode, $s['run_mode'], 'the run keeps its own mode');
+            $this->assertSame('c-42', $s['run_cursor']);
+            $this->assertSame('idem-1', $s['run_idempotency_key']);
+            $this->assertSame(1000, $s['run_started_at']);
+            $this->assertTrue($this->repo->releaseLock('run-2'));
+        }
+    }
+
+    public function testForcedStartOverAStaleHeldRunStillResumesSoTheCallerCanConvertIt(): void
+    {
+        $this->assertSame('fresh', $this->repo->acquireLock('run-1', 1000, 1000 - 1800, 'incremental', 'schedule'));
+        $this->repo->update(['run_phase' => 'tv', 'run_cursor' => 'c-1']);
+
+        $this->assertSame('resumed', $this->repo->acquireLock('run-2', 4000, 4000 - 1800, 'full', 'manual', true));
+        $this->assertSame('run-2', $this->repo->get()['lock_run_id']);
+        $this->assertSame('c-1', $this->repo->get()['run_cursor']);
+    }
+
+    public function testFreeUnfinishedRowWithoutAModeStartsFreshInsteadOfWedging(): void
+    {
+        $this->repo->update(['run_phase' => 'movie', 'run_mode' => null, 'run_cursor' => 'x']);
+
+        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 90_000, 90_000 - 1800, 'incremental', 'schedule'));
         $this->assertFreshRun('run-2', 'incremental', 90_000);
+    }
+
+    public function testOwnerCheckedUpdateOnlyLandsForTheLockHolder(): void
+    {
+        $this->repo->tryAcquireLock('run-1', 1000, 1000 - 1800, 'full', 'manual');
+
+        $this->assertSame(1, $this->repo->update(['run_cursor' => 'mine'], 'run-1'));
+        $this->assertSame('mine', $this->repo->get()['run_cursor']);
+
+        // Taken over (stale): the old run's writes change nothing.
+        $this->assertSame('resumed', $this->repo->acquireLock('run-2', 4000, 4000 - 1800, 'full', 'schedule'));
+        $this->assertSame(0, $this->repo->update(['run_cursor' => 'stale-write', 'last_status' => 'ok'], 'run-1'));
+        $s = $this->repo->get();
+        $this->assertSame('mine', $s['run_cursor']);
+        $this->assertNull($s['last_status']);
+
+        // Released: an owner write never lands on a free row either.
+        $this->repo->releaseLock('run-2');
+        $this->assertSame(0, $this->repo->update(['run_cursor' => 'late'], 'run-2'));
+        $this->assertSame('mine', $this->repo->get()['run_cursor']);
+
+        // Ownerless (controller / settings) writes still work and report 1.
+        $this->assertSame(1, $this->repo->update(['next_attempt_after' => null]));
+        $this->assertSame(0, $this->repo->update([], 'run-2'));
     }
 
     public function testFreeInterruptedIncrementalResumesForIncremental(): void
