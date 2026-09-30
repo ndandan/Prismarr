@@ -372,6 +372,45 @@ class WokeometerTitleRepositoryTest extends KernelTestCase
         $this->assertSame(0, $this->repo->countMatching('movie', [71]));
     }
 
+    /** Live series rows carry a non-positive sentinel (-1), not 0 and not NULL. */
+    public function testNegativeSentinelSeriesRowIsTheSeries(): void
+    {
+        $this->repo->upsertRows([
+            $this->row('show', ['mediaType' => 'tv', 'tmdbId' => 80, 'seasonNumber' => -1, 'wokeScore' => 2]),
+            $this->row('show-s1', ['mediaType' => 'tv', 'tmdbId' => 80, 'parentWokeometerId' => 'show', 'seasonNumber' => 1]),
+        ], 1000, 1000);
+
+        $tv = $this->repo->findForTmdb('tv', 80);
+        $this->assertNotNull($tv, 'a series row with season_number -1 must match');
+        $this->assertSame('show', $tv['wokeometer_id']);
+        $this->assertSame([80], array_keys($this->repo->findForTmdbMany('tv', [80])));
+        $this->assertSame(1, $this->repo->countMatching('tv', [80]));
+
+        $c = $this->repo->counts();
+        $this->assertSame(1, $c['series']);
+        $this->assertSame(1, $c['seasons']);
+    }
+
+    /** A season number stored as TEXT (raw insert, string bind) still marks a season and never matches. */
+    public function testTextSeasonNumberMarksASeasonAndNeverMatches(): void
+    {
+        foreach (['17', '17 '] as $i => $text) {
+            $this->db->executeStatement(
+                'INSERT INTO wokeometer_media (wokeometer_id, media_type, tmdb_id, title, wokeometer_updated_at, last_seen_at, synced_at, season_number)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                ['txt-season-' . $i, 'tv', 90 + $i, 'Text season', 1, 1, 1, $text],
+            );
+        }
+
+        $this->assertNull($this->repo->findForTmdb('tv', 90));
+        $this->assertNull($this->repo->findForTmdb('tv', 91));
+        $this->assertSame([], $this->repo->findForTmdbMany('tv', [90, 91]));
+        $this->assertSame(0, $this->repo->countMatching('tv', [90, 91]));
+        $c = $this->repo->counts();
+        $this->assertSame(0, $c['series']);
+        $this->assertSame(2, $c['seasons']);
+    }
+
     public function testTruncate(): void
     {
         $this->repo->upsertRows([$this->row('a'), $this->row('b')], 1000, 1000);

@@ -145,7 +145,7 @@ class WokeometerLookup implements ResetInterface
         $type     = $row['media_type'] ?? '';
 
         $score = is_int($score) ? $score : null;
-        $tldr  = is_string($tldr) && $tldr !== '' ? $tldr : null;
+        $tldr  = is_string($tldr) ? self::plainText($tldr) : null;
         if ($score === null && $tldr === null) {
             return null;
         }
@@ -158,6 +158,23 @@ class WokeometerLookup implements ResetInterface
             'title'     => (string) ($row['title'] ?? ''),
             'updatedAt' => (int) ($row['wokeometer_updated_at'] ?? 0),
         ];
+    }
+
+    /**
+     * Display-side only (the stored TL;DR stays raw): Wokeometer's TL;DR
+     * arrives with Markdown emphasis and we render plain text, so strip
+     * `**strong**` / `__strong__` and single `*em*` / `_em_` delimiters that
+     * wrap words (an underscore inside a word, `snake_case_name`, is left
+     * alone), collapse line breaks to one space and trim. Empty → null.
+     */
+    private static function plainText(string $text): ?string
+    {
+        $out = preg_replace('/(\*\*|__)(.+?)\1/su', '$2', $text) ?? $text;
+        $out = preg_replace('/(?<![\w])[*_](\S(?:.*?\S)?)[*_](?![\w])/su', '$1', $out) ?? $out;
+        $out = preg_replace('/\s*[\r\n]+\s*/u', ' ', $out) ?? $out;
+        $out = trim($out);
+
+        return $out !== '' ? $out : null;
     }
 
     private function fail(\Throwable $e): void

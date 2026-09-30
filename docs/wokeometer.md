@@ -217,7 +217,7 @@ worker; the request itself never calls Wokeometer.
   there are no fuzzy matches, so a missing score is always "not in the
   catalog", never "wrongly matched".
 - Wokeometer stores each season as its own row. Season rows (any row with a
-  parent id or a season number of 1 or more) are kept locally but are never matched to a
+  parent id or a season number of 1 or more; non-season rows carry `season_number` 0 (movies) or a non-positive sentinel such as -1 (series), which is not a season) are kept locally but are never matched to a
   series (a season's external id can be a TMDb season id that collides with
   an unrelated show), and only the series-level row is shown.
 - Sonarr series without a TMDb id do not match and simply show nothing.
@@ -225,7 +225,7 @@ worker; the request itself never calls Wokeometer.
 ## Where it appears
 
 A small "Wokeometer" block (score out of 10, the TL;DR, and a "View full
-analysis" link to wokeometer.app) appears for any title in the Wokeometer
+analysis" link to wokeometer.app; the TL;DR is shown as plain text, with any Markdown emphasis markers stripped, while the stored text stays raw) appears for any title in the Wokeometer
 catalog in:
 
 - the global quick-look modal (dashboard, top-bar search, Explorer, Plex
@@ -313,9 +313,9 @@ Other symptoms:
   so Prismarr derives the TMDb id from `external_source` = `tmdb` and a numeric
   `external_id`. Verified against a full live sync (13,916 rows): every row
   carries `external_source = tmdb` with a numeric `external_id`. The API also
-  emits `season_number = 0` on every non-season row (movies and series); Prismarr
-  treats 0 as "not a season" and only rows with a season number of 1 or more
-  (or a parent id) are seasons.
+  emits `season_number = 0` on movies and a non-positive sentinel (e.g. -1) on series rows; Prismarr
+  treats only a parent id or a positive season number as "season" (0, negatives
+  and NULL all mean "not a season").
 - **Seasons are stored but not shown.** Only the series-level score is used.
 - **Sonarr series without a TMDb id do not match.**
 - **Fixed monthly schedule.** The 30-day interval and the 600-request cap are

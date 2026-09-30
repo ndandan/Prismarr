@@ -97,6 +97,36 @@ class WokeometerLookupTest extends TestCase
         ], $lookup->forTmdb('movie', 603));
     }
 
+    public function testTldrMarkdownEmphasisIsStrippedForDisplay(): void
+    {
+        $repo = $this->createMock(WokeometerTitleRepository::class);
+        $repo->method('findForTmdb')->willReturn($this->dbRow([
+            'tldr' => "**The Matrix**: Pure spectacle\r\nand *style*, with _some_ __bold__ claims and **zero woke preaching** (2/10)\n\n",
+        ]));
+
+        $view = (new WokeometerLookup($this->settings(true), $repo, $this->logger()))->forTmdb('movie', 603);
+
+        $this->assertNotNull($view);
+        $this->assertSame(
+            'The Matrix: Pure spectacle and style, with some bold claims and zero woke preaching (2/10)',
+            $view['tldr'],
+        );
+        $this->assertStringNotContainsString('*', $view['tldr']);
+    }
+
+    public function testTldrIntraWordUnderscoresAndApostrophesAreLeftAlone(): void
+    {
+        $repo = $this->createMock(WokeometerTitleRepository::class);
+        $repo->method('findForTmdb')->willReturn($this->dbRow([
+            'tldr' => "It's about snake_case_name and don't_touch_this, plus 2 * 3 math.",
+        ]));
+
+        $view = (new WokeometerLookup($this->settings(true), $repo, $this->logger()))->forTmdb('movie', 603);
+
+        $this->assertNotNull($view);
+        $this->assertSame("It's about snake_case_name and don't_touch_this, plus 2 * 3 math.", $view['tldr']);
+    }
+
     public function testUnsafeSlugYieldsNullUrl(): void
     {
         $repo = $this->createMock(WokeometerTitleRepository::class);

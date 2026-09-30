@@ -21,8 +21,11 @@ use Doctrine\Persistence\ManagerRegistry;
  * external id may be a TMDb season id that collides with an unrelated show.
  * Belt and braces, a row carrying a positive `season_number` never matches
  * either (a season row whose parent id the API left out). The live API emits
- * `season_number = 0` on every non-season row, so NULL and 0 both mean "not a
- * season" (COALESCE keeps already-stored zeros matchable without a resync).
+ * `season_number = 0` on movies and a non-positive sentinel (e.g. -1) on series
+ * rows, so only a parent id or a POSITIVE integer season number marks a
+ * season; NULL, 0 and negatives all mean "not a season". The value is CAST to
+ * INTEGER first so a stray TEXT value cannot slip through a type comparison,
+ * and already-stored sentinels stay matchable without a resync.
  *
  * Row shape returned by findForTmdb()/findForTmdbMany() (snake_case columns,
  * integer columns cast to int, is_analyzed to bool, nulls preserved):
@@ -61,8 +64,11 @@ class WokeometerTitleRepository extends ServiceEntityRepository
         WHERE excluded.wokeometer_updated_at >= wokeometer_media.wokeometer_updated_at
         SQL;
 
+    /** A row is a season when it has a parent id or a positive integer season number. */
+    private const IS_SEASON = '(parent_wokeometer_id IS NOT NULL OR CAST(COALESCE(season_number, 0) AS INTEGER) > 0)';
+
     /** SQL fragment appended to every match query (spec D8 + season guard). */
-    private const MATCHABLE = "((media_type = 'movie' OR parent_wokeometer_id IS NULL) AND COALESCE(season_number, 0) = 0)";
+    private const MATCHABLE = "((media_type = 'movie' OR parent_wokeometer_id IS NULL) AND CAST(COALESCE(season_number, 0) AS INTEGER) <= 0)";
 
     private const INT_COLUMNS = ['id', 'tmdb_id', 'season_number', 'woke_score', 'wokeometer_updated_at', 'last_seen_at', 'synced_at'];
 
@@ -215,11 +221,12 @@ class WokeometerTitleRepository extends ServiceEntityRepository
      */
     public function counts(): array
     {
-        $r = $this->db()->fetchAssociative(<<<'SQL'
+        $isSeason = self::IS_SEASON;
+        $r = $this->db()->fetchAssociative(<<<SQL
             SELECT COUNT(*) AS total,
                    COALESCE(SUM(CASE WHEN media_type = 'movie' THEN 1 ELSE 0 END), 0) AS movies,
-                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND parent_wokeometer_id IS NULL AND COALESCE(season_number, 0) = 0 THEN 1 ELSE 0 END), 0) AS series,
-                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND (parent_wokeometer_id IS NOT NULL OR COALESCE(season_number, 0) > 0) THEN 1 ELSE 0 END), 0) AS seasons,
+                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND NOT {$isSeason} THEN 1 ELSE 0 END), 0) AS series,
+                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND {$isSeason} THEN 1 ELSE 0 END), 0) AS seasons,
                    COALESCE(SUM(CASE WHEN tmdb_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_tmdb
             FROM wokeometer_media
             SQL);
