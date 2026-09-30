@@ -213,4 +213,26 @@ class MediaLibraryCacheTest extends TestCase
 
         $this->assertSame([], $records, 'a stale-but-not-yet-overdue read must not log anything');
     }
+
+    public function testPeekIsNullOnAColdCacheAndNeverFetches(): void
+    {
+        $cache = $this->cache();
+
+        $this->assertNull($cache->peekMovies('radarr-1'));
+        $this->assertNull($cache->peekSeries('sonarr-1'));
+    }
+
+    public function testPeekReturnsTheCachedListWithoutFetchingOrRequestingARefresh(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write('media.movies.radarr-1', [['id' => 1]], MediaLibraryCache::HARD_TTL, time() - 120); // stale
+        $swr->write('media.series.sonarr-1', [['id' => 9]], MediaLibraryCache::HARD_TTL);
+
+        $cache = new MediaLibraryCache($swr);
+
+        $this->assertSame([['id' => 1]], $cache->peekMovies('radarr-1'), 'a stale entry is still served');
+        $this->assertSame([['id' => 9]], $cache->peekSeries('sonarr-1'));
+        $this->assertFalse($pool->getItem('media.movies.radarr-1.refreshing')->isHit(), 'peek must not ask for a background refresh');
+    }
 }

@@ -570,6 +570,158 @@
               {% endfor %}
               </div>
             {% endfor %}
+
+            {# ─── Metadata enrichment: Wokeometer ───────────────────────
+               Standalone card, deliberately outside the `groupings` loop:
+               Wokeometer is NOT a probed service (no FIELDS / SERVICE_LABELS /
+               HealthService entry, no Test button, no health chip) because
+               every request to its API costs credits. It sits INSIDE the main
+               form, hence type="button" + fetch for the two sync actions. #}
+            {% set wok  = wokeometer %}
+            {% set wst  = wok.state ?? {} %}
+            {% set wtimes = wok.times ?? {} %}
+            {% set wok_known_status = ['running', 'interrupted', 'ok', 'error', 'auth', 'forbidden', 'out_of_credits', 'rate_limited', 'request_cap', 'halted', 'invalid', 'never'] %}
+            {# "running" in the row without a live lock = a crashed / not-yet-picked-up run that the next tick resumes. #}
+            {% set wok_status = (wst.running ?? false) ? 'running' : ((wst.lastStatus ?? null) == 'running' ? 'interrupted' : (wst.lastStatus ?? 'never')) %}
+            {% if wok_status not in wok_known_status %}{% set wok_status = 'error' %}{% endif %}
+            {% set wok_can_sync = (wst.enabled ?? false) and not (wst.running ?? false) %}
+
+            <div style="font-size:.75rem; color:var(--tblr-secondary); font-weight:600; margin: 1.25rem 0 .6rem;">
+              {{ 'admin.services.group.enrichment'|trans }}
+            </div>
+
+            <div class="service-grid-2col">
+              <div class="service-card service-card--wide" data-wokeometer-card data-running="{{ (wst.running ?? false) ? 1 : 0 }}"
+                   data-has-state="{{ wok.state is not null ? 1 : 0 }}"
+                   data-last-status="{{ wst.lastStatus ?? '' }}"
+                   data-last-run-requests="{{ wst.lastRunRequests ?? 0 }}">
+                <div class="service-card-head">
+                  <div class="service-card-icon service-card-icon--logo" style="--brand: #6f42c1;">
+                    <img src="{{ asset('img/services/wokeometer.svg') }}"
+                         alt="Wokeometer" width="24" height="24" loading="lazy">
+                  </div>
+                  <div>
+                    <p class="service-card-title">Wokeometer</p>
+                    <p class="service-card-sub">{{ 'admin.wokeometer.subtitle'|trans }}</p>
+                  </div>
+                  <div class="service-card-actions">
+                    {# Unchecked box isn't POSTed → saveSubmitted stores '0'; checked → row dropped. #}
+                    <label class="form-check form-switch m-0 me-2" style="padding-left:2.4em;">
+                      <input class="form-check-input" type="checkbox"
+                             name="wokeometer_enabled" value="1"
+                             {{ wok.enabled ? 'checked' : '' }}>
+                      <span class="form-check-label" style="font-size:.78rem; color:var(--tblr-secondary);">{{ 'admin.services.enabled'|trans }}</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="field-row" data-field-key="wokeometer_api_key">
+                  <label for="wokeometer_api_key">{{ 'admin.field.api_key'|trans }}</label>
+                  {{ forms.secret_input('wokeometer_api_key', 'wokeometer_api_key', { value: wok.apiKey, placeholder: 'wok_…' }) }}
+                  {# Same clear affordance as the qBit user/password fields (generic loop above):
+                     the shared .field-clear handler raises the hidden _clear_<key>=1, which
+                     saveSubmitted() honours before its empty-means-unchanged rule. #}
+                  <input type="hidden" id="_clear_wokeometer_api_key" name="_clear_wokeometer_api_key" value="0">
+                  <button type="button" class="field-clear" data-clear-for="wokeometer_api_key">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 7l16 0M10 11l0 6M14 11l0 6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12M9 7V4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/>
+                    </svg>
+                    <span>{{ 'admin.field.clear'|trans }}</span>
+                  </button>
+                  <div class="text-secondary small mt-1">
+                    {{ 'admin.wokeometer.key_help'|trans }}
+                    <a href="https://wokeometer.app/account/developer" target="_blank" rel="noopener">{{ 'admin.wokeometer.key_link'|trans }} ↗</a>
+                  </div>
+                </div>
+
+                <div class="field-row" data-field-key="wokeometer_auto_sync">
+                  <label for="wokeometer_auto_sync">{{ 'admin.wokeometer.auto_sync'|trans }}</label>
+                  <label class="form-check form-switch m-0" style="padding-left:2.4em;">
+                    <input class="form-check-input" type="checkbox"
+                           id="wokeometer_auto_sync" name="wokeometer_auto_sync" value="1"
+                           {{ wok.autoSync ? 'checked' : '' }}>
+                  </label>
+                </div>
+
+                <div class="field-row" data-field-key="wokeometer_frequency">
+                  <label for="wokeometer_frequency">{{ 'admin.wokeometer.frequency'|trans }}</label>
+                  {# Fixed cadence (WokeometerSettings::SYNC_INTERVAL_DAYS): shown, not editable, never submitted. #}
+                  <select id="wokeometer_frequency" class="form-select form-select-sm" disabled>
+                    <option selected>{{ 'admin.wokeometer.monthly'|trans }}</option>
+                  </select>
+                </div>
+
+                <div class="d-flex flex-column gap-2 mt-3" data-wokeometer-stats>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.last_sync'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="last_sync">{{ (wtimes.lastSuccessAt ?? null) ? wtimes.lastSuccessAt|prismarr_datetime : '—' }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.last_status'|trans }}</span>
+                    <span class="small fw-medium text-end">
+                      <span data-wokeometer-stat="last_status">{{ ('admin.wokeometer.status.' ~ wok_status)|trans }}</span>
+                      <span class="d-block text-secondary fw-normal" data-wokeometer-error>{{ (wst.running ?? false) ? '' : (wst.lastErrorMessage ?? '') }}</span>
+                    </span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.last_run_requests'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="last_run_requests">{{ wst.lastRunRequests ?? '—' }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.last_run_records'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="last_run_records">{{ wst.lastRunRecords ?? '—' }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.total_requests'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="total_requests">{{ wst.totalRequests ?? 0 }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.credits_remaining'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="credits_remaining">{{ wst.creditsRemaining ?? '—' }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.cached_records'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="cached_records">{{ wst.cached.total ?? 0 }} ({{ 'admin.wokeometer.cached_breakdown'|trans({movies: wst.cached.movies ?? 0, series: wst.cached.series ?? 0, seasons: wst.cached.seasons ?? 0}) }})</span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.records_with_tmdb'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="records_with_tmdb">{{ wst.cached.withTmdb ?? 0 }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between border-bottom pb-2">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.matched_titles'|trans }}</span>
+                    {# Not computed on render (it unserializes the cached library): the script fetches ?stats=1 once on load. #}
+                    <span class="small fw-medium" data-wokeometer-stat="matched_titles">{{ wok.state is not null ? '…' : '—' }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between pb-1">
+                    <span class="text-secondary small">{{ 'admin.wokeometer.next_due'|trans }}</span>
+                    <span class="small fw-medium" data-wokeometer-stat="next_due">{{ ((wst.enabled ?? false) and (wst.autoSync ?? false) and (wtimes.nextDueAt ?? null)) ? wtimes.nextDueAt|prismarr_datetime : '—' }}</span>
+                  </div>
+                </div>
+
+                <div class="d-flex flex-wrap align-items-center gap-2 mt-3">
+                  <button type="button" class="btn btn-primary btn-sm" data-wokeometer-sync
+                          data-url="{{ path('admin_settings_wokeometer_sync') }}"
+                          data-csrf="{{ csrf_token('admin_wokeometer_sync') }}"
+                          data-state-url="{{ path('admin_settings_wokeometer_state') }}"
+                          {{ wok_can_sync ? '' : 'disabled' }}>{{ 'admin.wokeometer.sync_now'|trans }}</button>
+                  <button type="button" class="btn btn-outline-secondary btn-sm" data-wokeometer-sync-full
+                          data-url="{{ path('admin_settings_wokeometer_sync') }}"
+                          data-csrf="{{ csrf_token('admin_wokeometer_sync') }}"
+                          data-state-url="{{ path('admin_settings_wokeometer_state') }}"
+                          {{ wok_can_sync ? '' : 'disabled' }}>{{ 'admin.wokeometer.full_resync'|trans }}</button>
+                  <span class="small {{ (wst.enabled ?? false) ? 'text-secondary' : 'text-warning' }}" data-wokeometer-message role="status" aria-live="polite">{{ (wst.enabled ?? false) ? '' : 'admin.wokeometer.reason.disabled'|trans }}</span>
+                </div>
+
+                <p class="small mt-3 mb-0 text-warning{{ ((wst.enabled ?? false) and (wst.fullSyncCompletedAt ?? null) is null) ? '' : ' d-none' }}" data-wokeometer-initial-hint>{{ 'admin.wokeometer.initial_sync_hint'|trans }}</p>
+                <p class="text-secondary small mt-3 mb-1">{{ 'admin.wokeometer.cost_note'|trans }}</p>
+                <p class="text-secondary small mb-0">
+                  {{ 'admin.wokeometer.attribution'|trans }}
+                  <a href="https://wokeometer.app" target="_blank" rel="noopener">wokeometer.app ↗</a>
+                </p>
+              </div>
+            </div>
           </section>
 
           {# ─── Section 2: Display / user preferences ──── #}
@@ -1648,5 +1800,254 @@
   document.addEventListener('turbo:load', initDashboardLayoutSort);
   if (document.readyState !== 'loading') initDashboardLayoutSort();
 })();
+  </script>
+  {# Wokeometer card: Sync now / Full resync + status polling. The strings come
+     from the translator (never hardcoded here); the breakdown template is
+     rendered with %m% / %s% / %z% tokens that the script swaps for numbers. #}
+  {% set wok_i18n = {
+    status: {
+      running:        'admin.wokeometer.status.running'|trans,
+      interrupted:    'admin.wokeometer.status.interrupted'|trans,
+      ok:             'admin.wokeometer.status.ok'|trans,
+      error:          'admin.wokeometer.status.error'|trans,
+      auth:           'admin.wokeometer.status.auth'|trans,
+      forbidden:      'admin.wokeometer.status.forbidden'|trans,
+      out_of_credits: 'admin.wokeometer.status.out_of_credits'|trans,
+      rate_limited:   'admin.wokeometer.status.rate_limited'|trans,
+      request_cap:    'admin.wokeometer.status.request_cap'|trans,
+      halted:         'admin.wokeometer.status.halted'|trans,
+      invalid:        'admin.wokeometer.status.invalid'|trans,
+      never:          'admin.wokeometer.status.never'|trans,
+    },
+    reason: {
+      disabled: 'admin.wokeometer.reason.disabled'|trans,
+      locked:   'admin.wokeometer.reason.locked'|trans,
+      backoff:  'admin.wokeometer.reason.backoff'|trans,
+      csrf:     'admin.wokeometer.reason.csrf'|trans,
+      error:    'admin.wokeometer.reason.error'|trans,
+    },
+    confirmFull: 'admin.wokeometer.confirm_full'|trans,
+    confirmAfterHalt: 'admin.wokeometer.confirm_after_halt'|trans({requests: '%n%'}),
+    queued:      'admin.wokeometer.queued'|trans,
+    pollTimeout: 'admin.wokeometer.poll_timeout'|trans,
+    breakdown:   'admin.wokeometer.cached_breakdown'|trans({movies: '%m%', series: '%s%', seasons: '%z%'}),
+  } %}
+  <script nonce="{{ csp_nonce() }}">
+  (function () {
+    var I18N = {{ wok_i18n|json_encode(constant('JSON_HEX_TAG'))|raw }};
+    var POLL_MS = 5000;
+    var MAX_POLLS = 120;
+    var DASH = '—';
+
+    function initWokeometerCard() {
+      var card = document.querySelector('[data-wokeometer-card]');
+      if (!card) return null;
+      var btnSync = card.querySelector('[data-wokeometer-sync]');
+      var btnFull = card.querySelector('[data-wokeometer-sync-full]');
+      var msg     = card.querySelector('[data-wokeometer-message]');
+      if (!btnSync || !btnFull || !msg) return null;
+
+      var alive = true;
+      var timer = null;
+      var polls = 0;
+      var GET_OPTS = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+      var hint = card.querySelector('[data-wokeometer-initial-hint]');
+      // Last known run outcome (a runaway stop makes Sync now ask first).
+      var lastStatus = card.dataset.lastStatus || '';
+      var lastRunRequests = parseInt(card.dataset.lastRunRequests || '0', 10) || 0;
+      // Statuses that paused automatic sync (WokeometerSyncService::PAUSING_STATUSES).
+      var PAUSING = { request_cap: true, halted: true };
+
+      function setText(name, text) {
+        var el = card.querySelector('[data-wokeometer-stat="' + name + '"]');
+        if (el) el.textContent = text;
+      }
+      function num(v) { return (v === null || v === undefined) ? DASH : String(v); }
+      // Timestamps arrive pre-formatted by the server (same formatter as
+      // |prismarr_datetime: display timezone + date/time preferences).
+      function label(s, field) {
+        var l = s.labels || {};
+        return (typeof l[field] === 'string' && l[field] !== '') ? l[field] : DASH;
+      }
+      function say(text, isError) {
+        msg.textContent = text || '';
+        msg.classList.toggle('text-danger', !!isError);
+        msg.classList.toggle('text-warning', false);
+        msg.classList.toggle('text-secondary', !isError);
+      }
+      function unlock() {
+        btnSync.disabled = false;
+        btnFull.disabled = false;
+      }
+
+      // withStats: this state was fetched with ?stats=1, so a null
+      // matchedTitles is a real answer ("unknown"), not "not computed".
+      function render(s, withStats) {
+        if (!s) return;
+        lastStatus = s.lastStatus || '';
+        lastRunRequests = (typeof s.lastRunRequests === 'number') ? s.lastRunRequests : 0;
+        var key = s.running ? 'running' : (s.lastStatus === 'running' ? 'interrupted' : (s.lastStatus || 'never'));
+        if (!Object.prototype.hasOwnProperty.call(I18N.status, key)) key = 'error';
+        setText('last_status', I18N.status[key]);
+        var errEl = card.querySelector('[data-wokeometer-error]');
+        if (errEl) errEl.textContent = (!s.running && s.lastErrorMessage) ? s.lastErrorMessage : '';
+
+        setText('last_sync', label(s, 'lastSuccessAt'));
+        setText('last_run_requests', num(s.lastRunRequests));
+        setText('last_run_records', num(s.lastRunRecords));
+        setText('total_requests', num(s.totalRequests));
+        setText('credits_remaining', num(s.creditsRemaining));
+        var c = s.cached || {};
+        setText('cached_records', num(c.total) + ' (' + I18N.breakdown
+          .replace('%m%', num(c.movies)).replace('%s%', num(c.series)).replace('%z%', num(c.seasons)) + ')');
+        setText('records_with_tmdb', num(c.withTmdb));
+        if (withStats || (s.matchedTitles !== null && s.matchedTitles !== undefined)) {
+          setText('matched_titles', num(s.matchedTitles));
+        }
+        setText('next_due', (s.enabled && s.autoSync) ? label(s, 'nextDueAt') : DASH);
+        if (hint) hint.classList.toggle('d-none', !(s.enabled && (s.fullSyncCompletedAt === null || s.fullSyncCompletedAt === undefined)));
+
+        var can = !!s.enabled && !s.running;
+        btnSync.disabled = !can;
+        btnFull.disabled = !can;
+      }
+
+      function stopPolling() {
+        if (timer !== null) { clearTimeout(timer); timer = null; }
+      }
+
+      // Ends a polling session: ONE ?stats=1 fetch refreshes every stat
+      // (including the matched-titles count the 5 s polls skip). When the
+      // session ended without a verdict (poll cap / unreadable state) the
+      // buttons are handed back to the admin with a "reload" hint.
+      function finish(gaveUp) {
+        var url = btnSync.dataset.stateUrl + '?stats=1';
+        fetch(url, GET_OPTS)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!alive) return;
+            if (d && d.ok && d.state) {
+              render(d.state, true);
+              if (gaveUp && d.state.running) {
+                say(I18N.pollTimeout, false);
+                if (d.state.enabled) unlock();
+              }
+            } else if (gaveUp) {
+              say(I18N.pollTimeout, false);
+              unlock();
+            }
+          })
+          .catch(function () {
+            if (!alive || !gaveUp) return;
+            say(I18N.pollTimeout, false);
+            unlock();
+          });
+      }
+
+      // Poll the state endpoint (without stats) every POLL_MS while a run is in flight, at most MAX_POLLS times.
+      function poll() {
+        if (timer !== null || !alive) return;
+        if (polls >= MAX_POLLS) { finish(true); return; }
+        timer = setTimeout(function () {
+          timer = null;
+          if (!alive) return;
+          polls++;
+          fetch(btnSync.dataset.stateUrl, GET_OPTS)
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+              if (!alive) return;
+              if (d && d.ok && d.state) {
+                render(d.state, false);
+                if (d.state.running) { poll(); } else { finish(false); }
+              } else {
+                say(I18N.pollTimeout, false);
+                unlock();
+              }
+            })
+            .catch(function () { if (alive) poll(); });
+        }, POLL_MS);
+      }
+
+      function trigger(full) {
+        if (full && !window.confirm(I18N.confirmFull)) return;
+        // After a safety stop the next run starts over and re-bills from page 1: ask first.
+        if (!full && Object.prototype.hasOwnProperty.call(PAUSING, lastStatus)
+            && !window.confirm(I18N.confirmAfterHalt.replace('%n%', String(lastRunRequests)))) return;
+        btnSync.disabled = true;
+        btnFull.disabled = true;
+        say('', false);
+
+        var fd = new FormData();
+        fd.append('_token', btnSync.dataset.csrf || '');
+        if (full) fd.append('full', '1');
+
+        fetch(btnSync.dataset.url, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Accept': 'application/json' },
+          body: fd,
+        })
+          .then(function (r) { return r.json().catch(function () { return null; }); })
+          .then(function (d) {
+            if (!alive) return;
+            // state may legitimately be null (status read failed after the run was queued): skip the refresh.
+            if (d && d.state) render(d.state, true);
+            if (d && d.ok && d.queued) {
+              say(I18N.queued, false);
+              polls = 0;
+              poll();
+              return;
+            }
+            var reason = (d && d.reason && Object.prototype.hasOwnProperty.call(I18N.reason, d.reason)) ? d.reason : 'error';
+            say(I18N.reason[reason], true);
+            if (d && d.state && d.state.running) {
+              polls = 0;
+              poll();
+            } else if (!(d && d.state)) {
+              // Nothing came back to tell us the truth: let the admin retry.
+              unlock();
+            }
+          })
+          .catch(function () {
+            if (!alive) return;
+            say(I18N.reason.error, true);
+            unlock();
+          });
+      }
+
+      btnSync.onclick = function () { trigger(false); };
+      btnFull.onclick = function () { trigger(true); };
+
+      // The page render skips the matched-titles count (it unserializes the
+      // cached library): fetch the full stats ONCE now, then as before.
+      if (card.dataset.hasState === "1") {
+        fetch(btnSync.dataset.stateUrl + '?stats=1', GET_OPTS)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!alive) return;
+            if (d && d.ok && d.state) { render(d.state, true); } else { setText('matched_titles', DASH); }
+          })
+          .catch(function () { if (alive) setText('matched_titles', DASH); });
+      }
+
+      // A run started elsewhere (or before this page load) is still in flight: follow it.
+      if (card.dataset.running === "1") { poll(); }
+
+      // Never leak the poller across Turbo navigation.
+      return function () { alive = false; stopPolling(); };
+    }
+
+    if (typeof window.registerPageLifecycle === 'function') {
+      window.registerPageLifecycle(initWokeometerCard);
+    } else {
+      var teardown = initWokeometerCard();
+      if (typeof teardown === 'function') {
+        document.addEventListener('turbo:before-render', function cleanup() {
+          document.removeEventListener('turbo:before-render', cleanup);
+          teardown();
+        });
+      }
+    }
+  })();
   </script>
 {% endblock %}

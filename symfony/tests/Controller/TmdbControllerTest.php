@@ -58,6 +58,7 @@ class TmdbControllerTest extends TestCase
         ServiceInstanceProvider $instances,
         array $radarrPerSlug = [],
         array $sonarrPerSlug = [],
+        ?\App\Service\Wokeometer\WokeometerLookup $wokeometer = null,
     ): TmdbController {
         // Route per-instance withInstance() to the matching mock, so each
         // instance can be configured with its own getMovies()/getRawAllSeries()
@@ -96,6 +97,7 @@ class TmdbControllerTest extends TestCase
             $logger,
             $translator,
             $instances,
+            $wokeometer,
         );
 
         // AbstractController::json() reaches into the container even though
@@ -322,5 +324,71 @@ class TmdbControllerTest extends TestCase
         // Two unique tmdbIds across both Radarr instances → 2 seeds, not 3.
         $this->assertSame(2, $payload['seeds']);
         $this->assertSame([], $payload['results'], 'No TMDb recommendations configured = empty results');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function detailPayload(?\App\Service\Wokeometer\WokeometerLookup $wokeometer, string $type, int $id): array
+    {
+        $tmdb = $this->createMock(TmdbClient::class);
+        $tmdb->method('getMovie')->willReturn(['id' => $id, 'title' => 'The Matrix']);
+        $tmdb->method('getTv')->willReturn(['id' => $id, 'name' => 'Severance']);
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturn([]);
+
+        $controller = $this->controller(
+            $tmdb,
+            $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class),
+            $instances,
+            wokeometer: $wokeometer,
+        );
+
+        $payload = json_decode((string) $controller->detail($type, $id)->getContent(), true);
+        $this->assertIsArray($payload);
+
+        return $payload;
+    }
+
+    public function testDetailJsonCarriesTheLocalWokeometerView(): void
+    {
+        $view  = ['score' => 4, 'tldr' => 'Summary.', 'url' => 'https://wokeometer.app/media/tv/severance', 'analyzed' => true, 'title' => 'Severance', 'updatedAt' => 1];
+        $woke  = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $woke->expects($this->once())->method('forTmdb')->with('tv', 95396)->willReturn($view);
+
+        $payload = $this->detailPayload($woke, 'tv', 95396);
+
+        $this->assertSame($view, $payload['wokeometer']);
+    }
+
+    public function testDetailJsonUsesMovieVocabularyForMovies(): void
+    {
+        $woke = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $woke->expects($this->once())->method('forTmdb')->with('movie', 603)->willReturn(null);
+
+        $payload = $this->detailPayload($woke, 'movie', 603);
+
+        $this->assertArrayHasKey('wokeometer', $payload);
+        $this->assertNull($payload['wokeometer']);
+    }
+
+    public function testDetailJsonSurvivesALookupFailure(): void
+    {
+        $woke = $this->createMock(\App\Service\Wokeometer\WokeometerLookup::class);
+        $woke->method('forTmdb')->willThrowException(new \RuntimeException('db gone'));
+
+        $payload = $this->detailPayload($woke, 'movie', 603);
+
+        $this->assertSame('The Matrix', $payload['title']);
+        $this->assertNull($payload['wokeometer']);
+    }
+
+    public function testDetailJsonWithoutWokeometerServiceHasNullKey(): void
+    {
+        $payload = $this->detailPayload(null, 'movie', 603);
+
+        $this->assertArrayHasKey('wokeometer', $payload);
+        $this->assertNull($payload['wokeometer']);
     }
 }

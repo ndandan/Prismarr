@@ -8,13 +8,20 @@ use App\Repository\SettingRepository;
 use App\Repository\UserRepository;
 use App\Service\ConfigService;
 use App\Service\DashboardLayoutService;
+use App\Service\DisplayPreferencesService;
 use App\Service\HealthService;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\RadarrClient;
+use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\SonarrClient;
 use App\Service\ServiceInstanceProvider;
+use App\Service\Wokeometer\WokeometerSettings;
+use App\Service\Wokeometer\WokeometerSyncService;
+use App\Message\SyncWokeometerCatalog;
+use App\Repository\Media\WokeometerSyncStateRepository;
+use App\Repository\Media\WokeometerTitleRepository;
 use Doctrine\DBAL\Connection;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -23,6 +30,7 @@ use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Kernel;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Contracts\Translation\TranslatorInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
@@ -396,6 +404,12 @@ class AdminSettingsController extends AbstractController
         private readonly string $environment = 'prod',
         private readonly ?TranslatorInterface $translator = null,
         private readonly ?BazarrSubtitleIndex $bazarrIndex = null,
+        // Wokeometer card (not a probed service — see wokeometerView()).
+        // Nullable + last: tests construct this controller positionally.
+        private readonly ?WokeometerSyncService $wokeometerSync = null,
+        private readonly ?WokeometerSyncStateRepository $wokeometerState = null,
+        private readonly ?WokeometerTitleRepository $wokeometerTitles = null,
+        private readonly ?MediaLibraryCache $libraryCache = null,
     ) {
     }
 
@@ -443,6 +457,7 @@ class AdminSettingsController extends AbstractController
             'app_changelog_html'   => $this->appVersion->changelogHtml(),
             'app_upstream'         => $this->appVersion->upstream(),
             'dashboard_layout'   => $this->loadDashboardLayout(),
+            'wokeometer'         => $this->wokeometerView(),
             // v1.1.0 — instance lists for the multi-instance card UI.
             'instances_by_type'  => [
                 ServiceInstance::TYPE_RADARR => $this->instances->getAll(ServiceInstance::TYPE_RADARR),
@@ -1166,6 +1181,37 @@ class AdminSettingsController extends AbstractController
             $payload[$id . '_enabled'] = $request->request->has($id . '_enabled') ? null : '0';
         }
 
+        // Wokeometer (standalone card — deliberately NOT in FIELDS or
+        // HealthService::TOGGLEABLE_SERVICES, so no probe/chip/route guard).
+        // Key: trimmed, empty = unchanged (same rationale as the password
+        // guard above). Both switches use the kill-switch semantics: unchecked
+        // (absent from the POST) = explicit '0', checked = row dropped.
+        // A non-empty key that is not `wok_…`-shaped is refused (flash) and the
+        // stored key is left untouched — it could never authenticate.
+        $wokeometerKey        = trim((string) $request->request->get(WokeometerSettings::KEY_API_KEY, ''));
+        $wokeometerKeyChanged = false;
+        $wokeometerKeyRefused = false;
+        if ((string) $request->request->get('_clear_' . WokeometerSettings::KEY_API_KEY, '') === '1') {
+            // Explicit trash button: wins over the empty-means-unchanged rule
+            // below (and over whatever the input still holds).
+            $payload[WokeometerSettings::KEY_API_KEY] = null;
+        } elseif ($wokeometerKey !== '' && !WokeometerSettings::isValidKey($wokeometerKey)) {
+            // Everything else in the form IS saved: the single warning below
+            // says so, and replaces the generic success flash.
+            $wokeometerKeyRefused = true;
+            $this->addFlash('warning', $this->translator?->trans('admin.wokeometer.flash.invalid_key')
+                ?? 'Settings saved, but the Wokeometer API key was not: it does not look like a Wokeometer key (expected wok_…).');
+        } elseif ($wokeometerKey !== '') {
+            // The password input is pre-filled with the stored key, so every
+            // unrelated save resubmits it: only a genuinely different key
+            // counts as a change (captured BEFORE setMany() overwrites it).
+            $wokeometerKeyChanged = $wokeometerKey !== (string) $this->config->get(WokeometerSettings::KEY_API_KEY);
+            $payload[WokeometerSettings::KEY_API_KEY] = $wokeometerKey;
+        }
+        foreach ([WokeometerSettings::KEY_ENABLED, WokeometerSettings::KEY_AUTO_SYNC] as $wokeometerFlag) {
+            $payload[$wokeometerFlag] = $request->request->has($wokeometerFlag) ? null : '0';
+        }
+
         // Display preferences — only accept values from the declared allow-list
         // (selects/colors) or '1'/'0' for switches. Anything else is dropped
         // silently and the default kicks back in on next read. Hidden options
@@ -1204,7 +1250,234 @@ class AdminSettingsController extends AbstractController
             // does not silently depend on that unrelated purge.
             $this->bazarrIndex?->invalidate();
         }
-        $this->addFlash('success', $this->translator?->trans('admin.flash.saved') ?? 'Configuration saved.');
+        if ($wokeometerKeyChanged) {
+            // A new key deserves a fresh chance: drop any auth/forbidden/credits
+            // backoff left over from the old one. Best effort — a DB hiccup
+            // here must never turn a successful save into an error.
+            try {
+                $this->wokeometerState?->update(['next_attempt_after' => null]);
+            } catch (\Throwable $e) {
+                $this->logger->warning('Wokeometer backoff reset failed', ['exception' => $e::class]);
+            }
+        }
+        if (!$wokeometerKeyRefused) {
+            $this->addFlash('success', $this->translator?->trans('admin.flash.saved') ?? 'Configuration saved.');
+        }
+    }
+
+    /**
+     * View-model for the standalone Wokeometer card.
+     *
+     *  - `enabled`  the SWITCH position (row missing = on), not the effective
+     *               state — so a fresh install with no key still shows the
+     *               switch on; the effective flag is `state.enabled`.
+     *  - `apiKey`   the stored key, prefilled like every other secret input.
+     *  - `state`    WokeometerSyncService::statusSummary() WITHOUT the
+     *               matched-titles count (the card shows "…" and its script
+     *               fetches `?stats=1` once on load, so the page render never
+     *               unserializes the cached library), or null when the sync
+     *               tables cannot be read (the card then degrades to inputs
+     *               only; the rest of the page must still render).
+     *  - `times`    DateTimeImmutable (or null) per epoch so Twig formats
+     *               them with the user's timezone / date preferences.
+     *
+     * @return array{enabled: bool, apiKey: string, autoSync: bool, state: ?array<string, mixed>, times: array<string, ?\DateTimeImmutable>}
+     */
+    private function wokeometerView(): array
+    {
+        $view = [
+            'enabled'  => $this->config->get(WokeometerSettings::KEY_ENABLED) !== '0',
+            'apiKey'   => (string) $this->config->get(WokeometerSettings::KEY_API_KEY),
+            'autoSync' => $this->config->get(WokeometerSettings::KEY_AUTO_SYNC) !== '0',
+            'state'    => null,
+            'times'    => [],
+        ];
+
+        if ($this->wokeometerSync === null) {
+            return $view;
+        }
+
+        try {
+            $state = $this->wokeometerSync->statusSummary();
+        } catch (\Throwable $e) {
+            $this->logger->warning('Wokeometer status unavailable', ['exception' => $e::class]);
+
+            return $view;
+        }
+
+        $view['state'] = $state;
+        foreach (['lastSuccessAt', 'nextDueAt'] as $field) {
+            $epoch = $state[$field] ?? null;
+            $view['times'][$field] = is_int($epoch) ? new \DateTimeImmutable('@' . $epoch) : null;
+        }
+
+        return $view;
+    }
+
+    /**
+     * Library titles that have a Wokeometer row, counted from the ALREADY
+     * cached Radarr/Sonarr lists only (MediaLibraryCache::peek*, which never
+     * fetches nor requests a refresh). Cold cache for any enabled instance,
+     * no instance at all, or any error => null ("—" in the card): a partial
+     * count would be misleading and the settings page must stay cheap.
+     */
+    private function matchedLibraryTitles(): ?int
+    {
+        if ($this->libraryCache === null || $this->wokeometerTitles === null) {
+            return null;
+        }
+
+        try {
+            $ids = ['movie' => [], 'tv' => []];
+            $any = false;
+            foreach ([ServiceInstance::TYPE_RADARR => 'movie', ServiceInstance::TYPE_SONARR => 'tv'] as $type => $mediaType) {
+                foreach ($this->instances->getEnabled($type) as $instance) {
+                    $rows = $mediaType === 'movie'
+                        ? $this->libraryCache->peekMovies($instance->getSlug())
+                        : $this->libraryCache->peekSeries($instance->getSlug());
+                    if ($rows === null) {
+                        return null;
+                    }
+                    $any = true;
+                    foreach ($rows as $row) {
+                        // Normalised like the library pages: "603" and 603 are the same title.
+                        $raw    = is_array($row) ? ($row['tmdbId'] ?? null) : null;
+                        $tmdbId = (is_int($raw) || is_float($raw) || is_string($raw)) ? (int) $raw : 0;
+                        if ($tmdbId > 0) {
+                            $ids[$mediaType][$tmdbId] = $tmdbId;
+                        }
+                    }
+                }
+            }
+            if (!$any) {
+                return null;
+            }
+
+            return $this->wokeometerTitles->countMatching('movie', array_values($ids['movie']))
+                + $this->wokeometerTitles->countMatching('tv', array_values($ids['tv']));
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /**
+     * statusSummary() that never throws: null when the sync tables cannot be
+     * read. `$withMatched` opts into the (comparatively costly) matched-titles
+     * count, which unserializes the cached library lists.
+     *
+     * Adds `labels`: the card's timestamps formatted server-side exactly like
+     * `|prismarr_datetime` (display timezone + date/time format preferences),
+     * "—" when unset — the script shows these instead of toLocaleString().
+     *
+     * @return array<string, mixed>|null
+     */
+    private function wokeometerSummary(WokeometerSyncService $sync, bool $withMatched, ?DisplayPreferencesService $prefs = null): ?array
+    {
+        try {
+            $state = $sync->statusSummary($withMatched ? fn () => $this->matchedLibraryTitles() : null);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Wokeometer status unavailable', ['exception' => $e::class]);
+
+            return null;
+        }
+
+        $labels = [];
+        foreach (['lastSuccessAt', 'nextDueAt', 'lastRunFinishedAt', 'lastRunStartedAt'] as $field) {
+            $epoch = $state[$field] ?? null;
+            $label = null;
+            if (is_int($epoch) && $prefs !== null) {
+                try {
+                    $label = $prefs->formatDateTime(new \DateTimeImmutable('@' . $epoch));
+                } catch (\Throwable) {
+                    $label = null;
+                }
+            }
+            $labels[$field] = $label ?? '—';
+        }
+        $state['labels'] = $labels;
+
+        return $state;
+    }
+
+    /**
+     * "Sync now" / "Full resync": takes the run lock synchronously (so the UI
+     * can poll `running` right away) and queues the run on the worker — this
+     * request never calls the Wokeometer API itself. CSRF-protected (JSON
+     * fetch from the settings card); admin-only through the class IsGranted.
+     *
+     * `ok` means the HTTP request was served; `queued` carries the outcome
+     * (a refused start is `ok:true, queued:false, reason`). Once the message
+     * is dispatched the run is committed: a failing status read afterwards
+     * returns `queued:true, state:null` and must NOT release the lock, or the
+     * queued message would find its run orphaned.
+     */
+    #[Route('/wokeometer/sync', name: 'wokeometer_sync', methods: ['POST'])]
+    public function wokeometerSync(Request $request, WokeometerSyncService $sync, MessageBusInterface $bus, ?DisplayPreferencesService $prefs = null): JsonResponse
+    {
+        if (!$this->isCsrfTokenValid('admin_wokeometer_sync', (string) $request->request->get('_token'))) {
+            return new JsonResponse(['ok' => false, 'queued' => false, 'reason' => 'csrf'], 400);
+        }
+
+        $full  = $request->request->getBoolean('full');
+        $runId = null;
+
+        // The try covers ONLY start() + dispatch(): once it completes the run is committed (see above).
+        try {
+            $runId = $sync->start('manual', $full);
+            if ($runId !== null) {
+                $bus->dispatch(new SyncWokeometerCatalog($runId, 'manual', $full));
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('Wokeometer manual sync could not be queued', ['exception' => $e::class]);
+            if ($runId !== null) {
+                // Lock taken but nothing queued: free it so the next click is not "locked" for 30 minutes.
+                try {
+                    $fields = ['last_status' => WokeometerSyncService::STATUS_ERROR];
+                    // A FRESH start that never reached a worker (no cursor, no request made) must not linger as an
+                    // "interrupted run" the hourly tick would auto-start: the initial full sync is manual-only.
+                    // A resumed run has a cursor or requests to lose, so it keeps its position for a later start.
+                    $row = $this->wokeometerState?->get();
+                    if ($row !== null && ($row['run_cursor'] ?? null) === null && (int) ($row['run_requests'] ?? 0) === 0) {
+                        $fields['run_phase']           = null;
+                        $fields['run_cursor']          = null;
+                        $fields['run_idempotency_key'] = null;
+                    }
+                    $this->wokeometerState?->releaseLock($runId);
+                    $this->wokeometerState?->update($fields);
+                } catch (\Throwable) {
+                    // best effort
+                }
+            }
+
+            return new JsonResponse(['ok' => false, 'queued' => false, 'reason' => 'error']);
+        }
+
+        if ($runId !== null) {
+            return new JsonResponse(['ok' => true, 'queued' => true, 'state' => $this->wokeometerSummary($sync, true, $prefs)]);
+        }
+
+        return new JsonResponse([
+            'ok'     => true,
+            'queued' => false,
+            'reason' => $sync->lastStartReason() ?? 'error',
+            'state'  => $this->wokeometerSummary($sync, true, $prefs),
+        ]);
+    }
+
+    /**
+     * Polled by the card while a run is in flight (and once after a queue).
+     * `?stats=1` additionally computes `matchedTitles`; the 5 s poll omits it
+     * (it would unserialize the whole cached library each time) and the card
+     * asks for it once on page load and once when a run ends.
+     */
+    #[Route('/wokeometer/state', name: 'wokeometer_state', methods: ['GET'])]
+    public function wokeometerState(Request $request, WokeometerSyncService $sync, ?DisplayPreferencesService $prefs = null): JsonResponse
+    {
+        $state = $this->wokeometerSummary($sync, $request->query->getBoolean('stats'), $prefs);
+
+        return $state === null
+            ? new JsonResponse(['ok' => false, 'reason' => 'error'])
+            : new JsonResponse(['ok' => true, 'state' => $state]);
     }
 
     /**

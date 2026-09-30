@@ -393,6 +393,30 @@ class TemplateEscapingGuardTest extends TestCase
             'Sonarr healthWarnings text lands raw in the page banner innerHTML (films sibling uses esc(w))',
         ];
 
+        // Wokeometer modal integration: the TL;DR, title and url are third-party
+        // text. They only ever go through textContent / a guarded href; never
+        // splice them into an HTML string — neither by concatenation (with or
+        // without a trailing `+`, parenthesised, `+=`) nor by a template literal.
+        foreach (['media/films.html.twig', 'media/series.html.twig', 'decouverte/index.html.twig'] as $tpl) {
+            foreach (self::wokeometerSplicePatterns() as $label => $regex) {
+                yield "wokeometer in $tpl: $label" => [
+                    $tpl,
+                    $regex,
+                    'Wokeometer TL;DR / title / url are third-party text: textContent / guarded href only',
+                ];
+            }
+        }
+
+        // The settings card shows the provider's error text and refusal
+        // reasons: textContent only, never spliced into markup.
+        foreach (self::settingsSplicePatterns() as $label => $regex) {
+            yield "wokeometer settings card: $label" => [
+                'admin/settings.html.twig',
+                $regex,
+                'lastErrorMessage / reason carry provider-derived text: textContent only',
+            ];
+        }
+
         // Review 2026-08-28 #3: f02bc5f hardened esc() against attribute
         // breakout in prowlarr/index.html.twig only; these byte-identical
         // siblings interpolate esc() into value="…"/data-*="…" attributes, so
@@ -404,6 +428,73 @@ class TemplateEscapingGuardTest extends TestCase
                 "/function esc\\(s\\)[^\\n]*return d\\.innerHTML; \\}/",
                 'esc() must escape double quotes — its output lands in double-quoted attributes',
             ];
+        }
+    }
+
+    /**
+     * Splices of Wokeometer third-party fields (`w.` / `match.` /
+     * `wokeometer.` + tldr|title|url) into a string: `+ x.tldr` (a trailing
+     * `+` is NOT required), `+ (x.tldr)`, `+= x.tldr`, and `${x.tldr}`.
+     *
+     * @return array<string, string>
+     */
+    public static function wokeometerSplicePatterns(): array
+    {
+        return [
+            'concatenation' => '/\+=?\s*\(?\s*(?:w|match|wokeometer)\.(?:tldr|title|url)\b/',
+            'template literal' => '/\$\{\s*\(?\s*(?:match|w|wokeometer)\.(?:tldr|title|url)\b/',
+        ];
+    }
+
+    /** @return array<string, string> */
+    public static function settingsSplicePatterns(): array
+    {
+        return [
+            'lastErrorMessage / reason concatenation' => '/\+=?\s*\(?\s*[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\.(?:lastErrorMessage|reason)\b/',
+            'lastErrorMessage / reason template literal' => '/\$\{[^}]*\.(?:lastErrorMessage|reason)\b/',
+        ];
+    }
+
+    /**
+     * The sentinels must actually catch the splice shapes the reviews found
+     * (each fixture line is a real XSS shape, none of them caught by the old
+     * "+ x +" pattern that required a trailing `+`).
+     *
+     * @return iterable<string, array{0: string}>
+     */
+    public static function wokeometerSpliceFixtures(): iterable
+    {
+        yield 'innerHTML tail concat'  => ['x.innerHTML = "<p>" + match.tldr;'];
+        yield 'href concat'            => ['h += "<a href=\"" + w.url + "\">";'];
+        yield 'parenthesised'          => ['"<p>" + (match.tldr)'];
+        yield 'template literal'       => ['`${match.tldr}`'];
+        yield 'both sides'             => ['"<p>" + match.tldr + "</p>"'];
+        yield 'compound assignment'    => ['html += wokeometer.title;'];
+    }
+
+    #[DataProvider('wokeometerSpliceFixtures')]
+    public function testWokeometerSentinelsCatchEverySpliceShape(string $line): void
+    {
+        $caught = array_filter(self::wokeometerSplicePatterns(), static fn (string $re): bool => preg_match($re, $line) === 1);
+        self::assertNotEmpty($caught, 'not caught: ' . $line);
+    }
+
+    public function testWokeometerSentinelsLeaveTheSafeSinksAlone(): void
+    {
+        foreach ([
+            'tldr.textContent = match.tldr;',
+            "link.setAttribute('href', match.url);",
+            "var hasLink = typeof w.url === 'string' && w.url.indexOf('https://wokeometer.app/') === 0;",
+            'errEl.textContent = s.lastErrorMessage;',
+            'say(I18N.reason[reason], true);',
+        ] as $line) {
+            foreach ([...self::wokeometerSplicePatterns(), ...self::settingsSplicePatterns()] as $label => $re) {
+                self::assertDoesNotMatchRegularExpression($re, $line, "$label flags a safe sink: $line");
+            }
+        }
+        foreach (['el.innerHTML = "<b>" + s.lastErrorMessage;', 'm.innerHTML = `${d.reason}`;', 'h += d.state.lastErrorMessage;'] as $bad) {
+            $caught = array_filter(self::settingsSplicePatterns(), static fn (string $re): bool => preg_match($re, $bad) === 1);
+            self::assertNotEmpty($caught, 'settings sentinel misses: ' . $bad);
         }
     }
 

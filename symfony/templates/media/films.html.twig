@@ -859,6 +859,10 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="#01d277" stroke="none"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.56 5.82 22 7 14.14l-5-4.87 6.91-1.01z"/></svg>
                   <span id="film-rating-tmdb-val"></span>
                 </span>
+                {# Wokeometer score pill: filled by JS (textContent only) from the
+                   local lookup endpoint; hidden and cleared at the start of every
+                   modal open. #}
+                <span id="film-rating-woke" class="film-rating-badge" style="display:none" title="{{ 'wokeometer.badge_title'|trans|e('html_attr') }}"></span>
               </div>
               <div id="film-genres" class="d-flex flex-wrap gap-1 mt-2"></div>
             </div>
@@ -998,6 +1002,25 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
               </div>
               <div class="card-body py-2">
                 <div id="film-subtitles-chips" class="d-flex flex-wrap gap-1"></div>
+              </div>
+            </div>
+
+            {# Wokeometer: TL;DR + link to the full analysis, read from the
+               LOCAL catalog mirror (GET /wokeometer/api/lookup/movie/{tmdbId}).
+               Hidden by default and reset to hidden at the START of every modal
+               open; only unhidden client-side when the endpoint answers a match.
+               The text is third-party: filled through textContent only. #}
+            <div id="film-wokeometer" class="card mb-2 d-none">
+              <div class="card-header py-2">
+                <h3 class="card-title mb-0">{{ 'wokeometer.title'|trans }}</h3>
+                <div class="card-actions">
+                  <span id="film-wokeometer-score" class="badge bg-secondary-lt d-none" title="{{ 'wokeometer.badge_title'|trans|e('html_attr') }}"></span>
+                </div>
+              </div>
+              <div class="card-body py-2">
+                <p id="film-wokeometer-tldr" class="text-muted mb-2"></p>
+                <a id="film-wokeometer-link" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary d-none">{{ 'wokeometer.view_full'|trans }} ↗</a>
+                <div class="text-muted mt-2" style="font-size:.6875rem;">{{ 'wokeometer.attribution'|trans }}</div>
               </div>
             </div>
 
@@ -1441,8 +1464,17 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     shelf_missing: {{ 'media.films.status.missing'|trans|json_encode|raw }},
     shelf_unmonitored: {{ 'media.films.status.unmonitored'|trans|json_encode|raw }},
     subtitle_hi_title: {{ 'bazarr.chips.hi_title'|trans|json_encode|raw }},
-    subtitle_forced_title: {{ 'bazarr.chips.forced_title'|trans|json_encode|raw }}
+    subtitle_forced_title: {{ 'bazarr.chips.forced_title'|trans|json_encode|raw }},
+    // Wokeometer. The score templates keep a placeholder for the number,
+    // replaced in JS (the ICU messages themselves are rendered server-side):
+    // the header pill is self-describing, the card badge sits under the
+    // Wokeometer title.
+    woke_score_tpl: {{ 'wokeometer.score'|trans({score: '__SCORE__'})|json_encode|raw }},
+    woke_score_labelled_tpl: {{ 'wokeometer.score_labelled'|trans({score: '__SCORE__'})|json_encode|raw }}
   };
+  // Wokeometer switched on with a usable key? When not, the modal never
+  // calls the (local) lookup endpoint at all.
+  var WOKE_ENABLED = {{ wokeometer_enabled() ? 'true' : 'false' }};
   function tpl(s, map) {
     if (!s) return '';
     Object.keys(map || {}).forEach(function(k){
@@ -1814,6 +1846,8 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   var pollTimer        = null;
 
   modalEl.addEventListener('show.bs.modal', function (event) {
+    // Wokeometer: clear the previous movie's score/summary before anything else.
+    resetFilmWokeometer();
     var card = event.relatedTarget;
     if (!card || !card.dataset.movie) return;
 
@@ -1841,6 +1875,9 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     // flash before this movie's fetch resolves (or fails/stays untracked).
     resetFilmSubtitles();
     loadFilmSubtitles(currentId);
+
+    // Wokeometer: local lookup keyed by the TMDb id already in data-movie.
+    loadFilmWokeometer(currentMovie.tmdbId, currentId);
   });
 
   modalEl.addEventListener('hidden.bs.modal', function () {
@@ -1894,6 +1931,74 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
         document.getElementById('film-subtitles-chips').innerHTML = html;
         document.getElementById('film-subtitles-search').setAttribute('data-id', String(movieId));
         document.getElementById('film-subtitles').classList.remove('d-none');
+      })
+      .catch(function () { /* fail closed: leave the section hidden */ });
+  }
+
+  /* ── Wokeometer ──
+     Fetch-on-open of the LOCAL lookup endpoint (an indexed read of the catalog
+     mirror; no external call). It always answers 200 JSON of the shape
+     ok / match, where match is null or an object with score, tldr, url. Any
+     non-ok, non-200, non-JSON or network failure just leaves everything hidden.
+     The text is third-party: it is only ever written through textContent, and
+     the link target is only used when it is a wokeometer.app URL. The modal is
+     reused across movies, so the id being fetched is captured up front and
+     compared against currentId when the response lands. */
+  function resetFilmWokeometer() {
+    var card = document.getElementById('film-wokeometer');
+    var pill = document.getElementById('film-rating-woke');
+    var score = document.getElementById('film-wokeometer-score');
+    var tldr = document.getElementById('film-wokeometer-tldr');
+    var link = document.getElementById('film-wokeometer-link');
+    if (card) card.classList.add('d-none');
+    if (pill) { pill.style.display = 'none'; pill.textContent = ''; }
+    if (score) { score.classList.add('d-none'); score.textContent = ''; }
+    if (tldr) { tldr.classList.add('d-none'); tldr.textContent = ''; }
+    if (link) { link.classList.add('d-none'); link.setAttribute('href', '#'); }
+  }
+
+  function renderFilmWokeometer(match) {
+    var hasScore = typeof match.score === 'number' && isFinite(match.score);
+    var hasTldr = typeof match.tldr === 'string' && match.tldr !== '';
+    var hasLink = typeof match.url === 'string' && match.url.indexOf('https://wokeometer.app/') === 0;
+    // Same gate as WokeometerLookup::view(): a score or a TL;DR (a bare link is no content).
+    if (!hasScore && !hasTldr) return;
+    if (hasScore) {
+      var pill = document.getElementById('film-rating-woke');
+      pill.textContent = FILM_I18N.woke_score_labelled_tpl.replace('__SCORE__', String(match.score));
+      pill.style.display = '';
+      var score = document.getElementById('film-wokeometer-score');
+      score.textContent = FILM_I18N.woke_score_tpl.replace('__SCORE__', String(match.score));
+      score.classList.remove('d-none');
+    }
+    if (hasTldr) {
+      var tldr = document.getElementById('film-wokeometer-tldr');
+      tldr.textContent = match.tldr;
+      tldr.classList.remove('d-none');
+    }
+    if (hasLink) {
+      var link = document.getElementById('film-wokeometer-link');
+      link.setAttribute('href', match.url);
+      link.classList.remove('d-none');
+    }
+    document.getElementById('film-wokeometer').classList.remove('d-none');
+  }
+
+  function loadFilmWokeometer(tmdbId, movieId) {
+    if (!WOKE_ENABLED || !tmdbId) return;
+    fetch('/wokeometer/api/lookup/movie/' + encodeURIComponent(tmdbId), {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        var ct = r.headers.get('content-type') || '';
+        if (!r.ok || ct.indexOf('application/json') === -1) throw new Error('bad-response');
+        return r.json();
+      })
+      .then(function (data) {
+        if (movieId !== currentId) return; // stale: the modal moved on to another movie
+        if (!data || !data.ok || !data.match || typeof data.match !== 'object') return;
+        renderFilmWokeometer(data.match);
       })
       .catch(function () { /* fail closed: leave the section hidden */ });
   }

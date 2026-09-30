@@ -801,6 +801,7 @@ admin:
       indexers: Indexeurs & requêtes
       downloads: Téléchargements
       monitoring: Supervision
+      enrichment: Enrichissement des métadonnées
     subtitle:
       tmdb: Découverte films & séries, watchlist
       radarr: Gestionnaire de films
@@ -829,6 +830,54 @@ admin:
     test: Tester
     enabled: Activé
     enabled_title: "Désactivé, Prismarr arrête de tester ce service et le considère comme non configuré. L'URL et la clé API sont conservées."
+  wokeometer:
+    subtitle: Scores et résumés Wokeometer dans la fiche rapide des films et séries
+    key_help: Générez une clé API personnelle sur votre page développeur Wokeometer. La clé reste sur ce serveur et n'est envoyée qu'à Wokeometer.
+    key_link: wokeometer.app
+    auto_sync: Synchronisation automatique
+    frequency: Fréquence
+    monthly: Mensuelle
+    last_sync: Dernière synchronisation réussie
+    last_status: Dernière exécution
+    status:
+      running: En cours…
+      ok: Terminée
+      error: Échec
+      auth: Clé API refusée
+      forbidden: Accès refusé pour cette clé
+      out_of_credits: Crédits épuisés
+      rate_limited: Limite de débit atteinte
+      request_cap: Plafond de requêtes atteint — synchronisation automatique suspendue jusqu'au prochain « Synchroniser maintenant »
+      halted: Arrêtée par un garde-fou — synchronisation automatique suspendue jusqu'au prochain « Synchroniser maintenant »
+      interrupted: Interrompue — reprendra automatiquement
+      invalid: Réponse de l'API illisible — nouvelle tentative dans 7 jours
+      never: Jamais exécutée
+    last_run_requests: Requêtes (dernière exécution)
+    last_run_records: Enregistrements (dernière exécution)
+    total_requests: Requêtes facturées (total)
+    credits_remaining: Crédits restants
+    cached_records: Enregistrements en cache
+    cached_breakdown: '{movies} films · {series} séries · {seasons} saisons'
+    records_with_tmdb: Enregistrements avec un identifiant TMDb
+    matched_titles: Titres de la bibliothèque associés
+    next_due: Prochaine synchronisation planifiée
+    sync_now: Synchroniser maintenant
+    full_resync: Resynchronisation complète
+    confirm_full: 'Une resynchronisation complète retélécharge tout le catalogue (environ 200 requêtes facturées). Continuer ?'
+    cost_note: "Chaque page de 50 titres correspond à une requête d'API facturée. La synchronisation complète initiale (environ 200 requêtes, soit ≈ 10 $) ne démarre que lorsque vous cliquez sur « Synchroniser maintenant » ; ensuite, la synchronisation automatique est incrémentale (généralement 2 à 60 requêtes par mois). La navigation n'appelle jamais l'API."
+    initial_sync_hint: "Cliquez sur « Synchroniser maintenant » pour lancer la synchronisation initiale du catalogue (~200 requêtes facturées). La synchronisation automatique se fait ensuite de manière incrémentale tous les 30 jours."
+    confirm_after_halt: "La dernière exécution a été arrêtée par sécurité après {requests} requêtes. Une nouvelle exécution repart de la première page et peut facturer jusqu'à 600 requêtes supplémentaires. Continuer ?"
+    attribution: 'Les scores et résumés sont fournis par Wokeometer et mis en cache localement. Prismarr n''est pas affilié à Wokeometer.'
+    queued: Synchronisation mise en file — elle s'exécute en arrière-plan.
+    poll_timeout: Toujours en cours — rechargez la page pour voir l'état le plus récent.
+    reason:
+      disabled: Wokeometer est désactivé ou n'a pas encore de clé API.
+      locked: Une synchronisation est déjà en cours.
+      backoff: La synchronisation automatique est en pause après un échec ; essayez « Synchroniser maintenant » pour réessayer.
+      csrf: Votre session a expiré — rechargez la page et réessayez.
+      error: Impossible de démarrer la synchronisation. Consultez les journaux.
+    flash:
+      invalid_key: "Paramètres enregistrés, mais pas la clé API Wokeometer : elle ne ressemble pas à une clé Wokeometer (format attendu : wok_…)."
   instances:
     add: '+ Ajouter une instance {service}'
     empty:
@@ -5876,3 +5925,11 @@ flash:
     mismatch: Les deux nouveaux mots de passe ne correspondent pas.
   csrf:
     invalid: Jeton CSRF invalide.
+
+wokeometer:
+  title: "Wokeometer"
+  score: "{score}/10"
+  score_labelled: "Wokeometer {score}/10"
+  badge_title: "Score Wokeometer (évaluation automatisée)"
+  view_full: "Voir l'analyse complète"
+  attribution: "Score et résumé fournis par Wokeometer — évaluation automatisée, et non l'énoncé d'un fait."

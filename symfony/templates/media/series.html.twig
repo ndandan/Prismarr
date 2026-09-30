@@ -631,6 +631,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
        data-percent="{{ s.percent }}"
        data-added="{{ s.addedAt ? s.addedAt|date('c') : '' }}"
        data-network="{{ s.network|default('')|e('html_attr') }}"
+       data-tmdb-id="{{ s.tmdbId|default('') }}"
        data-next-airing="{{ s.nextAiring ? s.nextAiring.format('Y-m-d') : '' }}"
        title="{{ s.title }}{% if s.year %} ({{ s.year }}){% endif %} — {{ s.episodeFileCount }}/{{ s.episodeCount }} {{ 'media.series.status.episodes_suffix'|trans }}">
 
@@ -858,6 +859,25 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
             <div class="mb-3">
               <h4 class="mb-2" style="font-size:.9rem;">{{ 'media.series.detail.synopsis'|trans }}</h4>
               <p id="modal-serie-overview" class="text-muted" style="font-size:.85rem;line-height:1.6;margin:0;"></p>
+            </div>
+
+            {# Wokeometer: TL;DR + link to the full analysis, read from the
+               LOCAL catalog mirror (fetch-on-open of the tv lookup endpoint, keyed
+               by the card's data-tmdb-id). Hidden by default and reset to hidden at
+               the START of every modal open; the text is third-party and is only
+               filled through textContent. #}
+            <div id="serie-wokeometer" class="card mb-2 d-none">
+              <div class="card-header py-2">
+                <h3 class="card-title mb-0">{{ 'wokeometer.title'|trans }}</h3>
+                <div class="card-actions">
+                  <span id="serie-wokeometer-score" class="badge bg-secondary-lt d-none" title="{{ 'wokeometer.badge_title'|trans|e('html_attr') }}"></span>
+                </div>
+              </div>
+              <div class="card-body py-2">
+                <p id="serie-wokeometer-tldr" class="text-muted mb-2 d-none"></p>
+                <a id="serie-wokeometer-link" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary d-none">{{ 'wokeometer.view_full'|trans }} ↗</a>
+                <div class="text-muted mt-2" style="font-size:.6875rem;">{{ 'wokeometer.attribution'|trans }}</div>
+              </div>
             </div>
 
             {# Bandeau progression #}
@@ -1343,8 +1363,18 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     // Bazarr subtitles (visual & detail pass, Task 5)
     bazarr_episode_missing_title: {{ 'bazarr.detail.episode_missing'|trans|json_encode|raw }},
     bazarr_subtitles_complete_title: {{ 'bazarr.badge.complete'|trans|json_encode|raw }},
-    bazarr_search_title: {{ 'bazarr.detail.search'|trans|json_encode|raw }}
+    bazarr_search_title: {{ 'bazarr.detail.search'|trans|json_encode|raw }},
+    // Wokeometer. The score templates keep a placeholder for the number,
+    // replaced in JS (the ICU messages themselves are rendered server-side):
+    // the header pill is self-describing, the card badge sits under the
+    // Wokeometer title.
+    woke_score_tpl: {{ 'wokeometer.score'|trans({score: '__SCORE__'})|json_encode|raw }},
+    woke_score_labelled_tpl: {{ 'wokeometer.score_labelled'|trans({score: '__SCORE__'})|json_encode|raw }},
+    woke_badge_title: {{ 'wokeometer.badge_title'|trans|json_encode|raw }}
   };
+  // Wokeometer switched on with a usable key? When not, the modal never
+  // calls the (local) lookup endpoint at all.
+  var WOKE_ENABLED = {{ wokeometer_enabled() ? 'true' : 'false' }};
   function tpl(s, map) {
     if (!s) return '';
     Object.keys(map || {}).forEach(function(k){
@@ -2337,6 +2367,8 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
   var SVG_INTERACTIVE = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>';
 
   modalEl.addEventListener('show.bs.modal', function (event) {
+    // Wokeometer: clear the previous series' score/summary before anything else.
+    resetSerieWokeometer();
     var card         = event.relatedTarget;
     if (!card || !card.dataset.id) return;
     currentId        = card.dataset.id;
@@ -2372,6 +2404,9 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
       meta += parseFloat(card.dataset.ratings).toFixed(1) + '</span>';
     }
     if (card.dataset.network) meta += '<span class="text-white-50">' + card.dataset.network + '</span>';
+    // Wokeometer score pill: an EMPTY placeholder only (hidden). The score text
+    // is filled later through textContent, never concatenated into this string.
+    meta += '<span id="serie-rating-woke" class="badge bg-secondary-lt" style="display:none" title="' + esc(SERIES_I18N.woke_badge_title) + '"></span>';
     document.getElementById('modal-serie-meta').innerHTML = meta;
 
     // Genres (in header)
@@ -2412,9 +2447,85 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     resetEpisodeSubtitleMarkers();
     loadEpisodeSubtitles(currentId);
 
+    // Wokeometer: local lookup keyed by the TMDb id the card carries (skipped
+    // when the series has none).
+    loadSerieWokeometer(card.dataset.tmdbId, currentId);
+
     // Load episodes
     loadEpisodes();
   });
+
+  /* ── Wokeometer ──
+     Fetch-on-open of the LOCAL lookup endpoint (an indexed read of the catalog
+     mirror; no external call), keyed by the TMDb id the card carries in its
+     data-tmdb-id attribute. It always answers 200 JSON of the shape ok / match,
+     where match is null or an object with score, tldr, url. Any failure leaves
+     everything hidden. The text is third-party: only ever written through
+     textContent, and the link is only used when it is a wokeometer.app URL.
+     The modal is reused across series, so the id being fetched is captured up
+     front and compared against currentId when the response lands. */
+  function resetSerieWokeometer() {
+    var card = document.getElementById('serie-wokeometer');
+    var pill = document.getElementById('serie-rating-woke');
+    var score = document.getElementById('serie-wokeometer-score');
+    var tldr = document.getElementById('serie-wokeometer-tldr');
+    var link = document.getElementById('serie-wokeometer-link');
+    if (card) card.classList.add('d-none');
+    if (pill) { pill.style.display = 'none'; pill.textContent = ''; }
+    if (score) { score.classList.add('d-none'); score.textContent = ''; }
+    if (tldr) { tldr.classList.add('d-none'); tldr.textContent = ''; }
+    if (link) { link.classList.add('d-none'); link.setAttribute('href', '#'); }
+  }
+
+  function renderSerieWokeometer(match) {
+    var hasScore = typeof match.score === 'number' && isFinite(match.score);
+    var hasTldr = typeof match.tldr === 'string' && match.tldr !== '';
+    var hasLink = typeof match.url === 'string' && match.url.indexOf('https://wokeometer.app/') === 0;
+    // Same gate as WokeometerLookup::view(): a score or a TL;DR (a bare link is no content).
+    if (!hasScore && !hasTldr) return;
+    if (hasScore) {
+      var pill = document.getElementById('serie-rating-woke');
+      if (pill) {
+        pill.textContent = SERIES_I18N.woke_score_labelled_tpl.replace('__SCORE__', String(match.score));
+        pill.style.display = '';
+      }
+      var score = document.getElementById('serie-wokeometer-score');
+      score.textContent = SERIES_I18N.woke_score_tpl.replace('__SCORE__', String(match.score));
+      score.classList.remove('d-none');
+    }
+    if (hasTldr) {
+      var tldr = document.getElementById('serie-wokeometer-tldr');
+      tldr.textContent = match.tldr;
+      tldr.classList.remove('d-none');
+    }
+    if (hasLink) {
+      var link = document.getElementById('serie-wokeometer-link');
+      link.setAttribute('href', match.url);
+      link.classList.remove('d-none');
+    }
+    document.getElementById('serie-wokeometer').classList.remove('d-none');
+  }
+
+  function loadSerieWokeometer(tmdbId, serieId) {
+    if (!WOKE_ENABLED) return;
+    var id = parseInt(tmdbId, 10);
+    if (!id || id <= 0) return;
+    fetch('/wokeometer/api/lookup/tv/' + encodeURIComponent(id), {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'same-origin'
+    })
+      .then(function (r) {
+        var ct = r.headers.get('content-type') || '';
+        if (!r.ok || ct.indexOf('application/json') === -1) throw new Error('bad-response');
+        return r.json();
+      })
+      .then(function (data) {
+        if (serieId !== currentId) return; // stale: the modal moved on to another series
+        if (!data || !data.ok || !data.match || typeof data.match !== 'object') return;
+        renderSerieWokeometer(data.match);
+      })
+      .catch(function () { /* fail closed: leave the section hidden */ });
+  }
 
   /* ── Bazarr subtitles (visual & detail pass, Task 5) ──
      Admin-only per-episode has-sub/missing markers + a per-episode Search

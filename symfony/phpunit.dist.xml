@@ -40,5 +40,6 @@
     </source>
 
     <extensions>
+        <bootstrap class="App\Tests\Support\ResetTimeLimitExtension" />
     </extensions>
 </phpunit>
