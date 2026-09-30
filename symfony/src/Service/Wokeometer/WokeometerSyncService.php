@@ -189,9 +189,10 @@ class WokeometerSyncService implements ResetInterface
      * Whether the run is fresh or resumed is decided atomically by the
      * repository (never pre-clear run_phase here): a resumed run keeps its
      * phase, cursor, idempotency key, counters and ORIGINAL run_started_at.
-     * One exception: a forced full start that resumed a stale-locked
-     * INCREMENTAL run converts it in place (we hold the lock) into a fresh
-     * full run.
+     * One exception: "Full resync" means start over. A forced full start
+     * that resumed ANY run (a stale-locked one of either mode, or a free
+     * interrupted full run, e.g. one stuck on an `invalid` page) converts it
+     * in place (we hold the lock) into a fresh full run.
      *
      * A `manual` trigger ignores `next_attempt_after` (the admin asked
      * explicitly); every other trigger respects it.
@@ -218,8 +219,7 @@ class WokeometerSyncService implements ResetInterface
             return $this->refuse('locked');
         }
 
-        if ($forceFull && $acquired === WokeometerSyncStateRepository::ACQUIRED_RESUMED
-            && $this->state->get()['run_mode'] !== self::MODE_FULL) {
+        if ($forceFull && $acquired === WokeometerSyncStateRepository::ACQUIRED_RESUMED) {
             $this->state->update([
                 'run_mode'               => self::MODE_FULL,
                 'run_phase'              => 'movie',

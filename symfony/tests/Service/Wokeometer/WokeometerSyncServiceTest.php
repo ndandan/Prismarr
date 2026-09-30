@@ -769,6 +769,7 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertNull($s['run_idempotency_key']);
         $this->assertSame(0, $s['run_requests']);
         $this->assertSame(0, $s['run_records']);
+        $this->assertSame(0, $s['run_transient_failures']);
         $this->assertSame($later, $s['run_started_at']);
         $this->assertSame('manual', $s['run_trigger']);
         $this->assertSame('running', $s['last_status']);
@@ -783,6 +784,44 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $s = $this->st();
         $this->assertSame($later, $s['watermark']);
         $this->assertSame($later, $s['full_sync_completed_at']);
+    }
+
+    public function testFullResyncRestartsAFreeInterruptedFullRunStuckOnAnInvalidPage(): void
+    {
+        // First full sync stops resumably on an unreadable page after c1.
+        $this->client->script = [$this->page(['m1'], 'c1'), $this->failure(WokeometerPageResult::INVALID, 400)];
+        $this->sync->runChunk($this->startRun());
+        $this->state->update(['run_transient_failures' => 2]); // leftover budget must not survive the restart
+        $s = $this->st();
+        $this->assertSame('invalid', $s['last_status']);
+        $this->assertSame('full', $s['run_mode']);
+        $this->assertSame('c1', $s['run_cursor']);
+        $this->assertNotNull($s['run_idempotency_key']);
+
+        // A scheduled start (after the backoff) would resume the same stuck cursor…
+        $later = self::T0 + 3600;
+        $this->sync->clock = $later;
+        // …but "Full resync" means start over (manual → bypasses the 7-day backoff).
+        $runId = $this->startRun('manual', true);
+        $s = $this->st();
+        $this->assertSame($runId, $s['lock_run_id']);
+        $this->assertSame('full', $s['run_mode']);
+        $this->assertSame('movie', $s['run_phase']);
+        $this->assertNull($s['run_cursor']);
+        $this->assertNull($s['run_idempotency_key']);
+        $this->assertSame($later, $s['run_started_at']);
+        $this->assertSame(0, $s['run_requests']);
+        $this->assertSame(0, $s['run_records']);
+        $this->assertSame(0, $s['run_transient_failures']);
+        $this->assertSame('running', $s['last_status']);
+        $this->assertNull($s['last_error_code']);
+        $this->assertNull($s['last_error_message']);
+
+        $this->client->calls = [];
+        $this->client->script = [$this->page(['m1'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($runId)->status);
+        $this->assertSame([['movie', null], ['tv', null]], array_map(fn(array $c) => [$c['type'], $c['after']], $this->client->calls));
+        $this->assertSame($later, $this->st()['watermark']);
     }
 
     public function testFullRunThatStoredNothingSkipsTheSweep(): void
