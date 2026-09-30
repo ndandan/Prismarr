@@ -49,7 +49,7 @@ use Symfony\Contracts\Service\ResetInterface;
  * | 3 consecutive 5xx / transport failures | `error`          | 1 h     | yes (same key)   |
  * | 409 conflict (key still processing)    | `error`          | 1 h     | yes (same key)   |
  * | unconfigured mid-run (disabled / no key)| `error`         | 1 h     | yes (same key)   |
- * | any Throwable after start()            | `error`          | 1 h     | yes (same key)   |
+ * | any Throwable after start()            | `error`          | 6 h     | yes (same key)   |
  * | invalid (400/404/…, unreadable 2xx)    | `invalid`        | 7 days  | yes (same key)   |
  * | cursor did not advance (loop guard)    | `error`          | 24 h    | NO — next is fresh |
  * | REQUEST_CAP_PER_RUN reached            | `request_cap`    | 24 h    | NO — next is fresh |
@@ -80,8 +80,14 @@ class WokeometerSyncService implements ResetInterface
     public const CREDITS_BACKOFF_SECONDS = 86_400;
     public const ERROR_BACKOFF_SECONDS   = 86_400;
     public const INVALID_BACKOFF_SECONDS = 604_800;
-    /** Resumable `error` stops (transient trip, 409, unconfigured, Throwable) — retries are unbilled. */
+    /** Resumable `error` stops on unbilled outcomes (transient trip, 409, unconfigured). */
     public const TRANSIENT_BACKOFF_SECONDS = 3_600;
+    /**
+     * Resumable `error` stop after an internal Throwable. Longer than the
+     * transient backoff: a fault that repeats identically re-bills its page
+     * once the 24 h replay window lapses — 6 h bounds that to <= 4 pages/day.
+     */
+    public const INTERNAL_ERROR_BACKOFF_SECONDS = 21_600;
     public const MAX_TRANSIENT_FAILURES  = 3;
     public const CHUNK_DELAY_SECONDS     = 2;
     public const TRANSIENT_RETRY_SECONDS = 30;
@@ -239,7 +245,8 @@ class WokeometerSyncService implements ResetInterface
     /**
      * Process up to MAX_PAGES_PER_CHUNK pages of the run. Never throws: any
      * Throwable becomes a RESUMABLE `error` stop (sanitized class name as the
-     * message, 1 h backoff, key kept → the in-flight page replays for free)
+     * message, INTERNAL_ERROR_BACKOFF_SECONDS = 6 h, key kept → the in-flight
+     * page replays for free within the 24 h window)
      * with the lock released.
      */
     public function runChunk(string $runId): WokeometerChunkResult
@@ -249,7 +256,7 @@ class WokeometerSyncService implements ResetInterface
         } catch (\Throwable $e) {
             $label = self::throwableLabel($e);
             try {
-                return $this->stop($runId, self::STATUS_ERROR, null, $label, self::TRANSIENT_BACKOFF_SECONDS, true);
+                return $this->stop($runId, self::STATUS_ERROR, null, $label, self::INTERNAL_ERROR_BACKOFF_SECONDS, true);
             } catch (\Throwable) {
                 $this->logger->warning('Wokeometer sync chunk aborted', ['path' => '/media', 'code' => 0, 'message' => $label]);
                 try {

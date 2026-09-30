@@ -656,10 +656,12 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertSame('movie', $s['run_phase']);
         $this->assertSame('c1', $s['run_cursor']);
         $this->assertSame($key, $s['run_idempotency_key'], 'key kept: the replay is free');
-        $this->assertSame(self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS, $s['next_attempt_after']);
+        $this->assertSame(self::T0 + WokeometerSyncService::INTERNAL_ERROR_BACKOFF_SECONDS, $s['next_attempt_after']);
+        $this->assertSame(21_600, WokeometerSyncService::INTERNAL_ERROR_BACKOFF_SECONDS);
+        $this->assertFalse($this->sync->isDue(self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS), 'not retried after the 1 h transient backoff');
         $this->assertStringNotContainsString('wok_deadbeef', (string) json_encode($records));
 
-        $this->sync->clock = self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS;
+        $this->sync->clock = self::T0 + WokeometerSyncService::INTERNAL_ERROR_BACKOFF_SECONDS;
         $this->client->calls = [];
         $this->client->script = [$this->page(['m2'], null), $this->page([], null, 'tv')];
         $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('schedule'))->status);
