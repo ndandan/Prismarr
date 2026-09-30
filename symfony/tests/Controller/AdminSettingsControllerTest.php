@@ -28,6 +28,7 @@ class AdminSettingsControllerTest extends TestCase
         ?\App\Service\DashboardLayoutService $layout = null,
         ?BazarrSubtitleIndex $bazarrIndex = null,
         ?\App\Repository\Media\WokeometerSyncStateRepository $wokeometerState = null,
+        ?\Symfony\Component\HttpFoundation\Session\Session $session = null,
     ): AdminSettingsController {
         $appVersion = $this->createMock(\App\Service\AppVersion::class);
         $appVersion->method('current')->willReturn('test');
@@ -65,7 +66,7 @@ class AdminSettingsControllerTest extends TestCase
 
         $requestStack = new \Symfony\Component\HttpFoundation\RequestStack();
         $sessionRequest = Request::create('/');
-        $sessionRequest->setSession(new \Symfony\Component\HttpFoundation\Session\Session(
+        $sessionRequest->setSession($session ?? new \Symfony\Component\HttpFoundation\Session\Session(
             new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage()
         ));
         $requestStack->push($sessionRequest);
@@ -515,15 +516,43 @@ class AdminSettingsControllerTest extends TestCase
         $settings = $this->createMock(SettingRepository::class);
         $settings->expects($this->once())
             ->method('setMany')
-            ->with($this->callback(fn (array $p) => ($p['wokeometer_api_key'] ?? null) === 'wok_newkey'));
+            ->with($this->callback(fn (array $p) => ($p['wokeometer_api_key'] ?? null) === 'wok_newkey0123456789ab'));
 
         $config = $this->createMock(ConfigService::class);
-        $config->method('get')->willReturnCallback(fn (string $k) => $k === 'wokeometer_api_key' ? 'wok_oldkey' : null);
+        $config->method('get')->willReturnCallback(fn (string $k) => $k === 'wokeometer_api_key' ? 'wok_oldkey0123456789ab' : null);
 
         $state = $this->createMock(\App\Repository\Media\WokeometerSyncStateRepository::class);
         $state->expects($this->once())->method('update')->with(['next_attempt_after' => null]);
 
-        $this->postSettings($settings, $config, ['wokeometer_api_key' => '  wok_newkey  '], $state);
+        $this->postSettings($settings, $config, ['wokeometer_api_key' => '  wok_newkey0123456789ab  '], $state);
+    }
+
+    public function testWokeometerInvalidKeyIsRejectedWithADangerFlashAndTheStoredKeyIsKept(): void
+    {
+        foreach (['wok_short', 'not-a-key-at-all-0123456789', "wok_0123456789abcdef\nX: 1", 'wok_0123 456789abcdef'] as $bad) {
+            $settings = $this->createMock(SettingRepository::class);
+            $settings->expects($this->once())
+                ->method('setMany')
+                ->with($this->callback(fn (array $p) => !array_key_exists('wokeometer_api_key', $p)));
+
+            $config = $this->createMock(ConfigService::class);
+            $config->method('get')->willReturnCallback(fn (string $k) => $k === 'wokeometer_api_key' ? 'wok_oldkey0123456789ab' : null);
+
+            $state = $this->createMock(\App\Repository\Media\WokeometerSyncStateRepository::class);
+            $state->expects($this->never())->method('update');
+
+            $request = Request::create('/admin/settings', 'POST', ['_csrf_token' => 'valid', 'wokeometer_api_key' => $bad]);
+            $session = new \Symfony\Component\HttpFoundation\Session\Session(
+                new \Symfony\Component\HttpFoundation\Session\Storage\MockArraySessionStorage()
+            );
+            $request->setSession($session);
+
+            $this->controller($settings, $config, $this->createMock(HealthService::class), wokeometerState: $state, session: $session)->index($request);
+
+            $flashes = $session->getFlashBag()->peekAll();
+            $this->assertArrayHasKey('danger', $flashes, var_export($bad, true));
+            $this->assertStringContainsString('wok_', implode(' ', $flashes['danger']));
+        }
     }
 
     public function testWokeometerResubmittingTheSameKeyDoesNotClearTheBackoff(): void
@@ -532,12 +561,12 @@ class AdminSettingsControllerTest extends TestCase
         // unrelated save resubmits it: that must not wipe an active backoff.
         $settings = $this->createMock(SettingRepository::class);
         $config = $this->createMock(ConfigService::class);
-        $config->method('get')->willReturnCallback(fn (string $k) => $k === 'wokeometer_api_key' ? 'wok_samekey' : null);
+        $config->method('get')->willReturnCallback(fn (string $k) => $k === 'wokeometer_api_key' ? 'wok_samekey0123456789ab' : null);
 
         $state = $this->createMock(\App\Repository\Media\WokeometerSyncStateRepository::class);
         $state->expects($this->never())->method('update');
 
-        $this->postSettings($settings, $config, ['wokeometer_api_key' => 'wok_samekey'], $state);
+        $this->postSettings($settings, $config, ['wokeometer_api_key' => 'wok_samekey0123456789ab'], $state);
     }
 
     public function testWokeometerBackoffResetFailureDoesNotBreakTheSave(): void
@@ -548,13 +577,13 @@ class AdminSettingsControllerTest extends TestCase
         $state = $this->createMock(\App\Repository\Media\WokeometerSyncStateRepository::class);
         $state->method('update')->willThrowException(new \RuntimeException('db is down'));
 
-        $this->postSettings($settings, $this->createMock(ConfigService::class), ['wokeometer_api_key' => 'wok_k'], $state);
+        $this->postSettings($settings, $this->createMock(ConfigService::class), ['wokeometer_api_key' => 'wok_0123456789abcdef'], $state);
         $this->addToAssertionCount(1); // reaching here == the save completed
     }
 
     public function testExportNeverCarriesTheWokeometerApiKey(): void
     {
-        $key  = new \App\Entity\Setting('wokeometer_api_key', 'wok_supersecret');
+        $key  = new \App\Entity\Setting('wokeometer_api_key', 'wok_supersecret012345678');
         $flag = new \App\Entity\Setting('wokeometer_auto_sync', '0');
         $settings = $this->createMock(SettingRepository::class);
         $settings->method('findAll')->willReturn([$key, $flag]);
@@ -564,7 +593,7 @@ class AdminSettingsControllerTest extends TestCase
 
         $this->assertArrayNotHasKey('wokeometer_api_key', $payload['settings']);
         $this->assertSame('0', $payload['settings']['wokeometer_auto_sync'], 'non-sensitive flag travels like other flags');
-        $this->assertStringNotContainsString('wok_supersecret', (string) $response->getContent());
+        $this->assertStringNotContainsString('wok_supersecret012345678', (string) $response->getContent());
     }
 
     public function testTestEndpointReturnsOkJson(): void

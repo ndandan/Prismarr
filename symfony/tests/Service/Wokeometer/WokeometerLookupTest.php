@@ -33,7 +33,7 @@ class WokeometerLookupTest extends TestCase
 
     private function settings(bool $enabled): WokeometerSettings
     {
-        $values = $enabled ? ['wokeometer_api_key' => 'wok_k'] : [];
+        $values = $enabled ? ['wokeometer_api_key' => 'wok_0123456789abcdef'] : [];
         $c = $this->createMock(ConfigService::class);
         $c->method('get')->willReturnCallback(fn(string $k) => $values[$k] ?? null);
         return new WokeometerSettings($c);

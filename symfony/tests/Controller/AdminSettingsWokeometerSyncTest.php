@@ -71,7 +71,7 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
     private function seedKey(): void
     {
         $em = $this->em();
-        $em->persist(new Setting('wokeometer_api_key', 'wok_testkey'));
+        $em->persist(new Setting('wokeometer_api_key', 'wok_testkey0123456789'));
         $em->flush();
     }
 

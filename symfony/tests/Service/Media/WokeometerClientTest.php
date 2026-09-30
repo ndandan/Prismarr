@@ -29,6 +29,9 @@ class WokeometerClientTest extends TestCase
     /** 2026-09-01T00:00:00Z */
     private const SEP_2026 = 1788220800;
 
+    /** The fake client's clock (2026-09-21T13:46:40Z) — see now() in client(). */
+    public const NOW = 1_790_000_000;
+
     /** @var array<string, string> */
     private array $values = [];
 
@@ -120,6 +123,11 @@ class WokeometerClientTest extends TestCase
                 $this->sentHeaders[] = $headers;
 
                 return $headers;
+            }
+
+            protected function now(): int
+            {
+                return WokeometerClientTest::NOW;
             }
 
             protected function exec(\CurlHandle $ch): array
@@ -421,6 +429,37 @@ class WokeometerClientTest extends TestCase
         $this->assertSame(self::SEP_2026, $zero['lastUpdated']);
     }
 
+    /** @return iterable<string, array{0: mixed, 1: int}> */
+    public static function lastUpdatedShapes(): iterable
+    {
+        yield 'ATOM +00:00'          => ['2026-02-01T18:00:14+00:00', 1769968800 + 14];
+        yield 'ATOM Z'               => ['2026-09-01T00:00:00Z', self::SEP_2026];
+        yield 'ATOM offset'          => ['2026-02-01T20:00:14+02:00', 1769968814];
+        yield 'milliseconds'         => ['2026-02-01T18:00:14.473+00:00', 1769968814];
+        yield 'microseconds Z'       => ['2026-02-01T18:00:14.473123Z', 1769968814];
+        yield 'SQL datetime (UTC)'   => ['2026-02-01 18:00:14', 1769968814];
+        yield 'date only (UTC)'      => ['2026-02-01', 1769904000];
+        yield 'relative +1 year'     => ['+1 year', 0];
+        yield 'relative now'         => ['now', 0];
+        yield 'relative tomorrow'    => ['tomorrow', 0];
+        yield 'invalid calendar day' => ['2024-02-31', 0];
+        yield 'garbage'              => ['not a date', 0];
+        yield 'epoch number'         => [1769968814, 0];
+        yield 'far future ISO'       => ['2999-01-01T00:00:00Z', self::NOW + 86_400];
+        yield 'two days ahead'       => [gmdate('Y-m-d\TH:i:s\Z', self::NOW + 2 * 86_400), self::NOW + 86_400];
+        yield 'twelve hours ahead'   => [gmdate('Y-m-d\TH:i:s\Z', self::NOW + 43_200), self::NOW + 43_200];
+    }
+
+    #[DataProvider('lastUpdatedShapes')]
+    public function testLastUpdatedIsParsedStrictlyAndClampedToTomorrow(mixed $value, int $expected): void
+    {
+        $body = self::json(['data' => [['id' => 'x-1', 'title' => 'T', 'last_updated' => $value]], 'next_cursor' => null]);
+        $result = $this->client([self::response(200, $body)])->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame(WokeometerPageResult::OK, $result->outcome);
+        $this->assertSame($expected, $result->rows[0]['lastUpdated']);
+    }
+
     public function testNullNextCursorAndReplayHeadersFromTheLastHeaderBlock(): void
     {
         // A 100-continue block precedes the real one; its (bogus) credit
@@ -691,6 +730,35 @@ class WokeometerClientTest extends TestCase
         $this->assertStringContainsString('[redacted]', $message);
         $this->assertSame(0, preg_match('/[\x00-\x1F\x7F]/', $message), 'control characters stripped');
         $this->assertLessThanOrEqual(255, mb_strlen($message));
+    }
+
+    public function testPartialKeyEchoesAreRedacted(): void
+    {
+        // A provider echoing a truncated key (or someone else's key) is still redacted.
+        $raw = 'key wok_' . substr(self::KEY, 4, 6) . '… rejected; also WOK_ABCDEF and wok_' . strtoupper(substr(self::KEY, 10, 12));
+        $message = (string) $this->client([self::response(401, self::json(['error' => ['code' => 'k', 'message' => $raw]]))])
+            ->listMedia('movie', null, null, self::IDEM)->message;
+
+        $this->assertStringNotContainsString(substr(self::KEY, 4, 6), $message);
+        $this->assertStringNotContainsString(strtoupper(substr(self::KEY, 10, 12)), $message);
+        $this->assertStringContainsString('key [redacted]', $message);
+        $this->assertSame(0, preg_match('/wok_[0-9a-f]{4,}/i', $message));
+        $this->assertNoKeyMaterialLogged();
+    }
+
+    public function testANewlineSplitKeyIsRedactedWhole(): void
+    {
+        // Redaction runs BEFORE the control-character pass: once "\n" became
+        // a space the two halves would no longer look like one key.
+        $half  = intdiv(strlen(self::KEY), 2);
+        $split = substr(self::KEY, 0, $half) . "\n" . substr(self::KEY, $half);
+        $crlf  = substr(self::KEY, 0, 12) . "\r\n" . substr(self::KEY, 12);
+        $message = (string) $this->client([self::response(400, self::json(['error' => ['code' => 'k', 'message' => "bad $split / $crlf end"]]))])
+            ->listMedia('movie', null, null, self::IDEM)->message;
+
+        $this->assertSame('bad [redacted] / [redacted] end', $message);
+        $this->assertStringNotContainsString(substr(self::KEY, $half), $message, 'the second half is not left behind');
+        $this->assertNoKeyMaterialLogged();
     }
 
     public function testNonScalarErrorMessageIsIgnored(): void

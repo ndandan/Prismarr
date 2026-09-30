@@ -1185,9 +1185,14 @@ class AdminSettingsController extends AbstractController
         // Key: trimmed, empty = unchanged (same rationale as the password
         // guard above). Both switches use the kill-switch semantics: unchecked
         // (absent from the POST) = explicit '0', checked = row dropped.
+        // A non-empty key that is not `wok_…`-shaped is refused (flash) and the
+        // stored key is left untouched — it could never authenticate.
         $wokeometerKey        = trim((string) $request->request->get(WokeometerSettings::KEY_API_KEY, ''));
         $wokeometerKeyChanged = false;
-        if ($wokeometerKey !== '') {
+        if ($wokeometerKey !== '' && !WokeometerSettings::isValidKey($wokeometerKey)) {
+            $this->addFlash('danger', $this->translator?->trans('admin.wokeometer.flash.invalid_key')
+                ?? 'The Wokeometer API key looks invalid (expected wok_…) — not saved.');
+        } elseif ($wokeometerKey !== '') {
             // The password input is pre-filled with the stored key, so every
             // unrelated save resubmits it: only a genuinely different key
             // counts as a change (captured BEFORE setMany() overwrites it).

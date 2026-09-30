@@ -49,6 +49,25 @@ class WokeometerClient implements ResetInterface
     /** Idempotency keys are UUIDs; keep them to a header-safe alphabet. */
     private const IDEMPOTENCY_KEY = '/^[A-Za-z0-9-]{1,64}$/D';
 
+    /**
+     * Anything shaped like an API key (even a partial echo, even one split by
+     * control characters) is redacted from provider messages. A superset of
+     * `/wok_[0-9a-f]{4,}/i`: keys are `wok_` + alphanumerics.
+     */
+    private const KEY_SHAPE = '/wok_[A-Za-z0-9\x00-\x1F\x7F]{4,}/i';
+
+    /** Accepted `last_updated` shapes (ISO-8601 family); anything else → 0. */
+    private const DATE_FORMATS = [
+        DATE_ATOM,             // 2026-02-01T18:00:14+00:00 / …Z
+        'Y-m-d\TH:i:s.uP',     // 2026-02-01T18:00:14.473123+00:00
+        'Y-m-d\TH:i:s.vP',     // 2026-02-01T18:00:14.473Z
+        'Y-m-d H:i:s',         // UTC assumed
+        'Y-m-d',               // UTC midnight
+    ];
+
+    /** A `last_updated` more than a day in the future is clamped (monotonic-guard poisoning). */
+    private const MAX_FUTURE_SECONDS = 86_400;
+
     private bool $configLoaded = false;
     private bool $enabled = false;
     private string $apiKey = '';
@@ -159,8 +178,9 @@ class WokeometerClient implements ResetInterface
 
             $rows    = [];
             $dropped = 0;
+            $now     = $this->now();
             foreach ($json['data'] as $item) {
-                if (is_array($item) && ($row = self::normalizeRow($item, $type)) !== null) {
+                if (is_array($item) && ($row = self::normalizeRow($item, $type, $now)) !== null) {
                     $rows[] = $row;
                 } else {
                     $dropped++;
@@ -257,6 +277,12 @@ class WokeometerClient implements ResetInterface
         return ['body' => $body, 'code' => $code, 'error' => $err, 'headerSize' => $headerSize];
     }
 
+    /** Clock seam (the `last_updated` future clamp). */
+    protected function now(): int
+    {
+        return time();
+    }
+
     private function fail(
         string $outcome,
         int $code,
@@ -316,16 +342,22 @@ class WokeometerClient implements ResetInterface
     }
 
     /**
-     * Strip control chars, redact the given secrets, cap at 255 chars.
+     * Redact FIRST — the given secrets, then anything shaped like a key
+     * (KEY_SHAPE: `wok_` + ≥ 4 key characters, control characters allowed
+     * inside the run so a key split by a newline is still caught whole) —
+     * then strip control chars and cap at 255 chars. Redacting before the
+     * control-character pass matters: that pass turns an embedded `\n` into a
+     * space, which would split a key into fragments no pattern recognises.
      *
      * @param list<string> $secrets
      */
     private static function sanitize(string $text, array $secrets): string
     {
-        $text = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text));
         if ($secrets !== []) {
             $text = str_replace($secrets, '[redacted]', $text);
         }
+        $text = (string) preg_replace(self::KEY_SHAPE, '[redacted]', $text);
+        $text = trim((string) preg_replace('/[\x00-\x1F\x7F]+/', ' ', $text));
 
         return mb_substr($text, 0, self::MESSAGE_MAX);
     }
@@ -386,7 +418,7 @@ class WokeometerClient implements ResetInterface
      * @param array<mixed> $item
      * @return WokeometerRow|null
      */
-    private static function normalizeRow(array $item, string $requestedType): ?array
+    private static function normalizeRow(array $item, string $requestedType, int $now): ?array
     {
         $id = self::stringOrNull($item['id'] ?? null);
         if ($id === null) {
@@ -430,7 +462,7 @@ class WokeometerClient implements ResetInterface
             'tldr'               => self::stringOrNull($item['tldr'] ?? null, trim: false),
             'slug'               => self::stringOrNull($item['slug'] ?? null),
             'isAnalyzed'         => self::boolOrNull($item['is_analyzed'] ?? null),
-            'lastUpdated'        => self::epoch($item['last_updated'] ?? null),
+            'lastUpdated'        => self::epoch($item['last_updated'] ?? null, $now),
             'parentWokeometerId' => self::stringOrNull($item['parent_id'] ?? null),
             'seasonNumber'       => self::intOrNull($item['season_number'] ?? null),
             'externalSource'     => $source,
@@ -519,16 +551,31 @@ class WokeometerClient implements ResetInterface
         return null;
     }
 
-    /** ISO-8601 → UTC epoch; missing / empty / unparseable → 0 (never "now"). */
-    private static function epoch(mixed $value): int
+    /**
+     * Strict ISO-8601 (DATE_FORMATS only) → UTC epoch, clamped to
+     * [0, now + MAX_FUTURE_SECONDS]. Missing / empty / any other shape
+     * (relative strings such as "+1 year", invalid calendar dates) → 0,
+     * never "now": a far-future value would otherwise freeze the row
+     * against every later update (the upsert's monotonic guard).
+     */
+    private static function epoch(mixed $value, int $now): int
     {
         if (!is_string($value) || trim($value) === '') {
             return 0;
         }
-        try {
-            return (new \DateTimeImmutable($value, new \DateTimeZone('UTC')))->getTimestamp();
-        } catch (\Exception) {
-            return 0;
+        $value = trim($value);
+        $utc   = new \DateTimeZone('UTC');
+        foreach (self::DATE_FORMATS as $format) {
+            // `!` zeroes every field the format does not set (no "current time" leak).
+            $parsed = \DateTimeImmutable::createFromFormat('!' . $format, $value, $utc);
+            $errors = \DateTimeImmutable::getLastErrors();
+            if ($parsed === false || ($errors !== false && ($errors['warning_count'] > 0 || $errors['error_count'] > 0))) {
+                continue;
+            }
+
+            return max(0, min($now + self::MAX_FUTURE_SECONDS, $parsed->getTimestamp()));
         }
+
+        return 0;
     }
 }

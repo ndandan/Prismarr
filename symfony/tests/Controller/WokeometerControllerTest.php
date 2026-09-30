@@ -32,7 +32,7 @@ class WokeometerControllerTest extends AbstractWebTestCase
     {
         $em = $this->em();
         if ($enabled) {
-            $em->persist(new Setting('wokeometer_api_key', 'wok_testkey'));
+            $em->persist(new Setting('wokeometer_api_key', 'wok_testkey0123456789'));
         }
         $em->flush();
     }

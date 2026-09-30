@@ -11,6 +11,8 @@ use PHPUnit\Framework\TestCase;
 #[AllowMockObjectsWithoutExpectations]
 class WokeometerSettingsTest extends TestCase
 {
+    private const KEY = 'wok_0123456789abcdef';
+
     /** @param array<string, string> $values */
     private function settings(array $values): WokeometerSettings
     {
@@ -22,21 +24,21 @@ class WokeometerSettingsTest extends TestCase
 
     public function testEnabledByDefaultWhenKeyPresent(): void
     {
-        $s = $this->settings(['wokeometer_api_key' => 'wok_abc']);
+        $s = $this->settings(['wokeometer_api_key' => self::KEY]);
         $this->assertTrue($s->isEnabled());
-        $this->assertSame('wok_abc', $s->apiKey());
+        $this->assertSame(self::KEY, $s->apiKey());
     }
 
     public function testExplicitZeroDisables(): void
     {
-        $s = $this->settings(['wokeometer_api_key' => 'wok_abc', 'wokeometer_enabled' => '0']);
+        $s = $this->settings(['wokeometer_api_key' => self::KEY, 'wokeometer_enabled' => '0']);
         $this->assertFalse($s->isEnabled());
-        $this->assertSame('wok_abc', $s->apiKey(), 'disabling keeps the key');
+        $this->assertSame(self::KEY, $s->apiKey(), 'disabling keeps the key');
     }
 
     public function testOtherEnabledValuesKeepItOn(): void
     {
-        $this->assertTrue($this->settings(['wokeometer_api_key' => 'k', 'wokeometer_enabled' => '1'])->isEnabled());
+        $this->assertTrue($this->settings(['wokeometer_api_key' => self::KEY, 'wokeometer_enabled' => '1'])->isEnabled());
     }
 
     public function testNoKeyMeansDisabled(): void
@@ -50,7 +52,42 @@ class WokeometerSettingsTest extends TestCase
 
     public function testApiKeyIsTrimmed(): void
     {
-        $this->assertSame('wok_abc', $this->settings(['wokeometer_api_key' => "  wok_abc\n"])->apiKey());
+        $this->assertSame(self::KEY, $this->settings(['wokeometer_api_key' => '  ' . self::KEY . "\n"])->apiKey());
+    }
+
+    /** @return iterable<string, array{0: string, 1: bool}> */
+    public static function keyShapes(): iterable
+    {
+        yield 'hex body'           => ['wok_0123456789abcdef', true];
+        yield 'mixed alnum, long'  => ['wok_AbCdEf0123456789XyZ', true];
+        yield '15 chars'           => ['wok_0123456789abcde', false];
+        yield 'no prefix'          => ['0123456789abcdef0123', false];
+        yield 'wrong prefix case'  => ['WOK_0123456789abcdef', false];
+        yield 'dash in body'       => ['wok_0123-456789abcdef', false];
+        yield 'space in body'      => ['wok_0123 456789abcdef', false];
+        yield 'header injection'   => ["wok_0123456789abcdef\r\nX-Evil: 1", false];
+        yield 'trailing newline'   => ["wok_0123456789abcdef\n", false];
+        yield 'empty'              => ['', false];
+    }
+
+    #[DataProvider('keyShapes')]
+    public function testIsValidKey(string $key, bool $valid): void
+    {
+        $this->assertSame($valid, WokeometerSettings::isValidKey($key));
+    }
+
+    public function testAnInvalidStoredKeyCountsAsNoKey(): void
+    {
+        $s = $this->settings(['wokeometer_api_key' => 'wok_short']);
+        $this->assertNull($s->apiKey());
+        $this->assertFalse($s->isEnabled());
+    }
+
+    public function testRefreshInvalidatesTheConfigMemo(): void
+    {
+        $c = $this->createMock(ConfigService::class);
+        $c->expects($this->once())->method('invalidate');
+        (new WokeometerSettings($c))->refresh();
     }
 
     public function testAutoSyncDefaultsOnAndZeroDisables(): void
