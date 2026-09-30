@@ -74,6 +74,20 @@ class WokeometerSyncServiceTest extends KernelTestCase
         return $svc;
     }
 
+    /** @param list<array{level: mixed, message: string, context: array<string, mixed>}> $records */
+    private function recordingLogger(array &$records): LoggerInterface
+    {
+        return new class($records) extends \Psr\Log\AbstractLogger {
+            /** @param list<array{level: mixed, message: string, context: array<string, mixed>}> $records */
+            public function __construct(private array &$records) {}
+
+            public function log($level, string|\Stringable $message, array $context = []): void
+            {
+                $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
+            }
+        };
+    }
+
     /** @return array<string, mixed> */
     private function row(string $wid, string $type = 'movie', array $overrides = []): array
     {
@@ -316,9 +330,20 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertSame(1, $s['last_run_requests'], 'the unbilled 402 is not a run request');
         $this->assertSame(1, $s['last_run_records']);
 
+        // The scheduled path still respects the backoff…
         $this->assertFalse($this->sync->isDue(self::T0 + 3600), 'backoff blocks the tick');
-        $this->assertNull($this->sync->start('manual', false, self::T0 + 3600));
+        $this->assertNull($this->sync->start('schedule', false, self::T0 + 3600));
         $this->assertSame('backoff', $this->sync->lastStartReason());
+
+        // …but a manual start bypasses it and resumes from the cursor.
+        $manual = $this->sync->start('manual', false, self::T0 + 3600);
+        $this->assertNotNull($manual);
+        $this->assertNull($this->sync->lastStartReason());
+        $s = $this->st();
+        $this->assertSame($manual, $s['lock_run_id']);
+        $this->assertSame('c1', $s['run_cursor'], 'manual start resumed, not restarted');
+        $this->assertSame(self::T0, $s['run_started_at']);
+        $this->assertFalse($this->sync->isDue(self::T0 + 3600), 'isDue() unchanged: backoff + live lock');
     }
 
     public function testResumeAfterOutOfCreditsContinuesFromTheCursorWithANewRunId(): void
@@ -370,18 +395,20 @@ class WokeometerSyncServiceTest extends KernelTestCase
 
     public function testRateLimitedDelayIsBoundedAndDefaulted(): void
     {
-        $this->client->script = [$this->failure(WokeometerPageResult::RATE_LIMITED, 429, 99_999)];
+        $this->client->script = [$this->failure(WokeometerPageResult::RATE_LIMITED, 429, 3600)];
         $runId = $this->startRun();
         $delay = $this->sync->runChunk($runId)->delaySeconds;
+        $this->assertSame(WokeometerSyncService::MAX_RATE_LIMIT_WAIT_SECONDS, $delay);
         $this->assertLessThan(WokeometerSyncService::STALE_LOCK_SECONDS, $delay, 'never waits past the stale-lock window');
 
         $this->client->script = [$this->failure(WokeometerPageResult::RATE_LIMITED, 429)];
         $this->assertSame(60, $this->sync->runChunk($runId)->delaySeconds);
     }
 
-    public function testTransientFailuresRetryWithSameKeyThenStopAsTerminalError(): void
+    public function testTransientFailuresRetryWithSameKeyThenStopResumably(): void
     {
         $this->client->script = [
+            $this->page(['m1'], 'c1'),
             $this->failure(WokeometerPageResult::TRANSIENT, 503),
             $this->failure(WokeometerPageResult::TRANSPORT, 0),
             $this->failure(WokeometerPageResult::TRANSIENT, 503),
@@ -397,16 +424,31 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $r3 = $this->sync->runChunk($runId);
         $this->assertSame(WokeometerChunkResult::STOPPED, $r3->status);
         $this->assertSame('error', $r3->reason);
-        $this->assertCount(1, array_unique(array_column($this->client->calls, 'key')), 'same key on every retry');
+        $retryKeys = array_column(array_slice($this->client->calls, 1), 'key');
+        $this->assertCount(3, $retryKeys);
+        $this->assertCount(1, array_unique($retryKeys), 'same key on every retry');
 
         $s = $this->st();
         $this->assertSame('error', $s['last_status']);
-        $this->assertNull($s['run_phase'], 'terminal stop: never resumed by a later tick');
-        $this->assertNull($s['run_cursor']);
-        $this->assertNull($s['run_idempotency_key']);
-        $this->assertSame(self::T0 + WokeometerSyncService::ERROR_BACKOFF_SECONDS, $s['next_attempt_after']);
+        $this->assertSame('movie', $s['run_phase'], 'resumable: unbilled failures must not force a re-billed restart');
+        $this->assertSame('c1', $s['run_cursor']);
+        $this->assertSame($retryKeys[0], $s['run_idempotency_key']);
+        $this->assertSame(self::T0, $s['run_started_at']);
+        $this->assertSame(0, $s['run_transient_failures'], 'fresh budget for the resumed run');
+        $this->assertSame(self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS, $s['next_attempt_after']);
+        $this->assertSame(3_600, WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS);
         $this->assertNull($s['lock_run_id']);
-        $this->assertFalse($this->sync->isDue(self::T0 + 3600));
+        $this->assertFalse($this->sync->isDue(self::T0 + 1800));
+        $this->assertTrue($this->sync->isDue(self::T0 + 3600));
+
+        // Resume after the backoff: same cursor, same (free-replay) key.
+        $this->sync->clock = self::T0 + 3600;
+        $this->client->calls = [];
+        $this->client->script = [$this->page(['m2'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('schedule'))->status);
+        $this->assertSame('c1', $this->client->calls[0]['after']);
+        $this->assertSame($retryKeys[0], $this->client->calls[0]['key']);
+        $this->assertSame(self::T0, $this->st()['watermark']);
     }
 
     public function testTransientCounterResetsAfterASuccessfulPage(): void
@@ -465,39 +507,101 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertNull($s['lock_run_id']);
     }
 
-    public function testAuthFailureIsTerminalWithAuthBackoff(): void
+    public function testRequestCapIsPreCheckedBeforeARequest(): void
     {
-        $this->client->script = [$this->failure(WokeometerPageResult::AUTH, 401)];
-        $r = $this->sync->runChunk($this->startRun());
+        $this->client->script = [$this->page(['m1'], 'c1')];
+        $runId = $this->startRun();
+        $this->state->update(['run_requests' => WokeometerSyncService::REQUEST_CAP_PER_RUN]);
 
-        $this->assertSame('auth', $r->reason);
+        $r = $this->sync->runChunk($runId);
+        $this->assertSame('request_cap', $r->reason);
+        $this->assertSame([], $this->client->calls, 'no request once the cap is reached');
+        $this->assertNull($this->st()['run_phase']);
+    }
+
+    /**
+     * Resumable stop of the 2nd page: phase, cursor c1, key and run start kept,
+     * transient budget reset, lock released, one "stopped" warning.
+     *
+     * @return array{0: array<string, int|string|null>, 1: string, 2: list<array{level: mixed, message: string, context: array<string, mixed>}>}
+     */
+    private function stopOnSecondPage(WokeometerPageResult $failure): array
+    {
+        $records = [];
+        $this->sync = $this->service(logger: $this->recordingLogger($records));
+        $this->client->script = [$this->page(['m1'], 'c1'), $failure];
+        $this->sync->runChunk($this->startRun());
         $s = $this->st();
+
+        $this->assertSame('movie', $s['run_phase'], $failure->outcome);
+        $this->assertSame('c1', $s['run_cursor'], $failure->outcome);
+        $this->assertSame($this->client->calls[1]['key'], $s['run_idempotency_key'], $failure->outcome . ': same key kept');
+        $this->assertSame(self::T0, $s['run_started_at'], $failure->outcome);
+        $this->assertSame(0, $s['run_transient_failures'], $failure->outcome);
+        $this->assertNull($s['lock_run_id'], $failure->outcome);
+
+        $stops = array_values(array_filter($records, fn(array $r) => $r['message'] === 'Wokeometer sync stopped'));
+        $this->assertCount(1, $stops, $failure->outcome);
+        $this->assertSame('warning', $stops[0]['level']);
+        $this->assertSame(['status', 'code', 'message', 'resumable'], array_keys($stops[0]['context']));
+        $this->assertTrue($stops[0]['context']['resumable']);
+        $this->assertStringNotContainsString($this->client->calls[1]['key'], (string) json_encode($records), 'never log the key');
+
+        return [$s, $this->client->calls[1]['key'], $records];
+    }
+
+    public function testAuthStopKeepsTheCursorForTheNextKey(): void
+    {
+        [$s] = $this->stopOnSecondPage($this->failure(WokeometerPageResult::AUTH, 401));
         $this->assertSame('auth', $s['last_status']);
         $this->assertSame(401, $s['last_error_code']);
-        $this->assertNull($s['run_phase']);
         $this->assertSame(self::T0 + WokeometerSyncService::AUTH_BACKOFF_SECONDS, $s['next_attempt_after']);
-        $this->assertNull($s['lock_run_id']);
+
+        // A key save clears the backoff (Task 6) → the run continues where it stopped.
+        $this->state->update(['next_attempt_after' => null]);
+        $this->client->calls = [];
+        $this->client->script = [$this->page(['m2'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('schedule'))->status);
+        $this->assertSame('c1', $this->client->calls[0]['after']);
     }
 
-    public function testForbiddenInvalidAndConflictAreTerminal(): void
+    public function testForbiddenStopIsResumable(): void
     {
-        foreach ([[WokeometerPageResult::FORBIDDEN, 403, 'forbidden', WokeometerSyncService::AUTH_BACKOFF_SECONDS],
-                  [WokeometerPageResult::INVALID, 400, 'error', WokeometerSyncService::INVALID_BACKOFF_SECONDS],
-                  [WokeometerPageResult::CONFLICT, 409, 'error', WokeometerSyncService::ERROR_BACKOFF_SECONDS],
-                  [WokeometerPageResult::UNCONFIGURED, 0, 'error', WokeometerSyncService::ERROR_BACKOFF_SECONDS]] as [$outcome, $code, $status, $backoff]) {
-            $this->state->update(['next_attempt_after' => null]);
-            $this->client->script = [$this->failure($outcome, $code)];
-            $r = $this->sync->runChunk($this->startRun());
-            $this->assertSame(WokeometerChunkResult::STOPPED, $r->status, $outcome);
-            $this->assertSame($status, $r->reason, $outcome);
-            $s = $this->st();
-            $this->assertSame($status, $s['last_status'], $outcome);
-            $this->assertNull($s['run_phase'], $outcome);
-            $this->assertSame(self::T0 + $backoff, $s['next_attempt_after'], $outcome);
-        }
+        [$s] = $this->stopOnSecondPage($this->failure(WokeometerPageResult::FORBIDDEN, 403));
+        $this->assertSame('forbidden', $s['last_status']);
+        $this->assertSame(self::T0 + WokeometerSyncService::AUTH_BACKOFF_SECONDS, $s['next_attempt_after']);
     }
 
-    public function testUnreadableBilledPageIsTerminalWithAWeekBackoffAndRecordsCredits(): void
+    public function testConflictStopIsResumableAndReplaysTheSameKey(): void
+    {
+        [$s, $key] = $this->stopOnSecondPage($this->failure(WokeometerPageResult::CONFLICT, 409));
+        $this->assertSame('error', $s['last_status']);
+        $this->assertSame(409, $s['last_error_code']);
+        $this->assertSame(self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS, $s['next_attempt_after']);
+
+        $this->sync->clock = self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS;
+        $this->client->calls = [];
+        $this->client->script = [$this->page(['m2'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('schedule'))->status);
+        $this->assertSame(['c1', $key], [$this->client->calls[0]['after'], $this->client->calls[0]['key']]);
+    }
+
+    public function testUnconfiguredMidRunIsResumable(): void
+    {
+        [$s] = $this->stopOnSecondPage($this->failure(WokeometerPageResult::UNCONFIGURED, 0));
+        $this->assertSame('error', $s['last_status']);
+        $this->assertSame(self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS, $s['next_attempt_after']);
+    }
+
+    public function testInvalidStopIsResumableWithItsOwnStatus(): void
+    {
+        [$s] = $this->stopOnSecondPage($this->failure(WokeometerPageResult::INVALID, 400));
+        $this->assertSame('invalid', $s['last_status']);
+        $this->assertSame(WokeometerSyncService::STATUS_INVALID, $s['last_status']);
+        $this->assertSame(self::T0 + WokeometerSyncService::INVALID_BACKOFF_SECONDS, $s['next_attempt_after']);
+    }
+
+    public function testUnreadableBilledPageStopsResumablyWithAWeekBackoffAndRecordsCredits(): void
     {
         $this->client->script = [
             $this->page(['m1'], 'c1', credits: 60),
@@ -505,11 +609,12 @@ class WokeometerSyncServiceTest extends KernelTestCase
         ];
         $r = $this->sync->runChunk($this->startRun());
 
-        $this->assertSame('error', $r->reason);
+        $this->assertSame('invalid', $r->reason);
         $s = $this->st();
-        $this->assertSame('error', $s['last_status']);
+        $this->assertSame('invalid', $s['last_status']);
         $this->assertSame('no usable rows in page', $s['last_error_message']);
-        $this->assertNull($s['run_phase'], 'never resumed past unreadable data');
+        $this->assertSame('movie', $s['run_phase'], 'a retry re-reads just that page instead of restarting');
+        $this->assertSame('c1', $s['run_cursor']);
         $this->assertSame(self::T0 + WokeometerSyncService::INVALID_BACKOFF_SECONDS, $s['next_attempt_after']);
         $this->assertSame(604_800, WokeometerSyncService::INVALID_BACKOFF_SECONDS);
         $this->assertSame(59, $s['credits_remaining'], 'the 2xx was billed: its credits header is recorded');
@@ -519,16 +624,7 @@ class WokeometerSyncServiceTest extends KernelTestCase
     public function testDroppedRowsLogOneWarningPerChunk(): void
     {
         $records = [];
-        $logger = new class($records) extends \Psr\Log\AbstractLogger {
-            /** @param list<array{level: mixed, message: string, context: array<string, mixed>}> $records */
-            public function __construct(private array &$records) {}
-
-            public function log($level, string|\Stringable $message, array $context = []): void
-            {
-                $this->records[] = ['level' => $level, 'message' => (string) $message, 'context' => $context];
-            }
-        };
-        $this->sync = $this->service(logger: $logger);
+        $this->sync = $this->service(logger: $this->recordingLogger($records));
         $this->client->script = [
             new WokeometerPageResult(WokeometerPageResult::OK, 200, [$this->row('m1')], 'c1', 50, 1, droppedRows: 2),
             new WokeometerPageResult(WokeometerPageResult::OK, 200, [$this->row('m2')], null, 49, 1, droppedRows: 3),
@@ -542,20 +638,32 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertStringContainsString('5', $warnings[0]['context']['message']);
     }
 
-    public function testThrowableInsideTheChunkStopsWithSanitizedClassName(): void
+    public function testThrowableAfterTheRequestStopsResumablyWithSanitizedClassNameAndSameKey(): void
     {
-        $this->client->script = [new \RuntimeException('secret wok_deadbeef in message')];
+        $records = [];
+        $this->sync = $this->service(logger: $this->recordingLogger($records));
+        $this->client->script = [$this->page(['m1'], 'c1'), new \RuntimeException('secret wok_deadbeef in message')];
         $runId = $this->startRun();
         $r = $this->sync->runChunk($runId);
 
         $this->assertSame(WokeometerChunkResult::STOPPED, $r->status);
         $this->assertSame('error', $r->reason);
+        $key = $this->client->calls[1]['key'];
         $s = $this->st();
         $this->assertSame('error', $s['last_status']);
         $this->assertSame('RuntimeException', $s['last_error_message'], 'class name only, never getMessage()');
         $this->assertNull($s['lock_run_id'], 'lock released');
-        $this->assertNull($s['run_phase']);
-        $this->assertSame(self::T0 + WokeometerSyncService::ERROR_BACKOFF_SECONDS, $s['next_attempt_after']);
+        $this->assertSame('movie', $s['run_phase']);
+        $this->assertSame('c1', $s['run_cursor']);
+        $this->assertSame($key, $s['run_idempotency_key'], 'key kept: the replay is free');
+        $this->assertSame(self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS, $s['next_attempt_after']);
+        $this->assertStringNotContainsString('wok_deadbeef', (string) json_encode($records));
+
+        $this->sync->clock = self::T0 + WokeometerSyncService::TRANSIENT_BACKOFF_SECONDS;
+        $this->client->calls = [];
+        $this->client->script = [$this->page(['m2'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('schedule'))->status);
+        $this->assertSame(['c1', $key], [$this->client->calls[0]['after'], $this->client->calls[0]['key']]);
     }
 
     // ── start / lock ──────────────────────────────────────────────────
@@ -624,9 +732,11 @@ class WokeometerSyncServiceTest extends KernelTestCase
 
     public function testFreshStartAfterATerminalStopBeginsAtTheFirstPage(): void
     {
-        $this->client->script = [$this->page(['m1'], 'c1'), $this->failure(WokeometerPageResult::INVALID, 400)];
-        $this->sync->runChunk($this->startRun());
-        $this->state->update(['next_attempt_after' => null]);
+        // Loop guard = one of the two NON-resumable stops.
+        $this->client->script = [$this->page(['m1'], 'c1'), $this->page(['m2'], 'c1')];
+        $this->assertSame('error', $this->sync->runChunk($this->startRun())->reason);
+        $this->assertNull($this->st()['run_phase']);
+        $this->assertNull($this->st()['run_idempotency_key']);
 
         $this->client->calls = [];
         $this->client->script = [$this->page(['m1'], null), $this->page([], null, 'tv')];
@@ -634,6 +744,52 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun())->status);
         $this->assertSame([['movie', null], ['tv', null]], array_map(fn(array $c) => [$c['type'], $c['after']], $this->client->calls));
         $this->assertSame(self::T0 + 50, $this->st()['watermark']);
+    }
+
+    public function testForcedFullOverAStaleIncrementalRunConvertsItInPlace(): void
+    {
+        $done = self::T0 - 40 * 86_400;
+        $this->state->update(['full_sync_completed_at' => $done, 'watermark' => $done, 'last_success_at' => $done]);
+        $this->client->script = [$this->page(['m1'], 'c1'), $this->failure(WokeometerPageResult::RATE_LIMITED, 429, 5)];
+        $inc = $this->startRun('schedule');
+        $this->assertSame('incremental', $this->st()['run_mode']);
+        $this->sync->runChunk($inc); // lock still held, then the consumer dies
+        $this->state->update(['last_error_code' => 503, 'last_error_message' => 'old']);
+
+        $later = self::T0 + WokeometerSyncService::STALE_LOCK_SECONDS + 60;
+        $this->sync->clock = $later;
+        $full = $this->startRun('manual', true);
+        $s = $this->st();
+        $this->assertSame($full, $s['lock_run_id']);
+        $this->assertSame('full', $s['run_mode']);
+        $this->assertSame('movie', $s['run_phase']);
+        $this->assertNull($s['run_cursor']);
+        $this->assertNull($s['run_idempotency_key']);
+        $this->assertSame(0, $s['run_requests']);
+        $this->assertSame(0, $s['run_records']);
+        $this->assertSame($later, $s['run_started_at']);
+        $this->assertSame('manual', $s['run_trigger']);
+        $this->assertSame('running', $s['last_status']);
+        $this->assertNull($s['last_error_code'], 'fresh semantics');
+        $this->assertNull($s['last_error_message']);
+
+        $this->client->calls = [];
+        $this->client->script = [$this->page(['m1'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($full)->status);
+        $this->assertSame([['movie', null, null], ['tv', null, null]],
+            array_map(fn(array $c) => [$c['type'], $c['after'], $c['updatedSince']], $this->client->calls));
+        $s = $this->st();
+        $this->assertSame($later, $s['watermark']);
+        $this->assertSame($later, $s['full_sync_completed_at']);
+    }
+
+    public function testFullRunThatStoredNothingSkipsTheSweep(): void
+    {
+        $this->titles->upsertRows([$this->row('keep')], self::T0 - 1000, self::T0 - 1000);
+        $this->client->script = [$this->page([], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun())->status);
+        $this->assertSame(1, $this->mediaCount(), 'an empty full catalog response never wipes the mirror');
+        $this->assertSame(self::T0, $this->st()['full_sync_completed_at']);
     }
 
     public function testAScheduledStartResumesAnInterruptedForcedFullResync(): void

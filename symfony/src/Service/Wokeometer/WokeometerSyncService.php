@@ -31,17 +31,41 @@ use Symfony\Contracts\Service\ResetInterface;
  *    `updated_since = watermark − OVERLAP_SECONDS`.
  *  - Deletion sweep (D13): only after a completed FULL run.
  *
- * Stop semantics (paid API — every stop must be safe to leave alone):
- *  - Resumable (`run_phase`/`run_cursor` kept, lock released): `out_of_credits`
- *    (24 h backoff; a later start of the same mode continues from the cursor).
- *    429 and 5xx/transport are not stops at all — the chunk returns `continue`
- *    with a delay and the SAME key, the lock stays held.
- *  - Terminal (`run_phase = NULL` so the next start is fresh, plus a backoff
- *    so an hourly tick cannot re-bill a broken run forever): `error`
- *    (24 h; includes 3 consecutive transient failures, a non-advancing cursor,
- *    409 / unconfigured, and any Throwable), `invalid` (7 days — every retry
- *    re-bills each page up to the unreadable one), `request_cap` (24 h),
- *    `auth` / `forbidden` (24 h; a key save clears the backoff).
+ * Not stops: 429 and a 5xx/transport failure below MAX_TRANSIENT_FAILURES —
+ * the chunk returns `continue` with a delay (Retry-After ≤ 15 min / 30 s) and
+ * the SAME Idempotency-Key; the lock stays held.
+ *
+ * Stop policy. 4xx/5xx/transport responses are UNBILLED, while restarting a
+ * run re-bills every page up to its cursor — so almost every stop is
+ * resumable. Every stop records `last_status`, `last_error_code/_message`,
+ * `last_run_*`, sets `next_attempt_after`, resets `run_transient_failures`
+ * (a resumed run gets a fresh budget), releases the lock and logs one
+ * warning ("Wokeometer sync stopped": status, code, message, resumable).
+ *
+ * | trigger                                | last_status      | backoff | resumable        |
+ * |----------------------------------------|------------------|---------|------------------|
+ * | 402 out of credits                     | `out_of_credits` | 24 h    | yes (new key)    |
+ * | 401 / 403                              | `auth`/`forbidden`| 24 h   | yes (same key)   |
+ * | 3 consecutive 5xx / transport failures | `error`          | 1 h     | yes (same key)   |
+ * | 409 conflict (key still processing)    | `error`          | 1 h     | yes (same key)   |
+ * | unconfigured mid-run (disabled / no key)| `error`         | 1 h     | yes (same key)   |
+ * | any Throwable after start()            | `error`          | 1 h     | yes (same key)   |
+ * | invalid (400/404/…, unreadable 2xx)    | `invalid`        | 7 days  | yes (same key)   |
+ * | cursor did not advance (loop guard)    | `error`          | 24 h    | NO — next is fresh |
+ * | REQUEST_CAP_PER_RUN reached            | `request_cap`    | 24 h    | NO — next is fresh |
+ * | (internal) unknown `run_phase` in row  | `error`          | 24 h    | NO — next is fresh |
+ *
+ * Resumable = `run_phase`, `run_cursor`, `run_idempotency_key`,
+ * `run_started_at` kept: the next start of the same mode (after the backoff,
+ * or at once for a manual start) continues from the cursor and replays the
+ * in-flight key. Non-resumable = those columns nulled, so no tick can walk
+ * into the same runaway again. A 402 rotates the key instead of keeping it:
+ * the request was never executed, so a new key cannot double-bill and cannot
+ * hit a replayed 402. A key save clears the backoff (settings), so an
+ * auth-stopped run continues where it stopped with the new key.
+ *
+ * `start()` with trigger `manual` ignores `next_attempt_after`; scheduled
+ * starts and isDue() respect it.
  *
  * Non-final: handler tests mock it; sync tests override now()/pause().
  */
@@ -56,6 +80,8 @@ class WokeometerSyncService implements ResetInterface
     public const CREDITS_BACKOFF_SECONDS = 86_400;
     public const ERROR_BACKOFF_SECONDS   = 86_400;
     public const INVALID_BACKOFF_SECONDS = 604_800;
+    /** Resumable `error` stops (transient trip, 409, unconfigured, Throwable) — retries are unbilled. */
+    public const TRANSIENT_BACKOFF_SECONDS = 3_600;
     public const MAX_TRANSIENT_FAILURES  = 3;
     public const CHUNK_DELAY_SECONDS     = 2;
     public const TRANSIENT_RETRY_SECONDS = 30;
@@ -72,6 +98,7 @@ class WokeometerSyncService implements ResetInterface
     public const STATUS_AUTH           = 'auth';
     public const STATUS_FORBIDDEN      = 'forbidden';
     public const STATUS_OUT_OF_CREDITS = 'out_of_credits';
+    public const STATUS_INVALID        = 'invalid';
 
     public const MODE_FULL        = 'full';
     public const MODE_INCREMENTAL = 'incremental';
@@ -150,12 +177,18 @@ class WokeometerSyncService implements ResetInterface
      * Acquire the run lock and return the run id, or null (see
      * lastStartReason()). Mode: `full` when forced or no full sync ever
      * completed, else `incremental` — except that a FREE interrupted run
-     * (402-stopped) resumes in its own mode unless a full run is forced, so
+     * (a resumable stop) resumes in its own mode unless a full run is forced, so
      * a scheduled tick never supersedes an interrupted forced full resync.
      *
      * Whether the run is fresh or resumed is decided atomically by the
      * repository (never pre-clear run_phase here): a resumed run keeps its
      * phase, cursor, idempotency key, counters and ORIGINAL run_started_at.
+     * One exception: a forced full start that resumed a stale-locked
+     * INCREMENTAL run converts it in place (we hold the lock) into a fresh
+     * full run.
+     *
+     * A `manual` trigger ignores `next_attempt_after` (the admin asked
+     * explicitly); every other trigger respects it.
      */
     public function start(string $trigger, bool $forceFull, ?int $now = null): ?string
     {
@@ -168,7 +201,7 @@ class WokeometerSyncService implements ResetInterface
 
         $s = $this->state->get();
         $nextAttempt = self::intOrNull($s['next_attempt_after']);
-        if ($nextAttempt !== null && $nextAttempt > $now) {
+        if ($trigger !== 'manual' && $nextAttempt !== null && $nextAttempt > $now) {
             return $this->refuse('backoff');
         }
 
@@ -177,6 +210,23 @@ class WokeometerSyncService implements ResetInterface
         $acquired = $this->state->acquireLock($runId, $now, $now - self::STALE_LOCK_SECONDS, $mode, $trigger);
         if ($acquired === null) {
             return $this->refuse('locked');
+        }
+
+        if ($forceFull && $acquired === WokeometerSyncStateRepository::ACQUIRED_RESUMED
+            && $this->state->get()['run_mode'] !== self::MODE_FULL) {
+            $this->state->update([
+                'run_mode'               => self::MODE_FULL,
+                'run_phase'              => 'movie',
+                'run_cursor'             => null,
+                'run_idempotency_key'    => null,
+                'run_requests'           => 0,
+                'run_records'            => 0,
+                'run_transient_failures' => 0,
+                'run_started_at'         => $now,
+                'run_trigger'            => $trigger,
+                'last_run_started_at'    => $now,
+            ]);
+            $acquired = WokeometerSyncStateRepository::ACQUIRED_FRESH;
         }
 
         $this->state->update($acquired === WokeometerSyncStateRepository::ACQUIRED_FRESH
@@ -188,8 +238,9 @@ class WokeometerSyncService implements ResetInterface
 
     /**
      * Process up to MAX_PAGES_PER_CHUNK pages of the run. Never throws: any
-     * Throwable becomes a terminal `error` stop (sanitized class name as the
-     * message) with the lock released.
+     * Throwable becomes a RESUMABLE `error` stop (sanitized class name as the
+     * message, 1 h backoff, key kept → the in-flight page replays for free)
+     * with the lock released.
      */
     public function runChunk(string $runId): WokeometerChunkResult
     {
@@ -197,10 +248,10 @@ class WokeometerSyncService implements ResetInterface
             return $this->processChunk($runId);
         } catch (\Throwable $e) {
             $label = self::throwableLabel($e);
-            $this->logger->warning('Wokeometer sync chunk aborted', ['path' => '/media', 'code' => 0, 'message' => $label]);
             try {
-                return $this->stop($runId, self::STATUS_ERROR, null, $label, self::ERROR_BACKOFF_SECONDS, false);
+                return $this->stop($runId, self::STATUS_ERROR, null, $label, self::TRANSIENT_BACKOFF_SECONDS, true);
             } catch (\Throwable) {
+                $this->logger->warning('Wokeometer sync chunk aborted', ['path' => '/media', 'code' => 0, 'message' => $label]);
                 try {
                     $this->state->releaseLock($runId);
                 } catch (\Throwable) {
@@ -416,17 +467,17 @@ class WokeometerSyncService implements ResetInterface
                     case WokeometerPageResult::TRANSPORT:
                         $failures = (self::intOrNull($s['run_transient_failures']) ?? 0) + 1;
                         if ($failures >= self::MAX_TRANSIENT_FAILURES) {
-                            return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, $result->message, self::ERROR_BACKOFF_SECONDS, false, $fields);
+                            return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, $result->message, self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
                         }
                         $fields['run_transient_failures'] = $failures; // key kept → free replay
                         $this->state->update($fields);
                         return new WokeometerChunkResult(WokeometerChunkResult::CONTINUE, self::TRANSIENT_RETRY_SECONDS);
 
                     case WokeometerPageResult::AUTH:
-                        return $this->stop($runId, self::STATUS_AUTH, $result->httpCode, $result->message, self::AUTH_BACKOFF_SECONDS, false, $fields);
+                        return $this->stop($runId, self::STATUS_AUTH, $result->httpCode, $result->message, self::AUTH_BACKOFF_SECONDS, true, $fields);
 
                     case WokeometerPageResult::FORBIDDEN:
-                        return $this->stop($runId, self::STATUS_FORBIDDEN, $result->httpCode, $result->message, self::AUTH_BACKOFF_SECONDS, false, $fields);
+                        return $this->stop($runId, self::STATUS_FORBIDDEN, $result->httpCode, $result->message, self::AUTH_BACKOFF_SECONDS, true, $fields);
 
                     case WokeometerPageResult::OUT_OF_CREDITS:
                         // Resumable: phase + cursor kept. The key is rotated —
@@ -436,10 +487,10 @@ class WokeometerSyncService implements ResetInterface
                         return $this->stop($runId, self::STATUS_OUT_OF_CREDITS, $result->httpCode, $result->message, self::CREDITS_BACKOFF_SECONDS, true, $fields);
 
                     case WokeometerPageResult::INVALID:
-                        return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, $result->message, self::INVALID_BACKOFF_SECONDS, false, $fields);
+                        return $this->stop($runId, self::STATUS_INVALID, $result->httpCode, $result->message, self::INVALID_BACKOFF_SECONDS, true, $fields);
 
-                    default: // conflict, unconfigured, anything unknown
-                        return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, $result->message ?? $result->outcome, self::ERROR_BACKOFF_SECONDS, false, $fields);
+                    default: // conflict (key still processing → same key), unconfigured, anything unknown
+                        return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, $result->message ?? $result->outcome, self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
                 }
             }
 
@@ -505,9 +556,10 @@ class WokeometerSyncService implements ResetInterface
 
     /**
      * End the run without finishing: record the status, copy the run stats,
-     * set the backoff and release the lock. `$resumable` keeps phase/cursor
-     * (out_of_credits only); every other stop clears them so the next start
-     * is fresh and a broken run is never re-billed hourly.
+     * set the backoff, reset the transient budget, release the lock and log
+     * one warning. `$resumable` keeps phase/cursor/key/started_at (see the
+     * class-level stop table); only the loop guard and the request cap clear
+     * them so the next start is fresh.
      *
      * @param array<string, int|string|null> $fields pending writes from the page
      */
@@ -534,6 +586,8 @@ class WokeometerSyncService implements ResetInterface
             'last_run_requests'    => self::intOrNull($fields['run_requests'] ?? $s['run_requests']) ?? 0,
             'last_run_records'     => self::intOrNull($fields['run_records'] ?? $s['run_records']) ?? 0,
             'next_attempt_after'   => $now + $backoffSeconds,
+            // A resumed run gets a fresh transient budget.
+            'run_transient_failures' => 0,
         ]);
         if (!$resumable) {
             $fields['run_phase']           = null;
@@ -543,6 +597,15 @@ class WokeometerSyncService implements ResetInterface
 
         $this->state->update($fields);
         $this->state->releaseLock($runId);
+
+        // Never the key or a URL: status, HTTP code (or null) and the
+        // already-sanitized message only.
+        $this->logger->warning('Wokeometer sync stopped', [
+            'status'    => $status,
+            'code'      => $code,
+            'message'   => $fields['last_error_message'],
+            'resumable' => $resumable,
+        ]);
 
         return new WokeometerChunkResult(WokeometerChunkResult::STOPPED, 0, $status);
     }
