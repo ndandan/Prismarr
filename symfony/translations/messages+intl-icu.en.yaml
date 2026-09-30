@@ -803,6 +803,7 @@ admin:
       indexers: Indexers & requests
       downloads: Downloads
       monitoring: Monitoring
+      enrichment: Metadata enrichment
     subtitle:
       tmdb: Movie & TV discovery, watchlist
       radarr: Movie manager
@@ -831,6 +832,47 @@ admin:
     test: Test
     enabled: Enabled
     enabled_title: 'When off, Prismarr stops polling this service and treats it as not configured. URL and API key are kept.'
+  wokeometer:
+    subtitle: Woke-ness scores and summaries in the film and series quick-look
+    key_help: Generate a personal API key on your Wokeometer developer page. The key stays on this server and is only sent to Wokeometer.
+    key_link: wokeometer.app
+    auto_sync: Automatic sync
+    frequency: Frequency
+    monthly: Monthly
+    last_sync: Last successful sync
+    last_status: Last run
+    status:
+      running: Running…
+      ok: Completed
+      error: Failed
+      auth: API key rejected
+      forbidden: Access forbidden for this key
+      out_of_credits: Out of credits
+      rate_limited: Rate limited
+      request_cap: Request cap reached
+      invalid: Unreadable API response — retry scheduled in 7 days
+      never: Never run
+    last_run_requests: Requests (last run)
+    last_run_records: Records (last run)
+    total_requests: Billed requests (lifetime)
+    credits_remaining: Credits remaining
+    cached_records: Cached records
+    cached_breakdown: '{movies} movies · {series} series · {seasons} seasons'
+    records_with_tmdb: Records with a TMDb id
+    matched_titles: Matched library titles
+    next_due: Next scheduled sync
+    sync_now: Sync now
+    full_resync: Full resync
+    confirm_full: 'A full resync re-downloads the whole catalog (roughly 200 billed requests). Continue?'
+    cost_note: 'Each page of 50 titles is one billed API request; a full catalog sync is roughly 200 requests. Browsing never calls the API.'
+    attribution: 'Scores and summaries are provided by Wokeometer and cached locally. Prismarr is not affiliated with Wokeometer.'
+    queued: Sync queued — it runs in the background.
+    reason:
+      disabled: Wokeometer is switched off or has no API key yet.
+      locked: A sync is already running.
+      backoff: Automatic sync is paused after a failure; try Sync now to retry.
+      csrf: Your session expired — reload the page and try again.
+      error: The sync could not be started. Check the logs.
   instances:
     add: '+ Add a {service} instance'
     empty:

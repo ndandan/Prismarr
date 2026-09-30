@@ -24,6 +24,9 @@ Ubiquiti trademark logo.
 `bazarr.svg` — original minimal glyph drawn for Prismarr (Bazarr brand
 purple `#be4bdb`), not the official Bazarr logo.
 
+`wokeometer.svg` — original minimal gauge/dial glyph drawn for Prismarr
+(Wokeometer accent purple `#6f42c1`), not the official Wokeometer logo.
+
 Each logo remains a trademark of its respective project. They are used
 here nominatively, to identify the third-party services Prismarr can
 connect to, never to imply endorsement.
