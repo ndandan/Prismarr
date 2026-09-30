@@ -618,6 +618,18 @@
                 <div class="field-row" data-field-key="wokeometer_api_key">
                   <label for="wokeometer_api_key">{{ 'admin.field.api_key'|trans }}</label>
                   {{ forms.secret_input('wokeometer_api_key', 'wokeometer_api_key', { value: wok.apiKey, placeholder: 'wok_…' }) }}
+                  {# Same clear affordance as the qBit user/password fields (generic loop above):
+                     the shared .field-clear handler raises the hidden _clear_<key>=1, which
+                     saveSubmitted() honours before its empty-means-unchanged rule. #}
+                  <input type="hidden" id="_clear_wokeometer_api_key" name="_clear_wokeometer_api_key" value="0">
+                  <button type="button" class="field-clear" data-clear-for="wokeometer_api_key">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2"
+                         stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 7l16 0M10 11l0 6M14 11l0 6M5 7l1 12a2 2 0 0 0 2 2h8a2 2 0 0 0 2 -2l1 -12M9 7V4a1 1 0 0 1 1 -1h4a1 1 0 0 1 1 1v3"/>
+                    </svg>
+                    <span>{{ 'admin.field.clear'|trans }}</span>
+                  </button>
                   <div class="text-secondary small mt-1">
                     {{ 'admin.wokeometer.key_help'|trans }}
                     <a href="https://wokeometer.app/account/developer" target="_blank" rel="noopener">{{ 'admin.wokeometer.key_link'|trans }} ↗</a>

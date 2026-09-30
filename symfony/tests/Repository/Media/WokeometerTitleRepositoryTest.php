@@ -251,6 +251,19 @@ class WokeometerTitleRepositoryTest extends KernelTestCase
         $this->assertSame(['total' => 5, 'movies' => 2, 'series' => 1, 'seasons' => 2, 'withTmdb' => 3], $this->repo->counts());
     }
 
+    public function testCountsClassifySeasonRowsByEitherMarker(): void
+    {
+        $this->repo->upsertRows([
+            $this->row('show', ['mediaType' => 'tv', 'tmdbId' => 50]),
+            $this->row('orphan-season', ['mediaType' => 'tv', 'tmdbId' => 51, 'seasonNumber' => 3]),       // season_number only
+            $this->row('child', ['mediaType' => 'tv', 'tmdbId' => 52, 'parentWokeometerId' => 'show']),   // parent only
+        ], 1000, 1000);
+
+        $c = $this->repo->counts();
+        $this->assertSame(1, $c['series'], 'only rows matchable as a series (no parent AND no season number)');
+        $this->assertSame(2, $c['seasons'], 'a parent OR a season number makes a season row');
+    }
+
     public function testCountMatching(): void
     {
         $this->repo->upsertRows([

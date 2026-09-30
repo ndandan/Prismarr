@@ -216,8 +216,8 @@ class WokeometerTitleRepository extends ServiceEntityRepository
         $r = $this->db()->fetchAssociative(<<<'SQL'
             SELECT COUNT(*) AS total,
                    COALESCE(SUM(CASE WHEN media_type = 'movie' THEN 1 ELSE 0 END), 0) AS movies,
-                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND parent_wokeometer_id IS NULL THEN 1 ELSE 0 END), 0) AS series,
-                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND parent_wokeometer_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS seasons,
+                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND parent_wokeometer_id IS NULL AND season_number IS NULL THEN 1 ELSE 0 END), 0) AS series,
+                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND (parent_wokeometer_id IS NOT NULL OR season_number IS NOT NULL) THEN 1 ELSE 0 END), 0) AS seasons,
                    COALESCE(SUM(CASE WHEN tmdb_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_tmdb
             FROM wokeometer_media
             SQL);

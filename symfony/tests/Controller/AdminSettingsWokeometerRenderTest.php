@@ -31,6 +31,8 @@ final class AdminSettingsWokeometerRenderTest extends AbstractWebTestCase
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
         $this->assertSelectorExists('#section-services [data-wokeometer-card]');
         $this->assertSelectorExists('form [data-wokeometer-card] input[type="password"][name="wokeometer_api_key"]');
+        $this->assertSelectorExists('[data-wokeometer-card] button.field-clear[data-clear-for="wokeometer_api_key"]');
+        $this->assertSelectorExists('[data-wokeometer-card] input[type="hidden"][name="_clear_wokeometer_api_key"]');
         $this->assertSelectorExists('[name="wokeometer_enabled"]');
         $this->assertSelectorExists('[name="wokeometer_auto_sync"]');
         $this->assertSelectorExists('button[type="button"][data-wokeometer-sync]');

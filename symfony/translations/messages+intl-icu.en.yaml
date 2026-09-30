@@ -879,7 +879,7 @@ admin:
       csrf: Your session expired — reload the page and try again.
       error: The sync could not be started. Check the logs.
     flash:
-      invalid_key: 'The Wokeometer API key looks invalid (expected wok_…) — not saved.'
+      invalid_key: 'Settings saved, but the Wokeometer API key was not: it does not look like a Wokeometer key (expected wok_…).'
   instances:
     add: '+ Add a {service} instance'
     empty:

@@ -26,7 +26,7 @@ Wokeometer API  ──(initial full sync on Sync now, then monthly incremental s
   [wokeometer.app/account/developer](https://wokeometer.app/account/developer).
   Keys look like `wok_` followed by 64 hex characters. Prismarr refuses to
   save anything that is not `wok_` followed by at least 16 letters or digits
-  (you get a "looks invalid" message and the stored key is kept).
+  (you get a warning that the other settings were saved but the key was not, and the stored key is kept). The trash button next to the key field removes the stored key.
 - Prepaid API credits. **1 credit = $0.05**, and every successful API request
   costs one credit. Failed requests (4xx/5xx) are not billed. Check the
   pack sizes on Wokeometer's own pricing page: the smallest pack (100 credits,
@@ -146,7 +146,7 @@ audience scores and rating counts, and collection ids.
 | 3 server/network failures in a row | `error` | 1 hour | yes (same key, free replay) | resumes after the pause |
 | 10 rate limits (429) in a row | `error` | 1 hour | yes (same key, free replay) | resumes after the pause |
 | Key still being processed (409) | `error` | 1 hour | yes (same key) | resumes after the pause |
-| Switched off or key removed mid-run | `error` ("disabled mid-run") | 1 hour after you switch it back on | yes (same key) | resumes once re-enabled |
+| Switched off or key removed mid-run | `error` ("disabled mid-run") | 1 hour after the stop; the run resumes at the first hourly tick after BOTH re-enabling and that 1 hour backoff | yes (same key) | resumes once re-enabled and the backoff has passed |
 | Internal error in Prismarr | `error` | 6 hours | yes (same key) | resumes after the pause |
 | Unreadable response (404, unusable body, …) | `invalid` | 7 days | yes (same key) | resumes after the pause |
 | HTTP 400 on a page requested with a cursor | `invalid` | 7 days | that phase restarts at its first page (the cursor is the likely culprit) | resumes after the pause |
@@ -281,7 +281,7 @@ The "Last run" line on the Settings card shows one of these statuses.
 |---|---|---|
 | Never run | No sync has run yet. | Press **Sync now** to run the initial catalog sync (~200 billed requests). Automatic sync then runs incrementally every 30 days. |
 | Running | A sync is in progress; the card updates by itself. | Wait. A full sync takes a few minutes because of the 1.2 s pacing. |
-| Interrupted — will resume | A run was started but no live worker is holding it (crash, restart, or no worker running). | Nothing: the next hourly tick resumes it from its cursor. Check that the worker is running if it persists. |
+| Interrupted — will resume | A run was started but no live worker is holding it (crash, restart, or no worker running). | The next hourly tick resumes it from its cursor, but only while **Automatic sync** is on (otherwise press **Sync now**). Check that the worker is running if it persists. |
 | Completed (`ok`) | The last run finished. | Nothing. |
 | API key rejected (`auth`) | Wokeometer answered 401. | Paste a valid key. Saving a changed key clears the 24 hour pause and the interrupted run continues where it stopped. |
 | Access forbidden (`forbidden`) | Wokeometer answered 403 for this key. | Check the key's permissions on your Wokeometer account, or create a new key. Retried after 24 hours, or immediately after you save a changed key. |
@@ -289,7 +289,7 @@ The "Last run" line on the Settings card shows one of these statuses.
 | Rate limited (`rate_limited`) | Wokeometer answered 429. | Normally nothing to do: 429 responses are waited out inside the run; only 10 in a row stop it (as `error`, resumed an hour later). |
 | Request cap reached — automatic sync paused (`request_cap`) | The run hit the 600-request safety ceiling. | Unusual for the current catalog size. Check the worker log. **Automatic sync stays paused** until you press **Sync now**, which starts fresh and re-bills from page 1 (up to 600 requests) after a confirmation. |
 | Stopped by a safety guard — automatic sync paused (`halted`) | The paging cursor stopped advancing, or the saved run state was unreadable. | Check the worker log for "Wokeometer sync stopped". **Automatic sync stays paused** until you press **Sync now**, which starts fresh and re-bills from page 1 (up to 600 requests) after a confirmation. |
-| Failed (`error`) | A resumable stop: three transient failures in a row, ten rate limits in a row, a 409, the integration switched off mid-run, or an internal error. | Check the worker log for "Wokeometer sync stopped". The run resumes from its cursor automatically after 1 hour (transient, rate limits, 409, disabled mid-run — once re-enabled) or 6 hours (internal error). Press **Sync now** to resume at once. |
+| Failed (`error`) | A resumable stop: three transient failures in a row, ten rate limits in a row, a 409, the integration switched off mid-run, or an internal error. | Check the worker log for "Wokeometer sync stopped". The run resumes from its cursor automatically after 1 hour (transient, rate limits, 409, disabled mid-run — counted from the stop, and only from the first hourly tick after re-enabling) or 6 hours (internal error). Press **Sync now** to resume at once. |
 | Unreadable API response (`invalid`) | Wokeometer answered with something Prismarr could not use (a 400/404 or an unparsable body). | Retried after 7 days (after a 400 on a later page, that phase restarts at its first page); press **Sync now** to retry sooner, or use **Full resync** if it keeps failing. |
 
 Other symptoms:
@@ -298,7 +298,7 @@ Other symptoms:
 |---|---|
 | The monthly sync never happens | The scheduler tick is consumed by the messenger worker. Look in the worker log for `scheduler_wokeometer` (the worker command is `messenger:consume async scheduler_wokeometer`). Manual **Sync now** works without it. Also confirm "Enabled" and "Automatic sync" are on, that the initial sync has completed, and that the card shows no active pause (`request_cap` / `halted` pause automatic sync until **Sync now**). |
 | Nothing happens after saving the key | Expected: saving never starts a billed sync. Press **Sync now**. |
-| "The Wokeometer API key looks invalid" | The key must be `wok_` followed by at least 16 letters or digits; copy it again from your developer page. |
+| "Settings saved, but the Wokeometer API key was not" | The key must be `wok_` followed by at least 16 letters or digits; copy it again from your developer page. |
 | A sync completed but nothing matches | Look at "Records with a TMDb id" on the card. If it is 0 while "Cached records" is large, Wokeometer is not reporting `tmdb` as the `external_source` (see Known limitations); open an issue with the value from the `external_source` column. |
 | Scores appear for movies but not for some series | Series without a TMDb id in Sonarr do not match, and Wokeometer may simply not have analyzed them yet. |
 | Card shows credits remaining as "—" | Wokeometer reports the balance on each successful response; it appears after the first successful page. |

@@ -877,7 +877,7 @@ admin:
       csrf: Votre session a expiré — rechargez la page et réessayez.
       error: Impossible de démarrer la synchronisation. Consultez les journaux.
     flash:
-      invalid_key: "La clé API Wokeometer semble invalide (format attendu : wok_…) — elle n'a pas été enregistrée."
+      invalid_key: "Paramètres enregistrés, mais pas la clé API Wokeometer : elle ne ressemble pas à une clé Wokeometer (format attendu : wok_…)."
   instances:
     add: '+ Ajouter une instance {service}'
     empty:

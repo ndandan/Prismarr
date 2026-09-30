@@ -1190,9 +1190,17 @@ class AdminSettingsController extends AbstractController
         // stored key is left untouched — it could never authenticate.
         $wokeometerKey        = trim((string) $request->request->get(WokeometerSettings::KEY_API_KEY, ''));
         $wokeometerKeyChanged = false;
-        if ($wokeometerKey !== '' && !WokeometerSettings::isValidKey($wokeometerKey)) {
-            $this->addFlash('danger', $this->translator?->trans('admin.wokeometer.flash.invalid_key')
-                ?? 'The Wokeometer API key looks invalid (expected wok_…) — not saved.');
+        $wokeometerKeyRefused = false;
+        if ((string) $request->request->get('_clear_' . WokeometerSettings::KEY_API_KEY, '') === '1') {
+            // Explicit trash button: wins over the empty-means-unchanged rule
+            // below (and over whatever the input still holds).
+            $payload[WokeometerSettings::KEY_API_KEY] = null;
+        } elseif ($wokeometerKey !== '' && !WokeometerSettings::isValidKey($wokeometerKey)) {
+            // Everything else in the form IS saved: the single warning below
+            // says so, and replaces the generic success flash.
+            $wokeometerKeyRefused = true;
+            $this->addFlash('warning', $this->translator?->trans('admin.wokeometer.flash.invalid_key')
+                ?? 'Settings saved, but the Wokeometer API key was not: it does not look like a Wokeometer key (expected wok_…).');
         } elseif ($wokeometerKey !== '') {
             // The password input is pre-filled with the stored key, so every
             // unrelated save resubmits it: only a genuinely different key
@@ -1252,7 +1260,9 @@ class AdminSettingsController extends AbstractController
                 $this->logger->warning('Wokeometer backoff reset failed', ['exception' => $e::class]);
             }
         }
-        $this->addFlash('success', $this->translator?->trans('admin.flash.saved') ?? 'Configuration saved.');
+        if (!$wokeometerKeyRefused) {
+            $this->addFlash('success', $this->translator?->trans('admin.flash.saved') ?? 'Configuration saved.');
+        }
     }
 
     /**
@@ -1422,8 +1432,18 @@ class AdminSettingsController extends AbstractController
             if ($runId !== null) {
                 // Lock taken but nothing queued: free it so the next click is not "locked" for 30 minutes.
                 try {
+                    $fields = ['last_status' => WokeometerSyncService::STATUS_ERROR];
+                    // A FRESH start that never reached a worker (no cursor, no request made) must not linger as an
+                    // "interrupted run" the hourly tick would auto-start: the initial full sync is manual-only.
+                    // A resumed run has a cursor or requests to lose, so it keeps its position for a later start.
+                    $row = $this->wokeometerState?->get();
+                    if ($row !== null && ($row['run_cursor'] ?? null) === null && (int) ($row['run_requests'] ?? 0) === 0) {
+                        $fields['run_phase']           = null;
+                        $fields['run_cursor']          = null;
+                        $fields['run_idempotency_key'] = null;
+                    }
                     $this->wokeometerState?->releaseLock($runId);
-                    $this->wokeometerState?->update(['last_status' => WokeometerSyncService::STATUS_ERROR]);
+                    $this->wokeometerState?->update($fields);
                 } catch (\Throwable) {
                     // best effort
                 }

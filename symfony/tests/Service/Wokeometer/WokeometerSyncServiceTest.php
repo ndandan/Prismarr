@@ -1219,6 +1219,17 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->sync->clock = self::T0 + WokeometerSyncService::STALE_LOCK_SECONDS + 1;
         $this->assertFalse($this->sync->statusSummary()['running'], 'a stale lock is not "running"');
     }
+
+    public function testStatusSummaryHidesNextDueWhilePaused(): void
+    {
+        $this->state->update(['full_sync_completed_at' => self::T0 - 3600, 'last_success_at' => self::T0 - 3600, 'last_status' => 'ok']);
+        $this->assertSame(self::T0 - 3600 + 30 * 86_400, $this->sync->statusSummary()['nextDueAt']);
+
+        foreach (['request_cap', 'halted'] as $paused) {
+            $this->state->update(['last_status' => $paused]);
+            $this->assertNull($this->sync->statusSummary()['nextDueAt'], "no next-due date while paused after $paused");
+        }
+    }
 }
 
 /**

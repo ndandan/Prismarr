@@ -344,6 +344,48 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $row = $this->em()->getConnection()->fetchAssociative('SELECT lock_run_id, last_status FROM wokeometer_sync_state WHERE id = 1');
         $this->assertNull($row['lock_run_id'], 'the lock taken by start() must be released when nothing was queued');
         $this->assertSame('error', $row['last_status']);
+
+        // A fresh run that never got a worker message must not linger as an
+        // "interrupted run" the hourly tick would auto-start (the initial full
+        // sync is manual-only).
+        $orphan = $this->em()->getConnection()->fetchAssociative('SELECT run_phase, run_cursor, run_idempotency_key FROM wokeometer_sync_state WHERE id = 1');
+        $this->assertNull($orphan['run_phase'], 'no orphan run phase');
+        $this->assertNull($orphan['run_cursor']);
+        $this->assertNull($orphan['run_idempotency_key']);
+        $this->assertFalse(
+            static::getContainer()->get(WokeometerSyncService::class)->isDue(time()),
+            'the hourly tick must not auto-start the abandoned initial run'
+        );
+    }
+
+    public function testDispatchFailureOnAResumedRunKeepsItsPosition(): void
+    {
+        $this->seedKey();
+        $token = $this->csrf(); // renders the card → the state row exists
+
+        $this->em()->getConnection()->executeStatement(
+            "UPDATE wokeometer_sync_state SET run_phase = 'tv', run_cursor = 'c1', run_requests = 5, run_mode = 'full', lock_run_id = NULL WHERE id = 1"
+        );
+
+        $failing = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                throw new \RuntimeException('transport down');
+            }
+        };
+        $this->overrideServices(['messenger.default_bus' => new TraceableMessageBus($failing)]);
+
+        $data = $this->post($token);
+
+        $this->assertFalse($data['queued']);
+        $this->assertSame('error', $data['reason']);
+
+        $row = $this->em()->getConnection()->fetchAssociative('SELECT lock_run_id, last_status, run_phase, run_cursor, run_requests FROM wokeometer_sync_state WHERE id = 1');
+        $this->assertNull($row['lock_run_id'], 'the lock is released');
+        $this->assertSame('error', $row['last_status']);
+        $this->assertSame('tv', $row['run_phase'], 'the interrupted run keeps its phase so a later start can resume it');
+        $this->assertSame('c1', $row['run_cursor']);
+        $this->assertSame(5, (int) $row['run_requests']);
     }
 
     public function testStatusFailureAfterASuccessfulDispatchStillReportsQueued(): void

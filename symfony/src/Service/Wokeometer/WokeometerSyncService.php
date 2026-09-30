@@ -390,7 +390,7 @@ class WokeometerSyncService implements ResetInterface
             'nextAttemptAfter'    => self::intOrNull($s['next_attempt_after']),
             'fullSyncCompletedAt' => self::intOrNull($s['full_sync_completed_at']),
             'watermark'           => self::intOrNull($s['watermark']),
-            'nextDueAt'           => $lastSuccess !== null ? $lastSuccess + WokeometerSettings::SYNC_INTERVAL_DAYS * 86_400 : null,
+            'nextDueAt'           => $lastSuccess !== null && !self::isPaused($s) ? $lastSuccess + WokeometerSettings::SYNC_INTERVAL_DAYS * 86_400 : null,
             'cached'              => $this->titles->counts(),
             'matchedTitles'       => $matched,
         ];
