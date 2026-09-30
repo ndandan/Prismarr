@@ -182,6 +182,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
 - **Houndarr (fork):** optional dashboard stat tile with backlog-search totals and a health chip.
 - **UniFi network monitoring (fork):** optional admin-only dashboard section — live WAN up/download, client counts (wired/wireless/guest), a 24-hour usage graph and gateway/switch/AP status, via the UniFi OS Network API. Plus a full **UniFi Network tab** (`/unifi`, admin-only): 7-day traffic and 30-day speedtest trends, device inventory, RF environment (AP radios and neighbouring APs), VLANs, wireless clients, live talkers, top clients and DHCP-reservation mismatches — read-only, and every panel falls back to an empty state rather than breaking the page.
+- **Wokeometer scores (fork, optional):** a Wokeometer score out of 10, a one-line summary and a link to the full analysis for movies and series you already have, in the quick-look, Films/Series and Discover modals. The catalog is synced into a local database by the background worker (an initial full sync of roughly 200 paid API requests, about $9-11 at $0.05/credit, then a small monthly top-up), so **opening a title never calls the Wokeometer API** and nothing about your library is sent to it. See [docs/wokeometer.md](docs/wokeometer.md).
 - **Preferences:** theme, UI density, timezone, date format, English / French UI, settings export / import (credentials always stripped).
 - **Security:** Symfony auth with login rate-limiter, non-root container, a strict nonce-based CSP (`script-src` with no `'unsafe-inline'`, enforced), SSRF protection on user-provided URLs, CSRF on every mutation.
 
@@ -200,6 +201,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - Optional: a Tautulli instance (URL + API key) for the Plex activity page and widget
 - Optional: an Unraid 7 server (GraphQL API key) for the server monitoring widget
 - Optional: a Houndarr instance (URL + API key) for the backlog-search widget
+- Optional: a Wokeometer API key ([wokeometer.app/account/developer](https://wokeometer.app/account/developer), prepaid credits — the initial sync needs roughly 200 requests, see [docs/wokeometer.md](docs/wokeometer.md)) for the score in the detail views
 
 ### Which image?
 
@@ -268,6 +270,11 @@ will guide you through:
 Tautulli, Unraid and Houndarr are configured later from
 **Settings → Services** (each with its own enable toggle and Test-connection
 button).
+
+Wokeometer is configured from the same page (**Settings → Services → Metadata
+enrichment**), but it has no Test-connection button — a test would spend paid
+API credits. Save the key and press **Sync now**; see
+[docs/wokeometer.md](docs/wokeometer.md).
 
 `APP_SECRET` and `MERCURE_JWT_SECRET` are auto-generated on first boot and
 persisted in the `prismarr_data` volume. No `.env` editing required.

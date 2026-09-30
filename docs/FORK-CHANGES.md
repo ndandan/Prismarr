@@ -5,7 +5,7 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-08-15 (covers 2026-06-13 → 2026-08-15).*
+*Last updated: 2026-09-29 (covers 2026-06-13 → 2026-09-29).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
@@ -739,6 +739,61 @@ file, service, route or public method was renamed or moved — every new class l
 upstream doesn't use, and every touched shared file (`MediaController`, `DashboardController`,
 `MediaLibraryCache`, `_subtitle_badge.html.twig`, `_quicklook_body.html.twig`) kept its existing
 public surface.
+
+### Wokeometer integration (2026-09-29)
+
+New optional [Wokeometer](https://wokeometer.app) integration: a score out of
+10, a one-line summary and a link to the full analysis for titles you already
+have, in the global quick-look, the Films/Series modals and the Discover
+modal. Full user-facing documentation: [`docs/wokeometer.md`](wokeometer.md).
+
+The design constraint is cost. The Wokeometer API is prepaid and bills one
+credit ($0.05) per request, including empty pages, so **opening a media detail
+view makes zero API calls**. The catalog is mirrored into a local SQLite table
+and every lookup is a single indexed read on `(tmdb_id, media_type)`.
+
+- **Sync runs only in the messenger worker.** The `messenger-worker` s6
+  service now consumes `async scheduler_wokeometer`; a Symfony Scheduler
+  provider (`#[AsSchedule('wokeometer')]`, `#hourly` cron) fires a tick that
+  only checks the database for due-ness and queues `SyncWokeometerCatalog` to
+  `async`. Due-ness (30 days since the last success) lives in SQLite, so a
+  container that was down simply syncs on its next tick.
+- **Initial full sync, then monthly incremental** (`updated_since` = last run
+  start minus a 48 h overlap): about 180-220 requests (roughly $9-11) for the
+  first sync, about 2-60 for a month's changes. Runs are chunked (8 pages,
+  1.2 s pacing), keyed with persisted `Idempotency-Key`s so a crash replays the
+  in-flight page for free, guarded by a compare-and-set lock (30 min stale
+  takeover) in the single-row `wokeometer_sync_state` table, capped at 600
+  requests, and resumable: a failed run keeps its cursor and the stop's backoff
+  (transient/409/unconfigured 1 h, internal error 6 h, auth/forbidden/out of
+  credits 24 h, invalid 7 d) decides when the schedule retries it. A manual
+  **Sync now** bypasses the backoff; **Full resync** always starts over.
+- **TMDb-only matching, no fuzzy fallback.** List rows carry no `tmdb_id`, so it
+  is derived from `external_source = tmdb` + a numeric `external_id`; series
+  match only series-level rows; season rows are stored but never matched.
+- **Stored minimally on purpose:** ids, type, title, release date, score,
+  TL;DR, slug, timestamps. No poster, overview or audience data (Wokeometer's
+  terms forbid redistributing third-party media data). Attribution is a
+  "Wokeometer" label, a link to the public page and an "automated assessment"
+  disclaimer.
+- **Not a probed service.** It is deliberately absent from `HealthService`
+  (toggles, colors, chips), the sidebar and the route guard, and has no Test
+  button — each of those would spend credits. Settings gets a standalone card
+  under a new "Metadata enrichment" group with the API key (empty = unchanged,
+  excluded from export), an enable toggle, an automatic-sync toggle, live
+  stats and the two sync buttons; the key is kept out of
+  `AdminSettingsController::FIELDS`.
+- **Guards:** a registration guard test (routing, the not-a-health-service
+  rules, card/attribution/icon presence, schedule attribute), an EN/FR
+  translation-parity test, the s6 consume-line guard and a source guard that
+  the lookup path contains no HTTP client.
+
+**Files**: `symfony/src/Service/Wokeometer/` (new), `symfony/src/Service/Media/WokeometerClient.php`,
+`symfony/src/Repository/Media/Wokeometer*Repository.php`, `symfony/src/Entity/Media/Wokeometer*.php`,
+`symfony/src/Message/`, `symfony/src/MessageHandler/`, `symfony/src/Scheduler/` (all new),
+`symfony/src/Controller/WokeometerController.php` (new), one migration, plus surgical edits to
+`AdminSettingsController`, `DashboardController`, `TmdbController::detail`, the settings, films, series,
+Discover and quick-look templates, `messenger.yaml` and `docker/frankenphp/s6/messenger-worker/run`.
 
 ---
 
