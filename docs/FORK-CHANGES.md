@@ -743,9 +743,9 @@ public surface.
 ### Wokeometer integration (2026-09-29)
 
 New optional [Wokeometer](https://wokeometer.app) integration: a score out of
-10, a one-line summary and a link to the full analysis for titles you already
-have, in the global quick-look, the Films/Series modals and the Discover
-modal. Full user-facing documentation: [`docs/wokeometer.md`](wokeometer.md).
+10, a one-line summary and a link to the full analysis for any title in the
+Wokeometer catalog (library items, Discover, dashboard), in the global
+quick-look, the Films/Series modals and the Discover modal. Full user-facing documentation: [`docs/wokeometer.md`](wokeometer.md).
 
 The design constraint is cost. The Wokeometer API is prepaid and bills one
 credit ($0.05) per request, including empty pages, so **opening a media detail
@@ -756,18 +756,28 @@ and every lookup is a single indexed read on `(tmdb_id, media_type)`.
   service now consumes `async scheduler_wokeometer`; a Symfony Scheduler
   provider (`#[AsSchedule('wokeometer')]`, `#hourly` cron) fires a tick that
   only checks the database for due-ness and queues `SyncWokeometerCatalog` to
-  `async`. Due-ness (30 days since the last success) lives in SQLite, so a
-  container that was down simply syncs on its next tick.
-- **Initial full sync, then monthly incremental** (`updated_since` = last run
-  start minus a 48 h overlap): about 180-220 requests (roughly $9-11) for the
-  first sync, about 2-60 for a month's changes. Runs are chunked (8 pages,
-  1.2 s pacing), keyed with persisted `Idempotency-Key`s so a crash replays the
-  in-flight page for free, guarded by a compare-and-set lock (30 min stale
-  takeover) in the single-row `wokeometer_sync_state` table, capped at 600
-  requests, and resumable: a failed run keeps its cursor and the stop's backoff
-  (transient/409/unconfigured 1 h, internal error 6 h, auth/forbidden/out of
-  credits 24 h, invalid 7 d) decides when the schedule retries it. A manual
-  **Sync now** bypasses the backoff; **Full resync** always starts over.
+  `async` (the handler is bound to `fromTransport: 'async'` and re-checks
+  due-ness when it consumes a scheduled start). Due-ness (30 days since the
+  last success) lives in SQLite, so a container that was down simply syncs on
+  its next tick. Single-consumer contract: no second `messenger:consume async`.
+- **Manual initial full sync, then automatic monthly incremental**
+  (`updated_since` = last run start minus a 48 h overlap): about 180-220
+  requests (roughly $9-11) for the first sync — started only by **Sync now**;
+  saving a key never bills — and about 2-60 for a month's changes. Runs are
+  chunked (8 pages, 1.2 s pacing), keyed with persisted `Idempotency-Key`s so a
+  retried page is replayed free within Wokeometer's 24 h idempotency window,
+  guarded by a compare-and-set lock (30 min stale takeover; resume-vs-fresh
+  decided inside the CAS; every run write owner-checked) in the single-row
+  `wokeometer_sync_state` table, capped at 600 requests per run, and
+  resumable: a failed run keeps its cursor and the stop's backoff
+  (transient/10×429/409/disabled mid-run 1 h, internal error 6 h,
+  auth/forbidden/out of credits 24 h, invalid 7 d) decides when the schedule
+  retries it. Runaway stops (`request_cap`, and `halted` for a cursor that did
+  not advance or an unreadable run phase) discard the position and **pause
+  automatic sync** until a manual **Sync now** (which confirms first). A manual
+  **Sync now** bypasses and clears the backoff; **Full resync** always starts
+  over. Deletion sweep after a full run is per media type and skips a phase
+  that returned nothing.
 - **TMDb-only matching, no fuzzy fallback.** List rows carry no `tmdb_id`, so it
   is derived from `external_source = tmdb` + a numeric `external_id`; series
   match only series-level rows; season rows are stored but never matched.

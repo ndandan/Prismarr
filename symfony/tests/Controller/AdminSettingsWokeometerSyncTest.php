@@ -251,6 +251,32 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $this->assertFalse($data['state']['running']);
         $this->assertNull($data['state']['matchedTitles'], 'cold library cache => unknown, never a fetch');
         $this->assertStringNotContainsString('wok_', (string) $response->getContent());
+        $this->assertSame(
+            ['lastSuccessAt' => '—', 'nextDueAt' => '—', 'lastRunFinishedAt' => '—', 'lastRunStartedAt' => '—'],
+            $data['state']['labels'],
+            'never synced: every label is the dash',
+        );
+    }
+
+    public function testStateLabelsAreFormattedServerSideLikePrismarrDatetime(): void
+    {
+        $this->seedKey();
+        $db = $this->em()->getConnection();
+        $db->executeStatement('INSERT OR IGNORE INTO wokeometer_sync_state (id) VALUES (1)');
+        $db->executeStatement('UPDATE wokeometer_sync_state SET last_success_at = 1700000000, last_run_started_at = 1699990000, last_run_finished_at = 1700000000');
+
+        $this->client->request('GET', self::STATE, [], [], ['HTTP_ACCEPT' => 'application/json']);
+        $data = json_decode((string) $this->client->getResponse()->getContent(), true);
+
+        $prefs    = static::getContainer()->get(\App\Service\DisplayPreferencesService::class);
+        $expected = static fn (int $epoch): ?string => $prefs->formatDateTime(new \DateTimeImmutable('@' . $epoch));
+        $labels   = $data['state']['labels'];
+        $this->assertSame($expected(1_700_000_000), $labels['lastSuccessAt']);
+        $this->assertSame($expected(1_700_000_000 + 30 * 86_400), $labels['nextDueAt']);
+        $this->assertSame($expected(1_699_990_000), $labels['lastRunStartedAt']);
+        $this->assertSame($expected(1_700_000_000), $labels['lastRunFinishedAt']);
+        $this->assertStringContainsString('2023', (string) $labels['lastSuccessAt']);
+        $this->assertSame(1_700_000_000, $data['state']['lastSuccessAt'], 'the raw epochs stay in the payload');
     }
 
     public function testMatchedTitlesAreCountedFromTheCachedLibraryOnlyAndOnlyOnRequest(): void
@@ -289,9 +315,9 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $this->assertSame(2, $data['state']['matchedTitles']);
         $this->assertSame(0, $this->totalRequests());
 
-        // The page render keeps computing it.
+        // The page render no longer computes it: "…" until the card's one ?stats=1 fetch.
         $crawler = $this->client->request('GET', '/admin/settings');
-        $this->assertSame('2', trim($crawler->filter('[data-wokeometer-stat="matched_titles"]')->text()));
+        $this->assertSame('…', trim($crawler->filter('[data-wokeometer-stat="matched_titles"]')->text()));
     }
 
     public function testDispatchFailureReleasesTheLockAndMarksError(): void

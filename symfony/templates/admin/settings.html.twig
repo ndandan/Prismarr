@@ -580,8 +580,9 @@
             {% set wok  = wokeometer %}
             {% set wst  = wok.state ?? {} %}
             {% set wtimes = wok.times ?? {} %}
-            {% set wok_known_status = ['running', 'ok', 'error', 'auth', 'forbidden', 'out_of_credits', 'rate_limited', 'request_cap', 'invalid', 'never'] %}
-            {% set wok_status = (wst.running ?? false) ? 'running' : (wst.lastStatus ?? 'never') %}
+            {% set wok_known_status = ['running', 'interrupted', 'ok', 'error', 'auth', 'forbidden', 'out_of_credits', 'rate_limited', 'request_cap', 'halted', 'invalid', 'never'] %}
+            {# "running" in the row without a live lock = a crashed / not-yet-picked-up run that the next tick resumes. #}
+            {% set wok_status = (wst.running ?? false) ? 'running' : ((wst.lastStatus ?? null) == 'running' ? 'interrupted' : (wst.lastStatus ?? 'never')) %}
             {% if wok_status not in wok_known_status %}{% set wok_status = 'error' %}{% endif %}
             {% set wok_can_sync = (wst.enabled ?? false) and not (wst.running ?? false) %}
 
@@ -590,7 +591,10 @@
             </div>
 
             <div class="service-grid-2col">
-              <div class="service-card service-card--wide" data-wokeometer-card data-running="{{ (wst.running ?? false) ? 1 : 0 }}">
+              <div class="service-card service-card--wide" data-wokeometer-card data-running="{{ (wst.running ?? false) ? 1 : 0 }}"
+                   data-has-state="{{ wok.state is not null ? 1 : 0 }}"
+                   data-last-status="{{ wst.lastStatus ?? '' }}"
+                   data-last-run-requests="{{ wst.lastRunRequests ?? 0 }}">
                 <div class="service-card-head">
                   <div class="service-card-icon service-card-icon--logo" style="--brand: #6f42c1;">
                     <img src="{{ asset('img/services/wokeometer.svg') }}"
@@ -675,7 +679,8 @@
                   </div>
                   <div class="d-flex justify-content-between border-bottom pb-2">
                     <span class="text-secondary small">{{ 'admin.wokeometer.matched_titles'|trans }}</span>
-                    <span class="small fw-medium" data-wokeometer-stat="matched_titles">{{ wst.matchedTitles ?? '—' }}</span>
+                    {# Not computed on render (it unserializes the cached library): the script fetches ?stats=1 once on load. #}
+                    <span class="small fw-medium" data-wokeometer-stat="matched_titles">{{ wok.state is not null ? '…' : '—' }}</span>
                   </div>
                   <div class="d-flex justify-content-between pb-1">
                     <span class="text-secondary small">{{ 'admin.wokeometer.next_due'|trans }}</span>
@@ -697,6 +702,7 @@
                   <span class="small {{ (wst.enabled ?? false) ? 'text-secondary' : 'text-warning' }}" data-wokeometer-message role="status" aria-live="polite">{{ (wst.enabled ?? false) ? '' : 'admin.wokeometer.reason.disabled'|trans }}</span>
                 </div>
 
+                <p class="small mt-3 mb-0 text-warning{{ ((wst.enabled ?? false) and (wst.fullSyncCompletedAt ?? null) is null) ? '' : ' d-none' }}" data-wokeometer-initial-hint>{{ 'admin.wokeometer.initial_sync_hint'|trans }}</p>
                 <p class="text-secondary small mt-3 mb-1">{{ 'admin.wokeometer.cost_note'|trans }}</p>
                 <p class="text-secondary small mb-0">
                   {{ 'admin.wokeometer.attribution'|trans }}
@@ -1789,6 +1795,7 @@
   {% set wok_i18n = {
     status: {
       running:        'admin.wokeometer.status.running'|trans,
+      interrupted:    'admin.wokeometer.status.interrupted'|trans,
       ok:             'admin.wokeometer.status.ok'|trans,
       error:          'admin.wokeometer.status.error'|trans,
       auth:           'admin.wokeometer.status.auth'|trans,
@@ -1796,6 +1803,7 @@
       out_of_credits: 'admin.wokeometer.status.out_of_credits'|trans,
       rate_limited:   'admin.wokeometer.status.rate_limited'|trans,
       request_cap:    'admin.wokeometer.status.request_cap'|trans,
+      halted:         'admin.wokeometer.status.halted'|trans,
       invalid:        'admin.wokeometer.status.invalid'|trans,
       never:          'admin.wokeometer.status.never'|trans,
     },
@@ -1807,6 +1815,7 @@
       error:    'admin.wokeometer.reason.error'|trans,
     },
     confirmFull: 'admin.wokeometer.confirm_full'|trans,
+    confirmAfterHalt: 'admin.wokeometer.confirm_after_halt'|trans({requests: '%n%'}),
     queued:      'admin.wokeometer.queued'|trans,
     pollTimeout: 'admin.wokeometer.poll_timeout'|trans,
     breakdown:   'admin.wokeometer.cached_breakdown'|trans({movies: '%m%', series: '%s%', seasons: '%z%'}),
@@ -1830,15 +1839,24 @@
       var timer = null;
       var polls = 0;
       var GET_OPTS = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
+      var hint = card.querySelector('[data-wokeometer-initial-hint]');
+      // Last known run outcome (a runaway stop makes Sync now ask first).
+      var lastStatus = card.dataset.lastStatus || '';
+      var lastRunRequests = parseInt(card.dataset.lastRunRequests || '0', 10) || 0;
+      // Statuses that paused automatic sync (WokeometerSyncService::PAUSING_STATUSES).
+      var PAUSING = { request_cap: true, halted: true };
 
       function setText(name, text) {
         var el = card.querySelector('[data-wokeometer-stat="' + name + '"]');
         if (el) el.textContent = text;
       }
       function num(v) { return (v === null || v === undefined) ? DASH : String(v); }
-      // Approximation of the server-side |prismarr_datetime (browser locale,
-      // not the admin's display timezone/format preference).
-      function when(epoch) { return (typeof epoch === 'number') ? new Date(epoch * 1000).toLocaleString() : DASH; }
+      // Timestamps arrive pre-formatted by the server (same formatter as
+      // |prismarr_datetime: display timezone + date/time preferences).
+      function label(s, field) {
+        var l = s.labels || {};
+        return (typeof l[field] === 'string' && l[field] !== '') ? l[field] : DASH;
+      }
       function say(text, isError) {
         msg.textContent = text || '';
         msg.classList.toggle('text-danger', !!isError);
@@ -1854,13 +1872,15 @@
       // matchedTitles is a real answer ("unknown"), not "not computed".
       function render(s, withStats) {
         if (!s) return;
-        var key = s.running ? 'running' : (s.lastStatus || 'never');
+        lastStatus = s.lastStatus || '';
+        lastRunRequests = (typeof s.lastRunRequests === 'number') ? s.lastRunRequests : 0;
+        var key = s.running ? 'running' : (s.lastStatus === 'running' ? 'interrupted' : (s.lastStatus || 'never'));
         if (!Object.prototype.hasOwnProperty.call(I18N.status, key)) key = 'error';
         setText('last_status', I18N.status[key]);
         var errEl = card.querySelector('[data-wokeometer-error]');
         if (errEl) errEl.textContent = (!s.running && s.lastErrorMessage) ? s.lastErrorMessage : '';
 
-        setText('last_sync', when(s.lastSuccessAt));
+        setText('last_sync', label(s, 'lastSuccessAt'));
         setText('last_run_requests', num(s.lastRunRequests));
         setText('last_run_records', num(s.lastRunRecords));
         setText('total_requests', num(s.totalRequests));
@@ -1872,7 +1892,8 @@
         if (withStats || (s.matchedTitles !== null && s.matchedTitles !== undefined)) {
           setText('matched_titles', num(s.matchedTitles));
         }
-        setText('next_due', (s.enabled && s.autoSync) ? when(s.nextDueAt) : DASH);
+        setText('next_due', (s.enabled && s.autoSync) ? label(s, 'nextDueAt') : DASH);
+        if (hint) hint.classList.toggle('d-none', !(s.enabled && (s.fullSyncCompletedAt === null || s.fullSyncCompletedAt === undefined)));
 
         var can = !!s.enabled && !s.running;
         btnSync.disabled = !can;
@@ -1937,6 +1958,9 @@
 
       function trigger(full) {
         if (full && !window.confirm(I18N.confirmFull)) return;
+        // After a safety stop the next run starts over and re-bills from page 1: ask first.
+        if (!full && Object.prototype.hasOwnProperty.call(PAUSING, lastStatus)
+            && !window.confirm(I18N.confirmAfterHalt.replace('%n%', String(lastRunRequests)))) return;
         btnSync.disabled = true;
         btnFull.disabled = true;
         say('', false);
@@ -1981,6 +2005,18 @@
 
       btnSync.onclick = function () { trigger(false); };
       btnFull.onclick = function () { trigger(true); };
+
+      // The page render skips the matched-titles count (it unserializes the
+      // cached library): fetch the full stats ONCE now, then as before.
+      if (card.dataset.hasState === "1") {
+        fetch(btnSync.dataset.stateUrl + '?stats=1', GET_OPTS)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!alive) return;
+            if (d && d.ok && d.state) { render(d.state, true); } else { setText('matched_titles', DASH); }
+          })
+          .catch(function () { if (alive) setText('matched_titles', DASH); });
+      }
 
       // A run started elsewhere (or before this page load) is still in flight: follow it.
       if (card.dataset.running === "1") { poll(); }

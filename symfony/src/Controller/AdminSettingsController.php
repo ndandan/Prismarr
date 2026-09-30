@@ -8,6 +8,7 @@ use App\Repository\SettingRepository;
 use App\Repository\UserRepository;
 use App\Service\ConfigService;
 use App\Service\DashboardLayoutService;
+use App\Service\DisplayPreferencesService;
 use App\Service\HealthService;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\JellyseerrClient;
@@ -1261,9 +1262,12 @@ class AdminSettingsController extends AbstractController
      *               state — so a fresh install with no key still shows the
      *               switch on; the effective flag is `state.enabled`.
      *  - `apiKey`   the stored key, prefilled like every other secret input.
-     *  - `state`    WokeometerSyncService::statusSummary(), or null when the
-     *               sync tables cannot be read (the card then degrades to
-     *               inputs only; the rest of the page must still render).
+     *  - `state`    WokeometerSyncService::statusSummary() WITHOUT the
+     *               matched-titles count (the card shows "…" and its script
+     *               fetches `?stats=1` once on load, so the page render never
+     *               unserializes the cached library), or null when the sync
+     *               tables cannot be read (the card then degrades to inputs
+     *               only; the rest of the page must still render).
      *  - `times`    DateTimeImmutable (or null) per epoch so Twig formats
      *               them with the user's timezone / date preferences.
      *
@@ -1284,7 +1288,7 @@ class AdminSettingsController extends AbstractController
         }
 
         try {
-            $state = $this->wokeometerSync->statusSummary(fn () => $this->matchedLibraryTitles());
+            $state = $this->wokeometerSync->statusSummary();
         } catch (\Throwable $e) {
             $this->logger->warning('Wokeometer status unavailable', ['exception' => $e::class]);
 
@@ -1326,8 +1330,10 @@ class AdminSettingsController extends AbstractController
                     }
                     $any = true;
                     foreach ($rows as $row) {
-                        $tmdbId = is_array($row) ? ($row['tmdbId'] ?? null) : null;
-                        if (is_int($tmdbId) && $tmdbId > 0) {
+                        // Normalised like the library pages: "603" and 603 are the same title.
+                        $raw    = is_array($row) ? ($row['tmdbId'] ?? null) : null;
+                        $tmdbId = (is_int($raw) || is_float($raw) || is_string($raw)) ? (int) $raw : 0;
+                        if ($tmdbId > 0) {
                             $ids[$mediaType][$tmdbId] = $tmdbId;
                         }
                     }
@@ -1349,17 +1355,38 @@ class AdminSettingsController extends AbstractController
      * read. `$withMatched` opts into the (comparatively costly) matched-titles
      * count, which unserializes the cached library lists.
      *
+     * Adds `labels`: the card's timestamps formatted server-side exactly like
+     * `|prismarr_datetime` (display timezone + date/time format preferences),
+     * "—" when unset — the script shows these instead of toLocaleString().
+     *
      * @return array<string, mixed>|null
      */
-    private function wokeometerSummary(WokeometerSyncService $sync, bool $withMatched): ?array
+    private function wokeometerSummary(WokeometerSyncService $sync, bool $withMatched, ?DisplayPreferencesService $prefs = null): ?array
     {
         try {
-            return $sync->statusSummary($withMatched ? fn () => $this->matchedLibraryTitles() : null);
+            $state = $sync->statusSummary($withMatched ? fn () => $this->matchedLibraryTitles() : null);
         } catch (\Throwable $e) {
             $this->logger->warning('Wokeometer status unavailable', ['exception' => $e::class]);
 
             return null;
         }
+
+        $labels = [];
+        foreach (['lastSuccessAt', 'nextDueAt', 'lastRunFinishedAt', 'lastRunStartedAt'] as $field) {
+            $epoch = $state[$field] ?? null;
+            $label = null;
+            if (is_int($epoch) && $prefs !== null) {
+                try {
+                    $label = $prefs->formatDateTime(new \DateTimeImmutable('@' . $epoch));
+                } catch (\Throwable) {
+                    $label = null;
+                }
+            }
+            $labels[$field] = $label ?? '—';
+        }
+        $state['labels'] = $labels;
+
+        return $state;
     }
 
     /**
@@ -1375,7 +1402,7 @@ class AdminSettingsController extends AbstractController
      * queued message would find its run orphaned.
      */
     #[Route('/wokeometer/sync', name: 'wokeometer_sync', methods: ['POST'])]
-    public function wokeometerSync(Request $request, WokeometerSyncService $sync, MessageBusInterface $bus): JsonResponse
+    public function wokeometerSync(Request $request, WokeometerSyncService $sync, MessageBusInterface $bus, ?DisplayPreferencesService $prefs = null): JsonResponse
     {
         if (!$this->isCsrfTokenValid('admin_wokeometer_sync', (string) $request->request->get('_token'))) {
             return new JsonResponse(['ok' => false, 'queued' => false, 'reason' => 'csrf'], 400);
@@ -1406,14 +1433,14 @@ class AdminSettingsController extends AbstractController
         }
 
         if ($runId !== null) {
-            return new JsonResponse(['ok' => true, 'queued' => true, 'state' => $this->wokeometerSummary($sync, true)]);
+            return new JsonResponse(['ok' => true, 'queued' => true, 'state' => $this->wokeometerSummary($sync, true, $prefs)]);
         }
 
         return new JsonResponse([
             'ok'     => true,
             'queued' => false,
             'reason' => $sync->lastStartReason() ?? 'error',
-            'state'  => $this->wokeometerSummary($sync, true),
+            'state'  => $this->wokeometerSummary($sync, true, $prefs),
         ]);
     }
 
@@ -1421,12 +1448,12 @@ class AdminSettingsController extends AbstractController
      * Polled by the card while a run is in flight (and once after a queue).
      * `?stats=1` additionally computes `matchedTitles`; the 5 s poll omits it
      * (it would unserialize the whole cached library each time) and the card
-     * asks for it once when the run ends.
+     * asks for it once on page load and once when a run ends.
      */
     #[Route('/wokeometer/state', name: 'wokeometer_state', methods: ['GET'])]
-    public function wokeometerState(Request $request, WokeometerSyncService $sync): JsonResponse
+    public function wokeometerState(Request $request, WokeometerSyncService $sync, ?DisplayPreferencesService $prefs = null): JsonResponse
     {
-        $state = $this->wokeometerSummary($sync, $request->query->getBoolean('stats'));
+        $state = $this->wokeometerSummary($sync, $request->query->getBoolean('stats'), $prefs);
 
         return $state === null
             ? new JsonResponse(['ok' => false, 'reason' => 'error'])

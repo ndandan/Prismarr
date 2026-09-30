@@ -145,6 +145,78 @@ final class AdminSettingsWokeometerRenderTest extends AbstractWebTestCase
         $this->assertStringNotContainsString('admin.wokeometer.status.', $html);
     }
 
+    public function testRenderDoesNotComputeMatchedTitlesAndTheScriptFetchesThemOnce(): void
+    {
+        $this->seedKey();
+        $crawler = $this->client->request('GET', '/admin/settings');
+        $html    = (string) $this->client->getResponse()->getContent();
+
+        $this->assertSame('…', trim($crawler->filter('[data-wokeometer-stat="matched_titles"]')->text()));
+        $this->assertSame('1', $crawler->filter('[data-wokeometer-card]')->attr('data-has-state'));
+        $this->assertStringContainsString("fetch(btnSync.dataset.stateUrl + '?stats=1', GET_OPTS)", $html, 'one stats fetch on load');
+        $this->assertStringNotContainsString('toLocaleString', $html, 'dates come pre-formatted from the server');
+    }
+
+    public function testHaltedAndRequestCapLabelsSayAutomaticSyncIsPausedAndSyncNowConfirms(): void
+    {
+        $this->seedKey();
+        $db = $this->em()->getConnection();
+        $db->executeStatement('INSERT OR IGNORE INTO wokeometer_sync_state (id) VALUES (1)');
+
+        foreach (['halted' => 'Stopped by a safety guard', 'request_cap' => 'Request cap reached'] as $status => $text) {
+            $db->executeStatement('UPDATE wokeometer_sync_state SET last_status = ?, last_run_requests = 600', [$status]);
+            $crawler = $this->client->request('GET', '/admin/settings');
+            $html    = (string) $this->client->getResponse()->getContent();
+
+            $label = $crawler->filter('[data-wokeometer-stat="last_status"]')->text();
+            $this->assertStringContainsString($text, $label, $status);
+            $this->assertStringContainsString('automatic sync paused until you run Sync now', $label, $status);
+            $this->assertSame($status, $crawler->filter('[data-wokeometer-card]')->attr('data-last-status'));
+            $this->assertSame('600', $crawler->filter('[data-wokeometer-card]')->attr('data-last-run-requests'));
+            // The confirm text is shipped to the script with a %n% slot for the request count.
+            $this->assertStringContainsString('stopped as a safety measure after %n% requests', $html);
+            $this->assertStringContainsString('confirmAfterHalt', $html);
+        }
+    }
+
+    public function testARunningRowWithoutALiveLockReadsInterrupted(): void
+    {
+        $this->seedKey();
+        $db = $this->em()->getConnection();
+        $db->executeStatement('INSERT OR IGNORE INTO wokeometer_sync_state (id) VALUES (1)');
+        $db->executeStatement("UPDATE wokeometer_sync_state SET last_status = 'running', lock_run_id = 'r', lock_heartbeat_at = ?", [time() - 7200]);
+
+        $crawler = $this->client->request('GET', '/admin/settings');
+
+        $this->assertSame('0', $crawler->filter('[data-wokeometer-card]')->attr('data-running'));
+        $this->assertSame('Interrupted — will resume', trim($crawler->filter('[data-wokeometer-stat="last_status"]')->text()));
+    }
+
+    public function testInitialSyncHintShowsUntilTheFirstFullSyncCompletes(): void
+    {
+        $this->seedKey();
+        $crawler = $this->client->request('GET', '/admin/settings');
+        $hint    = $crawler->filter('[data-wokeometer-initial-hint]');
+        $this->assertStringContainsString('Press Sync now to run the initial catalog sync', $hint->text());
+        $this->assertStringNotContainsString('d-none', (string) $hint->attr('class'));
+
+        $db = $this->em()->getConnection();
+        $db->executeStatement('INSERT OR IGNORE INTO wokeometer_sync_state (id) VALUES (1)');
+        $db->executeStatement('UPDATE wokeometer_sync_state SET full_sync_completed_at = 1700000000, last_success_at = 1700000000');
+        $crawler = $this->client->request('GET', '/admin/settings');
+        $this->assertStringContainsString('d-none', (string) $crawler->filter('[data-wokeometer-initial-hint]')->attr('class'));
+    }
+
+    public function testCostNoteSaysTheInitialSyncIsManualAndAutomaticSyncIsIncremental(): void
+    {
+        $this->client->request('GET', '/admin/settings');
+        $html = (string) $this->client->getResponse()->getContent();
+
+        $this->assertStringContainsString('starts only when you press Sync now', $html);
+        $this->assertStringContainsString('usually 2–60 requests a month', $html);
+        $this->assertStringContainsString('Browsing never calls the API', $html);
+    }
+
     public function testRunningStateDisablesBothButtonsAndFlagsThePoller(): void
     {
         $this->seedKey();
