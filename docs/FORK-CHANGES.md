@@ -749,7 +749,10 @@ quick-look, the Films/Series modals and the Discover modal. Full user-facing doc
 
 The design constraint is cost. The Wokeometer API is prepaid and bills one
 credit ($0.05) per request, including empty pages, so **opening a media detail
-view makes zero API calls**. The catalog is mirrored into a local SQLite table
+view makes zero API calls**. This is not a free integration: on the first live
+install the initial full sync took **279 requests (about $14)** for 13,916
+titles, and the automatic monthly incremental sync then costs roughly 2-60
+requests ($0.10-$3) depending on how much the catalog changed. The catalog is mirrored into a local SQLite table
 and every lookup is a single indexed read on `(tmdb_id, media_type)`.
 
 - **Sync runs only in the messenger worker.** The `messenger-worker` s6

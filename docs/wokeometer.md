@@ -49,15 +49,15 @@ once the initial sync has completed.
 | Item | Requests | Approx. cost |
 |---|---|---|
 | One page of the catalog | 1 request = 1 credit = 50 titles | $0.05 |
-| Initial full sync (movies + TV), started only by **Sync now** | about 180-220 | about $9-11 |
+| Initial full sync (movies + TV), started only by **Sync now** | **279 on a real install (Sept 2026)** | **about $14** |
 | Monthly incremental sync (automatic) | about 2-60 (whatever changed) | about $0.10-$3 |
 | Opening a movie or series | 0 | $0 |
-| "Full resync" button | same as the initial sync | about $9-11 |
+| "Full resync" button | same as the initial sync (about 280) | about $14 |
 | Hard ceiling per run (safety cap) | 600 | $30 |
 
-The catalog is currently roughly 2,000 movies and 6,800 TV rows (about 5,200
-of those are individual seasons), which is where the 180-220 request estimate
-comes from. It grows over time. Every request, including an empty page, costs
+The catalog held 13,916 rows at the first live sync (4,330 movies, 3,292 TV
+series and 6,294 individual seasons), i.e. 279 pages of 50. It grows over
+time, so expect the initial sync to cost a little more each month you wait. Every request, including an empty page, costs
 one credit.
 
 The precise guarantee is:
