@@ -217,7 +217,7 @@ worker; the request itself never calls Wokeometer.
   there are no fuzzy matches, so a missing score is always "not in the
   catalog", never "wrongly matched".
 - Wokeometer stores each season as its own row. Season rows (any row with a
-  parent id or a season number) are kept locally but are never matched to a
+  parent id or a season number of 1 or more) are kept locally but are never matched to a
   series (a season's external id can be a TMDb season id that collides with
   an unrelated show), and only the series-level row is shown.
 - Sonarr series without a TMDb id do not match and simply show nothing.
@@ -299,7 +299,7 @@ Other symptoms:
 | The monthly sync never happens | The scheduler tick is consumed by the messenger worker. Look in the worker log for `scheduler_wokeometer` (the worker command is `messenger:consume async scheduler_wokeometer`). Manual **Sync now** works without it. Also confirm "Enabled" and "Automatic sync" are on, that the initial sync has completed, and that the card shows no active pause (`request_cap` / `halted` pause automatic sync until **Sync now**). |
 | Nothing happens after saving the key | Expected: saving never starts a billed sync. Press **Sync now**. |
 | "Settings saved, but the Wokeometer API key was not" | The key must be `wok_` followed by at least 16 letters or digits; copy it again from your developer page. |
-| A sync completed but nothing matches | Look at "Records with a TMDb id" on the card. If it is 0 while "Cached records" is large, Wokeometer is not reporting `tmdb` as the `external_source` (see Known limitations); open an issue with the value from the `external_source` column. |
+| A sync completed but nothing matches | Look at "Records with a TMDb id" on the card. If it is 0 while "Cached records" is large, Wokeometer is not reporting `tmdb` as the `external_source` (see Known limitations, where the verified behaviour is described); open an issue with the value from the `external_source` column. |
 | Scores appear for movies but not for some series | Series without a TMDb id in Sonarr do not match, and Wokeometer may simply not have analyzed them yet. |
 | Card shows credits remaining as "—" | Wokeometer reports the balance on each successful response; it appears after the first successful page. |
 
@@ -311,10 +311,11 @@ Other symptoms:
 - **Matching depends on `external_source`.** List rows do not carry a
   `tmdb_id`, and fetching each title's detail would cost one credit per title,
   so Prismarr derives the TMDb id from `external_source` = `tmdb` and a numeric
-  `external_id`. This was inferred from the API, not confirmed against a large
-  live sync: after your first sync, check that "Records with a TMDb id" is
-  close to the number of cached movies plus series. If it is not, matching
-  will be poor and the value reported by Wokeometer needs a code change.
+  `external_id`. Verified against a full live sync (13,916 rows): every row
+  carries `external_source = tmdb` with a numeric `external_id`. The API also
+  emits `season_number = 0` on every non-season row (movies and series); Prismarr
+  treats 0 as "not a season" and only rows with a season number of 1 or more
+  (or a parent id) are seasons.
 - **Seasons are stored but not shown.** Only the series-level score is used.
 - **Sonarr series without a TMDb id do not match.**
 - **Fixed monthly schedule.** The 30-day interval and the 600-request cap are

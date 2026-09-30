@@ -264,6 +264,46 @@ class WokeometerTitleRepositoryTest extends KernelTestCase
         $this->assertSame(2, $c['seasons'], 'a parent OR a season number makes a season row');
     }
 
+    /** Rows exactly as the live API delivered them: season_number 0 on every non-season row. */
+    private function seedProductionShape(): void
+    {
+        $this->repo->upsertRows([
+            $this->row('movie', ['mediaType' => 'movie', 'tmdbId' => 603, 'seasonNumber' => 0, 'wokeScore' => 3]),
+            $this->row('show', ['mediaType' => 'tv', 'tmdbId' => 1396, 'parentWokeometerId' => null, 'seasonNumber' => 0, 'lastUpdated' => 1_700_000_000]),
+            $this->row('show-s3', ['mediaType' => 'tv', 'tmdbId' => 1396, 'parentWokeometerId' => 'show', 'seasonNumber' => 3, 'lastUpdated' => 1_800_000_000]),
+        ], 1000, 1000);
+    }
+
+    public function testProductionShapedZeroSeasonRowsAreMatchable(): void
+    {
+        $this->seedProductionShape();
+
+        $movie = $this->repo->findForTmdb('movie', 603);
+        $this->assertNotNull($movie, 'a movie stored with season_number 0 must match');
+        $this->assertSame('movie', $movie['wokeometer_id']);
+
+        $tv = $this->repo->findForTmdb('tv', 1396);
+        $this->assertNotNull($tv);
+        $this->assertSame('show', $tv['wokeometer_id'], 'the series row (season_number 0), not the season');
+
+        $this->assertSame([603], array_keys($this->repo->findForTmdbMany('movie', [603, 999])));
+        $many = $this->repo->findForTmdbMany('tv', [1396]);
+        $this->assertSame('show', $many[1396]['wokeometer_id']);
+
+        $this->assertSame(1, $this->repo->countMatching('movie', [603]));
+        $this->assertSame(1, $this->repo->countMatching('tv', [1396]));
+    }
+
+    public function testProductionShapedCounts(): void
+    {
+        $this->seedProductionShape();
+
+        $c = $this->repo->counts();
+        $this->assertSame(1, $c['movies']);
+        $this->assertSame(1, $c['series'], 'season_number 0 with no parent is a series');
+        $this->assertSame(1, $c['seasons']);
+    }
+
     public function testCountMatching(): void
     {
         $this->repo->upsertRows([

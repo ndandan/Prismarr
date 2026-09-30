@@ -80,6 +80,19 @@ class WokeometerControllerTest extends AbstractWebTestCase
         self::assertNull($data['match']);
     }
 
+    public function testMovieStoredWithSeasonNumberZeroMatches(): void
+    {
+        $this->seedEnabled();
+        $this->seedTitle('movie', 604, 5);
+        $this->em()->getConnection()->executeStatement('UPDATE wokeometer_media SET season_number = 0 WHERE tmdb_id = 604');
+
+        $data = $this->lookup('/wokeometer/api/lookup/movie/604');
+
+        self::assertTrue($data['ok']);
+        self::assertNotNull($data['match'], 'the live API stores season_number 0 on movies');
+        self::assertSame(5, $data['match']['score']);
+    }
+
     public function testNoRowIsAnOkNullMatch(): void
     {
         $this->seedEnabled();

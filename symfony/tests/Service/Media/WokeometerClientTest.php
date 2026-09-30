@@ -429,6 +429,44 @@ class WokeometerClientTest extends TestCase
         $this->assertSame(self::SEP_2026, $zero['lastUpdated']);
     }
 
+    /** @return iterable<string, array{0: mixed, 1: ?int}> */
+    public static function seasonNumberShapes(): iterable
+    {
+        yield 'zero (live API on non-season rows)' => [0, null];
+        yield 'one'                                => [1, 1];
+        yield 'numeric string'                     => ['3', 3];
+        yield 'zero string'                        => ['0', null];
+        yield 'negative'                           => [-1, null];
+        yield 'null'                               => [null, null];
+        yield 'non-numeric'                        => ['abc', null];
+    }
+
+    #[DataProvider('seasonNumberShapes')]
+    public function testSeasonNumberZeroOrInvalidMeansNotASeason(mixed $raw, ?int $expected): void
+    {
+        $body = self::json(['data' => [[
+            'id'              => 'aaaaaaaa-0000-4000-8000-0000000000aa',
+            'media_type'      => 'movie',
+            'season_number'   => $raw,
+            'external_source' => 'tmdb',
+            'external_id'     => '603',
+        ]], 'next_cursor' => null]);
+        $result = $this->client([self::response(200, $body)])->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame($expected, $result->rows[0]['seasonNumber']);
+    }
+
+    public function testAbsentSeasonNumberIsNull(): void
+    {
+        $body = self::json(['data' => [[
+            'id'         => 'aaaaaaaa-0000-4000-8000-0000000000ab',
+            'media_type' => 'movie',
+        ]], 'next_cursor' => null]);
+        $result = $this->client([self::response(200, $body)])->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertNull($result->rows[0]['seasonNumber']);
+    }
+
     /** @return iterable<string, array{0: mixed, 1: int}> */
     public static function lastUpdatedShapes(): iterable
     {

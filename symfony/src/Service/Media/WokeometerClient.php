@@ -464,7 +464,7 @@ class WokeometerClient implements ResetInterface
             'isAnalyzed'         => self::boolOrNull($item['is_analyzed'] ?? null),
             'lastUpdated'        => self::epoch($item['last_updated'] ?? null, $now),
             'parentWokeometerId' => self::stringOrNull($item['parent_id'] ?? null),
-            'seasonNumber'       => self::intOrNull($item['season_number'] ?? null),
+            'seasonNumber'       => self::seasonNumber($item['season_number'] ?? null),
             'externalSource'     => $source,
             'externalId'         => $externalId,
             'tmdbId'             => $tmdbId,
@@ -486,6 +486,18 @@ class WokeometerClient implements ResetInterface
         }
 
         return trim($s) !== '' ? $s : null;
+    }
+
+    /**
+     * Season pages are `-season-N` with N >= 1; the API emits `season_number: 0`
+     * on every non-season row (movies and series), so 0, negatives and
+     * anything non-numeric all mean "not a season" → null.
+     */
+    private static function seasonNumber(mixed $value): ?int
+    {
+        $n = self::intOrNull($value);
+
+        return $n !== null && $n > 0 ? $n : null;
     }
 
     /** Ints, integral floats and (optionally signed) digit strings → int. */

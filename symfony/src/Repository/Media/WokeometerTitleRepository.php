@@ -19,8 +19,10 @@ use Doctrine\Persistence\ManagerRegistry;
  * `tv` lookups match only SERIES rows (`parent_wokeometer_id IS NULL`).
  * Season rows are stored and counted but never matched — a season's
  * external id may be a TMDb season id that collides with an unrelated show.
- * Belt and braces, a row carrying a `season_number` never matches either
- * (a season row whose parent id the API left out).
+ * Belt and braces, a row carrying a positive `season_number` never matches
+ * either (a season row whose parent id the API left out). The live API emits
+ * `season_number = 0` on every non-season row, so NULL and 0 both mean "not a
+ * season" (COALESCE keeps already-stored zeros matchable without a resync).
  *
  * Row shape returned by findForTmdb()/findForTmdbMany() (snake_case columns,
  * integer columns cast to int, is_analyzed to bool, nulls preserved):
@@ -60,7 +62,7 @@ class WokeometerTitleRepository extends ServiceEntityRepository
         SQL;
 
     /** SQL fragment appended to every match query (spec D8 + season guard). */
-    private const MATCHABLE = "((media_type = 'movie' OR parent_wokeometer_id IS NULL) AND season_number IS NULL)";
+    private const MATCHABLE = "((media_type = 'movie' OR parent_wokeometer_id IS NULL) AND COALESCE(season_number, 0) = 0)";
 
     private const INT_COLUMNS = ['id', 'tmdb_id', 'season_number', 'woke_score', 'wokeometer_updated_at', 'last_seen_at', 'synced_at'];
 
@@ -216,8 +218,8 @@ class WokeometerTitleRepository extends ServiceEntityRepository
         $r = $this->db()->fetchAssociative(<<<'SQL'
             SELECT COUNT(*) AS total,
                    COALESCE(SUM(CASE WHEN media_type = 'movie' THEN 1 ELSE 0 END), 0) AS movies,
-                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND parent_wokeometer_id IS NULL AND season_number IS NULL THEN 1 ELSE 0 END), 0) AS series,
-                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND (parent_wokeometer_id IS NOT NULL OR season_number IS NOT NULL) THEN 1 ELSE 0 END), 0) AS seasons,
+                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND parent_wokeometer_id IS NULL AND COALESCE(season_number, 0) = 0 THEN 1 ELSE 0 END), 0) AS series,
+                   COALESCE(SUM(CASE WHEN media_type = 'tv' AND (parent_wokeometer_id IS NOT NULL OR COALESCE(season_number, 0) > 0) THEN 1 ELSE 0 END), 0) AS seasons,
                    COALESCE(SUM(CASE WHEN tmdb_id IS NOT NULL THEN 1 ELSE 0 END), 0) AS with_tmdb
             FROM wokeometer_media
             SQL);
