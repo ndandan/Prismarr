@@ -1287,7 +1287,7 @@ class AdminSettingsController extends AbstractController
         }
 
         $view['state'] = $state;
-        foreach (['lastSuccessAt', 'nextDueAt', 'nextAttemptAfter'] as $field) {
+        foreach (['lastSuccessAt', 'nextDueAt'] as $field) {
             $epoch = $state[$field] ?? null;
             $view['times'][$field] = is_int($epoch) ? new \DateTimeImmutable('@' . $epoch) : null;
         }
@@ -1340,10 +1340,34 @@ class AdminSettingsController extends AbstractController
     }
 
     /**
+     * statusSummary() that never throws: null when the sync tables cannot be
+     * read. `$withMatched` opts into the (comparatively costly) matched-titles
+     * count, which unserializes the cached library lists.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function wokeometerSummary(WokeometerSyncService $sync, bool $withMatched): ?array
+    {
+        try {
+            return $sync->statusSummary($withMatched ? fn () => $this->matchedLibraryTitles() : null);
+        } catch (\Throwable $e) {
+            $this->logger->warning('Wokeometer status unavailable', ['exception' => $e::class]);
+
+            return null;
+        }
+    }
+
+    /**
      * "Sync now" / "Full resync": takes the run lock synchronously (so the UI
      * can poll `running` right away) and queues the run on the worker — this
      * request never calls the Wokeometer API itself. CSRF-protected (JSON
      * fetch from the settings card); admin-only through the class IsGranted.
+     *
+     * `ok` means the HTTP request was served; `queued` carries the outcome
+     * (a refused start is `ok:true, queued:false, reason`). Once the message
+     * is dispatched the run is committed: a failing status read afterwards
+     * returns `queued:true, state:null` and must NOT release the lock, or the
+     * queued message would find its run orphaned.
      */
     #[Route('/wokeometer/sync', name: 'wokeometer_sync', methods: ['POST'])]
     public function wokeometerSync(Request $request, WokeometerSyncService $sync, MessageBusInterface $bus): JsonResponse
@@ -1352,24 +1376,15 @@ class AdminSettingsController extends AbstractController
             return new JsonResponse(['ok' => false, 'queued' => false, 'reason' => 'csrf'], 400);
         }
 
-        $full = $request->request->getBoolean('full');
+        $full  = $request->request->getBoolean('full');
         $runId = null;
 
+        // The try covers ONLY start() + dispatch(): once it completes the run is committed (see above).
         try {
             $runId = $sync->start('manual', $full);
-
             if ($runId !== null) {
                 $bus->dispatch(new SyncWokeometerCatalog($runId, 'manual', $full));
-
-                return new JsonResponse(['ok' => true, 'queued' => true, 'state' => $sync->statusSummary(fn () => $this->matchedLibraryTitles())]);
             }
-
-            return new JsonResponse([
-                'ok'     => true,
-                'queued' => false,
-                'reason' => $sync->lastStartReason() ?? 'error',
-                'state'  => $sync->statusSummary(fn () => $this->matchedLibraryTitles()),
-            ]);
         } catch (\Throwable $e) {
             $this->logger->warning('Wokeometer manual sync could not be queued', ['exception' => $e::class]);
             if ($runId !== null) {
@@ -1384,19 +1399,33 @@ class AdminSettingsController extends AbstractController
 
             return new JsonResponse(['ok' => false, 'queued' => false, 'reason' => 'error']);
         }
+
+        if ($runId !== null) {
+            return new JsonResponse(['ok' => true, 'queued' => true, 'state' => $this->wokeometerSummary($sync, true)]);
+        }
+
+        return new JsonResponse([
+            'ok'     => true,
+            'queued' => false,
+            'reason' => $sync->lastStartReason() ?? 'error',
+            'state'  => $this->wokeometerSummary($sync, true),
+        ]);
     }
 
-    /** Polled by the card while a run is in flight (and once after a queue). */
+    /**
+     * Polled by the card while a run is in flight (and once after a queue).
+     * `?stats=1` additionally computes `matchedTitles`; the 5 s poll omits it
+     * (it would unserialize the whole cached library each time) and the card
+     * asks for it once when the run ends.
+     */
     #[Route('/wokeometer/state', name: 'wokeometer_state', methods: ['GET'])]
-    public function wokeometerState(WokeometerSyncService $sync): JsonResponse
+    public function wokeometerState(Request $request, WokeometerSyncService $sync): JsonResponse
     {
-        try {
-            return new JsonResponse(['ok' => true, 'state' => $sync->statusSummary(fn () => $this->matchedLibraryTitles())]);
-        } catch (\Throwable $e) {
-            $this->logger->warning('Wokeometer status unavailable', ['exception' => $e::class]);
+        $state = $this->wokeometerSummary($sync, $request->query->getBoolean('stats'));
 
-            return new JsonResponse(['ok' => false, 'reason' => 'error']);
-        }
+        return $state === null
+            ? new JsonResponse(['ok' => false, 'reason' => 'error'])
+            : new JsonResponse(['ok' => true, 'state' => $state]);
     }
 
     /**

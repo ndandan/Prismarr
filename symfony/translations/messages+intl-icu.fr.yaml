@@ -865,6 +865,7 @@ admin:
     cost_note: "Chaque page de 50 titres correspond à une requête d'API facturée ; une synchronisation complète du catalogue représente environ 200 requêtes. La navigation n'appelle jamais l'API."
     attribution: 'Les scores et résumés sont fournis par Wokeometer et mis en cache localement. Prismarr n''est pas affilié à Wokeometer.'
     queued: Synchronisation mise en file — elle s'exécute en arrière-plan.
+    poll_timeout: Toujours en cours — rechargez la page pour voir l'état le plus récent.
     reason:
       disabled: Wokeometer est désactivé ou n'a pas encore de clé API.
       locked: Une synchronisation est déjà en cours.

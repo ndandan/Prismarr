@@ -1808,6 +1808,7 @@
     },
     confirmFull: 'admin.wokeometer.confirm_full'|trans,
     queued:      'admin.wokeometer.queued'|trans,
+    pollTimeout: 'admin.wokeometer.poll_timeout'|trans,
     breakdown:   'admin.wokeometer.cached_breakdown'|trans({movies: '%m%', series: '%s%', seasons: '%z%'}),
   } %}
   <script nonce="{{ csp_nonce() }}">
@@ -1828,6 +1829,7 @@
       var alive = true;
       var timer = null;
       var polls = 0;
+      var GET_OPTS = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
 
       function setText(name, text) {
         var el = card.querySelector('[data-wokeometer-stat="' + name + '"]');
@@ -1843,8 +1845,14 @@
         msg.classList.toggle('text-warning', false);
         msg.classList.toggle('text-secondary', !isError);
       }
+      function unlock() {
+        btnSync.disabled = false;
+        btnFull.disabled = false;
+      }
 
-      function render(s) {
+      // withStats: this state was fetched with ?stats=1, so a null
+      // matchedTitles is a real answer ("unknown"), not "not computed".
+      function render(s, withStats) {
         if (!s) return;
         var key = s.running ? 'running' : (s.lastStatus || 'never');
         if (!Object.prototype.hasOwnProperty.call(I18N.status, key)) key = 'error';
@@ -1861,7 +1869,9 @@
         setText('cached_records', num(c.total) + ' (' + I18N.breakdown
           .replace('%m%', num(c.movies)).replace('%s%', num(c.series)).replace('%z%', num(c.seasons)) + ')');
         setText('records_with_tmdb', num(c.withTmdb));
-        setText('matched_titles', num(s.matchedTitles));
+        if (withStats || (s.matchedTitles !== null && s.matchedTitles !== undefined)) {
+          setText('matched_titles', num(s.matchedTitles));
+        }
         setText('next_due', (s.enabled && s.autoSync) ? when(s.nextDueAt) : DASH);
 
         var can = !!s.enabled && !s.running;
@@ -1873,20 +1883,52 @@
         if (timer !== null) { clearTimeout(timer); timer = null; }
       }
 
-      // Poll the state endpoint every POLL_MS while a run is in flight, at most MAX_POLLS times.
+      // Ends a polling session: ONE ?stats=1 fetch refreshes every stat
+      // (including the matched-titles count the 5 s polls skip). When the
+      // session ended without a verdict (poll cap / unreadable state) the
+      // buttons are handed back to the admin with a "reload" hint.
+      function finish(gaveUp) {
+        var url = btnSync.dataset.stateUrl + '?stats=1';
+        fetch(url, GET_OPTS)
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (!alive) return;
+            if (d && d.ok && d.state) {
+              render(d.state, true);
+              if (gaveUp && d.state.running) {
+                say(I18N.pollTimeout, false);
+                if (d.state.enabled) unlock();
+              }
+            } else if (gaveUp) {
+              say(I18N.pollTimeout, false);
+              unlock();
+            }
+          })
+          .catch(function () {
+            if (!alive || !gaveUp) return;
+            say(I18N.pollTimeout, false);
+            unlock();
+          });
+      }
+
+      // Poll the state endpoint (without stats) every POLL_MS while a run is in flight, at most MAX_POLLS times.
       function poll() {
-        if (timer !== null || !alive || polls >= MAX_POLLS) return;
+        if (timer !== null || !alive) return;
+        if (polls >= MAX_POLLS) { finish(true); return; }
         timer = setTimeout(function () {
           timer = null;
           if (!alive) return;
           polls++;
-          fetch(btnSync.dataset.stateUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+          fetch(btnSync.dataset.stateUrl, GET_OPTS)
             .then(function (r) { return r.json(); })
             .then(function (d) {
               if (!alive) return;
               if (d && d.ok && d.state) {
-                render(d.state);
-                if (d.state.running) poll();
+                render(d.state, false);
+                if (d.state.running) { poll(); } else { finish(false); }
+              } else {
+                say(I18N.pollTimeout, false);
+                unlock();
               }
             })
             .catch(function () { if (alive) poll(); });
@@ -1912,25 +1954,28 @@
           .then(function (r) { return r.json().catch(function () { return null; }); })
           .then(function (d) {
             if (!alive) return;
-            if (d && d.state) render(d.state);
+            // state may legitimately be null (status read failed after the run was queued): skip the refresh.
+            if (d && d.state) render(d.state, true);
             if (d && d.ok && d.queued) {
               say(I18N.queued, false);
-            } else {
-              var reason = (d && d.reason && Object.prototype.hasOwnProperty.call(I18N.reason, d.reason)) ? d.reason : 'error';
-              say(I18N.reason[reason], true);
-              if (!(d && d.state)) {
-                // Nothing came back to tell us the truth: let the admin retry.
-                btnSync.disabled = false;
-                btnFull.disabled = false;
-              }
+              polls = 0;
+              poll();
+              return;
             }
-            if (d && d.state && d.state.running) { polls = 0; poll(); }
+            var reason = (d && d.reason && Object.prototype.hasOwnProperty.call(I18N.reason, d.reason)) ? d.reason : 'error';
+            say(I18N.reason[reason], true);
+            if (d && d.state && d.state.running) {
+              polls = 0;
+              poll();
+            } else if (!(d && d.state)) {
+              // Nothing came back to tell us the truth: let the admin retry.
+              unlock();
+            }
           })
           .catch(function () {
             if (!alive) return;
             say(I18N.reason.error, true);
-            btnSync.disabled = false;
-            btnFull.disabled = false;
+            unlock();
           });
       }
 

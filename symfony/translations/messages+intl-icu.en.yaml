@@ -867,6 +867,7 @@ admin:
     cost_note: 'Each page of 50 titles is one billed API request; a full catalog sync is roughly 200 requests. Browsing never calls the API.'
     attribution: 'Scores and summaries are provided by Wokeometer and cached locally. Prismarr is not affiliated with Wokeometer.'
     queued: Sync queued — it runs in the background.
+    poll_timeout: Still running — reload the page for the latest status.
     reason:
       disabled: Wokeometer is switched off or has no API key yet.
       locked: A sync is already running.

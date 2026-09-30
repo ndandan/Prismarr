@@ -8,7 +8,12 @@ use App\Entity\User;
 use App\Message\SyncWokeometerCatalog;
 use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\MediaLibraryCache;
+use App\Service\Wokeometer\WokeometerSyncService;
 use App\Tests\AbstractWebTestCase;
+use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
+use Symfony\Component\Messenger\Envelope;
+use Symfony\Component\Messenger\MessageBusInterface;
+use Symfony\Component\Messenger\TraceableMessageBus;
 use Symfony\Component\Messenger\Transport\InMemory\InMemoryTransport;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
 
@@ -18,6 +23,7 @@ use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
  * consumed here): the Wokeometer HTTP client is only reachable from the
  * worker, so `total_requests` must stay 0 whatever we do below.
  */
+#[AllowMockObjectsWithoutExpectations]
 final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
 {
     private const SYNC  = '/admin/settings/wokeometer/sync';
@@ -41,6 +47,25 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $swr = static::getContainer()->get(StaleWhileRevalidateCache::class);
         $swr->delete('media.movies.radarr-1');
         $swr->delete('media.series.sonarr-1');
+    }
+
+    /**
+     * Replace services for the NEXT request. The settings page (used to scrape
+     * the CSRF token) has already initialised them in the current kernel, so
+     * boot a fresh one, override, then stop the browser rebooting it.
+     *
+     * @param array<string, object> $services
+     */
+    private function overrideServices(array $services): void
+    {
+        $kernel = $this->client->getKernel();
+        $kernel->shutdown();
+        $kernel->boot();
+        $container = $kernel->getContainer()->get('test.service_container');
+        foreach ($services as $id => $service) {
+            $container->set($id, $service);
+        }
+        $this->client->disableReboot();
     }
 
     private function seedKey(): void
@@ -76,7 +101,7 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
     /** @return list<object> */
     private function queued(): array
     {
-        $transport = static::getContainer()->get('messenger.transport.async');
+        $transport = $this->client->getKernel()->getContainer()->get('test.service_container')->get('messenger.transport.async');
         self::assertInstanceOf(InMemoryTransport::class, $transport);
 
         return array_values(array_map(static fn ($e) => $e->getMessage(), $transport->getSent()));
@@ -228,25 +253,104 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $this->assertStringNotContainsString('wok_', (string) $response->getContent());
     }
 
-    public function testMatchedTitlesAreCountedFromTheCachedLibraryOnly(): void
+    public function testMatchedTitlesAreCountedFromTheCachedLibraryOnlyAndOnlyOnRequest(): void
     {
         $this->seedKey();
         $em = $this->em();
-        $t  = new WokeometerTitle('u-movie-603', 'movie', 'The Matrix', 1_700_000_000, 1_700_000_100, 1_700_000_200);
-        $t->setTmdbId(603)->setExternalSource('tmdb')->setExternalId('603')->setWokeScore(3)->setSlug('the-matrix')->setAnalyzed(true);
-        $em->persist($t);
+
+        $movie = new WokeometerTitle('u-movie-603', 'movie', 'The Matrix', 1_700_000_000, 1_700_000_100, 1_700_000_200);
+        $movie->setTmdbId(603)->setExternalSource('tmdb')->setExternalId('603')->setWokeScore(3)->setSlug('the-matrix')->setAnalyzed(true);
+        $em->persist($movie);
+
+        // A top-level tv title (parent NULL) matches...
+        $show = new WokeometerTitle('u-tv-1399', 'tv', 'Game of Thrones', 1_700_000_000, 1_700_000_100, 1_700_000_200);
+        $show->setTmdbId(1399)->setExternalSource('tmdb')->setExternalId('1399')->setWokeScore(2)->setSlug('got')->setAnalyzed(true);
+        $em->persist($show);
+
+        // ...a season row (parent set) must NOT make its library series match.
+        $season = new WokeometerTitle('u-tv-1400-s1', 'tv', 'Some Show S1', 1_700_000_000, 1_700_000_100, 1_700_000_200);
+        $season->setTmdbId(1400)->setExternalSource('tmdb')->setExternalId('1400')->setParentWokeometerId('u-tv-1400')->setSeasonNumber(1);
+        $em->persist($season);
         $em->flush();
 
         // Warm the SHARED library cache the way MediaLibraryRefresher does.
         $swr = static::getContainer()->get(StaleWhileRevalidateCache::class);
         $swr->write('media.movies.radarr-1', [['tmdbId' => 603], ['tmdbId' => 604], ['tmdbId' => null]], MediaLibraryCache::HARD_TTL);
-        $swr->write('media.series.sonarr-1', [['tmdbId' => 1399]], MediaLibraryCache::HARD_TTL);
+        $swr->write('media.series.sonarr-1', [['tmdbId' => 1399], ['tmdbId' => 1400]], MediaLibraryCache::HARD_TTL);
+
+        // The 5 s poll variant never computes it.
+        $this->client->request('GET', self::STATE, [], [], ['HTTP_ACCEPT' => 'application/json']);
+        $data = json_decode((string) $this->client->getResponse()->getContent(), true);
+        $this->assertNull($data['state']['matchedTitles'], 'no ?stats=1 => not computed');
+
+        // ?stats=1: 1 movie (603) + 1 tv (1399); the season-only 1400 and unknown 604 do not count.
+        $this->client->request('GET', self::STATE . '?stats=1', [], [], ['HTTP_ACCEPT' => 'application/json']);
+        $data = json_decode((string) $this->client->getResponse()->getContent(), true);
+        $this->assertSame(2, $data['state']['matchedTitles']);
+        $this->assertSame(0, $this->totalRequests());
+
+        // The page render keeps computing it.
+        $crawler = $this->client->request('GET', '/admin/settings');
+        $this->assertSame('2', trim($crawler->filter('[data-wokeometer-stat="matched_titles"]')->text()));
+    }
+
+    public function testDispatchFailureReleasesTheLockAndMarksError(): void
+    {
+        $this->seedKey();
+        $token = $this->csrf();
+
+        // Wrapped in TraceableMessageBus: the debug data collector type-checks the bus.
+        $failing = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                throw new \RuntimeException('transport down: secret-detail');
+            }
+        };
+        $this->overrideServices(['messenger.default_bus' => new TraceableMessageBus($failing)]);
+
+        $data = $this->post($token);
+
+        $this->assertFalse($data['ok']);
+        $this->assertFalse($data['queued']);
+        $this->assertSame('error', $data['reason']);
+        $this->assertStringNotContainsString('secret-detail', (string) $this->client->getResponse()->getContent());
+
+        $row = $this->em()->getConnection()->fetchAssociative('SELECT lock_run_id, last_status FROM wokeometer_sync_state WHERE id = 1');
+        $this->assertNull($row['lock_run_id'], 'the lock taken by start() must be released when nothing was queued');
+        $this->assertSame('error', $row['last_status']);
+    }
+
+    public function testStatusFailureAfterASuccessfulDispatchStillReportsQueued(): void
+    {
+        $this->seedKey();
+        $token = $this->csrf();
+
+        $sync = $this->createMock(WokeometerSyncService::class);
+        $sync->method('start')->willReturn('run-abc');
+        $sync->method('statusSummary')->willThrowException(new \RuntimeException('db hiccup'));
+        $this->overrideServices([WokeometerSyncService::class => $sync]);
+
+        $data = $this->post($token);
+
+        $this->assertTrue($data['ok']);
+        $this->assertTrue($data['queued'], 'the message was dispatched, so the run is committed');
+        $this->assertNull($data['state']);
+        $messages = $this->queued();
+        $this->assertCount(1, $messages);
+        $this->assertSame('run-abc', $messages[0]->runId);
+    }
+
+    public function testStateEndpointReportsAnErrorWhenTheStatusReadFails(): void
+    {
+        $sync = $this->createMock(WokeometerSyncService::class);
+        $sync->method('statusSummary')->willThrowException(new \RuntimeException('db hiccup'));
+        $this->overrideServices([WokeometerSyncService::class => $sync]);
 
         $this->client->request('GET', self::STATE, [], [], ['HTTP_ACCEPT' => 'application/json']);
         $data = json_decode((string) $this->client->getResponse()->getContent(), true);
 
-        $this->assertSame(1, $data['state']['matchedTitles'], 'only 603 exists in the local Wokeometer cache');
-        $this->assertSame(0, $this->totalRequests());
+        $this->assertFalse($data['ok']);
+        $this->assertSame('error', $data['reason']);
     }
 
     public function testEndpointsNeverLeakExceptionMessages(): void
