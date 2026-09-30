@@ -393,6 +393,19 @@ class TemplateEscapingGuardTest extends TestCase
             'Sonarr healthWarnings text lands raw in the page banner innerHTML (films sibling uses esc(w))',
         ];
 
+        // Wokeometer modal integration: the TL;DR, title and url are third-party
+        // text. They only ever go through textContent / a guarded href; never
+        // splice them into an HTML string.
+        foreach (['media/films.html.twig', 'media/series.html.twig', 'decouverte/index.html.twig'] as $tpl) {
+            foreach (['w\\.tldr', 'match\\.tldr', 'wokeometer\\.tldr', 'w\\.title', 'match\\.title', 'wokeometer\\.title', 'match\\.url', 'wokeometer\\.url'] as $expr) {
+                yield "wokeometer in $tpl: $expr concatenation" => [
+                    $tpl,
+                    '/\\+\\s*' . $expr . '\\s*\\+/',
+                    'Wokeometer TL;DR / title / url are third-party text: textContent / guarded href only',
+                ];
+            }
+        }
+
         // Review 2026-08-28 #3: f02bc5f hardened esc() against attribute
         // breakout in prowlarr/index.html.twig only; these byte-identical
         // siblings interpolate esc() into value="…"/data-*="…" attributes, so

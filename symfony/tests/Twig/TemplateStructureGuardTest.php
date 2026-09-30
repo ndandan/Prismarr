@@ -96,6 +96,83 @@ class TemplateStructureGuardTest extends TestCase
         );
     }
 
+    /**
+     * Wokeometer modal integration (Task 5). The Films/Series modals fetch the
+     * LOCAL lookup endpoint on open; each must reset its Wokeometer elements at
+     * the very start of the open handler (a previous title's score must never
+     * flash). Discover receives the data in its own detail JSON, so it must
+     * NOT call the lookup endpoint.
+     */
+    public function testFilmsAndSeriesModalsFetchTheLocalWokeometerLookupOnOpen(): void
+    {
+        $films = (string) file_get_contents(self::TEMPLATE_ROOT . 'media/films.html.twig');
+        $series = (string) file_get_contents(self::TEMPLATE_ROOT . 'media/series.html.twig');
+
+        $this->assertStringContainsString('/wokeometer/api/lookup/movie/', $films);
+        $this->assertStringContainsString('/wokeometer/api/lookup/tv/', $series);
+
+        foreach ([
+            'films' => [$films, 'resetFilmWokeometer', 'loadFilmWokeometer'],
+            'series' => [$series, 'resetSerieWokeometer', 'loadSerieWokeometer'],
+        ] as $label => [$src, $reset, $load]) {
+            $this->assertStringContainsString($reset . '();', $src, $label . ': reset call missing');
+            $this->assertStringContainsString($load . '(', $src, $label . ': load call missing');
+            $this->assertStringContainsString('function ' . $reset . '(', $src, $label . ': reset definition missing');
+            $this->assertStringContainsString('function ' . $load . '(', $src, $label . ': load definition missing');
+            // The link target is only ever a wokeometer.app URL.
+            $this->assertStringContainsString('https://wokeometer.app/', $src, $label . ': link prefix guard missing');
+        }
+    }
+
+    public function testWokeometerResetRunsBeforeTheOpenHandlerCanBailOut(): void
+    {
+        // The reset is the FIRST statement of the show.bs.modal handler: it must
+        // come before the `if (!card ...) return;` early exit (and before any
+        // fetch), so a previous title's score can never flash.
+        foreach ([
+            'media/films.html.twig' => ['resetFilmWokeometer();', 'loadFilmWokeometer('],
+            'media/series.html.twig' => ['resetSerieWokeometer();', 'loadSerieWokeometer('],
+        ] as $rel => [$reset, $load]) {
+            $src = (string) file_get_contents(self::TEMPLATE_ROOT . $rel);
+            $handler = strpos($src, "modalEl.addEventListener('show.bs.modal', function (event) {");
+            $this->assertNotFalse($handler, $rel . ': open handler not found');
+            $resetAt = strpos($src, $reset, $handler);
+            $bailAt = strpos($src, 'return;', $handler);
+            $loadAt = strpos($src, $load, $handler);
+            $this->assertNotFalse($resetAt, $rel . ': reset not called in the open handler');
+            $this->assertLessThan($bailAt, $resetAt, $rel . ': reset must precede the early return');
+            $this->assertLessThan($loadAt, $resetAt, $rel . ': reset must precede the load');
+        }
+    }
+
+    public function testSeriesCardsCarryTheTmdbIdForTheWokeometerLookup(): void
+    {
+        $series = (string) file_get_contents(self::TEMPLATE_ROOT . 'media/series.html.twig');
+        $this->assertStringContainsString('data-tmdb-id="{{ s.tmdbId|default(\'\') }}"', $series);
+        $this->assertStringContainsString('card.dataset.tmdbId', $series);
+    }
+
+    public function testDiscoverRendersWokeometerFromItsDetailJsonWithoutFetching(): void
+    {
+        $src = (string) file_get_contents(self::TEMPLATE_ROOT . 'decouverte/index.html.twig');
+        // Data arrives server-side in the TmdbController::detail JSON.
+        $this->assertStringContainsString('d.wokeometer', $src);
+        $this->assertStringContainsString('resetDiscoverWokeometer', $src);
+        $this->assertStringContainsString('id="td-rating-woke"', $src);
+        $this->assertStringContainsString('id="td-wokeometer"', $src);
+        $this->assertStringNotContainsString('/wokeometer/api/', $src);
+    }
+
+    public function testEveryWokeometerModalTemplateWiresTheExistingTranslationKeys(): void
+    {
+        foreach (['media/films.html.twig', 'media/series.html.twig', 'decouverte/index.html.twig'] as $rel) {
+            $src = (string) file_get_contents(self::TEMPLATE_ROOT . $rel);
+            foreach (['wokeometer.title', 'wokeometer.score', 'wokeometer.view_full', 'wokeometer.attribution', 'wokeometer.badge_title'] as $key) {
+                $this->assertStringContainsString("'" . $key . "'|trans", $src, $rel . ': missing ' . $key);
+            }
+        }
+    }
+
     public function testSearchRenderItemRendersSubtitleBadge(): void
     {
         $base = file_get_contents(self::TEMPLATE_ROOT . 'base.html.twig');
@@ -154,6 +231,9 @@ class TemplateStructureGuardTest extends TestCase
             'media/_subtitle_chips.html.twig',
             'dashboard/_quicklook_body.html.twig',
             '_quicklook.html.twig',
+            // Wokeometer modal integration (Task 5): Discover gained inline
+            // script code too; all three modal templates carry this guard.
+            'decouverte/index.html.twig',
         ];
         foreach ($files as $relPath) {
             $src = file_get_contents(self::TEMPLATE_ROOT . $relPath);
