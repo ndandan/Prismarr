@@ -17,3 +17,7 @@ framework:
         # Bazarr fetch never occupies a FrankenPHP web worker.
         routing:
             App\Message\RefreshCacheKey: async
+            # Wokeometer sync chunks: paid API, worker only. The hourly
+            # WokeometerSyncTick is NOT routed — it arrives on the
+            # scheduler_wokeometer transport the worker also consumes.
+            App\Message\SyncWokeometerCatalog: async

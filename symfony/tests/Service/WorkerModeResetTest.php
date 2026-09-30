@@ -6,6 +6,7 @@ use App\Controller\DashboardController;
 use App\Service\HealthService;
 use App\Service\Media\RadarrClient;
 use App\Service\Wokeometer\WokeometerLookup;
+use App\Service\Wokeometer\WokeometerSyncService;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Symfony\Contracts\Service\ResetInterface;
@@ -48,6 +49,8 @@ class WorkerModeResetTest extends TestCase
             // Per-request (type:id) memo + once-per-request warning flag;
             // behaviour covered by WokeometerLookupTest::testResetClearsMemo.
             [WokeometerLookup::class],
+            // lastStartReason() of the previous message must not leak.
+            [WokeometerSyncService::class],
         ];
     }
 
