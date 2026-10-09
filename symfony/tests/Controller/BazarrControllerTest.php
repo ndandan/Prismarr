@@ -292,4 +292,18 @@ class BazarrControllerTest extends AbstractWebTestCase
 
         self::assertNotSame('already_running', json_decode((string) $this->client->getResponse()->getContent(), true)['reason']);
     }
+
+    /**
+     * End to end: a POST the browser labels same-site (another port of the
+     * same host, or a sibling subdomain behind a tunnel) is refused before
+     * the controller runs, even with a valid admin session cookie.
+     */
+    public function testACrossSitePostIsRefusedEvenWithAValidSession(): void
+    {
+        $this->client->request('POST', '/bazarr/api/refresh', [], [], ['HTTP_SEC_FETCH_SITE' => 'same-site', 'HTTP_ACCEPT' => 'application/json']);
+        self::assertResponseStatusCodeSame(403);
+
+        $this->client->request('POST', '/bazarr/api/refresh', [], [], ['HTTP_SEC_FETCH_SITE' => 'same-origin', 'HTTP_ACCEPT' => 'application/json']);
+        self::assertResponseStatusCodeSame(200);
+    }
 }
