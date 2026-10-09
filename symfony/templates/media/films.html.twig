@@ -4124,11 +4124,30 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
   var initialQueue = {{ queue|json_encode|raw }};
   (initialQueue || []).forEach(function(q) { if (q.movieId) previousQueueIds.add(q.movieId); });
   renderQueue(initialQueue);
+  // The 2 s poll (and the Radarr RefreshMonitoredDownloads POST it carries
+  // every third tick) pauses while the tab is hidden and refreshes at once
+  // when it becomes visible again. The listener is removed in the teardown.
   window.registerPageLifecycle(function () {
-    queueRefreshTimer = setInterval(refreshQueue, 2000);
-    return function () {
-      clearInterval(queueRefreshTimer);
+    function startQueuePoll() {
+      if (queueRefreshTimer === null) queueRefreshTimer = setInterval(refreshQueue, 2000);
+    }
+    function stopQueuePoll() {
+      if (queueRefreshTimer !== null) clearInterval(queueRefreshTimer);
       queueRefreshTimer = null;
+    }
+    function onQueueVisibility() {
+      if (document.hidden) {
+        stopQueuePoll();
+      } else if (queueRefreshTimer === null) {
+        refreshQueue();
+        startQueuePoll();
+      }
+    }
+    document.addEventListener('visibilitychange', onQueueVisibility);
+    if (!document.hidden) startQueuePoll();
+    return function () {
+      document.removeEventListener('visibilitychange', onQueueVisibility);
+      stopQueuePoll();
     };
   });
 
