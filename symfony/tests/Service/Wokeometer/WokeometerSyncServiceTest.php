@@ -1240,9 +1240,14 @@ class WokeometerSyncServiceTest extends KernelTestCase
         // row's UUID, so each next_cursor must sort after the previous one.
         // The old guard only caught A→A; an A→B→A cycle (provider bug) would
         // have spent up to the 600-request cap per run.
-        $u1 = '00000000-0000-4000-8000-000000000001';
-        $u2 = '00000000-0000-4000-8000-000000000002';
-        $this->client->script = [$this->page(['m1'], $u2), $this->page(['m2'], $u1), $this->page(['m3'], null)];
+        $u = static fn (int $n): string => sprintf('00000000-0000-4000-8000-%012d', $n);
+        // Each page's own rows ascend (so the provider's order is the
+        // string order the guard relies on), but page 2's cursor goes back.
+        $this->client->script = [
+            $this->page([$u(10), $u(20)], $u(20)),
+            $this->page([$u(5), $u(8)], $u(8)),
+            $this->page([$u(30)], null),
+        ];
         $r = $this->sync->runChunk($this->startRun());
 
         $this->assertSame(WokeometerSyncService::STATUS_HALTED, $r->reason);
@@ -1287,6 +1292,23 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertSame(1, $s['run_requests']);
         $this->assertSame(1, $s['total_requests']);
         $this->assertSame(41, $s['credits_remaining']);
+    }
+    public function testTheCursorOrderRuleOnlyAppliesWhenThePagesOwnRowsProveTheOrder(): void
+    {
+        // If the provider's "UUID ascending" is NOT plain string order (a
+        // different byte order), rows inside a page won't ascend by strcmp
+        // either — then a "backward" cursor is normal and must not halt a
+        // legitimate sync (a halt re-bills from page 1 on every Sync now).
+        $u = static fn (int $n): string => sprintf('00000000-0000-4000-8000-%012d', $n);
+        $this->client->script = [
+            $this->page([$u(90), $u(70)], $u(70)),
+            $this->page([$u(50), $u(30)], $u(30)),
+            $this->page([$u(10)], null),
+            $this->page([], null, 'tv'),
+        ];
+
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun())->status);
+        $this->assertSame(5, $this->mediaCount());
     }
 }
 

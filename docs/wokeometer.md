@@ -158,7 +158,9 @@ audience scores and rating counts, and collection ids.
 
 A **manual** Sync now ignores the pauses above and resumes the interrupted run
 at once (including after `invalid`), or, after `halted` / `request_cap`, starts
-fresh after a confirmation.
+fresh after a confirmation. (Resuming an `invalid` stop within 24 hours replays
+the same stored response for free — and stops again — so if the response was
+genuinely unusable, waiting a day or using **Full resync** is the way forward.)
 
 ## Scheduling
 
