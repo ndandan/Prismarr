@@ -3268,9 +3268,30 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     }).catch(function(){});
   }
   refreshSeriesWarnings();
+  // Paused while the tab is hidden, refreshed at once when it is shown again.
   window.registerPageLifecycle(function () {
-    var warningsTimer = setInterval(refreshSeriesWarnings, 10000);
-    return function () { clearInterval(warningsTimer); };
+    var warningsTimer = null;
+    function startWarningsPoll() {
+      if (warningsTimer === null) warningsTimer = setInterval(refreshSeriesWarnings, 10000);
+    }
+    function stopWarningsPoll() {
+      if (warningsTimer !== null) clearInterval(warningsTimer);
+      warningsTimer = null;
+    }
+    function onWarningsVisibility() {
+      if (document.hidden) {
+        stopWarningsPoll();
+      } else if (warningsTimer === null) {
+        refreshSeriesWarnings();
+        startWarningsPoll();
+      }
+    }
+    document.addEventListener('visibilitychange', onWarningsVisibility);
+    if (!document.hidden) startWarningsPoll();
+    return function () {
+      document.removeEventListener('visibilitychange', onWarningsVisibility);
+      stopWarningsPoll();
+    };
   });
 
   // Check for active commands on page load (only user-initiated ones)
