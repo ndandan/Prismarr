@@ -174,7 +174,10 @@ class ConcurrentCurl
 
     /**
      * Fallback when the multi loop can't make progress: run every parked
-     * transfer with plain curl_exec() and let its task carry on.
+     * transfer with plain curl_exec() and let its task carry on. A transfer
+     * the multi had already partly sent goes out again — acceptable only
+     * because every caller today is an idempotent health ping (a login or
+     * RPC "version" POST); don't route non-idempotent requests through here.
      *
      * @param array<int, array{key: string, fiber: \Fiber<mixed, mixed, mixed, mixed>, ch: \CurlHandle}> $pending
      * @param array<string, array{value: mixed}|array{error: \Throwable}> $out

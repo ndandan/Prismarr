@@ -41,6 +41,13 @@ class HealthService implements ResetInterface
     private const CACHE_TTL = 10;
 
     /**
+     * Services whose ping does synchronous work before its first transfer
+     * (BazarrClient / TautulliClient run the SSRF guard's DNS lookup inline):
+     * started first in a concurrent sweep — see sweep().
+     */
+    private const SYNC_SETUP_FIRST = ['bazarr', 'tautulli'];
+
+    /**
      * Pool key of the cache "generation" — a random token mixed into every
      * status key. invalidate() just drops it: the next read mints a new one,
      * which orphans every previous entry at once (they expire by TTL anyway)
@@ -276,6 +283,16 @@ class HealthService implements ResetInterface
         if ($this->concurrent === null || count($targets) < 2) {
             return;
         }
+        // Read-only pass first: a warm (or nearly warm) chips() call must not
+        // queue behind another request's sweep lock — which LockRegistry also
+        // shares with unrelated cache.app keys hashing to the same slot.
+        try {
+            if (count($this->collectMisses($targets, time())) < 2) {
+                return;
+            }
+        } catch (\Throwable) {
+            return; // pool trouble: statusFor() takes over, one service at a time
+        }
         if ($this->statusPool === null) {
             $this->sweep($targets);
             return;
@@ -298,31 +315,20 @@ class HealthService implements ResetInterface
             return;
         }
         try {
-            $now    = time();
-            $misses = [];
-            foreach ($targets as [$service, $instanceSlug]) {
-                $key = self::memoKey($service, $instanceSlug);
-                if (isset($misses[$key]) || $this->memoized($key, $now) !== null) {
-                    continue;
-                }
-                if ($this->statusPool !== null) {
-                    // Read-only pool lookup: never computes, never saves.
-                    /** @var mixed $hit the stored status array on a hit, null on a miss */
-                    $hit = $this->statusPool->get($this->poolKey($key), static function (ItemInterface $item, bool &$save): ?array {
-                        $save = false;
-                        return null;
-                    });
-                    if (is_array($hit)) {
-                        /** @var array{status: ?string, latencyMs: ?int} $hit only ever written by statusFor()/sweep() */
-                        $this->remember($key, $hit, $now);
-                        continue;
-                    }
-                }
-                $misses[$key] = [$service, $instanceSlug];
-            }
+            // Re-checked under the lock: another request may have just filled them.
+            $misses = $this->collectMisses($targets, time());
             if (count($misses) < 2) {
                 return; // nothing to overlap — statusFor() handles a lone miss as before
             }
+
+            // Probes that do synchronous work before their transfer (the SSRF
+            // guard's DNS lookup) start FIRST: fibers run in order until their
+            // first transfer, so a stalled lookup then finishes before any
+            // other probe's clock starts or handle joins the multi loop —
+            // instead of being charged to every in-flight service (false
+            // "slow", or a curl timeout that marks a healthy service down).
+            $first = array_filter($misses, static fn (array $t): bool => in_array($t[0], self::SYNC_SETUP_FIRST, true));
+            $misses = $first + array_diff_key($misses, $first);
 
             $tasks = [];
             foreach ($misses as $key => [$service, $instanceSlug]) {
@@ -348,6 +354,39 @@ class HealthService implements ResetInterface
         } catch (\Throwable) {
             // Whatever is already memoized is valid; statusFor() does the rest.
         }
+    }
+
+    /**
+     * Targets with neither a memo nor a pool entry. Read-only (never computes
+     * or saves); pool hits are copied into the memo on the way.
+     *
+     * @param list<array{0: string, 1: ?string}> $targets
+     * @return array<string, array{0: string, 1: ?string}> memo key => target
+     */
+    private function collectMisses(array $targets, int $now): array
+    {
+        $misses = [];
+        foreach ($targets as [$service, $instanceSlug]) {
+            $key = self::memoKey($service, $instanceSlug);
+            if (isset($misses[$key]) || $this->memoized($key, $now) !== null) {
+                continue;
+            }
+            if ($this->statusPool !== null) {
+                /** @var mixed $hit the stored status array on a hit, null on a miss */
+                $hit = $this->statusPool->get($this->poolKey($key), static function (ItemInterface $item, bool &$save): ?array {
+                    $save = false;
+                    return null;
+                });
+                if (is_array($hit)) {
+                    /** @var array{status: ?string, latencyMs: ?int} $hit only ever written by statusFor()/sweep() */
+                    $this->remember($key, $hit, $now);
+                    continue;
+                }
+            }
+            $misses[$key] = [$service, $instanceSlug];
+        }
+
+        return $misses;
     }
 
     private function pingFor(string $service, ?string $instanceSlug): ?bool

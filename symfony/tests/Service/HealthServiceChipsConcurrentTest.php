@@ -211,4 +211,60 @@ class HealthServiceChipsConcurrentTest extends HealthServiceChipsTest
 
         self::assertSame([], $this->batches);
     }
+
+    /**
+     * Review fix: work a probe does synchronously before its transfer (the
+     * SSRF guard's DNS lookup in Bazarr/Tautulli) blocks the whole multi
+     * loop. Those probes now start FIRST, so the stall happens before any
+     * other service's clock starts — healthy services are not charged for it.
+     */
+    public function testASynchronousStallInOneProbeIsNotChargedToTheOthers(): void
+    {
+        $settings = ['prowlarr_url' => 'http://p', 'prowlarr_api_key' => 'k', 'tmdb_api_key' => 'k',
+            'bazarr_url' => 'http://b', 'bazarr_api_key' => 'k'];
+        $svc = $this->make($settings, [
+            'radarr:r1' => self::slowPing(300),
+            'sonarr:s1' => self::slowPing(300),
+            'prowlarr'  => self::slowPing(300),
+            'tmdb'      => self::slowPing(300),
+            'bazarr'    => static function (): bool {
+                usleep(900_000); // a blocking DNS lookup before the transfer
+                ConcurrentCurl::exec(LocalHttp::blackholeHandle(100));
+                return true;
+            },
+        ], ['radarr' => ['r1'], 'sonarr' => ['s1']]);
+
+        foreach ($svc->chips() as $chip) {
+            if ($chip['name'] === 'Bazarr') {
+                continue;
+            }
+            self::assertSame('up', $chip['status'], $chip['name'] . ' must not be marked slow by another probe\'s stall');
+            self::assertLessThan(750, $chip['latencyMs'], $chip['name']);
+        }
+    }
+
+    /** Review fix: a fully cached chips() call must not queue behind the sweep lock. */
+    public function testAWarmChipsCallNeverTouchesTheSweepLock(): void
+    {
+        $keys = [];
+        $pool = new class ($keys) extends ArrayAdapter {
+            /** @param list<string> $keys */
+            public function __construct(private array &$keys) { parent::__construct(); }
+
+            public function get(string $key, callable $callback, ?float $beta = null, ?array &$metadata = null): mixed
+            {
+                $this->keys[] = $key;
+
+                return parent::get($key, $callback, $beta, $metadata);
+            }
+        };
+        $settings = ['prowlarr_url' => 'http://p', 'prowlarr_api_key' => 'k', 'tmdb_api_key' => 'k'];
+        $pings    = ['radarr:r1' => true, 'sonarr:s1' => true, 'prowlarr' => true, 'tmdb' => true];
+        $this->make($settings, $pings, ['radarr' => ['r1'], 'sonarr' => ['s1']], pool: $pool)->chips(); // cold: sweeps
+        $keys = [];
+
+        $this->make($settings, [], ['radarr' => ['r1'], 'sonarr' => ['s1']], pool: $pool)->chips(); // warm: no ping may run
+
+        self::assertSame([], array_values(array_filter($keys, static fn (string $k): bool => str_contains($k, 'sweep_lock'))));
+    }
 }
