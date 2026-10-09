@@ -5,6 +5,7 @@ namespace App\Tests\Service;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\HealthService;
+use App\Service\HostResolver;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
 use App\Service\Media\QBittorrentClient;
@@ -428,7 +429,16 @@ class HealthServiceTest extends TestCase
 
     public function testUrlBlockedReasonAllowsPublicHttps(): void
     {
-        $this->assertNull(HealthService::urlBlockedReason('https://api.themoviedb.org/3/configuration'));
+        // Stubbed resolver: this test must not depend on (or hang on) real DNS.
+        HostResolver::usePool(null);
+        HostResolver::reset();
+        HostResolver::setResolver(fn (string $h) => ['203.0.113.7']);
+        try {
+            $this->assertNull(HealthService::urlBlockedReason('https://api.themoviedb.org/3/configuration'));
+        } finally {
+            HostResolver::setResolver(null);
+            HostResolver::reset();
+        }
     }
 
     // ─── chips() — shared chip builder (dashboard + topbar single source) ───

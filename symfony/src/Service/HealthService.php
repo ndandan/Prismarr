@@ -871,14 +871,16 @@ class HealthService implements ResetInterface
         $host = rtrim($host, '.');
         $host = trim($host, '[]');
 
-        // Resolve hostname to IPs. gethostbynamel returns the A records
-        // (IPv4); IPv6 link-local literals are caught further down via the
-        // IP-literal short-circuit.
+        // Resolve hostname to IPs (A records only; IPv6 link-local literals
+        // are caught further down via the IP-literal short-circuit). IP
+        // literals never touch DNS. Hostnames go through HostResolver, which
+        // memoizes the answer (including failures) so a slow or dead resolver
+        // costs one stall per window instead of one per outbound call. An
+        // unresolvable host yields no IPs and is not blocked, as before.
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             $ips = [$host];
         } else {
-            $resolved = gethostbynamel($host);
-            $ips = is_array($resolved) ? $resolved : [];
+            $ips = HostResolver::resolve($host);
         }
         foreach ($ips as $ip) {
             // An IPv4-mapped IPv6 literal (::ffff:169.254.169.254) must be
