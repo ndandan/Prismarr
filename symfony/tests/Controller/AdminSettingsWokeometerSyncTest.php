@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Message\SyncWokeometerCatalog;
 use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\MediaLibraryCache;
+use App\Repository\Media\WokeometerSyncStateRepository;
 use App\Service\Wokeometer\WokeometerSyncService;
 use App\Tests\AbstractWebTestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -437,5 +438,43 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $this->assertSame('error', $data['reason']);
         $this->assertStringNotContainsString('wokeometer_sync_state', $body);
         $this->assertStringNotContainsString('SQLSTATE', $body);
+    }
+
+    public function testDispatchFailureNeverClobbersARunStartedRightAfterTheLockIsReleased(): void
+    {
+        // The failure path released the lock, THEN wrote state without an
+        // owner check: a start landing in between (another tab, the worker's
+        // scheduled start) had its fresh run_phase nulled → halted, auto
+        // sync paused. The write must be owner-checked and happen first.
+        $this->seedKey();
+        $token = $this->csrf();
+
+        $failing = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                throw new \RuntimeException('transport down');
+            }
+        };
+        $registry = static::getContainer()->get('doctrine');
+        $racing   = new class($registry) extends WokeometerSyncStateRepository {
+            public function releaseLock(string $runId): bool
+            {
+                $released = parent::releaseLock($runId);
+                // A competing start wins the lock the instant it is free.
+                $this->acquireLock('competitor', time(), time() - 1800, 'full', 'schedule');
+
+                return $released;
+            }
+        };
+        $this->overrideServices([
+            'messenger.default_bus'              => new TraceableMessageBus($failing),
+            WokeometerSyncStateRepository::class => $racing,
+        ]);
+
+        $this->post($token);
+
+        $row = $this->em()->getConnection()->fetchAssociative('SELECT lock_run_id, run_phase FROM wokeometer_sync_state WHERE id = 1');
+        $this->assertSame('competitor', $row['lock_run_id']);
+        $this->assertSame('movie', $row['run_phase'], 'the competing fresh run is left intact');
     }
 }

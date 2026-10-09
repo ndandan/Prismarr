@@ -1855,7 +1855,8 @@
       // Last known run outcome (a runaway stop makes Sync now ask first).
       var lastStatus = card.dataset.lastStatus || '';
       var lastRunRequests = parseInt(card.dataset.lastRunRequests || '0', 10) || 0;
-      // Statuses that paused automatic sync (WokeometerSyncService::PAUSING_STATUSES).
+      // Runaway stops whose next run starts over and re-bills from page 1
+      // (`invalid` also pauses automatic sync but resumes from its cursor).
       var PAUSING = { request_cap: true, halted: true };
 
       function setText(name, text) {

@@ -64,8 +64,9 @@ The precise guarantee is:
 
 - **per run, at most 600 billed requests** (the run then stops by itself);
 - **automatic scheduling pauses after a runaway stop** (the 600-request cap,
-  or a paging cursor that stops advancing): nothing runs again until you press
-  **Sync now**;
+  or a paging cursor that stops moving forward) **or an unreadable response**
+  (it was still billed, so it is never retried on a timer): nothing runs again
+  until you press **Sync now**;
 - **the initial full sync is manual-only**: the scheduler never starts it.
 
 The card in Settings shows the billed requests of the last run, your lifetime
@@ -127,7 +128,9 @@ audience scores and rating counts, and collection ids.
   returned at least one title (an empty phase is treated as an API glitch and
   never wipes that part of the local copy). Incremental syncs never delete.
 - **Safety stops.** A run stops at 600 requests, or immediately if the paging
-  cursor stops advancing (or the saved run state is unreadable). These are the
+  cursor stops moving forward — results are sorted by id, so each cursor must
+  sort after the previous one, which also catches a cursor that cycles back
+  (or if the saved run state is unreadable). These are the
   only stops that throw away the run's position, and they **pause automatic
   sync** until you press **Sync now**, which then starts fresh and re-bills
   from page 1 (up to another 600 requests). Sync now asks you to confirm
@@ -148,13 +151,14 @@ audience scores and rating counts, and collection ids.
 | Key still being processed (409) | `error` | 1 hour | yes (same key) | resumes after the pause |
 | Switched off or key removed mid-run | `error` ("disabled mid-run") | 1 hour after the stop; the run resumes at the first hourly tick after BOTH re-enabling and that 1 hour backoff | yes (same key) | resumes once re-enabled and the backoff has passed |
 | Internal error in Prismarr | `error` | 6 hours | yes (same key) | resumes after the pause |
-| Unreadable response (404, unusable body, …) | `invalid` | 7 days | yes (same key) | resumes after the pause |
-| HTTP 400 on a page requested with a cursor | `invalid` | 7 days | that phase restarts at its first page (the cursor is the likely culprit) | resumes after the pause |
-| Paging cursor did not advance / unreadable run state | `halted` | never automatically | **no** — the next run starts fresh | **paused until Sync now** |
+| Unreadable response (404, unusable body, …) | `invalid` | never automatically — an unusable 2xx is billed, so retrying it on a timer would re-bill it forever | yes (same key) | **paused until Sync now** |
+| HTTP 400 on a page requested with a cursor | `invalid` | never automatically | that phase restarts at its first page (the cursor is the likely culprit) | **paused until Sync now** |
+| Paging cursor did not move forward (results are sorted by id, so each cursor must sort after the last) / unreadable run state | `halted` | never automatically | **no** — the next run starts fresh | **paused until Sync now** |
 | 600-request cap reached | `request_cap` | never automatically | **no** — the next run starts fresh | **paused until Sync now** |
 
 A **manual** Sync now ignores the pauses above and resumes the interrupted run
-at once (or, after `halted` / `request_cap`, starts fresh after a confirmation).
+at once (including after `invalid`), or, after `halted` / `request_cap`, starts
+fresh after a confirmation.
 
 ## Scheduling
 
@@ -290,7 +294,7 @@ The "Last run" line on the Settings card shows one of these statuses.
 | Request cap reached — automatic sync paused (`request_cap`) | The run hit the 600-request safety ceiling. | Unusual for the current catalog size. Check the worker log. **Automatic sync stays paused** until you press **Sync now**, which starts fresh and re-bills from page 1 (up to 600 requests) after a confirmation. |
 | Stopped by a safety guard — automatic sync paused (`halted`) | The paging cursor stopped advancing, or the saved run state was unreadable. | Check the worker log for "Wokeometer sync stopped". **Automatic sync stays paused** until you press **Sync now**, which starts fresh and re-bills from page 1 (up to 600 requests) after a confirmation. |
 | Failed (`error`) | A resumable stop: three transient failures in a row, ten rate limits in a row, a 409, the integration switched off mid-run, or an internal error. | Check the worker log for "Wokeometer sync stopped". The run resumes from its cursor automatically after 1 hour (transient, rate limits, 409, disabled mid-run — counted from the stop, and only from the first hourly tick after re-enabling) or 6 hours (internal error). Press **Sync now** to resume at once. |
-| Unreadable API response (`invalid`) | Wokeometer answered with something Prismarr could not use (a 400/404 or an unparsable body). | Retried after 7 days (after a 400 on a later page, that phase restarts at its first page); press **Sync now** to retry sooner, or use **Full resync** if it keeps failing. |
+| Unreadable API response (`invalid`) | Wokeometer answered with something Prismarr could not use (a 400/404 or an unparsable body). | **Automatic sync stays paused** (an unusable page is still billed, so it is never retried on a timer). Press **Sync now** to resume from where the run stopped (after a 400 on a later page, that phase restarts at its first page), or use **Full resync** if it keeps failing. |
 
 Other symptoms:
 

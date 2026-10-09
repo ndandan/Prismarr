@@ -689,10 +689,10 @@ class WokeometerSyncServiceTest extends KernelTestCase
 
         $later = self::T0 + WokeometerSyncService::INVALID_BACKOFF_SECONDS;
         $this->sync->clock = $later;
-        $this->assertTrue($this->sync->isDue($later));
+        $this->assertFalse($this->sync->isDue($later), 'invalid pauses automatic sync');
         $this->client->calls = [];
         $this->client->script = [$this->page(['t1'], null, 'tv')];
-        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('schedule'))->status);
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('manual'))->status);
         $this->assertSame([['tv', null]], array_map(fn(array $c) => [$c['type'], $c['after']], $this->client->calls), 'tv restarts at its first page; movies are not re-read');
         $this->assertSame(self::T0, $this->st()['watermark']);
     }
@@ -1072,8 +1072,10 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $s = $this->st();
         $this->assertSame('thief', $s['lock_run_id'], 'the successor keeps its lock');
         $this->assertNull($s['run_cursor'], 'the page commit did not land');
-        $this->assertSame(0, $s['run_requests']);
-        $this->assertSame(0, $s['total_requests']);
+        // The billing facts were written while this run still held the lock
+        // (before the theft): the page WAS billed, so it is accounted.
+        $this->assertSame(1, $s['run_requests']);
+        $this->assertSame(1, $s['total_requests']);
         $this->assertSame('running', $s['last_status'], 'no stop was recorded either');
         $this->assertSame($this->client->calls[0]['key'], $s['run_idempotency_key'], 'the successor replays the persisted key');
     }
@@ -1149,12 +1151,12 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->state->update(['next_attempt_after' => $now]);
         $this->assertTrue($this->sync->isDue($now), 'backoff expired');
 
-        foreach (['request_cap', 'halted'] as $paused) {
+        foreach (['request_cap', 'halted', 'invalid'] as $paused) {
             $this->state->update(['last_status' => $paused]);
             $this->assertFalse($this->sync->isDue($now), "paused after $paused");
             $this->assertFalse($this->sync->isDue($now + 365 * 86_400), "still paused after $paused");
         }
-        foreach (['ok', 'error', 'invalid', 'out_of_credits', 'running', null] as $status) {
+        foreach (['ok', 'error', 'out_of_credits', 'running', null] as $status) {
             $this->state->update(['last_status' => $status]);
             $this->assertTrue($this->sync->isDue($now), 'not paused by ' . var_export($status, true));
         }
@@ -1229,6 +1231,62 @@ class WokeometerSyncServiceTest extends KernelTestCase
             $this->state->update(['last_status' => $paused]);
             $this->assertNull($this->sync->statusSummary()['nextDueAt'], "no next-due date while paused after $paused");
         }
+    }
+    // ── billing hardening ─────────────────────────────────────────────
+
+    public function testAUuidCursorThatMovesBackwardsHaltsTheRunBeforeAnotherPaidRequest(): void
+    {
+        // Results are sorted by UUID ascending and the cursor is the last
+        // row's UUID, so each next_cursor must sort after the previous one.
+        // The old guard only caught A→A; an A→B→A cycle (provider bug) would
+        // have spent up to the 600-request cap per run.
+        $u1 = '00000000-0000-4000-8000-000000000001';
+        $u2 = '00000000-0000-4000-8000-000000000002';
+        $this->client->script = [$this->page(['m1'], $u2), $this->page(['m2'], $u1), $this->page(['m3'], null)];
+        $r = $this->sync->runChunk($this->startRun());
+
+        $this->assertSame(WokeometerSyncService::STATUS_HALTED, $r->reason);
+        $this->assertCount(2, $this->client->calls, 'no third paid request');
+        $this->assertSame('cursor did not advance', $this->st()['last_error_message']);
+    }
+
+    public function testAnUnreadableResponsePausesAutomaticSyncButAManualStartResumesIt(): void
+    {
+        // An unusable 2xx is billed: resuming automatically every 7 days re-bills
+        // the same unusable page forever. Pause until someone looks.
+        $this->client->script = [$this->page(['m1'], 'c1'), new WokeometerPageResult(WokeometerPageResult::INVALID, 200, message: 'unusable body')];
+        $this->sync->runChunk($this->startRun());
+        $this->assertSame('invalid', $this->st()['last_status']);
+
+        $this->assertFalse($this->sync->isDue(self::T0 + WokeometerSyncService::INVALID_BACKOFF_SECONDS + 1), 'no automatic re-bill');
+        $this->sync->clock = self::T0 + WokeometerSyncService::INVALID_BACKOFF_SECONDS + 1;
+        $this->assertNull($this->sync->start('schedule', false));
+
+        $this->client->calls  = [];
+        $this->client->script = [$this->page(['m2'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun('manual'))->status);
+        $this->assertSame('c1', $this->client->calls[0]['after'], 'a manual start resumes from the saved cursor');
+    }
+
+    public function testABilledPageIsAccountedEvenWhenStoringItsRowsThrows(): void
+    {
+        // The request was billed; a failure afterwards must not lose that
+        // from run_requests / total_requests (the 600 cap counts it).
+        $titles = $this->createStub(WokeometerTitleRepository::class);
+        $titles->method('upsertRows')->willThrowException(new \RuntimeException('disk full'));
+        $settings     = $this->settings();
+        $this->client = new ScriptedWokeometerClient($settings, new NullLogger(), $this->state);
+        $this->sync   = new TestableWokeometerSyncService($settings, $this->client, $titles, $this->state, new NullLogger());
+        $this->sync->clock = self::T0;
+
+        $this->client->script = [$this->page(['m1'], 'c1', credits: 41)];
+        $r = $this->sync->runChunk($this->startRun());
+
+        $this->assertSame('error', $r->reason);
+        $s = $this->st();
+        $this->assertSame(1, $s['run_requests']);
+        $this->assertSame(1, $s['total_requests']);
+        $this->assertSame(41, $s['credits_remaining']);
     }
 }
 

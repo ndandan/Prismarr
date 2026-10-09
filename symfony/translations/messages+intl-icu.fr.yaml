@@ -850,7 +850,7 @@ admin:
       request_cap: Plafond de requêtes atteint — synchronisation automatique suspendue jusqu'au prochain « Synchroniser maintenant »
       halted: Arrêtée par un garde-fou — synchronisation automatique suspendue jusqu'au prochain « Synchroniser maintenant »
       interrupted: Interrompue — reprendra automatiquement
-      invalid: Réponse de l'API illisible — nouvelle tentative dans 7 jours
+      invalid: Réponse de l'API illisible — synchronisation automatique suspendue jusqu'au prochain « Synchroniser maintenant »
       never: Jamais exécutée
     last_run_requests: Requêtes (dernière exécution)
     last_run_records: Enregistrements (dernière exécution)

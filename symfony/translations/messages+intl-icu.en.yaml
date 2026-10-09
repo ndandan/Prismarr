@@ -852,7 +852,7 @@ admin:
       request_cap: Request cap reached — automatic sync paused until you run Sync now
       halted: Stopped by a safety guard — automatic sync paused until you run Sync now
       interrupted: Interrupted — will resume
-      invalid: Unreadable API response — retry scheduled in 7 days
+      invalid: Unreadable API response — automatic sync paused until you run Sync now
       never: Never run
     last_run_requests: Requests (last run)
     last_run_records: Records (last run)

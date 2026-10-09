@@ -142,11 +142,14 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
 
     /**
      * Compare-and-set lock acquisition (see class docblock). `$mode` is used
-     * only by a FRESH run; a resumed run keeps its own mode.
+     * only by a FRESH run; a resumed run keeps its own mode. A null `$mode`
+     * is decided inside the same UPDATE — full when forced or when no full
+     * sync has ever completed, else incremental — so it can't race a run
+     * finishing between the caller's read and this CAS.
      *
      * @return self::ACQUIRED_*|null null when a live run holds the lock
      */
-    public function acquireLock(string $runId, int $now, int $staleBefore, string $mode, string $trigger, bool $forceFull = false): ?string
+    public function acquireLock(string $runId, int $now, int $staleBefore, ?string $mode, string $trigger, bool $forceFull = false): ?string
     {
         $this->ensureRow();
         $db    = $this->db();
@@ -172,11 +175,14 @@ class WokeometerSyncStateRepository extends ServiceEntityRepository
         //    superseded by a FORCED full start (atomically, in this UPDATE),
         //    or a free unfinished row without a usable mode (malformed).
         $fresh = $db->executeStatement(
-            'UPDATE wokeometer_sync_state
-                SET lock_run_id = :run, lock_heartbeat_at = :now, run_mode = :mode, run_trigger = :trigger,
+            "UPDATE wokeometer_sync_state
+                SET lock_run_id = :run, lock_heartbeat_at = :now, run_trigger = :trigger,
+                    run_mode = CASE WHEN :mode IS NOT NULL THEN :mode
+                                    WHEN :force = 1 OR full_sync_completed_at IS NULL THEN 'full'
+                                    ELSE 'incremental' END,
                     run_started_at = :now, run_phase = :phase, run_cursor = NULL, run_idempotency_key = NULL,
                     run_requests = 0, run_records = 0, run_transient_failures = 0, last_run_started_at = :now
-              WHERE id = 1 AND ' . self::LOCK_AVAILABLE . "
+              WHERE id = 1 AND " . self::LOCK_AVAILABLE . "
                 AND (run_phase IS NULL OR run_phase = 'done'
                      OR (lock_run_id IS NULL
                          AND (:force = 1 OR run_mode IS NULL OR run_mode NOT IN ('full', 'incremental'))))",

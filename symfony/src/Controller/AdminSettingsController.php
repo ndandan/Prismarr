@@ -1442,8 +1442,11 @@ class AdminSettingsController extends AbstractController
                         $fields['run_cursor']          = null;
                         $fields['run_idempotency_key'] = null;
                     }
+                    // Owner-checked and BEFORE the release: once the lock is
+                    // free another start can take it, and an unowned write
+                    // here would clobber that run's fresh state.
+                    $this->wokeometerState?->update($fields, $runId);
                     $this->wokeometerState?->releaseLock($runId);
-                    $this->wokeometerState?->update($fields);
                 } catch (\Throwable) {
                     // best effort
                 }
