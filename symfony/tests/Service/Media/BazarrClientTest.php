@@ -146,7 +146,7 @@ class BazarrClientTest extends TestCase
                 parent::__construct($config, $logger, $health);
             }
 
-            protected function exec(\CurlHandle $ch): array
+            protected function exec(\CurlHandle $ch, array $opts): array
             {
                 curl_close($ch);
                 return [$this->fakeBody, $this->fakeCode, $this->fakeErr];
@@ -263,7 +263,7 @@ class BazarrClientTest extends TestCase
                 parent::__construct($config, $logger, $health);
             }
 
-            protected function exec(\CurlHandle $ch): array
+            protected function exec(\CurlHandle $ch, array $opts): array
             {
                 $this->urls[] = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
                 curl_close($ch);
@@ -339,5 +339,67 @@ class BazarrClientTest extends TestCase
     public function testGetMoviesWithIdsIsStillEmptyWhenUnconfigured(): void
     {
         $this->assertSame([], $this->client([])->getMovies([1]));
+    }
+
+    /**
+     * Capture the cURL options each request would send (body, timeout), via
+     * the same protected exec() seam.
+     *
+     * @param list<array<int, mixed>> $calls
+     */
+    private function optsCapturingClient(array &$calls, string $response = '{"data":[]}'): BazarrClient
+    {
+        return new class ($this->config($this->configured()), new NullLogger(), new ServiceHealthCache(new ArrayAdapter()), $calls, $response) extends BazarrClient {
+            /** @param list<array<int, mixed>> $calls */
+            public function __construct($config, $logger, $health, private array &$calls, private readonly string $response)
+            {
+                parent::__construct($config, $logger, $health);
+            }
+
+            protected function exec(\CurlHandle $ch, array $opts): array
+            {
+                $this->calls[] = $opts;
+                curl_close($ch);
+
+                return [$this->response, 200, ''];
+            }
+        };
+    }
+
+    /** @param array<int, mixed> $opts @return array<string, string> */
+    private static function postedFields(array $opts): array
+    {
+        parse_str((string) ($opts[CURLOPT_POSTFIELDS] ?? ''), $fields);
+
+        return $fields;
+    }
+
+    public function testDownloadEpisodeSendsTheSeriesIdBazarrRequires(): void
+    {
+        // Bazarr's POST /api/providers/episodes parser declares BOTH seriesid
+        // and episodeid required=True — without seriesid every manual
+        // episode download is rejected with a 400.
+        $calls = [];
+        $ok = $this->optsCapturingClient($calls, '')->downloadEpisode([
+            'seriesid' => 12, 'episodeid' => 345, 'hi' => '0', 'forced' => '0',
+            'original_format' => '0', 'provider' => 'opensubtitles', 'subtitle' => 'abc',
+        ]);
+
+        $this->assertTrue($ok);
+        $fields = self::postedFields($calls[0]);
+        $this->assertSame('12', $fields['seriesid'] ?? null);
+        $this->assertSame('345', $fields['episodeid'] ?? null);
+    }
+
+    public function testDownloadMovieBodyCarriesNoSeriesId(): void
+    {
+        $calls = [];
+        $this->optsCapturingClient($calls, '')->downloadMovie([
+            'radarrid' => 42, 'provider' => 'opensubtitles', 'subtitle' => 'abc',
+        ]);
+
+        $fields = self::postedFields($calls[0]);
+        $this->assertSame('42', $fields['radarrid'] ?? null);
+        $this->assertArrayNotHasKey('seriesid', $fields);
     }
 }

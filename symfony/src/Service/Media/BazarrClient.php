@@ -237,13 +237,19 @@ class BazarrClient implements ResetInterface
         return $this->request('POST', '/providers/movies', [], $this->downloadBody($p, 'radarrid')) !== null;
     }
 
-    /** @param array{episodeid?: mixed, hi?: mixed, forced?: mixed, original_format?: mixed, provider?: mixed, subtitle?: mixed} $p */
+    /**
+     * Bazarr's episode-download parser requires the Sonarr series id
+     * alongside the episode id (both `required=True`) — omit it and every
+     * download is rejected with a 400.
+     *
+     * @param array{seriesid?: mixed, episodeid?: mixed, hi?: mixed, forced?: mixed, original_format?: mixed, provider?: mixed, subtitle?: mixed} $p
+     */
     public function downloadEpisode(array $p): bool
     {
         if (!$this->ready()) {
             return false;
         }
-        return $this->request('POST', '/providers/episodes', [], $this->downloadBody($p, 'episodeid')) !== null;
+        return $this->request('POST', '/providers/episodes', [], $this->downloadBody($p, 'seriesid', 'episodeid')) !== null;
     }
 
     public function searchMissingMovie(int $radarrId): bool
@@ -264,19 +270,23 @@ class BazarrClient implements ResetInterface
 
     /**
      * Normalizes a subtitle-download request body for Bazarr's
-     * `/providers/{movies,episodes}` POST endpoints: the id is cast to a
-     * string under the caller-supplied key ('radarrid' or 'episodeid'), and
+     * `/providers/{movies,episodes}` POST endpoints: each id is cast to a
+     * string under the caller-supplied keys ('radarrid', or 'seriesid' +
+     * 'episodeid'), and
      * the three boolean-ish flags are coerced to Bazarr's expected literal
      * strings "True"/"False" (truthy-ish inputs: `true`, `"True"`, `"1"`, `1`).
      *
      * @param array<string, mixed> $p
      * @return array<string, string>
      */
-    private function downloadBody(array $p, string $idKey): array
+    private function downloadBody(array $p, string ...$idKeys): array
     {
         $b = static fn($v): string => (($v === true || $v === 'True' || $v === '1' || $v === 1) ? 'True' : 'False');
-        return [
-            $idKey            => (string) ($p[$idKey] ?? ''),
+        $ids = [];
+        foreach ($idKeys as $idKey) {
+            $ids[$idKey] = (string) ($p[$idKey] ?? '');
+        }
+        return $ids + [
             'hi'              => $b($p['hi'] ?? false),
             'forced'          => $b($p['forced'] ?? false),
             'original_format' => $b($p['original_format'] ?? false),
@@ -360,8 +370,7 @@ class BazarrClient implements ResetInterface
             $opts[CURLOPT_POSTFIELDS] = http_build_query($body);
         }
 
-        curl_setopt_array($ch, $opts);
-        [$rawBody, $code, $err] = $this->exec($ch);
+        [$rawBody, $code, $err] = $this->exec($ch, $opts);
 
         // Transport failure (unreachable / DNS / TLS / timeout) — the only
         // class of failure that may trip the breaker.
@@ -403,17 +412,21 @@ class BazarrClient implements ResetInterface
     }
 
     /**
-     * cURL execution seam: performs the transfer and returns the three raw
-     * facts request() classifies on. Split out (and protected) so unit tests
-     * can feed fabricated responses through the classification branches —
-     * transport failure vs non-2xx vs invalid JSON drive different circuit-
-     * breaker decisions, and there is no live Bazarr in the test suite.
+     * cURL execution seam: applies the options, performs the transfer and
+     * returns the three raw facts request() classifies on. Split out (and
+     * protected) so unit tests can feed fabricated responses through the
+     * classification branches — transport failure vs non-2xx vs invalid JSON
+     * drive different circuit-breaker decisions, and there is no live Bazarr
+     * in the test suite — and can inspect the options (body, timeout) each
+     * call would have sent.
      *
-     * @param \CurlHandle $ch
+     * @param \CurlHandle       $ch
+     * @param array<int, mixed> $opts
      * @return array{0: string|false, 1: int, 2: string} [body, http code, curl error]
      */
-    protected function exec(\CurlHandle $ch): array
+    protected function exec(\CurlHandle $ch, array $opts): array
     {
+        curl_setopt_array($ch, $opts);
         /** @var string|false $body */
         $body = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);

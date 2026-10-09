@@ -488,4 +488,30 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-frame-render', teardown)"));
         $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-render', teardown)"));
     }
+
+    public function testEveryEpisodeSubtitleSearchTriggerCarriesItsSeriesId(): void
+    {
+        // Bazarr's episode-download endpoint requires seriesid as well as
+        // episodeid (review 2026-10-08 #1): every [data-kind="episode"]
+        // search trigger must hand the modal its Sonarr series id.
+        foreach (['bazarr/series_detail.html.twig', 'media/series.html.twig'] as $tpl) {
+            $src = file_get_contents(self::TEMPLATE_ROOT . $tpl);
+            $this->assertNotFalse($src);
+            $triggers = substr_count($src, 'data-kind="episode"');
+            $this->assertGreaterThan(0, $triggers, $tpl . ' has no episode search trigger');
+            $this->assertSame(
+                $triggers,
+                preg_match_all('/data-kind="episode"[^>]*data-series-id=/', $src),
+                $tpl . ': an episode search trigger is missing data-series-id'
+            );
+        }
+    }
+
+    public function testTheSearchModalPostsTheSeriesIdWithAnEpisodeDownload(): void
+    {
+        $src = file_get_contents(self::TEMPLATE_ROOT . 'bazarr/_search_modal.html.twig');
+        $this->assertNotFalse($src);
+        $this->assertStringContainsString("getAttribute('data-series-id')", $src);
+        $this->assertStringContainsString('params.seriesid', $src);
+    }
 }
