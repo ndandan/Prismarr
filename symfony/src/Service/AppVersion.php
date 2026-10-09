@@ -143,27 +143,52 @@ class AppVersion implements ResetInterface
             return $this->historyInProcess;
         }
 
-        $item = $this->cacheApp->getItem(self::HISTORY_CACHE_KEY);
+        /** @var array<int, array{sha7: string, subject: string, date: string, html_url: string}> $history */
+        $history = $this->cachedOrLoad(
+            self::HISTORY_CACHE_KEY,
+            static fn (mixed $cached): bool => is_array($cached),
+            function (): array {
+                $body   = $this->httpGet(self::FORK_HISTORY_URL, 'application/vnd.github+json');
+                $parsed = $body === null ? [] : self::parseCommitList(json_decode($body, true));
+
+                // An empty result (fetch failed, or a genuinely empty list)
+                // is cached briefly rather than at the full TTL, so a GitHub
+                // outage costs at most one slow render per FAILURE_CACHE_TTL.
+                return [$parsed, $parsed === []];
+            },
+        );
+
+        return $this->historyInProcess = $history;
+    }
+
+    /**
+     * Shared read-through for the GitHub-backed values below: serve a cached
+     * payload when `$accepts` approves its shape, otherwise run `$load`,
+     * which returns `[value, failed]`, and cache `value` for CACHE_TTL — or
+     * only FAILURE_CACHE_TTL when `failed`, so a GitHub outage costs at most
+     * one slow render per FAILURE_CACHE_TTL window instead of one per
+     * request. The failure value is cached too (as the caller's own marker),
+     * so each caller decides what an "unavailable" entry looks like.
+     *
+     * @param callable(mixed): bool        $accepts
+     * @param callable(): array{0: mixed, 1: bool} $load
+     */
+    private function cachedOrLoad(string $key, callable $accepts, callable $load): mixed
+    {
+        $item = $this->cacheApp->getItem($key);
         if ($item->isHit()) {
             $cached = $item->get();
-            if (is_array($cached)) {
-                /** @var array<int, array{sha7: string, subject: string, date: string, html_url: string}> $cached */
-                return $this->historyInProcess = $cached;
+            if ($accepts($cached)) {
+                return $cached;
             }
         }
 
-        $body   = $this->httpGet(self::FORK_HISTORY_URL, 'application/vnd.github+json');
-        $parsed = $body === null ? [] : self::parseCommitList(json_decode($body, true));
-
-        // Same failure-marker pattern as releases()/changelogHtml(): an
-        // empty result (fetch failed, or a genuinely empty list) is cached
-        // briefly rather than at the full TTL, so a GitHub outage costs at
-        // most one slow render per FAILURE_CACHE_TTL window.
-        $item->set($parsed);
-        $item->expiresAfter($parsed === [] ? self::FAILURE_CACHE_TTL : self::CACHE_TTL);
+        [$value, $failed] = $load();
+        $item->set($value);
+        $item->expiresAfter($failed ? self::FAILURE_CACHE_TTL : self::CACHE_TTL);
         $this->cacheApp->save($item);
 
-        return $this->historyInProcess = $parsed;
+        return $value;
     }
 
     /** @return bool true when the running build is strictly behind fork main. */
@@ -197,29 +222,21 @@ class AppVersion implements ResetInterface
             return $this->changelogInProcess === '' ? null : $this->changelogInProcess;
         }
 
-        $item = $this->cacheApp->getItem(self::CHANGELOG_CACHE_KEY);
-        if ($item->isHit() && is_string($item->get())) {
-            $this->changelogInProcess = $item->get();
-            return $this->changelogInProcess === '' ? null : $this->changelogInProcess;
-        }
+        /** @var string $html '' is the cached failure marker */
+        $html = $this->cachedOrLoad(
+            self::CHANGELOG_CACHE_KEY,
+            static fn (mixed $cached): bool => is_string($cached),
+            function (): array {
+                $md = $this->httpGet(self::FORK_CHANGELOG_URL, 'text/plain');
 
-        $md = $this->httpGet(self::FORK_CHANGELOG_URL, 'text/plain');
-        if ($md === null) {
-            // Cache the failure briefly so a GitHub outage costs at most one
-            // slow render per FAILURE_CACHE_TTL window, not one per request.
-            $item->set('');
-            $item->expiresAfter(self::FAILURE_CACHE_TTL);
-            $this->cacheApp->save($item);
-            $this->changelogInProcess = '';
-            return null;
-        }
+                return $md === null
+                    ? ['', true]
+                    : [self::renderBody(self::sliceChangelog($md)), false];
+            },
+        );
+        $this->changelogInProcess = $html;
 
-        $html = self::renderBody(self::sliceChangelog($md));
-        $item->set($html);
-        $item->expiresAfter(self::CACHE_TTL);
-        $this->cacheApp->save($item);
-
-        return $this->changelogInProcess = $html;
+        return $html === '' ? null : $html;
     }
 
     /** @return array{behind: int|null} */
@@ -236,31 +253,19 @@ class AppVersion implements ResetInterface
             return $this->compareInProcess = $unavailable;
         }
 
-        $item = $this->cacheApp->getItem(self::COMPARE_CACHE_KEY);
-        if ($item->isHit()) {
-            $cached = $item->get();
-            if (is_array($cached) && array_key_exists('behind', $cached)) {
-                /** @var array{behind: int|null} $cached */
-                return $this->compareInProcess = $cached;
-            }
-        }
+        /** @var array{behind: int|null} $compare */
+        $compare = $this->cachedOrLoad(
+            self::COMPARE_CACHE_KEY,
+            static fn (mixed $cached): bool => is_array($cached) && array_key_exists('behind', $cached),
+            function () use ($sha, $unavailable): array {
+                $body   = $this->httpGet(sprintf(self::FORK_COMPARE_URL, $sha), 'application/vnd.github+json');
+                $parsed = $body === null ? null : self::parseComparePayload(json_decode($body, true));
 
-        $body   = $this->httpGet(sprintf(self::FORK_COMPARE_URL, $sha), 'application/vnd.github+json');
-        $parsed = $body === null ? null : self::parseComparePayload(json_decode($body, true));
-        if ($parsed === null) {
-            // Cache the failure briefly so a GitHub outage costs at most one
-            // slow render per FAILURE_CACHE_TTL window, not one per request.
-            $item->set($unavailable);
-            $item->expiresAfter(self::FAILURE_CACHE_TTL);
-            $this->cacheApp->save($item);
-            return $this->compareInProcess = $unavailable;
-        }
+                return $parsed === null ? [$unavailable, true] : [$parsed, false];
+            },
+        );
 
-        $item->set($parsed);
-        $item->expiresAfter(self::CACHE_TTL);
-        $this->cacheApp->save($item);
-
-        return $this->compareInProcess = $parsed;
+        return $this->compareInProcess = $compare;
     }
 
     /**
