@@ -85,4 +85,31 @@ class CrossSiteRequestGuardSubscriberTest extends TestCase
 
         $this->assertNull($event->getResponse());
     }
+
+    public function testExtraTrustedOriginsCoverAProxyThatRewritesTheHost(): void
+    {
+        // A plain-HTTP reverse proxy that forwards Host=127.0.0.1:7070 while
+        // the browser is on http://prismarr.lan: no Sec-Fetch-Site over plain
+        // http, so only the Origin fallback decides — and every POST,
+        // login included, would be refused without an escape hatch.
+        $request = self::request('POST', ['Origin' => 'http://prismarr.lan'], '127.0.0.1:7070');
+
+        $this->assertNotNull(CrossSiteRequestGuardSubscriber::blockReason($request));
+        $this->assertNull(CrossSiteRequestGuardSubscriber::blockReason($request, ['prismarr.lan']));
+        $this->assertNotNull(
+            CrossSiteRequestGuardSubscriber::blockReason(self::request('POST', ['Sec-Fetch-Site' => 'same-site', 'Origin' => 'http://prismarr.lan']), ['prismarr.lan']),
+            'the list never overrides what the browser itself reports'
+        );
+    }
+
+    public function testTheTrustedOriginsEnvAcceptsHostsOrFullOrigins(): void
+    {
+        $guard   = new CrossSiteRequestGuardSubscriber(new NullLogger(), ' prismarr.lan , https://dash.example.com:8443 ,');
+        $request = self::request('POST', ['Origin' => 'https://dash.example.com:8443'], '127.0.0.1:7070');
+        $event   = new RequestEvent($this->createStub(HttpKernelInterface::class), $request, HttpKernelInterface::MAIN_REQUEST);
+
+        $guard->onKernelRequest($event);
+
+        $this->assertNull($event->getResponse());
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\EventSubscriber;
 
 use Psr\Log\LoggerInterface;
+use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -27,12 +28,35 @@ use Symfony\Component\HttpKernel\KernelEvents;
  * host[:port] and never by scheme. A request carrying neither header is not
  * a browser cross-site request (curl, scripts, server-to-server) and passes:
  * CSRF needs a victim's browser, and browsers send Origin on every POST.
+ *
+ * PRISMARR_TRUSTED_ORIGINS (comma-separated hosts or origins) extends that
+ * Origin fallback for a reverse proxy that rewrites Host: over plain http
+ * browsers send no Sec-Fetch-Site, so a proxy forwarding Host=127.0.0.1:7070
+ * for a page on http://prismarr.lan would otherwise lock every POST out —
+ * login included. It never overrides what Sec-Fetch-Site reports.
  */
 class CrossSiteRequestGuardSubscriber implements EventSubscriberInterface
 {
     private const SAFE_METHODS = ['GET', 'HEAD', 'OPTIONS', 'TRACE'];
 
-    public function __construct(private readonly LoggerInterface $logger) {}
+    /** @var list<string> normalized host[:port] entries */
+    private readonly array $trustedHosts;
+
+    public function __construct(
+        private readonly LoggerInterface $logger,
+        // Nullable: `default::` yields null (not a PHP default) when unset.
+        #[Autowire('%env(default::PRISMARR_TRUSTED_ORIGINS)%')]
+        ?string $trustedOrigins = null,
+    ) {
+        $hosts = [];
+        foreach (explode(',', (string) $trustedOrigins) as $entry) {
+            $host = self::hostOf(trim($entry));
+            if ($host !== null) {
+                $hosts[] = $host;
+            }
+        }
+        $this->trustedHosts = $hosts;
+    }
 
     public static function getSubscribedEvents(): array
     {
@@ -47,7 +71,7 @@ class CrossSiteRequestGuardSubscriber implements EventSubscriberInterface
         }
 
         $request = $event->getRequest();
-        $reason  = self::blockReason($request);
+        $reason  = self::blockReason($request, $this->trustedHosts);
         if ($reason === null) {
             return;
         }
@@ -56,12 +80,19 @@ class CrossSiteRequestGuardSubscriber implements EventSubscriberInterface
             'method' => $request->getMethod(),
             'path'   => $request->getPathInfo(),
             'reason' => $reason,
+            // The host the app saw: a mismatch with the Origin above usually
+            // means a proxy rewrites Host — see PRISMARR_TRUSTED_ORIGINS.
+            'host'   => $request->getHttpHost(),
         ]);
         $event->setResponse(new JsonResponse(['ok' => false, 'error' => 'cross-site request blocked'], 403));
     }
 
-    /** Why $request must be refused, or null when it may proceed. */
-    public static function blockReason(Request $request): ?string
+    /**
+     * Why $request must be refused, or null when it may proceed.
+     *
+     * @param list<string> $trustedHosts extra host[:port] values accepted by the Origin fallback
+     */
+    public static function blockReason(Request $request, array $trustedHosts = []): ?string
     {
         if (in_array($request->getMethod(), self::SAFE_METHODS, true)) {
             return null;
@@ -81,12 +112,28 @@ class CrossSiteRequestGuardSubscriber implements EventSubscriberInterface
             return 'opaque origin';
         }
 
-        $parts = parse_url($origin);
-        if (!is_array($parts) || !isset($parts['host'])) {
+        $originHost = self::hostOf($origin);
+        if ($originHost === null) {
             return 'unparsable origin';
         }
-        $originHost = strtolower($parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : ''));
+        if ($originHost === strtolower($request->getHttpHost()) || in_array($originHost, $trustedHosts, true)) {
+            return null;
+        }
 
-        return $originHost === strtolower($request->getHttpHost()) ? null : 'origin: ' . $originHost;
+        return 'origin: ' . $originHost;
+    }
+
+    /** host[:port], lowercased, from an origin ("https://h:8443") or a bare host ("h:8443"). */
+    private static function hostOf(string $value): ?string
+    {
+        if ($value === '') {
+            return null;
+        }
+        $parts = parse_url(str_contains($value, '://') ? $value : 'http://' . $value);
+        if (!is_array($parts) || !isset($parts['host']) || $parts['host'] === '') {
+            return null;
+        }
+
+        return strtolower($parts['host'] . (isset($parts['port']) ? ':' . $parts['port'] : ''));
     }
 }
