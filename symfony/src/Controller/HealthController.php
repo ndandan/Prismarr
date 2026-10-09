@@ -51,6 +51,15 @@ class HealthController extends AbstractController
         HealthService $health,
         ServiceInstanceProvider $instances,
     ): JsonResponse {
+        // Unified chip list — same rows the dashboard section renders, so the
+        // popover is a true mirror. Unconfigured services are absent (no more
+        // "Not configured" rows); Unraid is admin-only like on the dashboard.
+        // Built FIRST: on a cold cache chips() probes every service in one
+        // concurrent sweep, so the legacy maps below are served from the
+        // per-request memo instead of re-probing one service at a time.
+        $chips = $health->chips($this->isGranted('ROLE_ADMIN'));
+        $okChips = count(array_filter($chips, static fn(array $c): bool => in_array($c['status'], ['up', 'slow', 'very_slow'], true)));
+
         $services = [];
         $instancesMap = ['radarr' => [], 'sonarr' => []];
 
@@ -87,12 +96,6 @@ class HealthController extends AbstractController
             }
             $services[$type] = $aggregate;
         }
-
-        // Unified chip list — same rows the dashboard section renders, so the
-        // popover is a true mirror. Unconfigured services are absent (no more
-        // "Not configured" rows); Unraid is admin-only like on the dashboard.
-        $chips = $health->chips($this->isGranted('ROLE_ADMIN'));
-        $okChips = count(array_filter($chips, static fn(array $c): bool => in_array($c['status'], ['up', 'slow', 'very_slow'], true)));
 
         return new JsonResponse([
             // Legacy shape — kept for upstream-diff hygiene and stale cached JS.

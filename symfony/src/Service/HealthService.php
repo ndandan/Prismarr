@@ -3,6 +3,7 @@
 namespace App\Service;
 
 use App\Entity\ServiceInstance;
+use App\Service\Http\ConcurrentCurl;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\DelugeClient;
 use App\Service\Media\HoundarrClient;
@@ -38,6 +39,13 @@ use Symfony\Contracts\Service\ResetInterface;
 class HealthService implements ResetInterface
 {
     private const CACHE_TTL = 10;
+
+    /**
+     * Services whose ping does synchronous work before its first transfer
+     * (BazarrClient / TautulliClient run the SSRF guard's DNS lookup inline):
+     * started first in a concurrent sweep — see sweep().
+     */
+    private const SYNC_SETUP_FIRST = ['bazarr', 'tautulli'];
 
     /**
      * Pool key of the cache "generation" — a random token mixed into every
@@ -94,6 +102,10 @@ class HealthService implements ResetInterface
         // Bazarr (subtitle management) — nullable + last, same
         // legacy-test-constructor reason as the clients above.
         private readonly ?BazarrClient      $bazarr = null,
+        // Runs a cold sweep's probes so their HTTP round-trips overlap (see
+        // warm()). Null (legacy positional test constructors) keeps the
+        // one-service-at-a-time path.
+        private readonly ?ConcurrentCurl    $concurrent = null,
     ) {}
 
     /**
@@ -147,10 +159,10 @@ class HealthService implements ResetInterface
      */
     public function statusFor(string $service, ?string $instanceSlug = null): array
     {
-        $key = $instanceSlug !== null ? $service . ':' . $instanceSlug : $service;
+        $key = self::memoKey($service, $instanceSlug);
         $now = time();
-        if (isset($this->statusCache[$key]) && ($now - $this->statusCache[$key]['at']) < self::CACHE_TTL) {
-            return $this->statusCache[$key]['result'];
+        if (($memo = $this->memoized($key, $now)) !== null) {
+            return $memo;
         }
 
         // Shared pool first (cache.app) — one probe sweep per TTL for the
@@ -228,6 +240,153 @@ class HealthService implements ResetInterface
     {
         $this->statusCache[$key] = ['result' => $result, 'at' => $now];
         return $result;
+    }
+
+    private static function memoKey(string $service, ?string $instanceSlug): string
+    {
+        return $instanceSlug !== null ? $service . ':' . $instanceSlug : $service;
+    }
+
+    /** @return array{status: ?string, latencyMs: ?int}|null the in-process memo, while still fresh */
+    private function memoized(string $key, int $now): ?array
+    {
+        if (isset($this->statusCache[$key]) && ($now - $this->statusCache[$key]['at']) < self::CACHE_TTL) {
+            return $this->statusCache[$key]['result'];
+        }
+        return null;
+    }
+
+    /**
+     * Cold-sweep accelerator. Every target that is neither memoized nor in
+     * the shared pool gets its probe — the exact computeStatus() statusFor()
+     * would run — executed concurrently (ConcurrentCurl), and the result is
+     * stored exactly where statusFor() stores it (pool with CACHE_TTL under
+     * the current generation, then the memo). The caller's statusFor() calls
+     * are then memo hits, so a cold sweep costs ~the slowest ping instead of
+     * the sum of all of them.
+     *
+     * Purely an accelerator: anything not resolved here (no runner wired, a
+     * probe that threw, a pool error) is simply left for statusFor() to
+     * compute the usual way — results, cache entries, breaker reads/writes
+     * and exception handling stay identical; only wall time changes.
+     *
+     * Across requests, sweeps are serialized through the pool's own
+     * stampede lock on one per-generation key (never saved): a second
+     * request arriving mid-sweep waits for it, then finds the statuses
+     * cached — the per-key protection statusFor() gets from the pool, at
+     * sweep granularity.
+     *
+     * @param list<array{0: string, 1: ?string}> $targets [service, instanceSlug]
+     */
+    private function warm(array $targets): void
+    {
+        if ($this->concurrent === null || count($targets) < 2) {
+            return;
+        }
+        // Read-only pass first: a warm (or nearly warm) chips() call must not
+        // queue behind another request's sweep lock — which LockRegistry also
+        // shares with unrelated cache.app keys hashing to the same slot.
+        try {
+            if (count($this->collectMisses($targets, time())) < 2) {
+                return;
+            }
+        } catch (\Throwable) {
+            return; // pool trouble: statusFor() takes over, one service at a time
+        }
+        if ($this->statusPool === null) {
+            $this->sweep($targets);
+            return;
+        }
+        try {
+            $this->statusPool->get($this->poolKey('sweep_lock'), function (ItemInterface $item, bool &$save) use ($targets): bool {
+                $save = false;
+                $this->sweep($targets);
+                return true;
+            });
+        } catch (\Throwable) {
+            // Pool trouble: statusFor() takes over, one service at a time.
+        }
+    }
+
+    /** @param list<array{0: string, 1: ?string}> $targets */
+    private function sweep(array $targets): void
+    {
+        if ($this->concurrent === null) {
+            return;
+        }
+        try {
+            // Re-checked under the lock: another request may have just filled them.
+            $misses = $this->collectMisses($targets, time());
+            if (count($misses) < 2) {
+                return; // nothing to overlap — statusFor() handles a lone miss as before
+            }
+
+            // Probes that do synchronous work before their transfer (the SSRF
+            // guard's DNS lookup) start FIRST: fibers run in order until their
+            // first transfer, so a stalled lookup then finishes before any
+            // other probe's clock starts or handle joins the multi loop —
+            // instead of being charged to every in-flight service (false
+            // "slow", or a curl timeout that marks a healthy service down).
+            $first = array_filter($misses, static fn (array $t): bool => in_array($t[0], self::SYNC_SETUP_FIRST, true));
+            $misses = $first + array_diff_key($misses, $first);
+
+            $tasks = [];
+            foreach ($misses as $key => [$service, $instanceSlug]) {
+                $tasks[$key] = fn (): array => $this->computeStatus($service, $instanceSlug);
+            }
+
+            foreach ($this->concurrent->run($tasks) as $key => $outcome) {
+                if (!isset($outcome['value']) || !is_array($outcome['value'])) {
+                    continue; // threw — statusFor() re-runs it and surfaces the error as before
+                }
+                /** @var array{status: ?string, latencyMs: ?int} $result */
+                $result = $outcome['value'];
+                if ($this->statusPool !== null) {
+                    // Same write statusFor() makes; if another request stored
+                    // this key meanwhile, its value wins — as it would there.
+                    $result = $this->statusPool->get($this->poolKey($key), static function (ItemInterface $item) use ($result): array {
+                        $item->expiresAfter(self::CACHE_TTL);
+                        return $result;
+                    });
+                }
+                $this->remember($key, $result, time());
+            }
+        } catch (\Throwable) {
+            // Whatever is already memoized is valid; statusFor() does the rest.
+        }
+    }
+
+    /**
+     * Targets with neither a memo nor a pool entry. Read-only (never computes
+     * or saves); pool hits are copied into the memo on the way.
+     *
+     * @param list<array{0: string, 1: ?string}> $targets
+     * @return array<string, array{0: string, 1: ?string}> memo key => target
+     */
+    private function collectMisses(array $targets, int $now): array
+    {
+        $misses = [];
+        foreach ($targets as [$service, $instanceSlug]) {
+            $key = self::memoKey($service, $instanceSlug);
+            if (isset($misses[$key]) || $this->memoized($key, $now) !== null) {
+                continue;
+            }
+            if ($this->statusPool !== null) {
+                /** @var mixed $hit the stored status array on a hit, null on a miss */
+                $hit = $this->statusPool->get($this->poolKey($key), static function (ItemInterface $item, bool &$save): ?array {
+                    $save = false;
+                    return null;
+                });
+                if (is_array($hit)) {
+                    /** @var array{status: ?string, latencyMs: ?int} $hit only ever written by statusFor()/sweep() */
+                    $this->remember($key, $hit, $now);
+                    continue;
+                }
+            }
+            $misses[$key] = [$service, $instanceSlug];
+        }
+
+        return $misses;
     }
 
     private function pingFor(string $service, ?string $instanceSlug): ?bool
@@ -316,10 +475,33 @@ class HealthService implements ResetInterface
      */
     public function chips(bool $includeUnraid = false): array
     {
+        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'transmission' => 'Transmission', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr', 'bazarr' => 'Bazarr'];
+        if ($includeUnraid) {
+            $labels['unraid'] = 'Unraid';
+            $labels['unifi']  = 'UniFi';
+        }
+        $enabled = [];
+        foreach ([ServiceInstance::TYPE_RADARR, ServiceInstance::TYPE_SONARR] as $type) {
+            $enabled[$type] = $this->instances?->getEnabled($type) ?? [];
+        }
+
+        // Cold cache → probe every status this list needs at once (warm());
+        // the statusFor() calls below are then memo hits.
+        $targets = [];
+        foreach ($enabled as $type => $list) {
+            foreach ($list as $inst) {
+                $targets[] = [$type, $inst->getSlug()];
+            }
+        }
+        foreach (array_keys($labels) as $service) {
+            $targets[] = [$service, null];
+        }
+        $this->warm($targets);
+
         $chips = [];
 
-        foreach ([ServiceInstance::TYPE_RADARR, ServiceInstance::TYPE_SONARR] as $type) {
-            foreach ($this->instances?->getEnabled($type) ?? [] as $inst) {
+        foreach ($enabled as $type => $list) {
+            foreach ($list as $inst) {
                 try {
                     $s = $this->statusFor($type, $inst->getSlug());
                 } catch (\Throwable) {
@@ -330,11 +512,6 @@ class HealthService implements ResetInterface
             }
         }
 
-        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'transmission' => 'Transmission', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr', 'bazarr' => 'Bazarr'];
-        if ($includeUnraid) {
-            $labels['unraid'] = 'Unraid';
-            $labels['unifi']  = 'UniFi';
-        }
         foreach ($labels as $service => $label) {
             try {
                 $s = $this->statusFor($service);
@@ -871,14 +1048,16 @@ class HealthService implements ResetInterface
         $host = rtrim($host, '.');
         $host = trim($host, '[]');
 
-        // Resolve hostname to IPs. gethostbynamel returns the A records
-        // (IPv4); IPv6 link-local literals are caught further down via the
-        // IP-literal short-circuit.
+        // Resolve hostname to IPs (A records only; IPv6 link-local literals
+        // are caught further down via the IP-literal short-circuit). IP
+        // literals never touch DNS. Hostnames go through HostResolver, which
+        // memoizes the answer (including failures) so a slow or dead resolver
+        // costs one stall per window instead of one per outbound call. An
+        // unresolvable host yields no IPs and is not blocked, as before.
         if (filter_var($host, FILTER_VALIDATE_IP)) {
             $ips = [$host];
         } else {
-            $resolved = gethostbynamel($host);
-            $ips = is_array($resolved) ? $resolved : [];
+            $ips = HostResolver::resolve($host);
         }
         foreach ($ips as $ip) {
             // An IPv4-mapped IPv6 literal (::ffff:169.254.169.254) must be

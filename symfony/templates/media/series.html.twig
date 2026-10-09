@@ -2332,18 +2332,43 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
   // (tells Sonarr to check qBittorrent). Both are torn down on navigation —
   // the second one POSTs, so left running it kept writing to Sonarr from a
   // page the user had already left.
+  // Both pause while the tab is hidden (a background tab otherwise keeps
+  // making Sonarr re-query the download client forever) and the queue
+  // refreshes at once when the tab becomes visible again. The visibility
+  // listener is removed in the teardown.
   window.registerPageLifecycle(function () {
-    var queueTimer = setInterval(refreshQueue, 2000);
-    var monitoredTimer = setInterval(function() {
+    var queueTimer = null;
+    var monitoredTimer = null;
+    function refreshMonitored() {
       fetch('/medias/' + (INSTANCE_SLUG || DEFAULT_SONARR_SLUG) + '/series/queue/refresh', {
         method: 'POST',
         headers: {'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
         body: '{}',
       });
-    }, 6000);
+    }
+    function startPolls() {
+      if (queueTimer === null) queueTimer = setInterval(refreshQueue, 2000);
+      if (monitoredTimer === null) monitoredTimer = setInterval(refreshMonitored, 6000);
+    }
+    function stopPolls() {
+      if (queueTimer !== null) clearInterval(queueTimer);
+      if (monitoredTimer !== null) clearInterval(monitoredTimer);
+      queueTimer = null;
+      monitoredTimer = null;
+    }
+    function onQueueVisibility() {
+      if (document.hidden) {
+        stopPolls();
+      } else if (queueTimer === null) {
+        refreshQueue();
+        startPolls();
+      }
+    }
+    document.addEventListener('visibilitychange', onQueueVisibility);
+    if (!document.hidden) startPolls();
     return function () {
-      clearInterval(queueTimer);
-      clearInterval(monitoredTimer);
+      document.removeEventListener('visibilitychange', onQueueVisibility);
+      stopPolls();
     };
   });
 
@@ -3243,9 +3268,30 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
     }).catch(function(){});
   }
   refreshSeriesWarnings();
+  // Paused while the tab is hidden, refreshed at once when it is shown again.
   window.registerPageLifecycle(function () {
-    var warningsTimer = setInterval(refreshSeriesWarnings, 10000);
-    return function () { clearInterval(warningsTimer); };
+    var warningsTimer = null;
+    function startWarningsPoll() {
+      if (warningsTimer === null) warningsTimer = setInterval(refreshSeriesWarnings, 10000);
+    }
+    function stopWarningsPoll() {
+      if (warningsTimer !== null) clearInterval(warningsTimer);
+      warningsTimer = null;
+    }
+    function onWarningsVisibility() {
+      if (document.hidden) {
+        stopWarningsPoll();
+      } else if (warningsTimer === null) {
+        refreshSeriesWarnings();
+        startWarningsPoll();
+      }
+    }
+    document.addEventListener('visibilitychange', onWarningsVisibility);
+    if (!document.hidden) startWarningsPoll();
+    return function () {
+      document.removeEventListener('visibilitychange', onWarningsVisibility);
+      stopWarningsPoll();
+    };
   });
 
   // Check for active commands on page load (only user-initiated ones)

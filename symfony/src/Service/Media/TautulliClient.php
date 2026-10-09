@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use App\Service\HealthService;
 use Psr\Log\LoggerInterface;
@@ -947,7 +948,7 @@ class TautulliClient implements ResetInterface
             CURLOPT_SSL_VERIFYHOST => 2,
             CURLOPT_HTTPHEADER     => ['Accept: application/json'],
         ]);
-        $body = curl_exec($ch);
+        $body = ConcurrentCurl::exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
         curl_close($ch);

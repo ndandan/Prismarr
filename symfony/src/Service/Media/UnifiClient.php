@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use App\Service\Unifi\UnifiFetcher;
 use Psr\Log\LoggerInterface;
@@ -322,7 +323,7 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             'Accept: application/json',
         ];
         curl_setopt_array($ch, $opts);
-        $body  = curl_exec($ch);
+        $body  = ConcurrentCurl::exec($ch);
         $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno = curl_errno($ch);
         curl_close($ch);

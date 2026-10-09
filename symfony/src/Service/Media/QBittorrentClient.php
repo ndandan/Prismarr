@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
@@ -768,7 +769,7 @@ class QBittorrentClient implements ResetInterface
             CURLOPT_HEADER         => true,
         ]);
 
-        $response = curl_exec($ch);
+        $response = ConcurrentCurl::exec($ch);
         $code     = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err      = curl_error($ch);
         if ($response === false) {
@@ -872,7 +873,7 @@ class QBittorrentClient implements ResetInterface
             CURLOPT_HTTPHEADER     => $headers,
         ]);
 
-        $body = curl_exec($ch);
+        $body = ConcurrentCurl::exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErr = curl_error($ch);
 

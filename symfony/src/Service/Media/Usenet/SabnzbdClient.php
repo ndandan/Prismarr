@@ -2,6 +2,7 @@
 
 namespace App\Service\Media\Usenet;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use App\Service\Media\ServiceHealthCache;
@@ -342,7 +343,7 @@ class SabnzbdClient implements UsenetClientInterface
             CURLOPT_TIMEOUT         => 8,
             CURLOPT_NOSIGNAL        => 1,
         ]);
-        $body = curl_exec($ch);
+        $body = ConcurrentCurl::exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curlErr = curl_error($ch);
         curl_close($ch);

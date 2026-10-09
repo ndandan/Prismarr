@@ -246,15 +246,8 @@
     var esc = window.escHtml || function (s) { return s == null ? '' : String(s); };
 
     // Les avatars atterrissent dans un url('…') CSS d'un attribut style :
-    // escHtml n'y suffit pas (le parseur HTML redécode les entités avant que le
-    // CSS soit lu). encodeURI protège l'attribut mais laisse passer ' ( ) — les
-    // trois caractères qui referment la chaîne CSS — donc on les encode en plus.
-    function escCssUrl(u) {
-        return encodeURI(u == null ? '' : String(u))
-            .replace(/'/g, '%27')
-            .replace(/\(/g, '%28')
-            .replace(/\)/g, '%29');
-    }
+    // window.escCssUrl (base.html.twig) encode aussi ' ( ) en plus d'encodeURI.
+    var escCssUrl = window.escCssUrl;
 
     // ── Recherche ──
     var searchInput = document.getElementById('js-search');

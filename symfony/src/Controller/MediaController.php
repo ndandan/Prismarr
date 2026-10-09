@@ -35,6 +35,17 @@ class MediaController extends AbstractController
 {
     use ApiClientErrorTrait;
 
+    /** Ctrl+K search index lifetime when every enabled instance answered with rows. */
+    private const SEARCH_INDEX_TTL = 60;
+
+    /**
+     * Lifetime when any instance failed or came back empty: the index is
+     * partial, so a transient blip must not hide that instance's titles for
+     * a whole minute. Short enough to self-heal, long enough to absorb a
+     * burst of keystrokes (the shared library cache already damps upstream load).
+     */
+    private const SEARCH_INDEX_PARTIAL_TTL = 5;
+
     public function __construct(
         private readonly RadarrClient      $radarr,
         private readonly SonarrClient      $sonarr,
@@ -2240,7 +2251,7 @@ class MediaController extends AbstractController
      */
     private function buildMovieSearchIndex(ItemInterface $item): array
     {
-        $item->expiresAfter(60);
+        $complete = true;
         $out = [];
         foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
             try {
@@ -2254,7 +2265,11 @@ class MediaController extends AbstractController
                     'exception' => $e::class,
                     'message'   => $e->getMessage(),
                 ]);
+                $complete = false;
                 continue;
+            }
+            if ($rows === []) {
+                $complete = false;
             }
             foreach ($rows as $m) {
                 $out[] = $this->normalizeIndexRow([
@@ -2270,6 +2285,8 @@ class MediaController extends AbstractController
             }
         }
 
+        $item->expiresAfter($complete ? self::SEARCH_INDEX_TTL : self::SEARCH_INDEX_PARTIAL_TTL);
+
         return $out;
     }
 
@@ -2280,7 +2297,7 @@ class MediaController extends AbstractController
      */
     private function buildSeriesSearchIndex(ItemInterface $item): array
     {
-        $item->expiresAfter(60);
+        $complete = true;
         $out = [];
         foreach ($this->instances->getEnabled(ServiceInstance::TYPE_SONARR) as $inst) {
             try {
@@ -2294,7 +2311,11 @@ class MediaController extends AbstractController
                     'exception' => $e::class,
                     'message'   => $e->getMessage(),
                 ]);
+                $complete = false;
                 continue;
+            }
+            if ($rows === []) {
+                $complete = false;
             }
             foreach ($rows as $s) {
                 $out[] = $this->normalizeIndexRow([
@@ -2309,6 +2330,8 @@ class MediaController extends AbstractController
                 ]);
             }
         }
+
+        $item->expiresAfter($complete ? self::SEARCH_INDEX_TTL : self::SEARCH_INDEX_PARTIAL_TTL);
 
         return $out;
     }

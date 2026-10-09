@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use App\Util\SafeUrl;
@@ -641,7 +642,7 @@ class ProwlarrClient implements ResetInterface
             CURLOPT_HTTPHEADER     => ["X-Api-Key: {$this->apiKey}", 'Accept: application/json'],
         ]);
 
-        $body = curl_exec($ch);
+        $body = ConcurrentCurl::exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
         curl_close($ch);
