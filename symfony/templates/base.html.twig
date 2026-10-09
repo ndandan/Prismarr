@@ -117,19 +117,24 @@
         if (p.date === 'us') {
           return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         }
-        return d.toLocaleDateString('fr-FR');
+        // 'fr' — and any unknown/blank value, exactly like formatDate()'s
+        // `default` arm — is 'd/m/Y' → "21/04/2026". Built by hand rather
+        // than via a hardcoded French locale so it neither depends on the
+        // browser's ICU data nor drifts from the PHP pattern.
+        return ('0' + d.getDate()).slice(-2) + '/' + ('0' + (d.getMonth() + 1)).slice(-2) + '/' + d.getFullYear();
       };
       window._prismarrFmtTime = function (d, withSeconds) {
         if (isNaN(d.getTime())) return '—';
         var p = window._prismarrDatePrefs || {};
-        // 12h uses a bare hour to match PHP 'g' ("2:30 PM"); 24h pads to match 'H'.
-        var opts = {
-          hour: p.time === '12h' ? 'numeric' : '2-digit',
-          minute: '2-digit',
-          hour12: p.time === '12h'
-        };
-        if (withSeconds) opts.second = '2-digit';
-        return d.toLocaleTimeString(p.time === '12h' ? 'en-US' : 'fr-FR', opts);
+        // Mirrors formatTime(): '12h' → 'g:i A' (bare hour, "2:30 PM"); anything
+        // else, including an unknown value, → 'H:i' (padded, "14:30"). Built by
+        // hand: toLocaleTimeString('en-US') puts a narrow no-break space before
+        // AM/PM, which the PHP output never has.
+        var pad = function (n) { return ('0' + n).slice(-2); };
+        var h = d.getHours();
+        var tail = ':' + pad(d.getMinutes()) + (withSeconds ? ':' + pad(d.getSeconds()) : '');
+        if (p.time === '12h') return (h % 12 || 12) + tail + ' ' + (h < 12 ? 'AM' : 'PM');
+        return pad(h) + tail;
       };
       // ' · ' is the separator formatDateTime() uses server-side — the two must
       // agree, since a poller can rewrite an element Twig already rendered.
