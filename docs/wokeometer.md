@@ -39,8 +39,8 @@ Enable it under **Settings → Services → Metadata enrichment → Wokeometer**
 paste the key, leave "Enabled" and "Automatic sync" on, and save.
 
 **Saving a key does not start a billed sync.** Press **Sync now** when you are
-ready to run the initial catalog sync (about 200 billed requests, roughly
-$10). The scheduler never starts that first sync by itself: it only resumes
+ready to run the initial catalog sync (about 280 billed requests, roughly
+$14). The scheduler never starts that first sync by itself: it only resumes
 an interrupted run you started, and runs the small monthly incremental syncs
 once the initial sync has completed.
 
@@ -285,7 +285,7 @@ The "Last run" line on the Settings card shows one of these statuses.
 
 | Status | What it means | What to do |
 |---|---|---|
-| Never run | No sync has run yet. | Press **Sync now** to run the initial catalog sync (~200 billed requests). Automatic sync then runs incrementally every 30 days. |
+| Never run | No sync has run yet. | Press **Sync now** to run the initial catalog sync (~280 billed requests, ≈ $14). Automatic sync then runs incrementally every 30 days. |
 | Running | A sync is in progress; the card updates by itself. | Wait. A full sync takes a few minutes because of the 1.2 s pacing. |
 | Interrupted — will resume | A run was started but no live worker is holding it (crash, restart, or no worker running). | The next hourly tick resumes it from its cursor, but only while **Automatic sync** is on (otherwise press **Sync now**). Check that the worker is running if it persists. |
 | Completed (`ok`) | The last run finished. | Nothing. |

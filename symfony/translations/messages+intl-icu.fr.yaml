@@ -863,8 +863,8 @@ admin:
     next_due: Prochaine synchronisation planifiée
     sync_now: Synchroniser maintenant
     full_resync: Resynchronisation complète
-    confirm_full: 'Une resynchronisation complète retélécharge tout le catalogue (environ 200 requêtes facturées). Continuer ?'
-    cost_note: "Chaque page de 50 titres correspond à une requête d'API facturée. La synchronisation complète initiale (environ 200 requêtes, soit ≈ 10 $) ne démarre que lorsque vous cliquez sur « Synchroniser maintenant » ; ensuite, la synchronisation automatique est incrémentale (généralement 2 à 60 requêtes par mois). La navigation n'appelle jamais l'API."
+    confirm_full: 'Une resynchronisation complète retélécharge tout le catalogue (environ 280 requêtes facturées, soit ≈ 14 $). Continuer ?'
+    cost_note: "Chaque page de 50 titres correspond à une requête d'API facturée. La synchronisation complète initiale (environ 280 requêtes, soit ≈ 14 $) ne démarre que lorsque vous cliquez sur « Synchroniser maintenant » ; ensuite, la synchronisation automatique est incrémentale (généralement 2 à 60 requêtes par mois). La navigation n'appelle jamais l'API."
     initial_sync_hint: "Cliquez sur « Synchroniser maintenant » pour lancer la synchronisation initiale du catalogue (~200 requêtes facturées). La synchronisation automatique se fait ensuite de manière incrémentale tous les 30 jours."
     confirm_after_halt: "La dernière exécution a été arrêtée par sécurité après {requests} requêtes. Une nouvelle exécution repart de la première page et peut facturer jusqu'à 600 requêtes supplémentaires. Continuer ?"
     attribution: 'Les scores et résumés sont fournis par Wokeometer et mis en cache localement. Prismarr n''est pas affilié à Wokeometer.'
