@@ -202,7 +202,10 @@ class BazarrClient implements ResetInterface
         ));
     }
 
-    /** @return list<array<string, mixed>> Raw movie subtitle-history dicts; [] on failure. */
+    /**
+     * @return list<array<string, mixed>> Raw movie subtitle-history dicts; [] on failure.
+     * @phpstan-impure Sets getLastError() — callers read it after each call.
+     */
     public function getHistoryMovies(): array
     {
         if (!$this->ready()) {
@@ -212,7 +215,10 @@ class BazarrClient implements ResetInterface
         return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
 
-    /** @return list<array<string, mixed>> Raw episode subtitle-history dicts; [] on failure. */
+    /**
+     * @return list<array<string, mixed>> Raw episode subtitle-history dicts; [] on failure.
+     * @phpstan-impure Sets getLastError() — callers read it after each call.
+     */
     public function getHistoryEpisodes(): array
     {
         if (!$this->ready()) {
