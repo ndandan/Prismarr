@@ -63,13 +63,15 @@ class BazarrIndexRefresherTest extends TestCase
         $this->assertFalse($r->supports(BazarrSubtitleIndex::KEY_MOVIE_LANGS)); // written BY the movies refresh, never requested on its own
     }
 
-    public function testRefreshingTheBadgesKeyRoutesThroughTheMovieFetch(): void
+    public function testRefreshingTheBadgesKeyNeverFetchesTheMovieList(): void
     {
+        // review 2026-10-08: KEY_BADGES used to fall through to a full
+        // refreshMovies() whenever the movie map wasn't fresh — so a failing
+        // /movies ran twice per cycle (one KEY_MOVIES + one KEY_BADGES
+        // message) and Retry fetched it twice inline, past its time limit.
         $pool   = new ArrayAdapter();
         $client = $this->createMock(BazarrClient::class);
-        $client->expects($this->once())->method('getMovies')->willReturn([
-            ['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => []],
-        ]);
+        $client->expects($this->never())->method('getMovies');
         $client->method('getBadgeCounts')->willReturn(['movies' => 1, 'episodes' => 2, 'providers' => 1]);
         $client->method('getLastError')->willReturn(null);
 

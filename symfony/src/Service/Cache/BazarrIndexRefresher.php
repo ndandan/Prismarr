@@ -14,15 +14,14 @@ use Psr\Log\LoggerInterface;
  * one fetch writes every map derived from it, so a refresh costs at most one
  * Bazarr call per dataset per soft window (CONTEXT constraint #2).
  *
- * KEY_BADGES (fix round 1, IMPORTANT 3) piggybacks on the SAME getMovies()
- * fetch as KEY_MOVIES — there is no separate badges-only Bazarr call. It
- * exists as its own requestable key because a mutation that only affects
- * badge counts and has no per-id row to patch (an episode subtitle download,
- * which carries an episode id, not a series id) needs a way to queue "the
- * badges are stale" without also implying "the movie list is stale" to a
- * caller that only cares about the former. Both keys share the same $now
- * (see refreshMovies()), so checking KEY_BADGES's own freshness still
- * coalesces correctly with a concurrent KEY_MOVIES-triggered refresh.
+ * KEY_BADGES is written by every movies refresh (one extra cheap /badges
+ * call in the same cycle), but a KEY_BADGES request on its own only ever
+ * makes that /badges call — never the full movie list (review 2026-10-08).
+ * The counts don't depend on the list, and routing a badges request through
+ * refreshMovies() made a failing /movies run twice per cycle (one KEY_MOVIES
+ * and one KEY_BADGES message) and twice inside apiRefresh()'s inline run.
+ * It exists as its own requestable key so a mutation (a subtitle download)
+ * or a landing page missing only its counts can ask for just them.
  */
 final class BazarrIndexRefresher implements CacheRefresherInterface
 {
@@ -54,20 +53,11 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             return;
         }
 
-        // KEY_BADGES normally rides on the movies refresh (see the class
-        // docblock). When the movie map is still fresh, only the counts are
-        // missing — their own /badges call failed last cycle — so retry just
-        // that one cheap call instead of re-fetching the whole library.
-        if ($key === BazarrSubtitleIndex::KEY_BADGES) {
-            $movies = $this->swr->read(BazarrSubtitleIndex::KEY_MOVIES, BazarrSubtitleIndex::SOFT_TTL);
-            if ($movies !== null && $movies['state'] === 'fresh') {
-                $this->refreshBadgeCounts();
-
-                return;
-            }
-        }
-
-        $key === BazarrSubtitleIndex::KEY_SERIES ? $this->refreshSeries() : $this->refreshMovies();
+        match ($key) {
+            BazarrSubtitleIndex::KEY_BADGES => $this->refreshBadgeCounts(), // never the full list — see the class docblock
+            BazarrSubtitleIndex::KEY_SERIES => $this->refreshSeries(),
+            default                         => $this->refreshMovies(),
+        };
     }
 
     private function refreshBadgeCounts(): void

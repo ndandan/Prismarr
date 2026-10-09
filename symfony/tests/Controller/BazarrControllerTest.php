@@ -200,6 +200,9 @@ class BazarrControllerTest extends AbstractWebTestCase
         self::assertTrue($payload['ok']);
         self::assertSame('fresh', $payload['movies']);
         self::assertSame('fresh', $payload['series']);
+        // review 2026-10-08: the landing page also gates on the badge counts,
+        // so the truthful answer reports them too.
+        self::assertSame('fresh', $payload['badges'] ?? null);
         self::assertNull($payload['reason']);
     }
 

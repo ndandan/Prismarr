@@ -661,10 +661,9 @@ class BazarrSubtitleIndex implements ResetInterface
     }
 
     /**
-     * `/api/badges` counts for the Bazarr topbar/tab chips. Refreshed
-     * alongside the movie dataset (see BazarrIndexRefresher) since it is one
-     * cheap call — giving it its own refresh key would double queue traffic
-     * for no benefit.
+     * `/api/badges` counts for the Bazarr topbar/tab chips. Written by every
+     * movies refresh, and requestable on their own (a /badges-only call — see
+     * BazarrIndexRefresher) for when just the counts are missing.
      *
      * @return array{state: 'ready'|'warming', counts: array{movies: int, episodes: int, providers: int}}
      */

@@ -47,12 +47,12 @@ class BazarrController extends AbstractController
 
     /**
      * Seconds. Must outlive apiRefresh()'s worst-case inline run (two
-     * library-budget lists + the badges call, plus a margin for processing)
+     * library-budget lists + two badges calls, plus a margin for processing)
      * or a double-clicked Retry could stack a second rebuild behind a
      * still-running first one. apiRefresh() also uses it as its PHP time
      * limit, so the run is cut off before the marker can expire under it.
      */
-    private const INLINE_REFRESH_MARKER_TTL = 2 * BazarrClient::LIBRARY_TIMEOUT + BazarrClient::DEFAULT_TIMEOUT + 10;
+    private const INLINE_REFRESH_MARKER_TTL = 2 * BazarrClient::LIBRARY_TIMEOUT + 2 * BazarrClient::DEFAULT_TIMEOUT + 10;
 
     /**
      * PHP time limit for the /providers/* actions: past the client budget so
@@ -502,10 +502,11 @@ class BazarrController extends AbstractController
      * what it achieved. This is the ONLY inline Bazarr fetch left in the app:
      * admin-only, explicitly user-driven (the warming panel's Retry button),
      * rate-limited by the refresher's own freshness check, and bounded by
-     * BazarrClient's timeouts — up to THREE client calls can happen inline
-     * (getMovies + getBadgeCounts for the movies refresh, getSeries for the
-     * series refresh); the two full lists run on LIBRARY_TIMEOUT (30 s) and
-     * the badges call on DEFAULT_TIMEOUT (8 s), so the worst case is ~68 s
+     * BazarrClient's timeouts — up to FOUR client calls can happen inline
+     * (getMovies + getBadgeCounts for the movies refresh, a /badges-only
+     * retry when that one didn't land, getSeries for the series refresh);
+     * the two full lists run on LIBRARY_TIMEOUT (30 s) and the badges calls
+     * on DEFAULT_TIMEOUT (8 s), so the worst case is ~76 s
      * (time limit: INLINE_REFRESH_MARKER_TTL) before this responds — only when Bazarr is that slow, which is exactly
      * when the old flat 8 s budget made Retry fail every time. It exists so a dead
      * messenger-worker is recoverable from the UI instead of leaving the tab
@@ -535,7 +536,7 @@ class BazarrController extends AbstractController
      * expires after MARKER_TTL, capping how often this endpoint's own
      * worst-case cost can be paid.
      *
-     * @return JsonResponse {ok: bool, movies: 'fresh'|'stale'|'pending', series: 'fresh'|'stale'|'pending', reason: 'breaker_open'|'fetch_failed'|'already_running'|null}
+     * @return JsonResponse {ok: bool, movies: 'fresh'|'stale'|'pending', series: 'fresh'|'stale'|'pending', badges: 'fresh'|'stale'|'pending', reason: 'breaker_open'|'fetch_failed'|'already_running'|null}
      */
     #[Route('/api/refresh', name: 'api_refresh', methods: ['POST'])]
     public function apiRefresh(BazarrIndexRefresher $refresher, ServiceHealthCache $health, CacheItemPoolInterface $cacheApp): JsonResponse
@@ -549,6 +550,7 @@ class BazarrController extends AbstractController
                 'ok'     => false,
                 'movies' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES),
                 'series' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES),
+                'badges' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_BADGES),
                 'reason' => 'breaker_open',
             ]);
         }
@@ -559,6 +561,7 @@ class BazarrController extends AbstractController
                 'ok'     => false,
                 'movies' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES),
                 'series' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES),
+                'badges' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_BADGES),
                 'reason' => 'already_running',
             ]);
         }
@@ -575,12 +578,15 @@ class BazarrController extends AbstractController
 
         $movies = $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES);
         $series = $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES);
-        $ok     = $movies === 'fresh' && $series === 'fresh';
+        // The landing page also gates on the counts, so "ok" includes them.
+        $badges = $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_BADGES);
+        $ok     = $movies === 'fresh' && $series === 'fresh' && $badges === 'fresh';
 
         return $this->json([
             'ok'     => $ok,
             'movies' => $movies,
             'series' => $series,
+            'badges' => $badges,
             'reason' => $ok ? null : 'fetch_failed',
         ]);
     }
