@@ -502,4 +502,54 @@ class BazarrIndexRefresherTest extends TestCase
 
         $this->assertSame('complete', $this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOVIES, 60)['value'][7]['state']);
     }
+
+    /**
+     * review 2026-10-08: a Bazarr URL/key change invalidates every dataset
+     * (BazarrSubtitleIndex::invalidate()); a refresh already fetching from the
+     * OLD instance (up to LIBRARY_TIMEOUT) must not write its data back as
+     * fresh afterwards.
+     */
+    public function testAMovieRefreshOverlappingAnInvalidationWritesNothing(): void
+    {
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $index  = $this->index($pool, $client);
+        $client->method('getMovies')->willReturnCallback(static function () use ($index): array {
+            $index->invalidate(); // settings changed while this fetch was in flight
+
+            return [['radarrId' => 7, 'title' => 'Old', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => []]];
+        });
+        $client->method('getBadgeCounts')->willReturn(['movies' => 1, 'episodes' => 1, 'providers' => 1]);
+        $client->method('getLastError')->willReturn(null);
+
+        (new BazarrIndexRefresher($client, $this->swr($pool), new ServiceHealthCache($pool), new NullLogger(), $index))
+            ->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $swr = $this->swr($pool);
+        foreach ([BazarrSubtitleIndex::KEY_MOVIES, BazarrSubtitleIndex::KEY_MOVIE_LANGS, BazarrSubtitleIndex::KEY_MOVIE_CARDS,
+                  BazarrSubtitleIndex::KEY_MOST_MISSING_MOVIES, BazarrSubtitleIndex::KEY_BADGES] as $key) {
+            $this->assertNull($swr->read($key, 60), $key . ' must not be resurrected from the old instance');
+        }
+    }
+
+    public function testASeriesRefreshOverlappingAnInvalidationWritesNothing(): void
+    {
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $index  = $this->index($pool, $client);
+        $client->method('getSeries')->willReturnCallback(static function () use ($index): array {
+            $index->invalidate();
+
+            return [['sonarrSeriesId' => 9, 'title' => 'Old', 'profileId' => 1, 'episodeFileCount' => 4, 'episodeMissingCount' => 2]];
+        });
+        $client->method('getLastError')->willReturn(null);
+
+        (new BazarrIndexRefresher($client, $this->swr($pool), new ServiceHealthCache($pool), new NullLogger(), $index))
+            ->refresh(BazarrSubtitleIndex::KEY_SERIES);
+
+        $swr = $this->swr($pool);
+        foreach ([BazarrSubtitleIndex::KEY_SERIES, BazarrSubtitleIndex::KEY_SERIES_CARDS, BazarrSubtitleIndex::KEY_MOST_MISSING_SERIES] as $key) {
+            $this->assertNull($swr->read($key, 60), $key . ' must not be resurrected from the old instance');
+        }
+    }
 }
