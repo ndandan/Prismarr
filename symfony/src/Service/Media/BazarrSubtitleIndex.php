@@ -182,6 +182,9 @@ class BazarrSubtitleIndex implements ResetInterface
         foreach (self::ALL_KEYS as $key) {
             $this->swr->delete($key);
         }
+        // A patch journalled from the OLD instance must not be re-applied by
+        // the first bulk refresh against the new one.
+        $this->cacheApp->deleteItem(self::KEY_PATCHES);
     }
 
     /**

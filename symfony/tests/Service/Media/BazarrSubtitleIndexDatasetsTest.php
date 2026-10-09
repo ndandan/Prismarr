@@ -227,4 +227,18 @@ class BazarrSubtitleIndexDatasetsTest extends TestCase
         $keys = array_map(static fn (object $m): string => $m->key, $this->dispatched);
         $this->assertSame([BazarrSubtitleIndex::KEY_BADGES], $keys);
     }
+
+    public function testInvalidateAlsoDropsThePatchJournal(): void
+    {
+        // A journalled patch from the OLD instance must not be re-applied by
+        // the first refresh against the new one (review 2026-10-08).
+        $pool = new ArrayAdapter();
+        $item = $pool->getItem(BazarrSubtitleIndex::KEY_PATCHES);
+        $item->set(['movie:7' => ['at' => time(), 'kind' => 'movie', 'id' => 7, 'status' => ['state' => 'complete', 'count' => 0], 'langs' => null]]);
+        $pool->save($item);
+
+        $this->index($this->createMock(BazarrClient::class), $pool)->invalidate();
+
+        $this->assertFalse($pool->getItem(BazarrSubtitleIndex::KEY_PATCHES)->isHit());
+    }
 }
