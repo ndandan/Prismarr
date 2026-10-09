@@ -488,4 +488,66 @@ class TemplateStructureGuardTest extends TestCase
         $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-frame-render', teardown)"));
         $this->assertSame(1, substr_count($src, "removeEventListener('turbo:before-render', teardown)"));
     }
+
+    public function testEveryEpisodeSubtitleSearchTriggerCarriesItsSeriesId(): void
+    {
+        // Bazarr's episode-download endpoint requires seriesid as well as
+        // episodeid (review 2026-10-08 #1): every [data-kind="episode"]
+        // search trigger must hand the modal its Sonarr series id.
+        foreach (['bazarr/series_detail.html.twig', 'media/series.html.twig'] as $tpl) {
+            $src = file_get_contents(self::TEMPLATE_ROOT . $tpl);
+            $this->assertNotFalse($src);
+            $triggers = substr_count($src, 'data-kind="episode"');
+            $this->assertGreaterThan(0, $triggers, $tpl . ' has no episode search trigger');
+            $this->assertSame(
+                $triggers,
+                preg_match_all('/data-kind="episode"[^>]*data-series-id=/', $src),
+                $tpl . ': an episode search trigger is missing data-series-id'
+            );
+        }
+    }
+
+    public function testTheSearchModalPostsTheSeriesIdWithAnEpisodeDownload(): void
+    {
+        $src = file_get_contents(self::TEMPLATE_ROOT . 'bazarr/_search_modal.html.twig');
+        $this->assertNotFalse($src);
+        $this->assertStringContainsString("getAttribute('data-series-id')", $src);
+        $this->assertStringContainsString('params.seriesid', $src);
+    }
+
+    public function testSeriesQueueAndModalMetaEscapeUpstreamStrings(): void
+    {
+        // review 2026-10-08 #4: release names (indexer-controlled), episode
+        // titles and status messages went into innerHTML raw on the Series
+        // queue — films.html.twig already escaped the same fields — and the
+        // series modal's meta line did the same with Sonarr metadata.
+        $src = file_get_contents(self::TEMPLATE_ROOT . 'media/series.html.twig');
+        $this->assertNotFalse($src);
+        foreach ([
+            "+ (item.seriesTitle || '—') +",
+            "+ (item.episode || '—') +",
+            "+ (item.quality || '—') +",
+            "+ statusLabel +",
+            "+ firstMsg +",
+            "allMsgs.replace(",
+            "+ card.dataset.certification +",
+            "+ card.dataset.network +",
+            "+ g + '</span>'",
+        ] as $raw) {
+            $this->assertStringNotContainsString($raw, $src, 'unescaped sink still present: ' . $raw);
+        }
+        foreach ([
+            "esc(item.seriesTitle || '—')",
+            "esc(item.episode || '—')",
+            "esc(item.quality || '—')",
+            'esc(statusLabel)',
+            'esc(firstMsg)',
+            'esc(allMsgs)',
+            'esc(card.dataset.certification)',
+            'esc(card.dataset.network)',
+            'esc(g)',
+        ] as $escaped) {
+            $this->assertStringContainsString($escaped, $src);
+        }
+    }
 }

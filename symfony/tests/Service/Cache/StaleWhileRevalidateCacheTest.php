@@ -356,4 +356,84 @@ class StaleWhileRevalidateCacheTest extends TestCase
         $this->assertFalse($pool->getItem('k.refreshing')->isHit());
         $this->assertFalse($pool->getItem('k.requested_at')->isHit());
     }
+
+    public function testAWriteWhoseFetchStartedBeforeAnInvalidationIsDropped(): void
+    {
+        // review 2026-10-08 #3 (lost update): a background refresh that began
+        // fetching before a user mutation invalidated the key must not land
+        // its pre-mutation data afterwards, stamped fresh.
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $startedAt = microtime(true);
+        $swr->delete('k');
+        $swr->write('k', ['old'], 600, startedAt: $startedAt);
+
+        $this->assertNull($swr->read('k', 45));
+    }
+
+    public function testAWriteWhoseFetchStartedAfterTheInvalidationLands(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $swr->delete('k');
+        usleep(1000);
+        $swr->write('k', ['new'], 600, startedAt: microtime(true));
+
+        $this->assertSame(['new'], $swr->read('k', 45)['value'] ?? null);
+    }
+
+    public function testAnInlineComputeOverlappingAnInvalidationIsServedButNotCached(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $hit = $swr->getOrCompute('k', 45, 600, static function () use ($swr): array {
+            $swr->delete('k'); // a mutation lands while this fetch is in flight
+
+            return ['old'];
+        });
+
+        $this->assertSame(['old'], $hit['value'], 'the caller still gets an answer');
+        $this->assertNull($swr->read('k', 45), 'but the pre-mutation list is not cached');
+    }
+
+    public function testMarkStaleKeepsTheValueButServesItStale(): void
+    {
+        // review 2026-10-08: a mutation's queued rebuild no-ops in the
+        // refresher while the key is fresh. markStale() keeps serving the
+        // value but lets the rebuild through.
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write('k', ['v'], 600);
+
+        $swr->markStale('k', 60, 600);
+
+        $this->assertSame(['value' => ['v'], 'state' => 'stale'], $swr->read('k', 60));
+    }
+
+    public function testMarkStaleLetsTheNextRefreshRequestThroughAnActiveMarker(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+        $swr->write('k', ['v'], 600);
+        $swr->requestRefresh('k'); // a page view just asked; its 30 s marker is set
+        $this->assertCount(1, $this->dispatched);
+
+        $swr->markStale('k', 60, 600);
+        $swr->requestRefresh('k');
+
+        $this->assertCount(2, $this->dispatched, 'the mutation-driven rebuild must not be swallowed by the marker');
+    }
+
+    public function testMarkStaleOnAMissingKeyDoesNothing(): void
+    {
+        $pool = new ArrayAdapter();
+        $swr  = $this->swr($pool);
+
+        $swr->markStale('k', 60, 600);
+
+        $this->assertNull($swr->read('k', 60));
+    }
 }

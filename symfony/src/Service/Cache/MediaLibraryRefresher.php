@@ -66,6 +66,9 @@ final class MediaLibraryRefresher implements CacheRefresherInterface
             return;
         }
 
+        // Taken before the fetch so a mutation that invalidates this key while
+        // the (up to LIBRARY_TIMEOUT) fetch is in flight wins over its result.
+        $startedAt = microtime(true);
         try {
             $rows = $isMovies
                 ? $this->radarr->withInstance($instance)->getMovies(RadarrClient::LIBRARY_TIMEOUT)
@@ -83,6 +86,6 @@ final class MediaLibraryRefresher implements CacheRefresherInterface
             return;
         }
 
-        $this->swr->write($key, $rows, MediaLibraryCache::HARD_TTL);
+        $this->swr->write($key, $rows, MediaLibraryCache::HARD_TTL, startedAt: $startedAt);
     }
 }
