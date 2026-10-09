@@ -26,6 +26,23 @@ class BazarrClient implements ResetInterface
     /** Short slug — circuit-breaker key + HealthService service id. */
     public const SERVICE = 'bazarr';
 
+    /** Request budget (seconds) for the cheap calls a page render waits on. */
+    public const DEFAULT_TIMEOUT = 8;
+
+    /**
+     * Budget for the full-library lists (`length=-1`), opt-in per call like
+     * RadarrClient::LIBRARY_TIMEOUT. The worker refresher passes it: /movies
+     * alone was measured at 4–8 s on a 5.4k-movie library — right at the
+     * default cap — and nobody is waiting on that request.
+     */
+    public const LIBRARY_TIMEOUT = 30;
+
+    /**
+     * Budget for /providers/* — Bazarr answers synchronously: a search fans
+     * out to every enabled provider, a download fetches and writes the file.
+     */
+    public const PROVIDER_TIMEOUT = 60;
+
     private bool $configLoaded = false;
     private bool $enabled = true;
     private string $baseUrl = '';
@@ -133,28 +150,31 @@ class BazarrClient implements ResetInterface
     /**
      * @param list<int> $radarrIds Optional per-id filter. Empty = the whole
      *        list (start=0&length=-1), byte-for-byte the previous query.
+     * @param int $timeout Pass LIBRARY_TIMEOUT for the unfiltered list off
+     *        the request path (the worker refresher).
      * @return list<array<string, mixed>> Raw movie dicts; [] on failure.
      */
-    public function getMovies(array $radarrIds = []): array
+    public function getMovies(array $radarrIds = [], int $timeout = self::DEFAULT_TIMEOUT): array
     {
         if (!$this->ready()) {
             return [];
         }
-        $r = $this->request('GET', '/movies', ['start' => 0, 'length' => -1], [], self::repeatedIds('radarrid', $radarrIds));
+        $r = $this->request('GET', '/movies', ['start' => 0, 'length' => -1], [], self::repeatedIds('radarrid', $radarrIds), $timeout);
 
         return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
 
     /**
      * @param list<int> $sonarrSeriesIds Optional per-id filter; empty = the whole list.
+     * @param int $timeout Pass LIBRARY_TIMEOUT for the unfiltered list off the request path.
      * @return list<array<string, mixed>> Raw series dicts; [] on failure.
      */
-    public function getSeries(array $sonarrSeriesIds = []): array
+    public function getSeries(array $sonarrSeriesIds = [], int $timeout = self::DEFAULT_TIMEOUT): array
     {
         if (!$this->ready()) {
             return [];
         }
-        $r = $this->request('GET', '/series', ['start' => 0, 'length' => -1], [], self::repeatedIds('seriesid', $sonarrSeriesIds));
+        $r = $this->request('GET', '/series', ['start' => 0, 'length' => -1], [], self::repeatedIds('seriesid', $sonarrSeriesIds), $timeout);
 
         return array_values(is_array($r['data'] ?? null) ? $r['data'] : []);
     }
@@ -216,7 +236,7 @@ class BazarrClient implements ResetInterface
         if (!$this->ready()) {
             return null;
         }
-        return $this->request('GET', '/providers/movies', ['radarrid' => $radarrId]);
+        return $this->request('GET', '/providers/movies', ['radarrid' => $radarrId], timeout: self::PROVIDER_TIMEOUT);
     }
 
     /** @return array<string, mixed>|null Provider search results; null on failure. */
@@ -225,7 +245,7 @@ class BazarrClient implements ResetInterface
         if (!$this->ready()) {
             return null;
         }
-        return $this->request('GET', '/providers/episodes', ['episodeid' => $episodeId]);
+        return $this->request('GET', '/providers/episodes', ['episodeid' => $episodeId], timeout: self::PROVIDER_TIMEOUT);
     }
 
     /** @param array{radarrid?: mixed, hi?: mixed, forced?: mixed, original_format?: mixed, provider?: mixed, subtitle?: mixed} $p */
@@ -234,7 +254,7 @@ class BazarrClient implements ResetInterface
         if (!$this->ready()) {
             return false;
         }
-        return $this->request('POST', '/providers/movies', [], $this->downloadBody($p, 'radarrid')) !== null;
+        return $this->request('POST', '/providers/movies', [], $this->downloadBody($p, 'radarrid'), timeout: self::PROVIDER_TIMEOUT) !== null;
     }
 
     /**
@@ -249,7 +269,7 @@ class BazarrClient implements ResetInterface
         if (!$this->ready()) {
             return false;
         }
-        return $this->request('POST', '/providers/episodes', [], $this->downloadBody($p, 'seriesid', 'episodeid')) !== null;
+        return $this->request('POST', '/providers/episodes', [], $this->downloadBody($p, 'seriesid', 'episodeid'), timeout: self::PROVIDER_TIMEOUT) !== null;
     }
 
     public function searchMissingMovie(int $radarrId): bool
@@ -308,9 +328,15 @@ class BazarrClient implements ResetInterface
      * @param string               $rawQuery Pre-encoded extra query fragment for
      *                                       parameters http_build_query() cannot
      *                                       express (Bazarr's repeated `name[]=`).
+     * @param int                  $timeout  Total budget in seconds. Only a call
+     *                                       on the DEFAULT budget trips the
+     *                                       breaker on a transport failure: a
+     *                                       long-budget call that runs out means
+     *                                       Bazarr is busy, not down — marking it
+     *                                       down would blind every other call.
      * @return array<string, mixed>|null
      */
-    private function request(string $method, string $path, array $query = [], array $body = [], string $rawQuery = ''): ?array
+    private function request(string $method, string $path, array $query = [], array $body = [], string $rawQuery = '', int $timeout = self::DEFAULT_TIMEOUT): ?array
     {
         // Circuit breaker: skip the call entirely if Bazarr was just seen
         // down — a widget poll would otherwise stack connect timeouts.
@@ -354,7 +380,7 @@ class BazarrClient implements ResetInterface
         $opts = [
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_CONNECTTIMEOUT => 3,
-            CURLOPT_TIMEOUT        => 8,
+            CURLOPT_TIMEOUT        => $timeout,
             CURLOPT_NOSIGNAL       => true, // critical under FrankenPHP/Alpine
             CURLOPT_FOLLOWLOCATION => false,
             // SSRF guard #2 — lock the protocol even across any redirect.
@@ -373,10 +399,13 @@ class BazarrClient implements ResetInterface
         [$rawBody, $code, $err] = $this->exec($ch, $opts);
 
         // Transport failure (unreachable / DNS / TLS / timeout) — the only
-        // class of failure that may trip the breaker.
+        // class of failure that may trip the breaker, and only on the default
+        // budget (see the $timeout docblock above).
         if ($rawBody === false || $err !== '' || $code === 0) {
             $this->recordError($code, $err !== '' ? $err : 'connection failed', $method, $path);
-            $this->health?->markDown(self::SERVICE);
+            if ($timeout <= self::DEFAULT_TIMEOUT) {
+                $this->health?->markDown(self::SERVICE);
+            }
             return null;
         }
 

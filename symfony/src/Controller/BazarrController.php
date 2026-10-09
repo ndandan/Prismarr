@@ -45,8 +45,12 @@ class BazarrController extends AbstractController
     /** Coalescing marker for apiRefresh()'s inline rebuild — see that method's docblock. */
     private const INLINE_REFRESH_MARKER = 'bazarr_subtitle_index.inline_refresh';
 
-    /** Seconds. Mirrors StaleWhileRevalidateCache::MARKER_TTL's coalescing window. */
-    private const INLINE_REFRESH_MARKER_TTL = 30;
+    /**
+     * Seconds. Must outlive apiRefresh()'s worst-case inline run (two
+     * library-budget lists + the badges call) or a double-clicked Retry
+     * could stack a second rebuild behind a still-running first one.
+     */
+    private const INLINE_REFRESH_MARKER_TTL = 2 * BazarrClient::LIBRARY_TIMEOUT + BazarrClient::DEFAULT_TIMEOUT;
 
     public function __construct(
         private readonly BazarrClient $bazarr,
@@ -458,10 +462,12 @@ class BazarrController extends AbstractController
      * what it achieved. This is the ONLY inline Bazarr fetch left in the app:
      * admin-only, explicitly user-driven (the warming panel's Retry button),
      * rate-limited by the refresher's own freshness check, and bounded by
-     * BazarrClient's own 3 s connect / 8 s total timeouts — up to THREE
-     * client calls can happen inline (getMovies + getBadgeCounts for the
-     * movies refresh, getSeries for the series refresh), so the worst case is
-     * roughly 3x8s (~24s) before this responds. It exists so a dead
+     * BazarrClient's timeouts — up to THREE client calls can happen inline
+     * (getMovies + getBadgeCounts for the movies refresh, getSeries for the
+     * series refresh); the two full lists run on LIBRARY_TIMEOUT (30 s) and
+     * the badges call on DEFAULT_TIMEOUT (8 s), so the worst case is ~68 s
+     * before this responds — only when Bazarr is that slow, which is exactly
+     * when the old flat 8 s budget made Retry fail every time. It exists so a dead
      * messenger-worker is recoverable from the UI instead of leaving the tab
      * warming forever.
      *
@@ -478,7 +484,7 @@ class BazarrController extends AbstractController
      * JSON (HTTP 200, never a 500) even when the breaker is open — the
      * breaker check below never calls the client at all.
      *
-     * Final-review fix-wave: the ~3x8s inline cost above means a double-
+     * Final-review fix-wave: the inline cost above means a double-
      * clicked Retry (or two admins) must not stack two of these in flight at
      * once. Before any of that inline work, a coalescing marker is acquired
      * in `cache.app` — best-effort check-then-set, the same shape as

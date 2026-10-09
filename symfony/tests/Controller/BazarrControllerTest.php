@@ -28,7 +28,7 @@ class BazarrControllerTest extends AbstractWebTestCase
      * AbstractWebTestCase resets — is NOT reset between tests in this
      * process. A test that reaches apiRefresh() successfully (the truthful-
      * shape test, the breaker-open test, and the already_running test below)
-     * leaves the marker set for 30 s, which would make whichever of those
+     * leaves the marker set for ~68 s, which would make whichever of those
      * tests happens to run next within that window answer already_running
      * instead of whatever it actually means to exercise. Clear it after
      * every test in this class so order/timing can never matter.
@@ -218,7 +218,7 @@ class BazarrControllerTest extends AbstractWebTestCase
     /**
      * Final-review fix-wave: a second call while the coalescing marker is
      * still set (a double-clicked Retry, or a second admin) must not stack
-     * another inline ~3x8s rebuild — it answers `already_running`
+     * another inline rebuild — it answers `already_running`
      * immediately. Zero client calls is structurally guaranteed here the
      * same way the breaker_open test above guarantees it: the marker check
      * returns before BazarrIndexRefresher::refresh() is ever called, and the

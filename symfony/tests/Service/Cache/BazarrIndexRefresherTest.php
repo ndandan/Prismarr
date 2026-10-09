@@ -82,7 +82,7 @@ class BazarrIndexRefresherTest extends TestCase
     {
         $pool   = new ArrayAdapter();
         $client = $this->createMock(BazarrClient::class);
-        $client->expects($this->once())->method('getMovies')->with([])->willReturn([
+        $client->expects($this->once())->method('getMovies')->with([], BazarrClient::LIBRARY_TIMEOUT)->willReturn([
             ['radarrId' => 7, 'profileId' => 1, 'subtitles' => [['code2' => 'en']], 'missing_subtitles' => [['code2' => 'fr']]],
         ]);
         $client->method('getLastError')->willReturn(null);
@@ -98,7 +98,7 @@ class BazarrIndexRefresherTest extends TestCase
     {
         $pool   = new ArrayAdapter();
         $client = $this->createMock(BazarrClient::class);
-        $client->expects($this->once())->method('getSeries')->with([])->willReturn([
+        $client->expects($this->once())->method('getSeries')->with([], BazarrClient::LIBRARY_TIMEOUT)->willReturn([
             ['sonarrSeriesId' => 9, 'profileId' => 1, 'episodeFileCount' => 4, 'episodeMissingCount' => 2],
         ]);
         $client->method('getLastError')->willReturn(null);
@@ -248,7 +248,7 @@ class BazarrIndexRefresherTest extends TestCase
     {
         $pool   = new ArrayAdapter();
         $client = $this->createMock(BazarrClient::class);
-        $client->expects($this->once())->method('getMovies')->with([])->willReturn([
+        $client->expects($this->once())->method('getMovies')->with([], BazarrClient::LIBRARY_TIMEOUT)->willReturn([
             ['radarrId' => 7, 'title' => 'A', 'year' => 2001, 'profileId' => 1,
              'subtitles' => [], 'missing_subtitles' => [['code2' => 'fr'], ['code2' => 'en']]],
             ['radarrId' => 8, 'title' => 'B', 'year' => 1999, 'profileId' => 1,

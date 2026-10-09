@@ -66,7 +66,7 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
         // flight (must survive) from one this fetch's own result already
         // reflects (must not double-apply) — spec D3 as amended, defect C2.
         $fetchStartedAt = time();
-        $rows = $this->client->getMovies();
+        $rows = $this->client->getMovies([], BazarrClient::LIBRARY_TIMEOUT);
 
         // Guardrail 6: only a clean fetch may overwrite. An unreachable
         // Bazarr yields [] plus a recorded lastError; caching that would
@@ -190,7 +190,7 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
     {
         // See refreshMovies(): captured before the client call.
         $fetchStartedAt = time();
-        $rows = $this->client->getSeries();
+        $rows = $this->client->getSeries([], BazarrClient::LIBRARY_TIMEOUT);
         // See refreshMovies(): an empty-but-clean result is a legitimate
         // permanent state (unconfigured/disabled Bazarr, or a genuinely
         // empty Sonarr library), not a failure — only a recorded lastError

@@ -402,4 +402,64 @@ class BazarrClientTest extends TestCase
         $this->assertSame('42', $fields['radarrid'] ?? null);
         $this->assertArrayNotHasKey('seriesid', $fields);
     }
+
+    public function testCheapCallsKeepTheShortDefaultTimeout(): void
+    {
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '{"bazarr_version":"1.4.0"}');
+        $client->ping();
+        $client->getMovies();
+        $client->getMovies([7]);
+
+        foreach ($calls as $opts) {
+            $this->assertSame(BazarrClient::DEFAULT_TIMEOUT, $opts[CURLOPT_TIMEOUT]);
+        }
+        $this->assertCount(3, $calls);
+    }
+
+    public function testTheFullLibraryListsCanUseTheLibraryBudget(): void
+    {
+        // review 2026-10-08 #2: /movies?length=-1 was measured at 4–8 s on a
+        // 5.4k library — right at the old flat 8 s cap — and the worker
+        // refresher that runs it has no user waiting on it.
+        $calls = [];
+        $client = $this->optsCapturingClient($calls);
+        $client->getMovies([], BazarrClient::LIBRARY_TIMEOUT);
+        $client->getSeries([], BazarrClient::LIBRARY_TIMEOUT);
+
+        $this->assertSame(BazarrClient::LIBRARY_TIMEOUT, $calls[0][CURLOPT_TIMEOUT]);
+        $this->assertSame(BazarrClient::LIBRARY_TIMEOUT, $calls[1][CURLOPT_TIMEOUT]);
+    }
+
+    public function testProviderSearchAndDownloadUseTheProviderBudget(): void
+    {
+        // Bazarr answers /providers/* synchronously: a search fans out to
+        // every enabled provider, a download fetches + writes the file.
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '');
+        $client->searchMovie(1);
+        $client->searchEpisode(2);
+        $client->downloadMovie(['radarrid' => 1]);
+        $client->downloadEpisode(['seriesid' => 3, 'episodeid' => 2]);
+
+        $this->assertCount(4, $calls);
+        foreach ($calls as $opts) {
+            $this->assertSame(BazarrClient::PROVIDER_TIMEOUT, $opts[CURLOPT_TIMEOUT]);
+        }
+    }
+
+    public function testATimedOutLongBudgetCallDoesNotTripTheBreaker(): void
+    {
+        // A slow provider search (or a slow full-library list) means Bazarr is
+        // busy, not down — marking it down would blind every other Bazarr
+        // call (badges, the Bazarr tab) for the breaker TTL.
+        $health = new ServiceHealthCache(new ArrayAdapter());
+        $client = $this->fakeClient($health, false, 0, 'Operation timed out after 60000 milliseconds');
+
+        $this->assertNull($client->searchMovie(1));
+        $this->assertFalse($client->downloadEpisode(['seriesid' => 3, 'episodeid' => 2]));
+        $this->assertSame([], $client->getMovies([], BazarrClient::LIBRARY_TIMEOUT));
+        $this->assertFalse($health->isDown(BazarrClient::SERVICE));
+        $this->assertNotNull($client->getLastError(), 'the failure is still reported to the caller');
+    }
 }
