@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use App\Service\HealthService;
 use Psr\Log\LoggerInterface;
@@ -467,7 +468,7 @@ class BazarrClient implements ResetInterface
     {
         curl_setopt_array($ch, $opts);
         /** @var string|false $body */
-        $body = curl_exec($ch);
+        $body = ConcurrentCurl::exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
         $timedOutAfterConnect = curl_errno($ch) === CURLE_OPERATION_TIMEDOUT

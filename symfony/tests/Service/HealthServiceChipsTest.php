@@ -5,6 +5,7 @@ namespace App\Tests\Service;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\HealthService;
+use App\Service\Http\ConcurrentCurl;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\DelugeClient;
 use App\Service\Media\HoundarrClient;
@@ -25,6 +26,7 @@ use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * Characterization of chips() — the one health list the dashboard section and
@@ -37,7 +39,7 @@ use Symfony\Component\Cache\Adapter\ArrayAdapter;
 class HealthServiceChipsTest extends TestCase
 {
     /** Every flat (single-instance) service fully configured. */
-    private const SETTINGS = [
+    protected const SETTINGS = [
         'prowlarr_url' => 'http://prowlarr', 'prowlarr_api_key' => 'k',
         'jellyseerr_url' => 'http://seerr', 'jellyseerr_api_key' => 'k',
         'qbittorrent_url' => 'http://qbit',
@@ -56,17 +58,23 @@ class HealthServiceChipsTest extends TestCase
     /** @var array<string, \PHPUnit\Framework\MockObject\MockObject> */
     private array $clients = [];
 
+    /** Null = the one-at-a-time path; a subclass re-runs every case through the concurrent sweep. */
+    protected ?ConcurrentCurl $runner = null;
+
+    /** The instance provider the last make() wired (controller-level tests reuse it). */
+    protected ?ServiceInstanceProvider $provider = null;
+
     /**
      * @param array<string, ?string>               $settings
      * @param array<string, bool|\Closure|null>     $pings   service or "radarr:slug" => ping result / callback (null = never pinged)
      * @param array<string, list<string>>           $instances type => enabled slugs
      */
-    private function make(
+    protected function make(
         array $settings,
         array $pings,
         array $instances = [],
         ?ServiceHealthCache $breaker = null,
-        ?ArrayAdapter $pool = null,
+        ?CacheInterface $pool = null,
         ?\Closure $instancesHook = null,
     ): HealthService {
         $config = $this->createMock(ConfigService::class);
@@ -79,7 +87,7 @@ class HealthServiceChipsTest extends TestCase
                 $byType[$type][$slug] = new ServiceInstance($type, $slug, ucfirst($type) . ' ' . strtoupper($slug), 'http://' . $slug, 'k');
             }
         }
-        $provider = $this->createMock(ServiceInstanceProvider::class);
+        $provider = $this->provider = $this->createMock(ServiceInstanceProvider::class);
         $provider->method('getEnabled')->willReturnCallback(fn (string $t) => array_values($byType[$t] ?? []));
         $provider->method('getBySlug')->willReturnCallback(fn (string $t, string $s) => $byType[$t][$s] ?? null);
         $provider->method('hasAnyEnabled')->willReturnCallback(function (string $t) use ($byType, $instancesHook) {
@@ -126,6 +134,7 @@ class HealthServiceChipsTest extends TestCase
             unifi: $this->clients['unifi'],
             transmission: $this->clients['transmission'],
             bazarr: $this->clients['bazarr'],
+            concurrent: $this->runner,
         );
     }
 
@@ -150,7 +159,7 @@ class HealthServiceChipsTest extends TestCase
      * @param list<array{id: string, name: string, status: string, latencyMs: ?int, color: string}> $chips
      * @return list<string>
      */
-    private static function summary(array $chips): array
+    protected static function summary(array $chips): array
     {
         return array_map(static fn (array $c): string => $c['id'] . '|' . $c['name'] . '|' . $c['status'], $chips);
     }

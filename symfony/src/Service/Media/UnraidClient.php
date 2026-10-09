@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Service\ResetInterface;
@@ -365,7 +366,7 @@ class UnraidClient implements ResetInterface
         $opts[CURLOPT_POSTFIELDS] = (string) json_encode(['query' => $query]);
         $opts[CURLOPT_HTTPHEADER] = $this->authHeaders();
         curl_setopt_array($ch, $opts);
-        $body  = curl_exec($ch);
+        $body  = ConcurrentCurl::exec($ch);
         $code  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno = curl_errno($ch);
         curl_close($ch);
