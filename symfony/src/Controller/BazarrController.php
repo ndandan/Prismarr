@@ -231,8 +231,13 @@ class BazarrController extends AbstractController
             if (!$this->bazarr->ping()) {
                 $error = true;
             } else {
+                // Each getter answers [] on failure, so check lastError after
+                // each one — a reachable Bazarr whose history call failed
+                // must show the error banner, not "No history".
                 $historyMovies = $this->bazarr->getHistoryMovies();
+                $error = $this->bazarr->getLastError() !== null;
                 $historyEpisodes = $this->bazarr->getHistoryEpisodes();
+                $error = $error || $this->bazarr->getLastError() !== null;
             }
         } catch (\Throwable $e) {
             $error = true;
@@ -248,10 +253,11 @@ class BazarrController extends AbstractController
     }
 
     /**
-     * Episode drill-down for one Sonarr series. `series_title` is a
-     * best-effort lookup against the already-consumed getSeries() list (no
-     * dedicated "get one series" client method exists) — a miss just falls
-     * back to a generic "Series #{id}" heading in the template.
+     * Episode drill-down for one Sonarr series. `series_title` and
+     * `series_tracked` come from a per-id getSeries([$seriesId]) lookup —
+     * best-effort: a miss falls back to a generic "Series #{id}" heading and
+     * an unknown (null) tracked state. A failed EPISODE fetch shows the error
+     * banner rather than an empty table (getEpisodes() answers [] on failure).
      */
     #[Route('/series/{seriesId}', name: 'series_detail', requirements: ['seriesId' => '\d+'])]
     public function seriesDetail(int $seriesId): Response
@@ -259,16 +265,24 @@ class BazarrController extends AbstractController
         $error = false;
         $episodes = [];
         $seriesTitle = null;
+        $seriesTracked = null;
 
         try {
             if (!$this->bazarr->ping()) {
                 $error = true;
             } else {
                 $episodes = $this->bazarr->getEpisodes($seriesId);
-                foreach ($this->bazarr->getSeries() as $s) {
-                    if ((int) ($s['sonarrSeriesId'] ?? 0) === $seriesId) {
-                        $seriesTitle = (string) ($s['title'] ?? '');
-                        break;
+                if ($this->bazarr->getLastError() !== null) {
+                    $error = true;
+                } else {
+                    foreach ($this->bazarr->getSeries([$seriesId]) as $s) {
+                        if ((int) ($s['sonarrSeriesId'] ?? 0) === $seriesId) {
+                            $seriesTitle = (string) ($s['title'] ?? '');
+                            // Same rule as computeSeriesStatus(): no language
+                            // profile means Bazarr isn't tracking it.
+                            $seriesTracked = ($s['profileId'] ?? null) !== null;
+                            break;
+                        }
                     }
                 }
             }
@@ -281,6 +295,7 @@ class BazarrController extends AbstractController
             'error'        => $error,
             'series_id'    => $seriesId,
             'series_title' => $seriesTitle,
+            'series_tracked' => $seriesTracked,
             'episodes'     => $episodes,
             'service_url'  => $this->config->get('bazarr_url'),
         ]);

@@ -65,8 +65,14 @@
                         {% else %}
                           <span class="text-secondary">—</span>
                         {% endif %}
-                      {% else %}
+                      {% elseif series_tracked is same as(false) %}
+                        {# No language profile: nothing is missing because nothing is asked for. #}
+                        <span class="text-secondary">{{ 'bazarr.series.not_tracked'|trans }}</span>
+                      {% elseif ep.subtitles is iterable and ep.subtitles|length > 0 %}
                         <span class="badge bg-green-lt">{{ 'bazarr.series_detail.complete'|trans }}</span>
+                      {% else %}
+                        {# Nothing present and nothing missing: no requirement, not "complete" (mirrors the Series modal). #}
+                        <span class="text-secondary">—</span>
                       {% endif %}
                     </td>
                   </tr>
