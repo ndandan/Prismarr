@@ -403,4 +403,29 @@ class BazarrFrameRenderTest extends WebTestCase
         $html = (string) $this->client->getResponse()->getContent();
         $this->assertSame(1, preg_match_all('/badge bg-green-lt">\s*Complete\s*</', $html), 'only the episode that actually has subtitles is "Complete"');
     }
+
+    /**
+     * Review of a6793db: one failed history call must not throw away the
+     * other card's data — the banner goes inside the failed card only.
+     */
+    public function testAFailedEpisodeHistoryKeepsTheMovieHistoryThatLoaded(): void
+    {
+        $this->boot(true, static function ($bazarr): void {
+            $bazarr->method('getHistoryMovies')->willReturn([
+                ['title' => 'ZzyxHistoryMovie', 'action' => 'downloaded', 'provider' => 'p', 'language' => 'en', 'timestamp' => 'now'],
+            ]);
+            $bazarr->method('getHistoryEpisodes')->willReturn([]);
+            $bazarr->method('getLastError')->willReturnOnConsecutiveCalls(
+                null, // after getHistoryMovies()
+                ['code' => 0, 'method' => 'GET', 'path' => '/episodes/history', 'message' => 'Operation timed out'],
+            );
+        });
+
+        $this->client->request('GET', '/bazarr/history');
+
+        $html = (string) $this->client->getResponse()->getContent();
+        $this->assertResponseIsSuccessful();
+        $this->assertStringContainsString('ZzyxHistoryMovie', $html, 'the movie history that loaded is still shown');
+        $this->assertSame(1, substr_count($html, 'data-reason="unreachable"'), 'one banner, for the failed card');
+    }
 }

@@ -224,6 +224,8 @@ class BazarrController extends AbstractController
     public function history(): Response
     {
         $error = false;
+        $errorMovies = false;
+        $errorEpisodes = false;
         $historyMovies = [];
         $historyEpisodes = [];
 
@@ -232,12 +234,13 @@ class BazarrController extends AbstractController
                 $error = true;
             } else {
                 // Each getter answers [] on failure, so check lastError after
-                // each one — a reachable Bazarr whose history call failed
-                // must show the error banner, not "No history".
+                // each one — a failed call shows the error banner in ITS card
+                // instead of "No history", without discarding the other card.
                 $historyMovies = $this->bazarr->getHistoryMovies();
-                $error = $this->bazarr->getLastError() !== null;
+                $errorMovies = $this->bazarr->getLastError() !== null;
                 $historyEpisodes = $this->bazarr->getHistoryEpisodes();
-                $error = $error || $this->bazarr->getLastError() !== null;
+                $errorEpisodes = $this->bazarr->getLastError() !== null;
+                $error = $errorMovies && $errorEpisodes;
             }
         } catch (\Throwable $e) {
             $error = true;
@@ -246,6 +249,8 @@ class BazarrController extends AbstractController
 
         return $this->render('bazarr/history.html.twig', [
             'error'            => $error,
+            'error_movies'     => $errorMovies,
+            'error_episodes'   => $errorEpisodes,
             'history_movies'   => $historyMovies,
             'history_episodes' => $historyEpisodes,
             'service_url'      => $this->config->get('bazarr_url'),
