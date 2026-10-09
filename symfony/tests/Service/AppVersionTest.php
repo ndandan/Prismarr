@@ -314,6 +314,75 @@ class AppVersionTest extends TestCase
     }
 
     /**
+     * Drive the shared read-through (private cachedOrLoad) on a MISS and
+     * report [stored value, stored TTL, returned value]. The write path
+     * needs the network when driven through the public methods, so this is
+     * the only place the success-vs-failure TTL split is pinned.
+     *
+     * @param callable(): array{0: mixed, 1: bool} $load
+     * @return array{0: mixed, 1: int|null, 2: mixed}
+     */
+    private function loadOnMiss(callable $load): array
+    {
+        $stored = null;
+        $ttl    = null;
+        $item   = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(false);
+        $item->method('set')->willReturnCallback(function ($v) use (&$stored, $item) {
+            $stored = $v;
+
+            return $item;
+        });
+        $item->method('expiresAfter')->willReturnCallback(function ($t) use (&$ttl, $item) {
+            $ttl = $t;
+
+            return $item;
+        });
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::once())->method('save')->with($item);
+
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3');
+        $m = new \ReflectionMethod(AppVersion::class, 'cachedOrLoad');
+        $returned = $m->invoke($v, 'k', static fn (mixed $c): bool => is_array($c), $load);
+
+        return [$stored, $ttl, $returned];
+    }
+
+    public function testCachedOrLoadStoresASuccessForTheFullTtl(): void
+    {
+        [$stored, $ttl, $returned] = $this->loadOnMiss(static fn () => [['ok'], false]);
+
+        self::assertSame(['ok'], $stored);
+        self::assertSame(['ok'], $returned);
+        self::assertSame(3600, $ttl);
+    }
+
+    public function testCachedOrLoadStoresAFailureMarkerBriefly(): void
+    {
+        [$stored, $ttl, $returned] = $this->loadOnMiss(static fn () => [[], true]);
+
+        self::assertSame([], $stored);
+        self::assertSame([], $returned);
+        self::assertSame(120, $ttl);
+    }
+
+    public function testCachedOrLoadRefetchesWhenTheCachedShapeIsRejected(): void
+    {
+        $item = $this->createMock(CacheItemInterface::class);
+        $item->method('isHit')->willReturn(true);
+        $item->method('get')->willReturn('not-an-array');
+        $pool = $this->createMock(CacheItemPoolInterface::class);
+        $pool->method('getItem')->willReturn($item);
+        $pool->expects(self::once())->method('save');
+
+        $v = new AppVersion($pool, new NullLogger(), '1.2.3');
+        $m = new \ReflectionMethod(AppVersion::class, 'cachedOrLoad');
+
+        self::assertSame(['fresh'], $m->invoke($v, 'k', static fn (mixed $c): bool => is_array($c), static fn () => [['fresh'], false]));
+    }
+
+    /**
      * @param list<array{tag:string,name:string,body:string,published_at:string,html_url:string}> $cached
      */
     private function withCachedReleases(array $cached, string $runtimeVersion = ''): AppVersion

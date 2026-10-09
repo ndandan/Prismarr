@@ -133,6 +133,8 @@
   if (window._prismarrQpInit) return;
   window._prismarrQpInit = true;
   function esc(s) {
+    // null/undefined → '' (String(null) would render the word "null").
+    if (s == null) return '';
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });

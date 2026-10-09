@@ -162,14 +162,23 @@ class WokeometerLookup implements ResetInterface
 
     /**
      * Display-side only (the stored TL;DR stays raw): Wokeometer's TL;DR
-     * arrives with Markdown emphasis and we render plain text, so strip
-     * `**strong**` / `__strong__` and single `*em*` / `_em_` delimiters that
-     * wrap words (an underscore inside a word, `snake_case_name`, is left
-     * alone), collapse line breaks to one space and trim. Empty → null.
+     * arrives as Markdown and we render plain text, so strip line-leading
+     * block markers (blockquote `>`, `#` headings, `-`/`*`/`+`/`1.` list
+     * bullets), links and images (`[text](url)` → text), inline-code
+     * backticks, then `**strong**` / `__strong__` and single `*em*` / `_em_`
+     * delimiters that wrap words (an underscore inside a word,
+     * `snake_case_name`, is left alone). Markers are only recognised at the
+     * start of a line, so mid-sentence `#1`, `5 > 4` or ` - ` survive.
+     * Collapse line breaks to one space and trim. Empty → null.
      */
     private static function plainText(string $text): ?string
     {
-        $out = preg_replace('/(\*\*|__)(.+?)\1/su', '$2', $text) ?? $text;
+        $out = preg_replace('/^[ \t]{0,3}(?:>[ \t]*)+/mu', '', $text) ?? $text;
+        $out = preg_replace('/^[ \t]{0,3}#{1,6}[ \t]+/mu', '', $out) ?? $out;
+        $out = preg_replace('/^[ \t]*(?:[-*+]|\d{1,3}[.)])[ \t]+/mu', '', $out) ?? $out;
+        $out = preg_replace('/!?\[([^\]]*)\]\([^)\s]*(?:[ \t]+"[^"]*")?\)/u', '$1', $out) ?? $out;
+        $out = preg_replace('/`+([^`]+)`+/u', '$1', $out) ?? $out;
+        $out = preg_replace('/(\*\*|__)(.+?)\1/su', '$2', $out) ?? $out;
         $out = preg_replace('/(?<![\w])[*_](\S(?:.*?\S)?)[*_](?![\w])/su', '$1', $out) ?? $out;
         $out = preg_replace('/\s*[\r\n]+\s*/u', ' ', $out) ?? $out;
         $out = trim($out);

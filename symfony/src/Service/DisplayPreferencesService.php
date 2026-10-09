@@ -63,15 +63,26 @@ class DisplayPreferencesService implements ResetInterface
             // but raw Twig `date(tz)` call sites (series episode rows, admin
             // settings preview) hand this straight to new \DateTimeZone() and
             // would fatal on a hand-edited/corrupted DB value. Validate once at
-            // the source so every consumer gets a real zone.
-            try {
-                new \DateTimeZone($tz);
+            // the source so every consumer gets a real zone — with the SAME
+            // rule the admin save path enforces (see isValidTimezone()).
+            if (self::isValidTimezone($tz)) {
                 return $tz;
-            } catch (\Throwable) {
-                // Fall through to the system zone; the next admin save re-normalizes.
             }
+            // Fall through to the system zone; the next admin save re-normalizes.
         }
         return date_default_timezone_get();
+    }
+
+    /**
+     * The one timezone rule: an IANA identifier from
+     * \DateTimeZone::listIdentifiers() (the list the admin picker offers and
+     * AdminSettingsController::normalizeDisplayValue() accepts). Deliberately
+     * stricter than `new \DateTimeZone()`, which also swallows abbreviations
+     * ('EST') and UTC offsets ('+02:00') that the UI can never produce.
+     */
+    public static function isValidTimezone(string $tz): bool
+    {
+        return in_array($tz, \DateTimeZone::listIdentifiers(), true);
     }
     public function getDateFormat(): string         { return $this->get('display_date_format'); }
     public function getTimeFormat(): string         { return $this->get('display_time_format'); }

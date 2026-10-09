@@ -114,6 +114,48 @@ class WokeometerLookupTest extends TestCase
         $this->assertStringNotContainsString('*', $view['tldr']);
     }
 
+    /** @return iterable<string, array{string, string}> */
+    public static function markdownSyntax(): iterable
+    {
+        yield 'link'                  => ['See [the review](https://example.com/a_b?x=1) for details.', 'See the review for details.'];
+        yield 'link with title'       => ['A [site](https://example.com "Title") link', 'A site link'];
+        yield 'link with bold label'  => ['Read [**this**](https://example.com/x) now', 'Read this now'];
+        yield 'image'                 => ['Look ![poster](https://example.com/p.png) here', 'Look poster here'];
+        yield 'heading'               => ["## Verdict\nMostly fine.", 'Verdict Mostly fine.'];
+        yield 'heading h1'            => ["# Title\r\nBody", 'Title Body'];
+        yield 'dash list'             => ["Pros:\n- fun cast\n- tight pacing", 'Pros: fun cast tight pacing'];
+        yield 'star list'             => ["Pros:\n* fun cast\n* tight pacing", 'Pros: fun cast tight pacing'];
+        yield 'numbered list'         => ["Notes:\n1. first\n2. second", 'Notes: first second'];
+        yield 'inline code'           => ['Uses `snake_case` naming', 'Uses snake_case naming'];
+        yield 'blockquote'            => ["> Pure spectacle\n> and style", 'Pure spectacle and style'];
+        yield 'nested blockquote'     => ['>> deep quote', 'deep quote'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('markdownSyntax')]
+    public function testTldrMarkdownSyntaxIsStrippedToPlainText(string $raw, string $expected): void
+    {
+        $repo = $this->createMock(WokeometerTitleRepository::class);
+        $repo->method('findForTmdb')->willReturn($this->dbRow(['tldr' => $raw]));
+
+        $view = (new WokeometerLookup($this->settings(true), $repo, $this->logger()))->forTmdb('movie', 603);
+
+        $this->assertNotNull($view);
+        $this->assertSame($expected, $view['tldr']);
+    }
+
+    public function testTldrMidLineHashesDashesAndAnglesAreLeftAlone(): void
+    {
+        $repo = $this->createMock(WokeometerTitleRepository::class);
+        $repo->method('findForTmdb')->willReturn($this->dbRow([
+            'tldr' => 'Trending #1 - not a list, rated 5 > 4 and #hashtag stays.',
+        ]));
+
+        $view = (new WokeometerLookup($this->settings(true), $repo, $this->logger()))->forTmdb('movie', 603);
+
+        $this->assertNotNull($view);
+        $this->assertSame('Trending #1 - not a list, rated 5 > 4 and #hashtag stays.', $view['tldr']);
+    }
+
     public function testTldrIntraWordUnderscoresAndApostrophesAreLeftAlone(): void
     {
         $repo = $this->createMock(WokeometerTitleRepository::class);

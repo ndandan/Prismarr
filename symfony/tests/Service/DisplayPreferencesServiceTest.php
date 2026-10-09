@@ -229,6 +229,40 @@ class DisplayPreferencesServiceTest extends TestCase
         $this->assertNull($prefs->formatDateTime(null, true));
     }
 
+    /**
+     * The admin save path only accepts \DateTimeZone::listIdentifiers() values.
+     * The read path must apply the SAME rule: new \DateTimeZone() alone also
+     * swallows abbreviations ('EST') and UTC offsets ('+02:00') that the admin
+     * form would have refused, so a hand-edited row would behave differently
+     * from anything the UI can produce.
+     *
+     * @return iterable<string, array{string}>
+     */
+    public static function nonIdentifierZones(): iterable
+    {
+        yield 'abbreviation' => ['EST'];
+        yield 'positive offset' => ['+02:00'];
+        yield 'negative offset' => ['-0530'];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('nonIdentifierZones')]
+    public function testNonIdentifierStoredTimezoneFallsBackToSystemZone(string $stored): void
+    {
+        $prefs = $this->serviceWith(['display_timezone' => $stored]);
+
+        $this->assertSame(date_default_timezone_get(), $prefs->getTimezone());
+    }
+
+    public function testIsValidTimezoneMatchesTheAdminRule(): void
+    {
+        $this->assertTrue(DisplayPreferencesService::isValidTimezone('Europe/Paris'));
+        $this->assertTrue(DisplayPreferencesService::isValidTimezone('UTC'));
+        $this->assertFalse(DisplayPreferencesService::isValidTimezone('EST'));
+        $this->assertFalse(DisplayPreferencesService::isValidTimezone('+02:00'));
+        $this->assertFalse(DisplayPreferencesService::isValidTimezone(''));
+        $this->assertFalse(DisplayPreferencesService::isValidTimezone('Not/A-Real/Zone'));
+    }
+
     public function testInvalidStoredTimezoneFallsBackToSystemZone(): void
     {
         // A corrupted/hand-edited timezone in the DB must not crash the render.
