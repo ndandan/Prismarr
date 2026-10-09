@@ -187,8 +187,8 @@ class BazarrSubtitleIndex implements ResetInterface
     /**
      * Queue a bulk rebuild of $key without waiting for the next reader to hit
      * a hard miss or a stale soft window. Used by mutation endpoints that
-     * cannot patch a specific id in place — e.g. apiDownloadEpisode, which
-     * only knows an episode id, not the series id it belongs to — so the
+     * cannot patch a specific id in place — e.g. apiDownloadEpisode, whose
+     * episode-level change rolls up into series-level status — so the
      * queue happens synchronously in the request that performed the mutation
      * (guardrail 9) instead of the fix waiting for someone else's page view.
      *

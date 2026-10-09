@@ -47,10 +47,20 @@ class BazarrController extends AbstractController
 
     /**
      * Seconds. Must outlive apiRefresh()'s worst-case inline run (two
-     * library-budget lists + the badges call) or a double-clicked Retry
-     * could stack a second rebuild behind a still-running first one.
+     * library-budget lists + the badges call, plus a margin for processing)
+     * or a double-clicked Retry could stack a second rebuild behind a
+     * still-running first one. apiRefresh() also uses it as its PHP time
+     * limit, so the run is cut off before the marker can expire under it.
      */
-    private const INLINE_REFRESH_MARKER_TTL = 2 * BazarrClient::LIBRARY_TIMEOUT + BazarrClient::DEFAULT_TIMEOUT;
+    private const INLINE_REFRESH_MARKER_TTL = 2 * BazarrClient::LIBRARY_TIMEOUT + BazarrClient::DEFAULT_TIMEOUT + 10;
+
+    /**
+     * PHP time limit for the /providers/* actions: past the client budget so
+     * a slow provider answers with Prismarr's JSON error, not a fatal page
+     * (PHP_MAX_EXECUTION_TIME can be lowered, and FrankenPHP's limit is
+     * wall-clock).
+     */
+    private const PROVIDER_TIME_LIMIT = BazarrClient::PROVIDER_TIMEOUT + 15;
 
     public function __construct(
         private readonly BazarrClient $bazarr,
@@ -285,6 +295,7 @@ class BazarrController extends AbstractController
     #[Route('/api/search/movie/{radarrId}', name: 'api_search_movie', methods: ['GET'], requirements: ['radarrId' => '\d+'])]
     public function apiSearchMovie(int $radarrId): JsonResponse
     {
+        set_time_limit(self::PROVIDER_TIME_LIMIT);
         $r = $this->bazarr->searchMovie($radarrId);
 
         return $r !== null
@@ -299,6 +310,7 @@ class BazarrController extends AbstractController
     #[Route('/api/search/episode/{episodeId}', name: 'api_search_episode', methods: ['GET'], requirements: ['episodeId' => '\d+'])]
     public function apiSearchEpisode(int $episodeId): JsonResponse
     {
+        set_time_limit(self::PROVIDER_TIME_LIMIT);
         $r = $this->bazarr->searchEpisode($episodeId);
 
         return $r !== null
@@ -385,6 +397,7 @@ class BazarrController extends AbstractController
     #[Route('/api/download/movie', name: 'api_download_movie', methods: ['POST'])]
     public function apiDownloadMovie(Request $request): JsonResponse
     {
+        set_time_limit(self::PROVIDER_TIME_LIMIT);
         $ok = $this->bazarr->downloadMovie($request->request->all());
         if ($ok) {
             $radarrId = $request->request->getInt('radarrid');
@@ -403,8 +416,8 @@ class BazarrController extends AbstractController
      * Download a specific subtitle result for an episode. No CSRF token —
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
      *
-     * The POST body carries an episodeid, not a series id, so there is
-     * nothing per-id to patch in place — queue a bulk rebuild of the series
+     * Episode subtitles roll up into series-level status, so there is no
+     * per-episode entry to patch in place — queue a bulk rebuild of the series
      * map and the badge counts instead of invalidate()'s blanket delete (fix
      * round 1, IMPORTANT 3): invalidate() would also blank movies/cards/
      * most-missing that this mutation never touched, turning every badge on
@@ -413,6 +426,7 @@ class BazarrController extends AbstractController
     #[Route('/api/download/episode', name: 'api_download_episode', methods: ['POST'])]
     public function apiDownloadEpisode(Request $request): JsonResponse
     {
+        set_time_limit(self::PROVIDER_TIME_LIMIT);
         $ok = $this->bazarr->downloadEpisode($request->request->all());
         if ($ok) {
             $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_SERIES);
@@ -466,7 +480,7 @@ class BazarrController extends AbstractController
      * (getMovies + getBadgeCounts for the movies refresh, getSeries for the
      * series refresh); the two full lists run on LIBRARY_TIMEOUT (30 s) and
      * the badges call on DEFAULT_TIMEOUT (8 s), so the worst case is ~68 s
-     * before this responds — only when Bazarr is that slow, which is exactly
+     * (time limit: INLINE_REFRESH_MARKER_TTL) before this responds — only when Bazarr is that slow, which is exactly
      * when the old flat 8 s budget made Retry fail every time. It exists so a dead
      * messenger-worker is recoverable from the UI instead of leaving the tab
      * warming forever.
@@ -500,6 +514,7 @@ class BazarrController extends AbstractController
     #[Route('/api/refresh', name: 'api_refresh', methods: ['POST'])]
     public function apiRefresh(BazarrIndexRefresher $refresher, ServiceHealthCache $health, CacheItemPoolInterface $cacheApp): JsonResponse
     {
+        set_time_limit(self::INLINE_REFRESH_MARKER_TTL);
         $marker = $cacheApp->getItem(self::INLINE_REFRESH_MARKER);
         if ($marker->isHit()) {
             return $this->json([

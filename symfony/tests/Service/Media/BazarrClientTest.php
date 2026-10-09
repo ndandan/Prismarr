@@ -132,9 +132,9 @@ class BazarrClientTest extends TestCase
      * classification branches (transport failure / non-2xx / invalid JSON /
      * 2xx) can be driven without a live Bazarr.
      */
-    private function fakeClient(ServiceHealthCache $health, string|false $body, int $code, string $err = ''): BazarrClient
+    private function fakeClient(ServiceHealthCache $health, string|false $body, int $code, string $err = '', bool $timedOutAfterConnect = false): BazarrClient
     {
-        return new class ($this->config($this->configured()), new NullLogger(), $health, $body, $code, $err) extends BazarrClient {
+        return new class ($this->config($this->configured()), new NullLogger(), $health, $body, $code, $err, $timedOutAfterConnect) extends BazarrClient {
             public function __construct(
                 ConfigService $config,
                 LoggerInterface $logger,
@@ -142,6 +142,7 @@ class BazarrClientTest extends TestCase
                 private readonly string|false $fakeBody,
                 private readonly int $fakeCode,
                 private readonly string $fakeErr,
+                private readonly bool $fakeTimedOutAfterConnect,
             ) {
                 parent::__construct($config, $logger, $health);
             }
@@ -149,7 +150,7 @@ class BazarrClientTest extends TestCase
             protected function exec(\CurlHandle $ch, array $opts): array
             {
                 curl_close($ch);
-                return [$this->fakeBody, $this->fakeCode, $this->fakeErr];
+                return [$this->fakeBody, $this->fakeCode, $this->fakeErr, $this->fakeTimedOutAfterConnect];
             }
         };
     }
@@ -268,7 +269,7 @@ class BazarrClientTest extends TestCase
                 $this->urls[] = (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
                 curl_close($ch);
 
-                return ['{"data":[]}', 200, ''];
+                return ['{"data":[]}', 200, '', false];
             }
         };
     }
@@ -361,7 +362,7 @@ class BazarrClientTest extends TestCase
                 $this->calls[] = $opts;
                 curl_close($ch);
 
-                return [$this->response, 200, ''];
+                return [$this->response, 200, '', false];
             }
         };
     }
@@ -454,12 +455,24 @@ class BazarrClientTest extends TestCase
         // busy, not down — marking it down would blind every other Bazarr
         // call (badges, the Bazarr tab) for the breaker TTL.
         $health = new ServiceHealthCache(new ArrayAdapter());
-        $client = $this->fakeClient($health, false, 0, 'Operation timed out after 60000 milliseconds');
+        $client = $this->fakeClient($health, false, 0, 'Operation timed out after 45000 milliseconds with 0 bytes received', timedOutAfterConnect: true);
 
         $this->assertNull($client->searchMovie(1));
         $this->assertFalse($client->downloadEpisode(['seriesid' => 3, 'episodeid' => 2]));
         $this->assertSame([], $client->getMovies([], BazarrClient::LIBRARY_TIMEOUT));
         $this->assertFalse($health->isDown(BazarrClient::SERVICE));
         $this->assertNotNull($client->getLastError(), 'the failure is still reported to the caller');
+    }
+
+    public function testALongBudgetCallThatCannotConnectStillTripsTheBreaker(): void
+    {
+        // Refused / unresolvable / connect-timeout is DOWN, not busy — the
+        // breaker must still open so the worker refresher and other pages
+        // stop paying a connect timeout each (review of the 2026-10-08 fix).
+        $health = new ServiceHealthCache(new ArrayAdapter());
+        $client = $this->fakeClient($health, false, 0, 'Failed to connect to bazarr.invalid port 6767', timedOutAfterConnect: false);
+
+        $this->assertSame([], $client->getMovies([], BazarrClient::LIBRARY_TIMEOUT));
+        $this->assertTrue($health->isDown(BazarrClient::SERVICE));
     }
 }

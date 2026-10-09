@@ -40,8 +40,10 @@ class BazarrClient implements ResetInterface
     /**
      * Budget for /providers/* — Bazarr answers synchronously: a search fans
      * out to every enabled provider, a download fetches and writes the file.
+     * Kept under the common 60 s reverse-proxy read timeout so the browser
+     * gets Prismarr's answer, not a proxy 504 for a download that worked.
      */
-    public const PROVIDER_TIMEOUT = 60;
+    public const PROVIDER_TIMEOUT = 45;
 
     private bool $configLoaded = false;
     private bool $enabled = true;
@@ -328,12 +330,13 @@ class BazarrClient implements ResetInterface
      * @param string               $rawQuery Pre-encoded extra query fragment for
      *                                       parameters http_build_query() cannot
      *                                       express (Bazarr's repeated `name[]=`).
-     * @param int                  $timeout  Total budget in seconds. Only a call
-     *                                       on the DEFAULT budget trips the
-     *                                       breaker on a transport failure: a
-     *                                       long-budget call that runs out means
-     *                                       Bazarr is busy, not down — marking it
-     *                                       down would blind every other call.
+     * @param int                  $timeout  Total budget in seconds. A long-budget
+     *                                       call that connected and then ran out
+     *                                       does NOT trip the breaker: Bazarr is
+     *                                       busy, not down, and marking it down
+     *                                       would blind every other call. Refused /
+     *                                       unresolvable / connect-timeout still
+     *                                       trips it on any budget.
      * @return array<string, mixed>|null
      */
     private function request(string $method, string $path, array $query = [], array $body = [], string $rawQuery = '', int $timeout = self::DEFAULT_TIMEOUT): ?array
@@ -396,14 +399,15 @@ class BazarrClient implements ResetInterface
             $opts[CURLOPT_POSTFIELDS] = http_build_query($body);
         }
 
-        [$rawBody, $code, $err] = $this->exec($ch, $opts);
+        [$rawBody, $code, $err, $timedOutAfterConnect] = $this->exec($ch, $opts);
 
         // Transport failure (unreachable / DNS / TLS / timeout) — the only
-        // class of failure that may trip the breaker, and only on the default
-        // budget (see the $timeout docblock above).
+        // class of failure that may trip the breaker. One exception: a
+        // long-budget call that connected and then ran out of time means
+        // Bazarr is busy, not down (see the $timeout docblock above).
         if ($rawBody === false || $err !== '' || $code === 0) {
             $this->recordError($code, $err !== '' ? $err : 'connection failed', $method, $path);
-            if ($timeout <= self::DEFAULT_TIMEOUT) {
+            if ($timeout <= self::DEFAULT_TIMEOUT || !$timedOutAfterConnect) {
                 $this->health?->markDown(self::SERVICE);
             }
             return null;
@@ -451,7 +455,7 @@ class BazarrClient implements ResetInterface
      *
      * @param \CurlHandle       $ch
      * @param array<int, mixed> $opts
-     * @return array{0: string|false, 1: int, 2: string} [body, http code, curl error]
+     * @return array{0: string|false, 1: int, 2: string, 3: bool} [body, http code, curl error, timed out after the connection was established]
      */
     protected function exec(\CurlHandle $ch, array $opts): array
     {
@@ -460,9 +464,11 @@ class BazarrClient implements ResetInterface
         $body = curl_exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
+        $timedOutAfterConnect = curl_errno($ch) === CURLE_OPERATION_TIMEDOUT
+            && (float) curl_getinfo($ch, CURLINFO_CONNECT_TIME) > 0.0;
         curl_close($ch);
 
-        return [$body, $code, $err];
+        return [$body, $code, $err, $timedOutAfterConnect];
     }
 
     private function recordError(int $code, string $message, string $method, string $path): void
