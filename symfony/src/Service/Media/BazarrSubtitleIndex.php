@@ -208,6 +208,10 @@ class BazarrSubtitleIndex implements ResetInterface
             throw new \InvalidArgumentException(sprintf('BazarrSubtitleIndex::requestRefresh(): unsupported key "%s".', $key));
         }
 
+        // A mutation just changed Bazarr: the key's current value is stale by
+        // definition, even if it was fetched seconds ago — otherwise the
+        // refresher's fresh-key early return swallows this rebuild.
+        $this->swr->markStale($key, self::SOFT_TTL, self::HARD_TTL);
         $this->swr->requestRefresh($key);
     }
 
@@ -262,7 +266,7 @@ class BazarrSubtitleIndex implements ResetInterface
         $rows      = $kind === 'movie' ? $this->client->getMovies([$id]) : $this->client->getSeries([$id]);
 
         if ($this->client->getLastError() !== null || $rows === []) {
-            $this->swr->requestRefresh($statusKey);
+            $this->requestRefresh($statusKey);
 
             return;
         }
@@ -274,7 +278,7 @@ class BazarrSubtitleIndex implements ResetInterface
             // the response — writing $rows[0] under $id would patch the WRONG
             // item. Treat exactly like a failed fetch.
             $this->logger->warning('Bazarr per-id refresh: requested id not found in response', ['kind' => $kind, 'id' => $id]);
-            $this->swr->requestRefresh($statusKey);
+            $this->requestRefresh($statusKey);
 
             return;
         }
@@ -302,7 +306,7 @@ class BazarrSubtitleIndex implements ResetInterface
 
         // Everyone else's view, plus the cards/most-missing/badge datasets
         // derived from the same full-list fetch.
-        $this->swr->requestRefresh($statusKey);
+        $this->requestRefresh($statusKey);
     }
 
     /**

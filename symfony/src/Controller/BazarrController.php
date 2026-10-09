@@ -420,8 +420,9 @@ class BazarrController extends AbstractController
                 $this->bazarrIndex->refreshItem('movie', $radarrId);
             } else {
                 $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_MOVIES);
-                $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_BADGES);
             }
+            // The wanted-movies count changed either way.
+            $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_BADGES);
         }
 
         return $ok ? $this->json(['ok' => true]) : $this->jsonClientError('Bazarr', $this->bazarr);

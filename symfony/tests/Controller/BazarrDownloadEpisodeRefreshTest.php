@@ -74,4 +74,17 @@ class BazarrDownloadEpisodeRefreshTest extends TestCase
 
         self::assertSame([BazarrSubtitleIndex::KEY_SERIES, BazarrSubtitleIndex::KEY_BADGES], $requested);
     }
+
+    public function testASuccessfulMovieDownloadAlsoQueuesTheBadgeCounts(): void
+    {
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('downloadMovie')->willReturn(true);
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $index->expects($this->once())->method('refreshItem')->with('movie', 42);
+        $index->expects($this->once())->method('requestRefresh')->with(BazarrSubtitleIndex::KEY_BADGES);
+
+        $this->controller($client, $index)->apiDownloadMovie(
+            Request::create('/bazarr/api/download/movie', 'POST', ['radarrid' => '42']),
+        );
+    }
 }
