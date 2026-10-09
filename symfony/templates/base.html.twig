@@ -179,6 +179,21 @@
       };
     }
 
+    // For values that land inside a CSS url('…') in an HTML style attribute
+    // (avatars, backdrops): escHtml is not enough there, because the HTML
+    // parser decodes entities before the CSS is read. encodeURI protects the
+    // attribute (quotes and angle brackets get percent-encoded) but lets
+    // ' ( ) through — the three characters that close the CSS string — so
+    // those are encoded too. null/undefined become ''.
+    if (!window.escCssUrl) {
+      window.escCssUrl = function (u) {
+        return encodeURI(u == null ? '' : String(u))
+          .replace(/'/g, '%27')
+          .replace(/\(/g, '%28')
+          .replace(/\)/g, '%29');
+      };
+    }
+
     // One place to register a page's setup and its teardown. `init` runs
     // immediately, at parse time — the same timing `main` has today — so a
     // page's listeners and timers are live before Turbo fires turbo:load,
