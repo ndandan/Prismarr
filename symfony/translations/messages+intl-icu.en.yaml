@@ -852,7 +852,7 @@ admin:
       request_cap: Request cap reached — automatic sync paused until you run Sync now
       halted: Stopped by a safety guard — automatic sync paused until you run Sync now
       interrupted: Interrupted — will resume
-      invalid: Unreadable API response — retry scheduled in 7 days
+      invalid: Unreadable API response — automatic sync paused until you run Sync now
       never: Never run
     last_run_requests: Requests (last run)
     last_run_records: Records (last run)
@@ -865,8 +865,8 @@ admin:
     next_due: Next scheduled sync
     sync_now: Sync now
     full_resync: Full resync
-    confirm_full: 'A full resync re-downloads the whole catalog (roughly 200 billed requests). Continue?'
-    cost_note: 'Each page of 50 titles is one billed API request. The initial full sync (about 200 requests, ≈ $10) starts only when you press Sync now; automatic sync afterwards is incremental (usually 2–60 requests a month). Browsing never calls the API.'
+    confirm_full: 'A full resync re-downloads the whole catalog (roughly 280 billed requests, ≈ $14). Continue?'
+    cost_note: 'Each page of 50 titles is one billed API request. The initial full sync (about 280 requests, ≈ $14) starts only when you press Sync now; automatic sync afterwards is incremental (usually 2–60 requests a month). Browsing never calls the API.'
     initial_sync_hint: 'Press Sync now to run the initial catalog sync (~200 billed requests). Automatic sync then runs incrementally every 30 days.'
     confirm_after_halt: 'The last run was stopped as a safety measure after {requests} requests. A new run starts from the first page and can bill up to 600 more requests. Continue?'
     attribution: 'Scores and summaries are provided by Wokeometer and cached locally. Prismarr is not affiliated with Wokeometer.'

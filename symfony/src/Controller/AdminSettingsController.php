@@ -1420,6 +1420,13 @@ class AdminSettingsController extends AbstractController
 
         $full  = $request->request->getBoolean('full');
         $runId = null;
+        // start() overwrites last_status / next_attempt_after; if queuing then
+        // fails, a pause (halted / request_cap / invalid) must survive it.
+        try {
+            $prior = $this->wokeometerState?->get();
+        } catch (\Throwable) {
+            $prior = null;
+        }
 
         // The try covers ONLY start() + dispatch(): once it completes the run is committed (see above).
         try {
@@ -1432,7 +1439,10 @@ class AdminSettingsController extends AbstractController
             if ($runId !== null) {
                 // Lock taken but nothing queued: free it so the next click is not "locked" for 30 minutes.
                 try {
-                    $fields = ['last_status' => WokeometerSyncService::STATUS_ERROR];
+                    $priorStatus = $prior['last_status'] ?? null;
+                    $fields      = in_array($priorStatus, WokeometerSyncService::PAUSING_STATUSES, true)
+                        ? ['last_status' => $priorStatus, 'next_attempt_after' => $prior['next_attempt_after'] ?? null]
+                        : ['last_status' => WokeometerSyncService::STATUS_ERROR];
                     // A FRESH start that never reached a worker (no cursor, no request made) must not linger as an
                     // "interrupted run" the hourly tick would auto-start: the initial full sync is manual-only.
                     // A resumed run has a cursor or requests to lose, so it keeps its position for a later start.
@@ -1442,10 +1452,19 @@ class AdminSettingsController extends AbstractController
                         $fields['run_cursor']          = null;
                         $fields['run_idempotency_key'] = null;
                     }
-                    $this->wokeometerState?->releaseLock($runId);
-                    $this->wokeometerState?->update($fields);
+                    // Owner-checked and BEFORE the release: once the lock is
+                    // free another start can take it, and an unowned write
+                    // here would clobber that run's fresh state.
+                    $this->wokeometerState?->update($fields, $runId);
                 } catch (\Throwable) {
                     // best effort
+                }
+                try {
+                    // Always attempted, even if the write above failed: a held
+                    // lock would read as "running" for 30 minutes.
+                    $this->wokeometerState?->releaseLock($runId);
+                } catch (\Throwable) {
+                    // best effort: the lock goes stale and is taken over later
                 }
             }
 

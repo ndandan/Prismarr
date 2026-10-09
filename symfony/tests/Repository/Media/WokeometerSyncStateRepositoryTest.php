@@ -403,4 +403,24 @@ class WokeometerSyncStateRepositoryTest extends KernelTestCase
         $this->assertNull($s['lock_heartbeat_at']);
         $this->assertSame('movie', $s['run_phase'], 'release keeps the resumable run state');
     }
+
+    public function testANullModeIsDecidedAtomicallyInsideTheFreshAcquire(): void
+    {
+        // The service used to read full_sync_completed_at, then CAS: a first
+        // full run finishing in between made a manual start re-run a whole
+        // full sync. A null mode is now decided inside the same UPDATE.
+        $this->repo->update(['full_sync_completed_at' => null]);
+        $this->assertSame('fresh', $this->repo->acquireLock('run-1', 1000, 1000 - 1800, null, 'manual'));
+        $this->assertSame('full', $this->repo->get()['run_mode']);
+        $this->repo->releaseLock('run-1');
+
+        $this->repo->update(['full_sync_completed_at' => 900, 'run_phase' => 'done']);
+        $this->assertSame('fresh', $this->repo->acquireLock('run-2', 2000, 2000 - 1800, null, 'manual'));
+        $this->assertSame('incremental', $this->repo->get()['run_mode']);
+        $this->repo->releaseLock('run-2');
+
+        $this->repo->update(['run_phase' => 'done']);
+        $this->assertSame('fresh', $this->repo->acquireLock('run-3', 3000, 3000 - 1800, null, 'manual', true));
+        $this->assertSame('full', $this->repo->get()['run_mode'], 'a forced start is always full');
+    }
 }

@@ -8,6 +8,7 @@ use App\Entity\User;
 use App\Message\SyncWokeometerCatalog;
 use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\MediaLibraryCache;
+use App\Repository\Media\WokeometerSyncStateRepository;
 use App\Service\Wokeometer\WokeometerSyncService;
 use App\Tests\AbstractWebTestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -437,5 +438,110 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $this->assertSame('error', $data['reason']);
         $this->assertStringNotContainsString('wokeometer_sync_state', $body);
         $this->assertStringNotContainsString('SQLSTATE', $body);
+    }
+
+    public function testDispatchFailureNeverClobbersARunStartedRightAfterTheLockIsReleased(): void
+    {
+        // The failure path released the lock, THEN wrote state without an
+        // owner check: a start landing in between (another tab, the worker's
+        // scheduled start) had its fresh run_phase nulled → halted, auto
+        // sync paused. The write must be owner-checked and happen first.
+        $this->seedKey();
+        $token = $this->csrf();
+
+        $failing = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                throw new \RuntimeException('transport down');
+            }
+        };
+        $registry = static::getContainer()->get('doctrine');
+        $racing   = new class($registry) extends WokeometerSyncStateRepository {
+            public function releaseLock(string $runId): bool
+            {
+                $released = parent::releaseLock($runId);
+                // A competing start wins the lock the instant it is free.
+                $this->acquireLock('competitor', time(), time() - 1800, 'full', 'schedule');
+
+                return $released;
+            }
+        };
+        $this->overrideServices([
+            'messenger.default_bus'              => new TraceableMessageBus($failing),
+            WokeometerSyncStateRepository::class => $racing,
+        ]);
+
+        $this->post($token);
+
+        $row = $this->em()->getConnection()->fetchAssociative('SELECT lock_run_id, run_phase FROM wokeometer_sync_state WHERE id = 1');
+        $this->assertSame('competitor', $row['lock_run_id']);
+        $this->assertSame('movie', $row['run_phase'], 'the competing fresh run is left intact');
+    }
+
+    public function testDispatchFailureKeepsAPausedSyncPaused(): void
+    {
+        // start() overwrites last_status with "running"; the failure path then
+        // wrote "error" — un-pausing a halted / request_cap sync, so the
+        // scheduler could start a fresh run on its own (up to the 600 cap).
+        $this->seedKey();
+        $token = $this->csrf();
+        $this->em()->getConnection()->executeStatement(
+            "UPDATE wokeometer_sync_state SET last_status = 'halted', next_attempt_after = 123, run_phase = NULL, lock_run_id = NULL WHERE id = 1"
+        );
+
+        $failing = new class implements MessageBusInterface {
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                throw new \RuntimeException('transport down');
+            }
+        };
+        $this->overrideServices(['messenger.default_bus' => new TraceableMessageBus($failing)]);
+
+        $this->post($token);
+
+        $row = $this->em()->getConnection()->fetchAssociative('SELECT last_status, next_attempt_after, lock_run_id FROM wokeometer_sync_state WHERE id = 1');
+        $this->assertSame('halted', $row['last_status'], 'the pause survives a failed queue');
+        $this->assertSame(123, (int) $row['next_attempt_after']);
+        $this->assertNull($row['lock_run_id']);
+    }
+
+    public function testDispatchFailureReleasesTheLockEvenWhenTheStateWriteThrows(): void
+    {
+        $this->seedKey();
+        $token = $this->csrf();
+
+        $registry = static::getContainer()->get('doctrine');
+        $flaky    = new class($registry) extends WokeometerSyncStateRepository {
+            public bool $armed = false;
+
+            public function update(array $fields, ?string $ownerRunId = null): int
+            {
+                if ($this->armed) {
+                    throw new \RuntimeException('database is locked');
+                }
+
+                return parent::update($fields, $ownerRunId);
+            }
+        };
+        $failing = new class($flaky) implements MessageBusInterface {
+            public function __construct(private readonly object $repo) {}
+
+            public function dispatch(object $message, array $stamps = []): Envelope
+            {
+                $this->repo->armed = true; // the next state write fails
+                throw new \RuntimeException('transport down');
+            }
+        };
+        $this->overrideServices([
+            'messenger.default_bus'              => new TraceableMessageBus($failing),
+            WokeometerSyncStateRepository::class => $flaky,
+        ]);
+
+        $this->post($token);
+
+        $this->assertNull(
+            $this->em()->getConnection()->fetchOne('SELECT lock_run_id FROM wokeometer_sync_state WHERE id = 1'),
+            'the lock must not be held for 30 minutes because the status write failed'
+        );
     }
 }

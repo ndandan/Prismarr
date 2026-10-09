@@ -36,8 +36,8 @@ use Symfony\Contracts\Service\ResetInterface;
  *    and only for a type whose phase returned at least one row (an empty
  *    phase is far more likely an API glitch than an emptied catalog).
  *  - Phase end: only `next_cursor === null` ends a phase (an empty page that
- *    still carries a cursor is followed); a cursor equal to the one sent
- *    trips the loop guard.
+ *    still carries a cursor is followed); a cursor that does not move
+ *    forward trips the loop guard (see cursorAdvances()).
  *  - Settings are re-read before every page (settings->refresh() +
  *    client->reset()), so a switch-off or key change lands within one page.
  *
@@ -63,9 +63,9 @@ use Symfony\Contracts\Service\ResetInterface;
  * | disabled mid-run (switch off / no key)    | `error`           | 1 h     | yes (same key)                   | resumes once re-enabled |
  * | client reports unconfigured               | `error`           | 1 h     | yes (same key)                   | resumes after backoff   |
  * | any Throwable after start()               | `error`           | 6 h     | yes (same key)                   | resumes after backoff   |
- * | invalid (404/…, unreadable 2xx)           | `invalid`         | 7 days  | yes (same key)                   | resumes after backoff   |
- * | 400 on a page requested WITH a cursor     | `invalid`         | 7 days  | yes — phase restarts at its first page (cursor + key cleared) | resumes after backoff |
- * | cursor did not advance (loop guard)       | `halted`          | 24 h    | NO — next run is fresh           | PAUSED until Sync now   |
+ * | invalid (404/…, unreadable 2xx)           | `invalid`         | 7 days  | yes (same key)                   | PAUSED until Sync now   |
+ * | 400 on a page requested WITH a cursor     | `invalid`         | 7 days  | yes — phase restarts at its first page (cursor + key cleared) | PAUSED until Sync now |
+ * | cursor did not advance (loop guard; a UUID cursor must sort AFTER the previous one) | `halted` | 24 h | NO — next run is fresh | PAUSED until Sync now |
  * | (internal) unknown `run_phase` in row     | `halted`          | 24 h    | NO — next run is fresh           | PAUSED until Sync now   |
  * | REQUEST_CAP_PER_RUN reached               | `request_cap`     | 24 h    | NO — next run is fresh           | PAUSED until Sync now   |
  *
@@ -76,7 +76,10 @@ use Symfony\Contracts\Service\ResetInterface;
  * columns nulled, AND isDue() stays false while `last_status` is
  * `request_cap` / `halted`: the scheduler never walks back into a runaway.
  * Only a manual Sync now clears the pause — it starts fresh and re-bills
- * from page 1 (up to REQUEST_CAP_PER_RUN). A 402 rotates the key instead of
+ * from page 1 (up to REQUEST_CAP_PER_RUN). `invalid` also pauses automatic
+ * sync (an unusable 2xx is billed, so an automatic resume would re-bill it
+ * every backoff) but stays resumable: Sync now continues from the cursor.
+ * A 402 rotates the key instead of
  * keeping it: the request was never executed, so a new key cannot
  * double-bill and cannot hit a replayed 402. A key save clears the backoff
  * (settings), so an auth-stopped run continues where it stopped.
@@ -131,8 +134,14 @@ class WokeometerSyncService implements ResetInterface
     /** Non-resumable safety stop (loop guard / unknown phase): automatic sync paused. */
     public const STATUS_HALTED         = 'halted';
 
-    /** `last_status` values that pause automatic scheduling until a manual start. */
-    public const PAUSING_STATUSES = [self::STATUS_REQUEST_CAP, self::STATUS_HALTED];
+    /**
+     * `last_status` values that pause automatic scheduling until a manual
+     * start. `invalid` is among them because an unusable 2xx is BILLED:
+     * resuming it automatically would re-bill the same unreadable page every
+     * backoff, forever. Unlike the other two it keeps its cursor, so the
+     * manual start resumes rather than starting over.
+     */
+    public const PAUSING_STATUSES = [self::STATUS_REQUEST_CAP, self::STATUS_HALTED, self::STATUS_INVALID];
 
     public const MODE_FULL        = 'full';
     public const MODE_INCREMENTAL = 'incremental';
@@ -169,8 +178,8 @@ class WokeometerSyncService implements ResetInterface
 
     /**
      * Should the hourly tick queue a scheduled start? Enabled AND auto-sync
-     * on AND not paused by a runaway stop (`last_status` request_cap /
-     * halted) AND no active backoff AND the lock free-or-stale, AND one of:
+     * on AND not paused (`last_status` request_cap / halted / invalid — see
+     * PAUSING_STATUSES) AND no active backoff AND the lock free-or-stale, AND one of:
      * an unfinished run to take over (stale lock) or resume (free, e.g. after
      * a 402 backoff), or — only once a first full sync has completed — the
      * last success ≥ 30 days ago. Never before the first full sync: that one
@@ -258,9 +267,11 @@ class WokeometerSyncService implements ResetInterface
             }
         }
 
-        $mode     = $this->modeFor($s, $forceFull);
-        $runId    = $this->newRunId();
-        $acquired = $this->state->acquireLock($runId, $now, $now - self::STALE_LOCK_SECONDS, $mode, $trigger, $forceFull);
+        $runId = $this->newRunId();
+        // Mode null: a FRESH run decides full vs incremental inside the CAS
+        // itself, so a first full run finishing between our read and the
+        // acquire can't make this start re-run the whole catalog.
+        $acquired = $this->state->acquireLock($runId, $now, $now - self::STALE_LOCK_SECONDS, null, $trigger, $forceFull);
         if ($acquired === null) {
             return $this->refuse('locked');
         }
@@ -509,6 +520,13 @@ class WokeometerSyncService implements ResetInterface
                     $fields['credits_remaining']    = $result->creditsRemaining;
                     $fields['credits_remaining_at'] = $now;
                 }
+                // Persist the billing facts now: anything below can throw
+                // (storing the rows, the final sweep), and runChunk()'s
+                // catch-all stop writes no fields — a billed page would then
+                // vanish from run_requests (the 600 cap) and total_requests.
+                if ($fields !== [] && !$this->write($runId, $fields)) {
+                    return self::notOwner();
+                }
 
                 switch ($result->outcome) {
                     case WokeometerPageResult::OK:
@@ -529,7 +547,7 @@ class WokeometerSyncService implements ResetInterface
                             }
                             $fields['run_phase']  = $next;
                             $fields['run_cursor'] = null;
-                        } elseif ($result->nextCursor === $cursor) {
+                        } elseif (!self::cursorAdvances($cursor, $result->nextCursor, $result->rows)) {
                             return $this->stop($runId, self::STATUS_HALTED, $result->httpCode, 'cursor did not advance', self::ERROR_BACKOFF_SECONDS, false, $fields);
                         } else {
                             $fields['run_cursor'] = $result->nextCursor;
@@ -726,20 +744,6 @@ class WokeometerSyncService implements ResetInterface
     }
 
     /**
-     * Mode for a FRESH run (a resumed run keeps its own — decided in the CAS).
-     *
-     * @param array<string, int|string|null> $s
-     */
-    private function modeFor(array $s, bool $forceFull): string
-    {
-        if ($forceFull) {
-            return self::MODE_FULL;
-        }
-
-        return self::intOrNull($s['full_sync_completed_at']) === null ? self::MODE_FULL : self::MODE_INCREMENTAL;
-    }
-
-    /**
      * Owner-checked state write for the run path: false when `$runId` no
      * longer holds the lock (nothing was written). An empty set is a no-op.
      *
@@ -762,7 +766,59 @@ class WokeometerSyncService implements ResetInterface
     }
 
     /**
-     * Automatic scheduling paused by a runaway stop (request cap / halted).
+     * Loop guard. Results are sorted by UUID ascending and the cursor is the
+     * last row's UUID, so a UUID cursor must sort strictly after the previous
+     * one — that catches cycles (A→B→A), not just a repeat. The strict rule
+     * only applies when this page's own rows PROVE the provider's order is
+     * plain string order (2+ UUID ids, strictly ascending): a provider whose
+     * "UUID ascending" uses another byte order would otherwise trip it on a
+     * legitimate sync, and every Sync now would re-bill up to the same
+     * boundary. Otherwise (and for non-UUID cursors) it falls back to "must
+     * change".
+     *
+     * @param list<array<string, mixed>> $rows
+     */
+    private static function cursorAdvances(?string $previous, string $next, array $rows): bool
+    {
+        if ($previous === null) {
+            return true;
+        }
+        if (self::isUuid($previous) && self::isUuid($next) && self::rowsAscend($rows)) {
+            return strcmp(strtolower($next), strtolower($previous)) > 0;
+        }
+
+        return $next !== $previous;
+    }
+
+    /** @param list<array<string, mixed>> $rows */
+    private static function rowsAscend(array $rows): bool
+    {
+        $prev = null;
+        $seen = 0;
+        foreach ($rows as $row) {
+            $id = $row['wokeometerId'] ?? null;
+            if (!is_string($id) || !self::isUuid($id)) {
+                return false;
+            }
+            $id = strtolower($id);
+            if ($prev !== null && strcmp($id, $prev) <= 0) {
+                return false;
+            }
+            $prev = $id;
+            $seen++;
+        }
+
+        return $seen >= 2;
+    }
+
+    private static function isUuid(string $value): bool
+    {
+        return preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i', $value) === 1;
+    }
+
+    /**
+     * Automatic scheduling paused: a runaway stop (request cap / halted) or an
+     * unreadable response (`invalid`) — see PAUSING_STATUSES.
      *
      * @param array<string, int|string|null> $s
      */
