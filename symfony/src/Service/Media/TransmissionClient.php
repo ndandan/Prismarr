@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
@@ -691,7 +692,7 @@ class TransmissionClient implements ResetInterface
         $ch = curl_init($url);
         curl_setopt_array($ch, $opts);
 
-        $raw   = curl_exec($ch);
+        $raw   = ConcurrentCurl::exec($ch);
         $code  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $hsize = (int) curl_getinfo($ch, CURLINFO_HEADER_SIZE);
         $err   = curl_error($ch);

@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Exception\ServiceNotConfiguredException;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
@@ -347,7 +348,7 @@ class TmdbClient implements ResetInterface
             CURLOPT_HTTPHEADER     => ['Accept: application/json'],
         ]);
 
-        $raw  = curl_exec($ch);
+        $raw  = ConcurrentCurl::exec($ch);
         $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
         curl_close($ch);

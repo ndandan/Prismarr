@@ -2,6 +2,7 @@
 
 namespace App\Service\Media;
 
+use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Service\ResetInterface;
@@ -141,7 +142,7 @@ class HoundarrClient implements ResetInterface
             CURLOPT_REDIR_PROTOCOLS => CURLPROTO_HTTP | CURLPROTO_HTTPS,
             CURLOPT_HTTPHEADER      => ['X-Api-Key: ' . $this->apiKey, 'Accept: application/json'],
         ]);
-        $body  = curl_exec($ch);
+        $body  = ConcurrentCurl::exec($ch);
         $code  = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $errno = curl_errno($ch);
         curl_close($ch);
