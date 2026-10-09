@@ -416,12 +416,15 @@ class BazarrController extends AbstractController
      * Download a specific subtitle result for an episode. No CSRF token —
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
      *
-     * Episode subtitles roll up into series-level status, so there is no
-     * per-episode entry to patch in place — queue a bulk rebuild of the series
-     * map and the badge counts instead of invalidate()'s blanket delete (fix
-     * round 1, IMPORTANT 3): invalidate() would also blank movies/cards/
-     * most-missing that this mutation never touched, turning every badge on
-     * the Films page 'pending' until the next full rebuild lands.
+     * Episode subtitles roll up into series-level status: with the Sonarr
+     * series id the body now carries (Bazarr requires it), refetch just that
+     * series and patch its badge in place, like the movie path — a queued
+     * bulk rebuild alone no-ops while the series map is still fresh (review
+     * 2026-10-08). Without a usable id, fall back to queueing the bulk
+     * rebuild rather than invalidate()'s blanket delete (fix round 1,
+     * IMPORTANT 3): invalidate() would also blank movies/cards/most-missing
+     * that this mutation never touched. The badge counts are queued either
+     * way.
      */
     #[Route('/api/download/episode', name: 'api_download_episode', methods: ['POST'])]
     public function apiDownloadEpisode(Request $request): JsonResponse
@@ -429,7 +432,15 @@ class BazarrController extends AbstractController
         set_time_limit(self::PROVIDER_TIME_LIMIT);
         $ok = $this->bazarr->downloadEpisode($request->request->all());
         if ($ok) {
-            $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_SERIES);
+            // Read leniently: InputBag::get() throws on a non-scalar, which
+            // would turn this already-successful download into a 400.
+            $rawSeriesId = $request->request->all()['seriesid'] ?? null;
+            $seriesId    = is_scalar($rawSeriesId) ? (int) $rawSeriesId : 0;
+            if ($seriesId > 0) {
+                $this->bazarrIndex->refreshItem('series', $seriesId);
+            } else {
+                $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_SERIES);
+            }
             $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_BADGES);
         }
 
