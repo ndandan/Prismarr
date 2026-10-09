@@ -670,7 +670,11 @@ class BazarrSubtitleIndex implements ResetInterface
      */
     public function badgeCounts(): array
     {
-        $hit = $this->readDataset(self::KEY_BADGES, self::KEY_MOVIES);
+        // Requests KEY_BADGES itself, not KEY_MOVIES: the counts come from
+        // their own /badges call, which can fail while /movies succeeds — a
+        // KEY_MOVIES request would then no-op against the fresh movie map
+        // and leave the landing page on "warming" (review 2026-10-08).
+        $hit = $this->readDataset(self::KEY_BADGES, self::KEY_BADGES);
         if (!is_array($hit)) {
             return ['state' => 'warming', 'counts' => ['movies' => 0, 'episodes' => 0, 'providers' => 0]];
         }

@@ -54,9 +54,32 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             return;
         }
 
-        // KEY_BADGES has no fetch of its own — see the class docblock — so it
-        // takes the same branch as KEY_MOVIES.
+        // KEY_BADGES normally rides on the movies refresh (see the class
+        // docblock). When the movie map is still fresh, only the counts are
+        // missing — their own /badges call failed last cycle — so retry just
+        // that one cheap call instead of re-fetching the whole library.
+        if ($key === BazarrSubtitleIndex::KEY_BADGES) {
+            $movies = $this->swr->read(BazarrSubtitleIndex::KEY_MOVIES, BazarrSubtitleIndex::SOFT_TTL);
+            if ($movies !== null && $movies['state'] === 'fresh') {
+                $this->refreshBadgeCounts();
+
+                return;
+            }
+        }
+
         $key === BazarrSubtitleIndex::KEY_SERIES ? $this->refreshSeries() : $this->refreshMovies();
+    }
+
+    private function refreshBadgeCounts(): void
+    {
+        $counts = $this->client->getBadgeCounts();
+        if ($this->client->getLastError() !== null) {
+            $this->logger->warning('Bazarr badge count refresh failed', ['error' => $this->client->getLastError()]);
+
+            return;
+        }
+
+        $this->swr->write(BazarrSubtitleIndex::KEY_BADGES, $counts, BazarrSubtitleIndex::HARD_TTL);
     }
 
     private function refreshMovies(): void

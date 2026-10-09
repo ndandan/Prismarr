@@ -455,4 +455,21 @@ class BazarrIndexRefresherTest extends TestCase
             'a patch older than this fetch adds nothing — the bulk result stands',
         );
     }
+
+    public function testABadgesRefreshWithAFreshMovieMapFetchesOnlyTheBadgeCounts(): void
+    {
+        // The movie map is fresh, only the counts are missing (their own
+        // /badges call failed last cycle): re-fetching the full 5k-row list
+        // just to retry one cheap call would be wasteful.
+        $pool = new ArrayAdapter();
+        $this->swr($pool)->write(BazarrSubtitleIndex::KEY_MOVIES, [7 => ['state' => 'ok', 'count' => 0]], BazarrSubtitleIndex::HARD_TTL);
+        $client = $this->createMock(BazarrClient::class);
+        $client->expects($this->never())->method('getMovies');
+        $client->expects($this->once())->method('getBadgeCounts')->willReturn(['movies' => 3, 'episodes' => 4, 'providers' => 1]);
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_BADGES);
+
+        $this->assertSame(3, $this->swr($pool)->read(BazarrSubtitleIndex::KEY_BADGES, 60)['value']['movies'] ?? null);
+    }
 }

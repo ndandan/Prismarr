@@ -3,7 +3,9 @@
 namespace App\Tests\Controller;
 
 use App\Entity\User;
+use App\Service\Cache\StaleWhileRevalidateCache;
 use App\Service\Media\BazarrClient;
+use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\ServiceHealthCache;
 use App\Tests\AbstractWebTestCase;
 use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
@@ -35,7 +37,12 @@ class BazarrControllerTest extends AbstractWebTestCase
      */
     protected function tearDown(): void
     {
-        static::getContainer()->get('cache.app')->deleteItem('bazarr_subtitle_index.inline_refresh');
+        $pool = static::getContainer()->get('cache.app');
+        $pool->deleteItem('bazarr_subtitle_index.inline_refresh');
+        // The breaker lives in the same persistent pool; apiRefresh() checks
+        // it first, so a test that marks Bazarr down must not leak that into
+        // the next one.
+        (new ServiceHealthCache($pool))->clear(BazarrClient::SERVICE);
         parent::tearDown();
     }
 
@@ -243,5 +250,43 @@ class BazarrControllerTest extends AbstractWebTestCase
         self::assertArrayHasKey('series', $payload);
         self::assertFalse($payload['ok']);
         self::assertSame('already_running', $payload['reason']);
+    }
+
+    /**
+     * review 2026-10-08: Retry only rebuilt the movies + series maps, so a
+     * landing page stuck on "warming" because its badge counts were missing
+     * (their /badges call failed while /movies succeeded) could never be
+     * recovered from the UI.
+     */
+    public function testTheRefreshEndpointAlsoRebuildsMissingBadgeCounts(): void
+    {
+        $swr = static::getContainer()->get(StaleWhileRevalidateCache::class);
+        $swr->write(BazarrSubtitleIndex::KEY_MOVIES, [], BazarrSubtitleIndex::HARD_TTL);
+        $swr->write(BazarrSubtitleIndex::KEY_SERIES, [], BazarrSubtitleIndex::HARD_TTL);
+        $swr->delete(BazarrSubtitleIndex::KEY_BADGES);
+
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertResponseStatusCodeSame(200);
+        self::assertNotNull($swr->read(BazarrSubtitleIndex::KEY_BADGES, BazarrSubtitleIndex::SOFT_TTL));
+    }
+
+    /**
+     * review 2026-10-08: the coalescing marker was taken BEFORE the breaker
+     * check, so a breaker_open answer still blocked every Retry for the
+     * marker TTL — after Bazarr had already recovered.
+     */
+    public function testABreakerOpenAnswerDoesNotBlockTheNextRetry(): void
+    {
+        $pool   = static::getContainer()->get('cache.app');
+        $health = new ServiceHealthCache($pool);
+        $health->markDown(BazarrClient::SERVICE);
+        $this->client->request('POST', '/bazarr/api/refresh');
+        self::assertSame('breaker_open', json_decode((string) $this->client->getResponse()->getContent(), true)['reason']);
+
+        $health->clear(BazarrClient::SERVICE);
+        $this->client->request('POST', '/bazarr/api/refresh');
+
+        self::assertNotSame('already_running', json_decode((string) $this->client->getResponse()->getContent(), true)['reason']);
     }
 }

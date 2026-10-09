@@ -515,6 +515,18 @@ class BazarrController extends AbstractController
     public function apiRefresh(BazarrIndexRefresher $refresher, ServiceHealthCache $health, CacheItemPoolInterface $cacheApp): JsonResponse
     {
         set_time_limit(self::INLINE_REFRESH_MARKER_TTL);
+        // Breaker first: a breaker_open answer does no work, so it must not
+        // take the coalescing marker — that would block every Retry for the
+        // marker TTL after Bazarr had already recovered (review 2026-10-08).
+        if ($health->isDown(BazarrClient::SERVICE)) {
+            return $this->json([
+                'ok'     => false,
+                'movies' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES),
+                'series' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES),
+                'reason' => 'breaker_open',
+            ]);
+        }
+
         $marker = $cacheApp->getItem(self::INLINE_REFRESH_MARKER);
         if ($marker->isHit()) {
             return $this->json([
@@ -528,16 +540,11 @@ class BazarrController extends AbstractController
         $marker->expiresAfter(self::INLINE_REFRESH_MARKER_TTL);
         $cacheApp->save($marker);
 
-        if ($health->isDown(BazarrClient::SERVICE)) {
-            return $this->json([
-                'ok'     => false,
-                'movies' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES),
-                'series' => $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_SERIES),
-                'reason' => 'breaker_open',
-            ]);
-        }
-
         $refresher->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+        // A movies refresh that just ran already wrote the counts (this is
+        // then a cheap fresh-key no-op); one that found the movie map fresh
+        // didn't, so the counts get their own cheap /badges retry.
+        $refresher->refresh(BazarrSubtitleIndex::KEY_BADGES);
         $refresher->refresh(BazarrSubtitleIndex::KEY_SERIES);
 
         $movies = $this->bazarrIndex->datasetState(BazarrSubtitleIndex::KEY_MOVIES);
