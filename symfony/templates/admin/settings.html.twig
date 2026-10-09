@@ -1850,6 +1850,7 @@
       var alive = true;
       var timer = null;
       var polls = 0;
+      var parked = false;
       var GET_OPTS = { credentials: 'same-origin', headers: { 'Accept': 'application/json' } };
       var hint = card.querySelector('[data-wokeometer-initial-hint]');
       // Last known run outcome (a runaway stop makes Sync now ask first).
@@ -1946,12 +1947,16 @@
       }
 
       // Poll the state endpoint (without stats) every POLL_MS while a run is in flight, at most MAX_POLLS times.
-      function poll() {
+      // A hidden tab neither polls nor spends the cap: the session is parked
+      // (parked = true) and resumed, with an immediate poll, once the tab is visible again.
+      function poll(immediate) {
         if (timer !== null || !alive) return;
+        if (document.hidden) { parked = true; return; }
         if (polls >= MAX_POLLS) { finish(true); return; }
         timer = setTimeout(function () {
           timer = null;
           if (!alive) return;
+          if (document.hidden) { parked = true; return; }
           polls++;
           fetch(btnSync.dataset.stateUrl, GET_OPTS)
             .then(function (r) { return r.json(); })
@@ -1966,8 +1971,20 @@
               }
             })
             .catch(function () { if (alive) poll(); });
-        }, POLL_MS);
+        }, immediate === true ? 0 : POLL_MS);
       }
+
+      function onVisibility() {
+        if (!alive) return;
+        if (document.hidden) {
+          // Cancel the pending tick (not an in-flight fetch) and park the session.
+          if (timer !== null) { stopPolling(); parked = true; }
+        } else if (parked) {
+          parked = false;
+          poll(true);
+        }
+      }
+      document.addEventListener('visibilitychange', onVisibility);
 
       function trigger(full) {
         if (full && !window.confirm(I18N.confirmFull)) return;
@@ -2035,7 +2052,11 @@
       if (card.dataset.running === "1") { poll(); }
 
       // Never leak the poller across Turbo navigation.
-      return function () { alive = false; stopPolling(); };
+      return function () {
+        alive = false;
+        stopPolling();
+        document.removeEventListener('visibilitychange', onVisibility);
+      };
     }
 
     if (typeof window.registerPageLifecycle === 'function') {
