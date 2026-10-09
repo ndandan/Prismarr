@@ -213,9 +213,14 @@ class RadarrClient implements ResetInterface
      * Wider budget for the full-library fetch (issue #41): on a large/busy
      * Radarr the one-payload /api/v3/movie call can exceed the default 8s.
      * Opt-in per call site — the library routes (which already allow
-     * set_time_limit(120)) pass it; frequent paths (dashboard widgets,
-     * quick-look membership checks, admin stats) keep the 8s bound so a slow
-     * instance can't pin their request for 30s.
+     * set_time_limit(120)) pass it, and so does every reader of the shared
+     * MediaLibraryCache entry (dashboard library widgets, Bazarr poster
+     * resolver, the worker refresher): whoever refills that entry decides the
+     * budget for all of its readers (see
+     * docs/perf/2026-09-01-optimization-architecture.md and
+     * LibraryTimeoutGuardTest). Only paths that do NOT go through the shared
+     * cache (quick-look membership checks, admin stats) keep the 8s default so
+     * a slow instance can't pin their request for 30s.
      */
     public const LIBRARY_TIMEOUT = 30;
 
