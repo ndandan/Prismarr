@@ -472,4 +472,34 @@ class BazarrIndexRefresherTest extends TestCase
 
         $this->assertSame(3, $this->swr($pool)->read(BazarrSubtitleIndex::KEY_BADGES, 60)['value']['movies'] ?? null);
     }
+
+    /**
+     * review 2026-10-08: the journal was read BEFORE the /badges network
+     * call, so a download whose patch landed during that call was missed and
+     * the bulk result (pre-mutation, stamped fresh) overwrote it.
+     */
+    public function testAPatchRecordedDuringTheBadgesCallSurvivesTheWrittenBulkResult(): void
+    {
+        $pool   = new ArrayAdapter();
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('getMovies')->willReturn([
+            ['radarrId' => 7, 'title' => 'A', 'profileId' => 1, 'subtitles' => [], 'missing_subtitles' => [['code2' => 'fr']]],
+        ]);
+        $client->method('getBadgeCounts')->willReturnCallback(static function () use ($pool): array {
+            // refreshItem() journals its patch while /badges is in flight.
+            $item = $pool->getItem(BazarrSubtitleIndex::KEY_PATCHES);
+            $item->set(['movie:7' => [
+                'at' => time(), 'kind' => 'movie', 'id' => 7,
+                'status' => ['state' => 'complete', 'count' => 0], 'langs' => null,
+            ]]);
+            $pool->save($item);
+
+            return ['movies' => 0, 'episodes' => 0, 'providers' => 0];
+        });
+        $client->method('getLastError')->willReturn(null);
+
+        $this->refresher($pool, $client)->refresh(BazarrSubtitleIndex::KEY_MOVIES);
+
+        $this->assertSame('complete', $this->swr($pool)->read(BazarrSubtitleIndex::KEY_MOVIES, 60)['value'][7]['state']);
+    }
 }

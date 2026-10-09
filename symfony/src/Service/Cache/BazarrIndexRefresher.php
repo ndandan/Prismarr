@@ -170,12 +170,6 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
             => ($b['missingCount'] <=> $a['missingCount']) ?: strcasecmp($a['title'], $b['title']));
         $candidates = array_slice($candidates, 0, BazarrSubtitleIndex::MOST_MISSING_CANDIDATES);
 
-        // A mutation's per-id patch (BazarrSubtitleIndex::refreshItem())
-        // recorded at or after $fetchStartedAt must survive this write —
-        // otherwise a subtitle download that lands mid-fetch would be
-        // silently reverted the moment this bulk result is written below.
-        [$status, $langs] = $this->index->applyPatchesNewerThan('movie', $fetchStartedAt, $status, $langs);
-
         // /api/badges is one cheap call and belongs to the same refresh cycle;
         // giving it its own message would double queue traffic for nothing.
         // BazarrClient::getBadgeCounts() fails CLOSED to all-zeros AND
@@ -192,6 +186,15 @@ final class BazarrIndexRefresher implements CacheRefresherInterface
         if ($badgesFailed) {
             $this->logger->warning('Bazarr badge count refresh failed', ['error' => $this->client->getLastError()]);
         }
+
+        // A mutation's per-id patch (BazarrSubtitleIndex::refreshItem())
+        // recorded at or after $fetchStartedAt must survive this write —
+        // otherwise a subtitle download that lands mid-fetch would be
+        // silently reverted the moment this bulk result is written below.
+        // Read the journal AFTER the /badges call above, right before the
+        // writes, so a patch landing during that call isn't missed (review
+        // 2026-10-08).
+        [$status, $langs] = $this->index->applyPatchesNewerThan('movie', $fetchStartedAt, $status, $langs);
 
         // One timestamp for every key written from this fetch, so the group
         // shares a soft window instead of drifting apart. Write order per
