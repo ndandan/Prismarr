@@ -128,14 +128,27 @@ download client (Transmission) landed upstream from a parallel community
 contribution around the same time, so this fork now runs upstream's Transmission
 page rather than the one it built.
 
+**Merged upstream in Beta 1.3.0 (2026-10-12)** — the third, fourth and fifth
+contribution waves, 21 pull requests in all:
+
+- Fixes: library pages no longer report a big instance unreachable (#41) — [#90](https://github.com/Shoshuo/Prismarr/pull/90); TMDb region priority from the locale — [#96](https://github.com/Shoshuo/Prismarr/pull/96); SABnzbd actions fail closed — [#97](https://github.com/Shoshuo/Prismarr/pull/97); Transmission detail speeds — [#98](https://github.com/Shoshuo/Prismarr/pull/98); the Display date/time preference everywhere — [#102](https://github.com/Shoshuo/Prismarr/pull/102); greeting follows the display timezone — [#113](https://github.com/Shoshuo/Prismarr/pull/113); series queue/header escaping — [#121](https://github.com/Shoshuo/Prismarr/pull/121)
+- Features: per-instance library filter memory — [#92](https://github.com/Shoshuo/Prismarr/pull/92); mobile filter drawer + packed settings cards — [#93](https://github.com/Shoshuo/Prismarr/pull/93); setup wizard on stock Tabler — [#94](https://github.com/Shoshuo/Prismarr/pull/94); tracker links in interactive search — [#99](https://github.com/Shoshuo/Prismarr/pull/99); SABnzbd/NZBGet history inline — [#100](https://github.com/Shoshuo/Prismarr/pull/100); Prowlarr grab to the download client — [#101](https://github.com/Shoshuo/Prismarr/pull/101); episode quality + custom-format score — [#104](https://github.com/Shoshuo/Prismarr/pull/104); default quality profile per instance — [#105](https://github.com/Shoshuo/Prismarr/pull/105); Bazarr subtitles — [#109](https://github.com/Shoshuo/Prismarr/pull/109); Plex episode codes — [#111](https://github.com/Shoshuo/Prismarr/pull/111)
+- Performance: OPcache preloading — [#91](https://github.com/Shoshuo/Prismarr/pull/91); opt-in FrankenPHP worker mode (`PRISMARR_WORKER`) — [#95](https://github.com/Shoshuo/Prismarr/pull/95); stale-while-revalidate library cache — [#107](https://github.com/Shoshuo/Prismarr/pull/107); Ctrl+K search index normalized once — [#108](https://github.com/Shoshuo/Prismarr/pull/108)
+
+The fork has since synced onto 1.3.0 and follows upstream's redesigns
+(Search page, two-step setup, Services settings list) — see
+[docs/FORK-CHANGES.md](docs/FORK-CHANGES.md#upstream-beta-130-sync-2026-10-12).
+
 **Fork-only** — only available here:
 
-- **FrankenPHP/Symfony worker mode (opt-in):** an env-gated flag
-  (`PRISMARR_WORKER`) that boots the kernel once and keeps it resident instead
-  of rebuilding it per request. Off by default. On a real homelab it cut a
-  health-poll response from ~46 ms to ~3 ms (~15×) and a large Films-page render
-  from ~3.0 s to ~0.3 s (~10×); TMDb-bound pages like Discover are unchanged,
-  as expected. See the [Configuration](#environment-variables-optional) table.
+- **Wokeometer scores (optional, paid API):** a score, one-line summary and
+  link for titles in the Wokeometer catalog, shown in the detail views from a
+  locally synced copy of the catalog — browsing never calls the API. See
+  [docs/wokeometer.md](docs/wokeometer.md).
+- **Stricter security defaults:** an enforcing nonce-based CSP (no
+  `'unsafe-inline'` scripts), a cross-site request guard on state-changing
+  actions, and template-escaping guard tests over the TMDb/*arr strings the
+  pages render.
 - **Unraid server widget:** an admin-only dashboard section for the Unraid 7
   GraphQL API — array and disk health, parity status with live check progress
   and ETA, CPU/RAM/uptime, per-container Docker status chips, and UPS state.
@@ -173,8 +186,8 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Movies & Series:** Radarr and Sonarr libraries with five view modes, **multiple instances side by side** (1080p / 4K / Anime, each first-class in the UI), global `Ctrl+K` search and a quick-add modal with a per-instance target picker.
 - **Unified calendar:** movie and episode releases merged across instances, deduped by `tmdbId` / `tvdbId`, with month / week / day views and iCal export.
 - **Dashboard:** hero spotlight, upcoming releases, pending Seerr requests, live service health, watchlist, trending and latest additions. Paints instantly, each widget hydrates on its own.
-- **Dashboard customization (fork):** an admin can reorder and hide/show every dashboard section, and pick one of 17 theme presets (or leave it on Classic).
-- **Quick-look everywhere (fork):** clicking any media tile — dashboard, top-bar search result, Explorer, Plex activity — opens one rich in-place detail modal (poster, synopsis, ratings, release/air dates, watchlist, Add/Manage deep-links) instead of navigating away.
+- **Dashboard customization:** an admin can reorder and hide/show every dashboard section, and pick one of 17 theme presets (or leave it on Classic).
+- **Quick-look everywhere:** clicking any media tile — dashboard, top-bar search result, Explorer, Plex activity — opens one rich in-place detail modal (poster, synopsis, ratings, release/air dates, watchlist, Add/Manage deep-links) instead of navigating away.
 - **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload), a full Deluge tab (live table, labels, seeding columns, detail panel, add/limits — via deluge-web JSON-RPC), a full Transmission tab (same list/table/compact views, bulk actions, detail modal and add-by-URL/file, with a read-only filter over Transmission's own labels — via the Transmission RPC API), plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
 - **Search:** one box for movies, series and people, typo-tolerant with a Google-style "did you mean", inline filters (type, genre, rating, sort, hide what you have), a large best-match card and each result's library status. With the box empty: trending movie and series banners, recommendations from your library, trending rows, plus the watchlist and an explorer.
 - **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs with a per-user filter, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
@@ -185,7 +198,7 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
 - **Houndarr (fork):** optional dashboard stat tile with backlog-search totals and a health chip.
 - **UniFi network monitoring (fork):** optional admin-only dashboard section — live WAN up/download, client counts (wired/wireless/guest), a 24-hour usage graph and gateway/switch/AP status, via the UniFi OS Network API. Plus a full **UniFi Network tab** (`/unifi`, admin-only): 7-day traffic and 30-day speedtest trends, device inventory, RF environment (AP radios and neighbouring APs), VLANs, wireless clients, live talkers, top clients and DHCP-reservation mismatches — read-only, and every panel falls back to an empty state rather than breaking the page.
-- **Wokeometer scores (fork, optional):** a Wokeometer score out of 10, a one-line summary and a link to the full analysis for any title in the Wokeometer catalog (library items, Discover, dashboard), in the quick-look, Films/Series and Discover modals. The catalog is synced into a local database by the background worker, so **opening a title never calls the Wokeometer API** and nothing about your library is sent to it. **This is not free:** the Wokeometer API is prepaid at **$0.05 per request**. The initial full sync (started only when you press **Sync now**) took **279 requests, about $14**, on a real install (13,916 titles), and the automatic monthly incremental sync then costs roughly 2-60 requests ($0.10-$3) depending on how much the catalog changed. Browsing costs nothing. See [docs/wokeometer.md](docs/wokeometer.md).
+- **Wokeometer scores (fork, optional):** a Wokeometer score out of 10, a one-line summary and a link to the full analysis for any title in the Wokeometer catalog (library items, Search, dashboard), in the quick-look, Films/Series and Search modals. The catalog is synced into a local database by the background worker, so **opening a title never calls the Wokeometer API** and nothing about your library is sent to it. **This is not free:** the Wokeometer API is prepaid at **$0.05 per request**. The initial full sync (started only when you press **Sync now**) took **279 requests, about $14**, on a real install (13,916 titles), and the automatic monthly incremental sync then costs roughly 2-60 requests ($0.10-$3) depending on how much the catalog changed. Browsing costs nothing. See [docs/wokeometer.md](docs/wokeometer.md).
 - **Preferences:** theme, UI density, timezone, date format, English / French UI, settings export / import (credentials always stripped).
 - **Security:** Symfony auth with login rate-limiter, non-root container, a strict nonce-based CSP (`script-src` with no `'unsafe-inline'`, enforced), SSRF protection on user-provided URLs, CSRF on every mutation.
 
