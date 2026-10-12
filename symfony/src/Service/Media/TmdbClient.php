@@ -47,7 +47,8 @@ class TmdbClient implements ResetInterface
      * to FR if the pref service is unreachable (shouldn't happen but
      * defensive — TMDb still needs a `language=` value to respond).
      */
-    private function getLocale(): string
+    /** TMDb language in use (also keys the search vocabulary per locale). */
+    public function getLocale(): string
     {
         if ($this->locale === null) {
             try {
@@ -111,6 +112,11 @@ class TmdbClient implements ResetInterface
     public function getTopRatedMovies(int $page = 1): array
     {
         return $this->cachedGet("top_movie_{$page}", '/movie/top_rated', ['page' => $page], self::TTL_LIST);
+    }
+
+    public function getPopularPeople(int $page = 1): array
+    {
+        return $this->cachedGet("popular_person_{$page}", '/person/popular', ['page' => $page], self::TTL_LIST);
     }
 
     public function getTopRatedTv(int $page = 1): array
@@ -318,12 +324,16 @@ class TmdbClient implements ResetInterface
         $full = "prismarr_tmdb_{$this->getLocale()}_{$cacheKey}";
 
         return $this->cache->get($full, function (ItemInterface $item) use ($path, $params, $ttl) {
-            $item->expiresAfter($ttl);
-            return $this->request($path, $params) ?? [];
+            $data = $this->request($path, $params);
+            // A failed call is never cached: an empty answer stored for the
+            // whole TTL would show "no result" (and starve the search
+            // vocabulary) long after a short TMDb hiccup.
+            $item->expiresAfter($data === null ? 0 : $ttl);
+            return $data ?? [];
         });
     }
 
-    private function request(string $path, array $params = []): ?array
+    protected function request(string $path, array $params = []): ?array
     {
         $this->ensureConfig();
         $params['api_key']       = $this->apiKey;

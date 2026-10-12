@@ -80,14 +80,14 @@ class ServiceRouteGuardSubscriberTest extends TestCase
         $this->assertFalse($event->hasResponse());
     }
 
-    public function testUnconfiguredServiceRedirectsToWizard(): void
+    public function testUnconfiguredServiceRedirectsToServicesSettings(): void
     {
         $event = $this->event('radarr_index');
         ($this->subscriber())->onKernelRequest($event);
 
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringContainsString('app_setup_managers', $response->getTargetUrl());
+        $this->assertSame('/_route/app_configure_services', $response->getTargetUrl());
     }
 
     public function testDisabledServiceRedirectsHomeEvenWhenCredentialsArePresent(): void
@@ -179,7 +179,7 @@ class ServiceRouteGuardSubscriberTest extends TestCase
         $this->assertFalse($event->hasResponse());
     }
 
-    public function testPartiallyConfiguredRedirectsToWizard(): void
+    public function testPartiallyConfiguredRedirectsToServicesSettings(): void
     {
         // Only radarr_api_key set, radarr_url missing → still treated as "not configured".
         $event = $this->event('radarr_index');
@@ -190,7 +190,7 @@ class ServiceRouteGuardSubscriberTest extends TestCase
 
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringContainsString('app_setup_managers', $response->getTargetUrl());
+        $this->assertSame('/_route/app_configure_services', $response->getTargetUrl());
     }
 
     public function testTmdbPrefixMatches(): void
@@ -200,7 +200,7 @@ class ServiceRouteGuardSubscriberTest extends TestCase
 
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringContainsString('app_setup_tmdb', $response->getTargetUrl());
+        $this->assertSame('/_route/app_configure_services', $response->getTargetUrl());
     }
 
     public function testQbittorrentPrefixMatches(): void
@@ -210,27 +210,27 @@ class ServiceRouteGuardSubscriberTest extends TestCase
 
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringContainsString('app_setup_downloads', $response->getTargetUrl());
+        $this->assertSame('/_route/app_configure_services', $response->getTargetUrl());
     }
 
-    public function testDelugeUnconfiguredRedirectsToDownloadsWizard(): void
+    public function testDelugeUnconfiguredRedirectsToServicesSettings(): void
     {
         $event = $this->event('app_deluge_index');
         ($this->subscriber())->onKernelRequest($event);
 
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringContainsString('app_setup_downloads', $response->getTargetUrl());
+        $this->assertSame('/_route/app_configure_services', $response->getTargetUrl());
     }
 
-    public function testTransmissionUnconfiguredRedirectsToDownloadsWizard(): void
+    public function testTransmissionUnconfiguredRedirectsToServicesSettings(): void
     {
         $event = $this->event('app_transmission_add');
         ($this->subscriber())->onKernelRequest($event);
 
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringContainsString('app_setup_downloads', $response->getTargetUrl());
+        $this->assertSame('/_route/app_configure_services', $response->getTargetUrl());
     }
 
     public function testDelugeConfiguredLetsThrough(): void
@@ -248,14 +248,14 @@ class ServiceRouteGuardSubscriberTest extends TestCase
     public function testUnifiRouteRedirectsToSettingsWhenUnconfigured(): void
     {
         // unifi_url present, unifi_api_key missing → half configured, must bounce.
-        // UniFi has no wizard step, so the target is admin settings.
+        // Every unconfigured service bounces to app_configure_services (admins land on Settings).
         $event = $this->event('app_unifi_index');
         $sub = $this->subscriber(configuredKeys: ['unifi_url']);
         $sub->onKernelRequest($event);
 
         $response = $event->getResponse();
         $this->assertInstanceOf(RedirectResponse::class, $response);
-        $this->assertStringContainsString('admin_settings_index', $response->getTargetUrl());
+        $this->assertStringContainsString('app_configure_services', $response->getTargetUrl());
     }
 
     public function testUnifiRoutePassesWhenFullyConfiguredAndHealthy(): void

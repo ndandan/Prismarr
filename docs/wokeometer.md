@@ -2,7 +2,7 @@
 
 Prismarr can show a [Wokeometer](https://wokeometer.app) score, a one-line
 summary and a link to the full analysis for any title in the Wokeometer
-catalog (library items, Discover, dashboard), right inside the detail views.
+catalog (library items, Search, dashboard), right inside the detail views.
 It is optional, off until you paste an API key, and designed around one rule:
 
 > **Opening a movie or series never calls the Wokeometer API. API calls caused by opening a media detail view: 0.**
@@ -17,7 +17,7 @@ and works offline from Wokeometer's point of view.
 Wokeometer API  ──(initial full sync on Sync now, then monthly incremental sync, worker only)──▶  SQLite (wokeometer_media)
                                                                                                    │ indexed local lookup by (tmdb_id, media_type)
                                                                                                    ▼
-                                                                  Global quick-look · Films/Series modals · Discover modal
+                                                                  Global quick-look · Films/Series modals · Search modal  
 ```
 
 ## What you need
@@ -237,7 +237,7 @@ catalog in:
 - the global quick-look modal (dashboard, top-bar search, Explorer, Plex
   activity, and anywhere else a media tile opens it),
 - the Films and Series detail modals,
-- the Discover detail modal.
+- the Search page's detail modal (formerly Discover).
 
 In each header the score pill reads "Wokeometer 4/10". The block is hidden
 entirely when there is no match, when the catalog row has neither a score nor
@@ -246,7 +246,7 @@ Series pages then do not even query the local endpoint). It is visible to
 every signed-in user, because it is read-only local data. The Films and
 Series modals fetch it from a small local JSON endpoint that only reads
 SQLite; that endpoint never contacts Wokeometer, and neither do the
-quick-look and Discover paths.
+quick-look and Search paths.
 
 ## Attribution and terms
 

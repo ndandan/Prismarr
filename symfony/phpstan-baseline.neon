@@ -7,7 +7,7 @@ parameters:
 			path: src/Controller/AdminSettingsController.php
 
 		-
-			message: '#^Offset ''type'' on array\{key\: ''bazarr_api_key''\|''jellyseerr_api_key''\|''prowlarr_api_key''\|''radarr_api_key''\|''sabnzbd_api_key''\|''sonarr_api_key''\|''tautulli_api_key''\|''unifi_api_key''\|''unraid_api_key'', type\: ''password'', label\: ''admin\.field\.api_key''\}\|array\{key\: ''bazarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''deluge_password''\|''nzbget_password''\|''qbittorrent_password''\|''transmission…'', type\: ''password'', label\: ''admin\.field\.password'', clearable\: true\}\|array\{key\: ''deluge_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''gluetun_api_key'', type\: ''password'', label\: ''admin\.field\.api_key…''\}\|array\{key\: ''gluetun_url'', type\: ''text'', label\: ''admin\.field\.url''\}\|array\{key\: ''houndarr_api_key'', type\: ''password'', label\: ''admin\.field\.api_key'', placeholder\: ''hndarr_…''\}\|array\{key\: ''houndarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''jellyseerr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''nzbget_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''nzbget_user''\|''qbittorrent_user''\|''transmission_user'', type\: ''text'', label\: ''admin\.field\.username'', clearable\: true\}\|array\{key\: ''prowlarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''qbittorrent_url''\|''sabnzbd_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''radarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''sonarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''tautulli_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''tmdb_api_key'', type\: ''password'', label\: ''admin\.field\.tmdb…'', placeholder\: ''7a2f4…''\}\|array\{key\: ''transmission_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''unifi_site'', type\: ''text'', label\: ''admin\.field\.unifi…'', placeholder\: ''default'', clearable\: true\}\|array\{key\: ''unifi_skip_tls…'', type\: ''checkbox'', label\: ''admin\.field\.unifi…''\}\|array\{key\: ''unifi_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''https\://192\.168\.1\.1''\}\|array\{key\: ''unraid_skip_tls…'', type\: ''checkbox'', label\: ''admin\.field\.unraid…''\}\|array\{key\: ''unraid_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''https\://tower\.local''\} on left side of \?\? always exists and is not nullable\.$#'
+			message: '#^Offset ''type'' on array\{key\: ''bazarr_api_key''\|''emby_api_key''\|''jellyseerr_api_key''\|''prowlarr_api_key''\|''radarr_api_key''\|''sabnzbd_api_key''\|''sonarr_api_key''\|''tautulli_api_key''\|''unifi_api_key''\|''unraid_api_key'', type\: ''password'', label\: ''admin\.field\.api_key''\}\|array\{key\: ''bazarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''deluge_password''\|''nzbget_password''\|''qbittorrent_password''\|''transmission…'', type\: ''password'', label\: ''admin\.field\.password'', clearable\: true\}\|array\{key\: ''deluge_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''emby_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''gluetun_api_key'', type\: ''password'', label\: ''admin\.field\.api_key…''\}\|array\{key\: ''gluetun_url'', type\: ''text'', label\: ''admin\.field\.url''\}\|array\{key\: ''houndarr_api_key'', type\: ''password'', label\: ''admin\.field\.api_key'', placeholder\: ''hndarr_…''\}\|array\{key\: ''houndarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''jellyseerr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''nzbget_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''nzbget_user''\|''qbittorrent_user''\|''transmission_user'', type\: ''text'', label\: ''admin\.field\.username'', clearable\: true\}\|array\{key\: ''prowlarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''qbittorrent_url''\|''sabnzbd_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''radarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''sonarr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''tautulli_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''tmdb_api_key'', type\: ''password'', label\: ''admin\.field\.tmdb…'', placeholder\: ''7a2f4…''\}\|array\{key\: ''tracearr_api_key'', type\: ''password'', label\: ''admin\.field\.api_key'', placeholder\: ''trr_pub_…''\}\|array\{key\: ''tracearr_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''transmission_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''http\://host\.docker…''\}\|array\{key\: ''unifi_site'', type\: ''text'', label\: ''admin\.field\.unifi…'', placeholder\: ''default'', clearable\: true\}\|array\{key\: ''unifi_skip_tls…'', type\: ''checkbox'', label\: ''admin\.field\.unifi…''\}\|array\{key\: ''unifi_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''https\://192\.168\.1\.1''\}\|array\{key\: ''unraid_skip_tls…'', type\: ''checkbox'', label\: ''admin\.field\.unraid…''\}\|array\{key\: ''unraid_url'', type\: ''text'', label\: ''admin\.field\.url'', placeholder\: ''https\://tower\.local''\} on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
 			path: src/Controller/AdminSettingsController.php
@@ -19,7 +19,7 @@ parameters:
 			path: src/Controller/AdminSettingsController.php
 
 		-
-			message: '#^Parameter \#1 \$spec of method App\\Controller\\AdminSettingsController\:\:normalizeDisplayValue\(\) expects array\{label\: string, type\: string, default\: string, options\?\: array\<string, string\>, help\?\: string\}, array\{label\: ''admin\.display\.date…'', type\: ''select'', default\: ''fr'', options\: array\{fr\: ''admin\.display\.date…'', us\: ''admin\.display\.date…'', iso\: ''admin\.display\.date…''\}\}\|array\{label\: ''admin\.display\.home…'', type\: ''select'', default\: ''dashboard'', options\: array\{dashboard\: ''admin\.display\.home…'', discovery\: ''admin\.display\.home…'', films\: ''admin\.display\.home…'', series\: ''admin\.display\.home…'', qbittorrent\: ''admin\.display\.home…'', last\: ''admin\.display\.home…''\}, help\: ''admin\.display\.home…''\}\|array\{label\: ''admin\.display\.page…'', type\: ''select'', default\: ''200'', options\: array\{50\: ''admin\.display\.page…'', 100\: ''admin\.display\.page…'', 200\: ''admin\.display\.page…'', 500\: ''admin\.display\.page…''\}, help\: ''admin\.display\.page…''\}\|array\{label\: ''admin\.display\.qbit…'', type\: ''select'', default\: ''2'', options\: array\{1\: ''admin\.display\.qbit…'', 2\: ''admin\.display\.qbit…'', 5\: ''admin\.display\.qbit…'', 10\: ''admin\.display\.qbit…'', 0\: ''admin\.display\.qbit…''\}, help\: ''admin\.display\.qbit…''\}\|array\{label\: ''admin\.display\.theme…'', type\: ''color'', default\: ''theme_default'', options\: array\{theme_default\: ''auto'', indigo\: ''\#6366f1'', red\: ''\#ef4444'', green\: ''\#22c55e'', orange\: ''\#f59e0b'', pink\: ''\#ec4899'', blue\: ''\#3b82f6''\}, help\: ''admin\.display\.theme…''\}\|array\{label\: ''admin\.display\.theme…'', type\: ''select'', default\: ''classic'', options\: array\{classic\: ''admin\.display\.theme…'', midnight\: ''admin\.display\.theme…'', nord\: ''admin\.display\.theme…'', catppuccin_latte\: ''admin\.display\.theme…'', catppuccin_frappe\: ''admin\.display\.theme…'', catppuccin_macchiato\: ''admin\.display\.theme…'', catppuccin_mocha\: ''admin\.display\.theme…'', dracula\: ''admin\.display\.theme…'', \.\.\.\}, help\: ''admin\.display\.theme…''\}\|array\{label\: ''admin\.display\.time…'', type\: ''select'', default\: ''24h'', options\: array\{''24h''\: ''admin\.display\.time…'', ''12h''\: ''admin\.display\.time…''\}\}\|array\{label\: ''admin\.display\.ui…'', type\: ''select'', default\: ''comfortable'', options\: array\{comfortable\: ''admin\.display\.ui…'', compact\: ''admin\.display\.ui…''\}\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''2'', options\: array\{1\: ''admin\.display\.qbit…'', 2\: ''admin\.display\.qbit…'', 5\: ''admin\.display\.qbit…'', 10\: ''admin\.display\.qbit…'', 0\: ''admin\.display\.qbit…''\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''2'', options\: array\{1\: ''admin\.display…'', 2\: ''admin\.display…'', 5\: ''admin\.display…'', 10\: ''admin\.display…'', 0\: ''admin\.display…''\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''en'', hidden\: true, options\: array\{fr\: ''admin\.display…'', en\: ''admin\.display…''\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''en\-US'', hidden\: true, options\: array\{fr\-FR\: ''admin\.display…'', en\-US\: ''admin\.display…'', en\-GB\: ''admin\.display…'', es\-ES\: ''admin\.display…'', de\-DE\: ''admin\.display…'', it\-IT\: ''admin\.display…'', pt\-PT\: ''admin\.display…'', pt\-BR\: ''admin\.display…'', \.\.\.\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''switch'', default\: ''1'', help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''timezone'', default\: '''', help\: ''admin\.display…''\} given\.$#'
+			message: '#^Parameter \#1 \$spec of method App\\Controller\\AdminSettingsController\:\:normalizeDisplayValue\(\) expects array\{label\: string, type\: string, default\: string, options\?\: array\<string, string\>, help\?\: string\}, array\{label\: ''admin\.display\.date…'', type\: ''select'', default\: ''fr'', options\: array\{fr\: ''admin\.display\.date…'', us\: ''admin\.display\.date…'', iso\: ''admin\.display\.date…''\}\}\|array\{label\: ''admin\.display\.home…'', type\: ''select'', default\: ''dashboard'', options\: array\{dashboard\: ''admin\.display\.home…'', discovery\: ''admin\.display\.home…'', films\: ''admin\.display\.home…'', series\: ''admin\.display\.home…'', qbittorrent\: ''admin\.display\.home…'', last\: ''admin\.display\.home…''\}, help\: ''admin\.display\.home…''\}\|array\{label\: ''admin\.display\.page…'', type\: ''select'', default\: ''200'', options\: array\{50\: ''admin\.display\.page…'', 100\: ''admin\.display\.page…'', 200\: ''admin\.display\.page…'', 500\: ''admin\.display\.page…''\}, help\: ''admin\.display\.page…''\}\|array\{label\: ''admin\.display\.qbit…'', type\: ''select'', default\: ''2'', options\: array\{1\: ''admin\.display\.qbit…'', 2\: ''admin\.display\.qbit…'', 5\: ''admin\.display\.qbit…'', 10\: ''admin\.display\.qbit…'', 0\: ''admin\.display\.qbit…''\}, help\: ''admin\.display\.qbit…''\}\|array\{label\: ''admin\.display\.theme…'', type\: ''color'', default\: ''theme_default'', options\: array\{theme_default\: ''auto'', indigo\: ''\#6366f1'', red\: ''\#ef4444'', green\: ''\#22c55e'', orange\: ''\#f59e0b'', pink\: ''\#ec4899'', blue\: ''\#3b82f6''\}, help\: ''admin\.display\.theme…''\}\|array\{label\: ''admin\.display\.theme…'', type\: ''select'', default\: ''classic'', options\: array\{classic\: ''admin\.display\.theme…'', midnight\: ''admin\.display\.theme…'', nord\: ''admin\.display\.theme…'', catppuccin_latte\: ''admin\.display\.theme…'', catppuccin_frappe\: ''admin\.display\.theme…'', catppuccin_macchiato\: ''admin\.display\.theme…'', catppuccin_mocha\: ''admin\.display\.theme…'', dracula\: ''admin\.display\.theme…'', \.\.\.\}, help\: ''admin\.display\.theme…''\}\|array\{label\: ''admin\.display\.time…'', type\: ''select'', default\: ''24h'', options\: array\{''24h''\: ''admin\.display\.time…'', ''12h''\: ''admin\.display\.time…''\}\}\|array\{label\: ''admin\.display\.ui…'', type\: ''select'', default\: ''comfortable'', options\: array\{comfortable\: ''admin\.display\.ui…'', compact\: ''admin\.display\.ui…''\}\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''2'', options\: array\{1\: ''admin\.display\.qbit…'', 2\: ''admin\.display\.qbit…'', 5\: ''admin\.display\.qbit…'', 10\: ''admin\.display\.qbit…'', 0\: ''admin\.display\.qbit…''\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''2'', options\: array\{1\: ''admin\.display…'', 2\: ''admin\.display…'', 5\: ''admin\.display…'', 10\: ''admin\.display…'', 0\: ''admin\.display…''\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''auto'', options\: array\{auto\: ''admin\.display…'', tautulli\: ''admin\.display…'', tracearr\: ''admin\.display…''\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''en'', hidden\: true, options\: array\{fr\: ''admin\.display…'', en\: ''admin\.display…''\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''select'', default\: ''en\-US'', hidden\: true, options\: array\{fr\-FR\: ''admin\.display…'', en\-US\: ''admin\.display…'', en\-GB\: ''admin\.display…'', es\-ES\: ''admin\.display…'', de\-DE\: ''admin\.display…'', it\-IT\: ''admin\.display…'', pt\-PT\: ''admin\.display…'', pt\-BR\: ''admin\.display…'', \.\.\.\}, help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''switch'', default\: ''1'', help\: ''admin\.display…''\}\|array\{label\: ''admin\.display…'', type\: ''timezone'', default\: '''', help\: ''admin\.display…''\} given\.$#'
 			identifier: argument.type
 			count: 1
 			path: src/Controller/AdminSettingsController.php
@@ -409,6 +409,24 @@ parameters:
 			path: src/Controller/TmdbController.php
 
 		-
+			message: '#^Method App\\Controller\\TmdbController\:\:searchPayload\(\) should return array\{terms\: string, best\: array\|null, results\: list\<array\>, people\: list\<array\>, total\: int, candidates\: list\<array\{label\: string, popularity\: float\}\>\} but returns array\{terms\: string, best_person\: array\{id\: int, popularity\: float, name\: non\-empty\-string, profile\: string\|null, known\: string, titles\: list\<mixed\>\}\|null, best\: mixed, results\: array, people\: list\<array\{id\: int, popularity\: float, name\: non\-empty\-string, profile\: string\|null, known\: string, titles\: list\<mixed\>\}\>, total\: int\<0, max\>, candidates\: list\<array\{label\: string, popularity\: float\}\>\}\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Controller/TmdbController.php
+
+		-
+			message: '#^Offset ''best_person'' does not exist on array\{terms\: string, best\: array\|null, results\: list\<array\>, people\: list\<array\>, total\: int, candidates\: list\<array\{label\: string, popularity\: float\}\>\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: src/Controller/TmdbController.php
+
+		-
+			message: '#^Offset ''best_person'' does not exist on array\{terms\: string, best\: array\|null, results\: list\<array\>, people\: list\<array\>, total\: int\<min, \-1\>\|int\<1, max\>, candidates\: list\<array\{label\: string, popularity\: float\}\>\}\.$#'
+			identifier: offsetAccess.notFound
+			count: 1
+			path: src/Controller/TmdbController.php
+
+		-
 			message: '#^Offset ''parts'' on non\-empty\-array on left side of \?\? always exists and is not nullable\.$#'
 			identifier: nullCoalesce.offset
 			count: 1
@@ -793,6 +811,36 @@ parameters:
 			path: src/Service/Media/RadarrClient.php
 
 		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/Media/SearchRanker.php
+
+		-
+			message: '#^Offset ''label'' on array\{label\: string, popularity\?\: float\|int\} on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.offset
+			count: 1
+			path: src/Service/Media/SearchRanker.php
+
+		-
+			message: '#^Parameter \#1 \$array \(list\<array\<string, mixed\>\>\) of array_values is already a list, call has no effect\.$#'
+			identifier: arrayValues.list
+			count: 1
+			path: src/Service/Media/SearchRanker.php
+
+		-
+			message: '#^Method App\\Service\\Media\\SearchVocabulary\:\:read\(\) should return list\<array\{label\: string, popularity\: float\}\> but returns array\<mixed\>\.$#'
+			identifier: return.type
+			count: 1
+			path: src/Service/Media/SearchVocabulary.php
+
+		-
+			message: '#^Variable \$data on left side of \?\? always exists and is not nullable\.$#'
+			identifier: nullCoalesce.variable
+			count: 1
+			path: src/Service/Media/SearchVocabulary.php
+
+		-
 			message: '#^Method App\\Service\\Media\\SonarrClient\:\:normalizeCalendarEntries\(\) should return list\<array\<string, mixed\>\> but returns array\<int, array\{id\: mixed, seriesId\: mixed, tvdbId\: mixed, tmdbId\: mixed, seriesTitle\: mixed, poster\: string\|null, fanart\: string\|null, season\: mixed, \.\.\.\}\>\.$#'
 			identifier: return.type
 			count: 1
@@ -905,6 +953,12 @@ parameters:
 			identifier: return.type
 			count: 2
 			path: src/Service/Media/TorrentResolverService.php
+
+		-
+			message: '#^Call to function is_string\(\) with string will always evaluate to true\.$#'
+			identifier: function.alreadyNarrowedType
+			count: 1
+			path: src/Service/Media/TracearrClient.php
 
 		-
 			message: '#^Parameter \#1 \$string of function substr expects string, string\|true given\.$#'

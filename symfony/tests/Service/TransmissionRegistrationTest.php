@@ -28,17 +28,12 @@ class TransmissionRegistrationTest extends TestCase
             "'transmission': { icon_bg: '#d7302f', subtitle: 'admin.services.subtitle.transmission'|trans },",
             $tpl,
         );
-        // 2. groupings "downloads" list, ~line 451
+        // 2. listed in the Services settings layout (admin/_services_list.html.twig);
+        // the kill-switch list is HealthService::TOGGLEABLE_SERVICES, pinned by
+        // ServiceListsCoherenceTest.
         self::assertStringContainsString(
-            "['qbittorrent', 'deluge', 'transmission', 'gluetun', 'sabnzbd', 'nzbget']",
-            $tpl,
-        );
-        // 3. per-service kill-switch visibility list (issue #15), ~line 493 —
-        // a distinct list from the groupings one above (different membership
-        // and order), so this proves transmission is in THIS list specifically.
-        self::assertStringContainsString(
-            "['tmdb', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'sabnzbd', 'nzbget', 'tautulli', 'bazarr', 'unraid', 'unifi', 'houndarr']",
-            $tpl,
+            "'transmission'",
+            (string) file_get_contents(dirname(self::SETTINGS_TWIG) . '/_services_list.html.twig'),
         );
         // 4. "Test connection" TEST_FIELDS map, ~line 1314
         self::assertStringContainsString(

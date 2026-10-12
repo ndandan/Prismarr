@@ -5,13 +5,13 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-09-29 (covers 2026-06-13 → 2026-09-29).*
+*Last updated: 2026-10-12 (covers 2026-06-13 → 2026-10-12).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
 mergeable both ways), and everything general-purpose is offered back as an
 upstream PR. Every change lands through the same quality gate as upstream —
-PHP lint, Twig lint and the full PHPUnit suite (~1,083 tests) green in CI, plus
+PHP lint, Twig lint and the full PHPUnit suite (~2,040 tests) green in CI, plus
 a live test on a real Unraid deployment — before an image is published.
 Since 2026-07-31 that gate also includes PHPStan at level 7.
 
@@ -172,9 +172,16 @@ sits behind the same circuit breaker + SSRF locks as every other client.
 
 ---
 
-## 3. Shipped in the fork, not yet proposed upstream
+## 3. Shipped in the fork
 
-On the fork's `main`; candidates for a future PR wave.
+On the fork's `main`. Much of this section was later proposed upstream and
+**merged in Beta 1.3.0 (2026-10-12)** — worker mode and OPcache preloading,
+the mobile filter drawer, the Tabler setup wizard (since replaced upstream by a
+two-step setup), Bazarr, the stale-while-revalidate library cache and the
+date/time preference sweep among them. Those entries are kept as the record of
+how the work was built; the list of what landed upstream is in the
+[1.3.0 sync](#upstream-beta-130-sync-2026-10-12) entry at the end of this
+section.
 
 ### Houndarr widget (2026-07-04)
 
@@ -235,7 +242,10 @@ chip, admin settings card, kill switch, test fields), `DashboardController` edit
 `templates/admin/settings.html.twig`), `unifi.svg`, translations
 (`translations/messages+intl-icu.en.yaml`, `translations/messages+intl-icu.fr.yaml`), tests.
 
-### Setup wizard on stock Tabler primitives (2026-07-10)
+### Setup wizard on stock Tabler primitives (2026-07-10) — superseded upstream 2026-10-12
+
+*Merged upstream as #94, then replaced by upstream's two-step setup (language
++ admin account); services are now added from Settings → Services.*
 
 The first-run wizard (`templates/setup/`) carried its own mini design system —
 custom stepper, buttons, card, badges, test-result dots, secret toggles and
@@ -263,7 +273,7 @@ container in dark, light and 390 px widths.
 **Files:** the eight `symfony/templates/setup/*.html.twig` templates (merge
 `968da85`, 4 commits).
 
-### Runtime & performance (2026-07-10 → 2026-07-11)
+### Runtime & performance (2026-07-10 → 2026-07-11) — worker mode and preloading merged upstream (#95, #91)
 
 A batch of runtime work, some general enough to propose upstream later:
 
@@ -294,7 +304,10 @@ A batch of runtime work, some general enough to propose upstream later:
   in parallel for fast first paint; fail-open / hidden-tab / Turbo-singleton
   behaviour is preserved.
 
-### Mobile & settings polish (2026-07-10)
+### Mobile & settings polish (2026-07-10) — merged upstream (#93)
+
+*The packed service-card grid was later replaced by upstream's Services list in
+1.3.0; the mobile filter drawer stays.*
 
 - **Library filters collapse into a drawer on mobile.** Below 992 px the
   Films/Series filter card becomes a Bootstrap offcanvas opened by a
@@ -679,7 +692,7 @@ guard (which closes the last open item from the cross-page poller fix above),
 Classic theme mode, the `deluge.*` translation namespace, the 4+ instance
 Radarr/Sonarr sidebar dropdown fix, and PHPUnit 14 test hygiene.
 
-### Bazarr integration (2026-08-29) — [#103](https://github.com/ndandan/Prismarr/issues/103)
+### Bazarr integration (2026-08-29) — [#103](https://github.com/ndandan/Prismarr/issues/103), merged upstream (#109)
 
 New optional [Bazarr](https://www.bazarr.media) subtitle-management
 integration, single-instance flat config under `/admin/settings` (URL + API
@@ -694,7 +707,7 @@ other media-client controller.
   search results — so subtitle coverage is visible without opening the
   Bazarr tab.
 
-### Bazarr/library responsiveness — stale-while-revalidate caching (2026-09-02)
+### Bazarr/library responsiveness — stale-while-revalidate caching (2026-09-02) — merged upstream (#107, #108)
 
 The Bazarr integration above and the pre-existing Radarr/Sonarr library cache both had the same
 shape of problem: a slow external refill (Bazarr's `/movies?length=-1`, 4–8 s on 5,382 rows; the
@@ -808,6 +821,70 @@ and every lookup is a single indexed read on `(tmdb_id, media_type)`.
 `AdminSettingsController`, `DashboardController`, `TmdbController::detail`, the settings, films, series,
 Discover and quick-look templates, `messenger.yaml` and `docker/frankenphp/s6/messenger-worker/run`.
 
+### Upstream Beta 1.3.0 sync (2026-10-12)
+
+Upstream merged every open contribution PR from this fork — 21 in all, waves
+three to five: #90–#102, #104, #105, #107–#109, #111, #113 and #121 — and
+released them as **Beta 1.3.0** together with its own rework. It merged them
+through integration branches, so the code is upstream but not under this
+fork's commit SHAs; syncing back meant resolving ~99 conflicting files, half of
+them the same file added on both sides.
+
+**Direction: follow upstream's redesigns** wherever the two overlapped, and
+re-wire the fork-only features onto them:
+
+- **Discover → upstream's Search page** (one box for movies, series and
+  people, typo-tolerant with "did you mean", best-match card). The fork's
+  Wokeometer block was re-added to its detail modal.
+- **Setup → upstream's two steps** (language + admin account). The fork's
+  multi-step wizard templates were removed; services are added afterwards.
+- **Settings → upstream's Services list** (grouped, collapsible rows with live
+  status, Test, Remove and the per-service switch). Unraid, UniFi and Houndarr
+  became rows in it (a `checkbox` field type was added for their skip-TLS
+  toggles); the Wokeometer card stays a block of its own below it.
+- **One service list for health.** Upstream's `HealthCatalog` is now the single
+  flat-service list behind the topbar, the API and the dashboard; the fork's
+  Houndarr, Unraid and UniFi were added to it, with Unraid/UniFi marked
+  admin-only. `HealthService::chips()` keeps the fork's concurrent probe sweep.
+- **Came along from upstream:** the Tracearr activity page, the Emby
+  now-playing widget, the Transmission dashboard widget, official service
+  logos, base-path-aware URLs and the bulk-delete fix.
+
+**Kept from the fork** on the files both sides touched, because upstream's
+copies would have regressed them:
+
+- **The 30 s library budget.** Upstream's copy of the shared-cache refill paths
+  (Bazarr poster resolver, dashboard library widgets) had dropped
+  `LIBRARY_TIMEOUT`, which would have reopened the 2026-08-28 "large library
+  marked unreachable" regression. For the files added on both sides the
+  fork's copy was taken and only upstream's real changes (`BASE_PATH` URL
+  prefixes) ported onto it.
+- **Template escaping on the Search page.** Upstream's detail modal still
+  spliced ~17 TMDb strings (alternative titles, reviews, provider and company
+  names, video keys, external links) into HTML unescaped — the same sinks the
+  fork closed on Discover in July. `TemplateEscapingGuardTest` caught every one
+  of them; the fixes were re-applied (`escHtml()` / `encodeURI()` /
+  `encodeURIComponent()`, and a quote-safe `escHtml`).
+- **The enforcing nonce CSP.** Upstream's new inline scripts (Search,
+  Tracearr, the Emby quick-look) got `nonce="{{ csp_nonce() }}"`; the repo-wide
+  "inline `<script>` with neither `src=` nor a nonce" check reports zero.
+- PHPStan (pinned to 2.2.7 / phpstan-symfony 2.0.20 — 2.3.x rules invalidate
+  the baseline; upstream's new Search/Tracearr code is baselined like other
+  upstream-origin code), `SafeUrl`, the em-dash date filters, floating
+  episode air dates and the client-side date patterns.
+
+**Found on `:beta`, not by the suite:** the Services list still uses upstream's
+`.secret-wrapper` / `.secret-toggle` markup, whose CSS the fork had removed when
+its own cards moved to `forms.secret_input` — so every API-key field showed its
+show/hide button as a loose box underneath. Restoring upstream's CSS fixed it.
+
+**A test-harness trap worth keeping:** running PHPUnit in the dev container
+over the Windows bind mount silently skips ~37 test classes (1,777 tests
+locally vs 2,044 in CI). The local run was green while CI failed on seven
+tests; the reliable local run copies the tree into the container's own
+filesystem first. Final gate: PHP lint, Twig lint, container lint, PHPStan 0
+and **2,042 / 2,042** tests, CI green, live-verified on `:beta`.
+
 ---
 
 ## 4. Fork-only — declined upstream
@@ -881,8 +958,8 @@ Gluetun `X-API-Key` fix.
 ## Verification
 
 - Full gate green in CI on `main`: PHP lint, Twig lint, PHPStan level 7
-  (baseline shrink-only, added 2026-07-31) and the PHPUnit suite (1,079 tests /
-  2,941 assertions as of 2026-08-01). GHCR `:latest` rebuilds automatically on
+  (baseline shrink-only, added 2026-07-31) and the PHPUnit suite (2,042 tests /
+  ~7,550 assertions as of 2026-10-12). GHCR `:latest` rebuilds automatically on
   every push to `main`; CI runs independently, so tests are verified green
   *before* pushing.
 - Every feature above was live-verified on a real Unraid deployment (usually

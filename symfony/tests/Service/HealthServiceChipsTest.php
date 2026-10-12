@@ -195,15 +195,15 @@ class HealthServiceChipsTest extends TestCase
             'radarr|Radarr R2|down',
             'radarr|Radarr R3|degraded',
             'sonarr|Sonarr S1|down',
+            'tmdb|TMDb|up',
             'prowlarr|Prowlarr|up',
             'jellyseerr|Seerr|up',
             'deluge|Deluge|down',
             'transmission|Transmission|up',
             'sabnzbd|SABnzbd|up',
-            'tmdb|TMDb|up',
             'tautulli|Tautulli|degraded',
-            'houndarr|Houndarr|up',
             'bazarr|Bazarr|down',
+            'houndarr|Houndarr|up',
         ], self::summary($chips));
 
         foreach ($chips as $chip) {
@@ -214,7 +214,7 @@ class HealthServiceChipsTest extends TestCase
             }
         }
         self::assertSame('#FFC230', $chips[0]['color']);
-        self::assertSame('#be4bdb', $chips[12]['color']);
+        self::assertSame('#be4bdb', $chips[11]['color']);
     }
 
     public function testUnraidAndUnifiOnlyWhenIncluded(): void
@@ -259,7 +259,7 @@ class HealthServiceChipsTest extends TestCase
         $second = $this->make($settings, [], ['radarr' => ['r1']], pool: $pool)->chips();
 
         self::assertSame(self::summary($first), self::summary($second));
-        self::assertSame(['radarr|Radarr R1|up', 'prowlarr|Prowlarr|down', 'tmdb|TMDb|up'], self::summary($second));
+        self::assertSame(['radarr|Radarr R1|up', 'tmdb|TMDb|up', 'prowlarr|Prowlarr|down'], self::summary($second));
         self::assertSame($first[0]['latencyMs'], $second[0]['latencyMs']);
     }
 

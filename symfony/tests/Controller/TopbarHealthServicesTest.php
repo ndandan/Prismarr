@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Tests\Controller;
+
+use App\Service\HealthCatalog;
+use App\Tests\AbstractWebTestCase;
+
+/**
+ * The topbar health indicator and its API must cover every service of
+ * HealthCatalog, so the topbar, the API and the dashboard widget never drift.
+ * (Fork: the topbar renders the API's `chips`, which HealthService::chips()
+ * builds from HealthCatalog — so there is no separate JS label list to pin.)
+ */
+final class TopbarHealthServicesTest extends AbstractWebTestCase
+{
+    public function testApiReportsEveryCatalogService(): void
+    {
+        $this->client->request('GET', '/api/health/services');
+        self::assertResponseIsSuccessful();
+
+        $data = json_decode((string) $this->client->getResponse()->getContent(), true);
+        foreach (array_keys(HealthCatalog::FLAT_SERVICES) as $service) {
+            self::assertArrayHasKey($service, $data['services']);
+            self::assertNull($data['services'][$service], $service . ' is not configured in the test kernel');
+        }
+    }
+}

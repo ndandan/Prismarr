@@ -45,6 +45,20 @@
     window.INSTANCE_SLUG = INSTANCE_SLUG;
     window.DEFAULT_RADARR_SLUG = DEFAULT_RADARR_SLUG;
     window.DEFAULT_SONARR_SLUG = DEFAULT_SONARR_SLUG;
+    // Reverse-proxy path prefix, exposed once here so every child template's
+    // `var BASE = window.BASE_PATH;` reads the same value instead of each
+    // re-evaluating app.request.getBasePath() in its own script block.
+    window.BASE_PATH = {{ app.request.getBasePath()|json_encode|raw }};
+
+    // The global search dropdown renders its subtitle badge purely
+    // client-side (results are built from a JSON payload, not Twig), so the
+    // click-to-search affordance on a 'missing' badge needs an admin check
+    // in JS. This mirrors the server-side gate: `bazarr/_search_modal.html.twig`
+    // (below) is itself only ever included for admins, and BazarrController
+    // is `#[IsGranted('ROLE_ADMIN')]` on the whole class — so this flag only
+    // controls whether the badge LOOKS clickable, it grants no capability by
+    // itself.
+    window.PRISMARR_IS_ADMIN = {{ is_granted('ROLE_ADMIN') ? 'true' : 'false' }};
 
     // Task 13 — the global search dropdown renders its subtitle badge purely
     // client-side (results are built from a JSON payload, not Twig), so the
@@ -989,7 +1003,8 @@
           </a>
         </div>
 
-        {% if service_visible_in_sidebar('tautulli') %}
+        {% set plex_pill_source = activity_source() %}
+        {% if plex_pill_source and service_visible_in_sidebar(plex_pill_source) %}
         {# Live Plex streaming pill — hidden until the poller finds active streams. #}
         <a href="{{ path('app_dashboard') }}#plex-activity" id="sidebar-plex-pill" class="sidebar-plex-pill" style="display:none;">
           <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4v16l13 -8z"/></svg>
@@ -1040,7 +1055,7 @@
                  href="{{ path('tmdb_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
                   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <path d="M12 2l2.4 7.4h7.6l-6.2 4.5l2.4 7.4l-6.2 -4.6l-6.2 4.6l2.4 -7.4l-6.2 -4.5h7.6z"/>
+                    <path d="M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/><path d="M21 21l-6 -6"/>
                   </svg>
                 </span>
                 <span class="nav-link-title">{{ 'sidebar.nav.discovery'|trans }}</span>
@@ -1082,7 +1097,7 @@
               {% set _radarr_slug = app.request.attributes.get('slug') %}
               {% set _radarr_icon %}
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg width="24" height="24" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg" class="icon"><g transform="translate(70 21)"><path d="M105.3 154.9L112.8 869.5C52.7 877 7.5 846.9 7.5 786.8L0 192.6C0 4.5 173-40.6 278.3 34.6L812.3 343C887.5 395.6 902.6 493.4 865 561.1C857.5 508.5 834.9 478.4 789.8 448.3L188 109.8C142.9 79.7 105.3 87.2 105.3 154.9Z" fill="#FFC230"/><path d="M0 376.1C45.1 391.1 90.3 383.6 127.9 361L744.6 0C782.2 52.7 774.7 105.3 729.6 135.4L210.6 436.3C135.4 473.9 37.6 436.3 0 376.1Z" transform="translate(60.2 531)" fill="#FFC230"/><path d="M0 413.7L368.6 203.1L7.5 0L0 413.7Z" transform="translate(240.7 282.8)" fill="#FFC230"/></g></svg>
+                  <img src="{{ asset('img/services/radarr.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
               {% endset %}
 
@@ -1135,7 +1150,7 @@
               {% set _sonarr_slug = app.request.attributes.get('slug') %}
               {% set _sonarr_icon %}
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg width="24" height="24" viewBox="0 0 216.7 216.9" xmlns="http://www.w3.org/2000/svg" class="icon"><path d="M194.65 42.5l-22.4 22.4C159.15 78 158 89.4 158 109.5c0 17.93 2.85 34.35 16.2 47.7l19 18.95c-2.5 3.07-5.2 6.07-8.1 9-.7.83-1.48 1.6-2.35 2.3-2.53 2.5-5.17 4.82-7.9 6.95l-17.55-17.55c-15.6-15.6-28-17.1-48.6-17.1-19.77 0-33.22 1.82-47.7 16.3l-18.55 18.6c-3.77-2.87-7.33-6.03-10.7-9.5-2.8-2.8-5.42-5.67-7.85-8.6l19.15-19.2c13.85-13.85 16.1-29.92 16.1-47.85 0-17.5-2.87-33.82-15.6-46.55L22.45 43.85c2.83-3.6 5.92-7.07 9.25-10.4 2.93-2.87 5.93-5.55 9-8.05L61.1 43.85C74.1 56.85 90.77 60.2 108.7 60.2c18.47 0 35.08-3.58 48.6-17.1l19.3-19.25c2.9 2.37 5.73 4.93 8.5 7.7 3.47 3.53 6.65 7.18 9.55 10.95z" fill="#0CF"/><circle cx="108.35" cy="108.45" r="29.5" fill="#0CF" opacity=".8"/></svg>
+                  <img src="{{ asset('img/services/sonarr.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
               {% endset %}
 
@@ -1181,7 +1196,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'prowlarr_' ? 'active' }}"
                  href="{{ path('prowlarr_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg width="24" height="24" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" class="icon"><path d="M256 32C132.3 32 32 132.3 32 256s100.3 224 224 224 224-100.3 224-224S379.7 32 256 32zm0 400c-97 0-176-79-176-176S159 80 256 80s176 79 176 176-79 176-176 176z" fill="#E88D1A"/><path d="M256 120c-75 0-136 61-136 136s61 136 136 136 136-61 136-136-61-136-136-136zm0 224c-48.6 0-88-39.4-88-88s39.4-88 88-88 88 39.4 88 88-39.4 88-88 88z" fill="#E88D1A"/><circle cx="256" cy="256" r="48" fill="#E88D1A"/></svg>
+                  <img src="{{ asset('img/services/prowlarr.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title">Prowlarr</span>
               </a>
@@ -1193,7 +1208,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'jellyseerr_' ? 'active' }}"
                  href="{{ path('jellyseerr_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg width="24" height="24" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg" class="icon"><path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm0 368c-88.4 0-160-71.6-160-160S167.6 96 256 96s160 71.6 160 160-71.6 160-160 160z" fill="#a259ff"/><circle cx="256" cy="256" r="80" fill="#a259ff"/></svg>
+                  <img src="{{ asset('img/services/jellyseerr.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title d-flex align-items-center">Seerr
                   <span id="sidebar-seerr-badge" class="sidebar-dl-badge" style="display:none;">0</span>
@@ -1207,12 +1222,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_qbittorrent_' ? 'active' }}"
                  href="{{ path('app_qbittorrent_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#2f67ba" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/>
-                    <path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/>
-                  </svg>
+                  <img src="{{ asset('img/services/qbittorrent.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title d-flex align-items-center">{{ 'sidebar.nav.qbittorrent'|trans }}
                   <span id="sidebar-qbt-badge" class="sidebar-dl-badge" style="display:none;">0</span>
@@ -1226,11 +1236,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_deluge_' ? 'active' }}"
                  href="{{ path('app_deluge_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#3e7bbf" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M12 3c3.5 4.2 6 7.4 6 10.5a6 6 0 1 1 -12 0c0 -3.1 2.5 -6.3 6 -10.5z"/>
-                  </svg>
+                  <img src="{{ asset('img/services/deluge.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title d-flex align-items-center">{{ 'sidebar.nav.deluge'|trans }}
                   <span id="sidebar-deluge-badge" class="sidebar-dl-badge" style="display:none;">0</span>
@@ -1244,11 +1250,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_transmission_' ? 'active' }}"
                  href="{{ path('app_transmission_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#d7302f" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <path d="M12 3c3.5 4.2 6 7.4 6 10.5a6 6 0 1 1 -12 0c0 -3.1 2.5 -6.3 6 -10.5z"/>
-                  </svg>
+                  <img src="{{ asset('img/services/transmission.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title d-flex align-items-center">{{ 'sidebar.nav.transmission'|trans }}
                   <span id="sidebar-transmission-badge" class="sidebar-dl-badge" style="display:none;">0</span>
@@ -1262,12 +1264,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_usenet_' and app.request.attributes.get('client') == 'sabnzbd' ? 'active' }}"
                  href="{{ path('app_usenet_index', {client: 'sabnzbd'}) }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#ffa000" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/>
-                    <path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/>
-                  </svg>
+                  <img src="{{ asset('img/services/sabnzbd.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title d-flex align-items-center">SABnzbd
                   <span id="sidebar-sabnzbd-badge" class="sidebar-dl-badge" style="display:none;">0</span>
@@ -1281,12 +1278,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_usenet_' and app.request.attributes.get('client') == 'nzbget' ? 'active' }}"
                  href="{{ path('app_usenet_index', {client: 'nzbget'}) }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#1f9c3a" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-2"/>
-                    <path d="M7 11l5 5l5 -5"/><path d="M12 4l0 12"/>
-                  </svg>
+                  <img src="{{ asset('img/services/nzbget.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title d-flex align-items-center">NZBGet
                   <span id="sidebar-nzbget-badge" class="sidebar-dl-badge" style="display:none;">0</span>
@@ -1300,11 +1292,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_tautulli_' ? 'active' }}"
                  href="{{ path('app_tautulli_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#e5a00d" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <path d="M3 12h4l3 8l4 -16l3 8h4"/>
-                  </svg>
+                  <img src="{{ asset('img/services/tautulli.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title">Tautulli</span>
               </a>
@@ -1316,14 +1304,21 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_bazarr_' ? 'active' }}"
                  href="{{ path('app_bazarr_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#be4bdb" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <rect x="3" y="5" width="18" height="14" rx="2"/>
-                    <path d="M7 15h2"/><path d="M11 15h6"/>
-                  </svg>
+                  <img src="{{ asset('img/services/bazarr.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title">{{ 'sidebar.nav.bazarr'|trans }}</span>
+              </a>
+            </li>
+            {% endif %}
+
+            {% if service_visible_in_sidebar('tracearr') %}
+            <li class="nav-item">
+              <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_tracearr_' ? 'active' }}"
+                 href="{{ path('app_tracearr_index') }}">
+                <span class="nav-link-icon d-md-none d-lg-inline-block">
+                  <img src="{{ asset('img/services/tracearr.svg') }}" width="24" height="24" alt="" class="icon">
+                </span>
+                <span class="nav-link-title">Tracearr</span>
               </a>
             </li>
             {% endif %}
@@ -1333,14 +1328,7 @@
               <a class="nav-link {{ app.request.attributes.get('_route') starts with 'app_unifi_' ? 'active' }}"
                  href="{{ path('app_unifi_index') }}">
                 <span class="nav-link-icon d-md-none d-lg-inline-block">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"
-                       fill="none" stroke="#0559C9" stroke-width="2"
-                       stroke-linecap="round" stroke-linejoin="round" class="icon">
-                    <path d="M12 18l.01 0"/>
-                    <path d="M9.172 15.172a4 4 0 0 1 5.656 0"/>
-                    <path d="M6.343 12.343a8 8 0 0 1 11.314 0"/>
-                    <path d="M3.515 9.515c4.686 -4.687 12.284 -4.687 17 0"/>
-                  </svg>
+                  <img src="{{ asset('img/services/unifi.svg') }}" width="24" height="24" alt="" class="icon">
                 </span>
                 <span class="nav-link-title">{{ 'unifi.title'|trans }}</span>
               </a>
@@ -1796,6 +1784,7 @@
   {% block javascripts %}{% endblock %}
   <script nonce="{{ csp_nonce() }}">
   (function () {
+    var BASE = window.BASE_PATH;
     function initAutohide() {
       document.querySelectorAll('.js-autohide').forEach(function (el) {
         if (el.dataset.autohideInit) return;
@@ -1860,8 +1849,8 @@
         var instanceLabel = (item.instance && item.instance.name)
           ? ' · <span class="text-info">' + window.escHtml(item.instance.name) + '</span>'
           : '';
-        // Task 13 — subtitle status badge. `item.subtitle` only ever exists
-        // on in-library results (attached server-side in MediaController::
+        // Subtitle status badge. `item.subtitle` only ever exists on
+        // in-library results (attached server-side in MediaController::
         // globalSearch(), omitted for the 'hidden' state and for online/
         // TMDb-only results), so its mere presence is the render gate.
         // A 'missing' MOVIE badge is clickable (opens the Bazarr search modal)
@@ -2023,7 +2012,7 @@
         var url;
         if (item.inLibrary && item.instance && item.instance.slug && item.id) {
           // Local library result — authoritative Radarr/Sonarr data + Manage deep-link.
-          url = '/tableau-de-bord/quicklook/' + (isFilm ? 'movie' : 'series')
+          url = BASE + '/tableau-de-bord/quicklook/' + (isFilm ? 'movie' : 'series')
               + '/' + item.instance.slug + '/' + item.id;
         } else {
           // Online result — TMDb data. Movies key on tmdbId (== id); series need tmdbId.
@@ -2041,7 +2030,7 @@
             trigger.remove();
             return;
           }
-          url = '/tableau-de-bord/quicklook/tmdb/' + (isFilm ? 'movie' : 'tv') + '/' + tmdbId;
+          url = BASE + '/tableau-de-bord/quicklook/tmdb/' + (isFilm ? 'movie' : 'tv') + '/' + tmdbId;
         }
         closeResults();
         window.prismarrQl.open();
@@ -2059,12 +2048,11 @@
           })
           .catch(function () { window.prismarrQl.close(); });
       }
-
       function runSearch(q) {
         showSpinner();
         var ctrl = new AbortController();
         currentReq = ctrl;
-        fetch('/medias/' + DEFAULT_RADARR_SLUG + '/search?q=' + encodeURIComponent(q), { signal: ctrl.signal })
+        fetch(BASE + '/medias/' + DEFAULT_RADARR_SLUG + '/search?q=' + encodeURIComponent(q), { signal: ctrl.signal })
           .then(function (r) { return r.json(); })
           .then(function (localItems) {
             hideSpinner();
@@ -2074,7 +2062,7 @@
 
             var ctrl2 = new AbortController();
             onlineReq = ctrl2;
-            fetch('/medias/' + DEFAULT_RADARR_SLUG + '/search/online?q=' + encodeURIComponent(q), { signal: ctrl2.signal })
+            fetch(BASE + '/medias/' + DEFAULT_RADARR_SLUG + '/search/online?q=' + encodeURIComponent(q), { signal: ctrl2.signal })
               .then(function (r) { return r.json(); })
               .then(function (onlineItems) {
                 onlineReq = null;
@@ -2130,9 +2118,9 @@
       // then fail its `.contains(e.target)` check (the orphan node is no
       // longer in the DOM) and wrongly close the dropdown.
       resultsDiv.addEventListener('click', function (e) {
-        // Task 13 — no `[data-bazarr-search]` carve-out needed here: that
-        // listener (bazarr/_search_modal.html.twig) runs in the capture phase
-        // and stops the event before it ever reaches this one.
+        // No `[data-bazarr-search]` carve-out needed here: that listener
+        // (bazarr/_search_modal.html.twig) runs in the capture phase and
+        // stops the event before it ever reaches this one.
         var pill = e.target.closest('.prismarr-search-pill');
         if (pill) {
           e.stopPropagation();
@@ -2241,11 +2229,11 @@
           return Promise.resolve();
         }
         var profileUrl = isFilm
-          ? '/medias/' + slug + '/films/quality-profiles'
-          : '/medias/' + slug + '/sonarr/quality-profiles';
+          ? BASE + '/medias/' + slug + '/films/quality-profiles'
+          : BASE + '/medias/' + slug + '/sonarr/quality-profiles';
         var folderUrl = isFilm
-          ? '/medias/' + slug + '/films/root-folders'
-          : '/medias/' + slug + '/sonarr/root-folders';
+          ? BASE + '/medias/' + slug + '/films/root-folders'
+          : BASE + '/medias/' + slug + '/sonarr/root-folders';
         return Promise.all([
           fetch(profileUrl).then(function (r) { return r.json(); }),
           fetch(folderUrl).then(function (r) { return r.json(); })
@@ -2270,7 +2258,7 @@
         var rows = instances.map(function (inst) {
           var lbl = statusLabels[inst.status] || inst.status;
           var openLbl = i18n['qa.action.view'] || 'Voir';
-          var url = '/medias/' + inst.slug + (isFilm ? '/films?open=' : '/series?open=') + inst.id;
+          var url = BASE + '/medias/' + inst.slug + (isFilm ? '/films?open=' : '/series?open=') + inst.id;
           return '<div class="d-flex align-items-center gap-2 p-2 mb-1 rounded" style="background:rgba(255,255,255,.04);">'
             + '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5"><path d="M5 12l5 5l10-10"/></svg>'
             + '<span class="small fw-medium">' + window.escHtml(inst.name) + '</span>'
@@ -2341,7 +2329,7 @@
         // falls back to default-only behaviour so the modal still works.
         var resolveType = isFilm ? 'movie' : 'tv';
         var resolveId   = qaItem.tmdbId || qaItem.id;
-        fetch('/decouverte/resolve/' + resolveType + '/' + resolveId)
+        fetch(BASE + '/decouverte/resolve/' + resolveType + '/' + resolveId)
           .then(function (r) { return r.json(); })
           .then(function (resolved) {
             var defaultSlug = isFilm ? DEFAULT_RADARR_SLUG : DEFAULT_SONARR_SLUG;
@@ -2486,7 +2474,7 @@
         var targetSlug = qaSelectedSlug || (isFilm ? DEFAULT_RADARR_SLUG : DEFAULT_SONARR_SLUG);
         var url, payload;
         if (isFilm) {
-          url = '/medias/' + targetSlug + '/films/add';
+          url = BASE + '/medias/' + targetSlug + '/films/add';
           payload = {
             tmdbId: qaItem.id, title: qaItem.title, year: qaItem.year || 0,
             qualityProfileId: parseInt(qualVal), rootFolderPath: folderVal,
@@ -2495,7 +2483,7 @@
             searchForMovie: document.getElementById('qa-film-search').checked
           };
         } else {
-          url = '/medias/' + targetSlug + '/series/add';
+          url = BASE + '/medias/' + targetSlug + '/series/add';
           payload = {
             tvdbId: qaItem.id, title: qaItem.title,
             qualityProfileId: parseInt(qualVal), rootFolderPath: folderVal,
@@ -3269,14 +3257,17 @@
      Tautulli has no sidebar nav entry, so the pill is rendered unconditionally
      and hidden by default; this poller reveals it when streams are active and
      stops itself entirely when Tautulli isn't configured (so it doesn't poke a
-     disabled service every 30s).
+     disabled service every 30s). Fed by Tautulli, or by Tracearr when only
+     Tracearr is set up — same priority as the dashboard widget; both
+     activity endpoints answer the same {enabled, configured, streamCount}.
      ══════════════════════════════════════════════════════════════════════════ #}
-  {% if service_visible_in_sidebar('tautulli') %}
+  {% set plex_pill_source = activity_source() %}
+  {% if plex_pill_source and service_visible_in_sidebar(plex_pill_source) %}
   <script nonce="{{ csp_nonce() }}">
   (function () {
     var pill = document.getElementById('sidebar-plex-pill');
     if (!pill) return;
-    var URL = '{{ path('app_tautulli_api_activity') }}';
+    var URL = '{{ plex_pill_source == 'tautulli' ? path('app_tautulli_api_activity') : path('app_tracearr_api_activity') }}';
     var INTERVAL = 30000;
     function tick() {
       if (document.hidden) return;
@@ -3407,7 +3398,7 @@
       }
 
       function fetchHealth() {
-        fetch('/api/health/services', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        fetch('{{ path('api_health_services') }}', { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
           .then(function (r) { return r.ok ? r.json() : null; })
           .then(function (d) { if (d) renderHealth(d); })
           .catch(function () {});

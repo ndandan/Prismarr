@@ -31,7 +31,8 @@ class PageLifecycleGuardTest extends TestCase
         yield 'base'     => ['base.html.twig'];
         yield 'films'    => ['media/films.html.twig'];
         yield 'series'   => ['media/series.html.twig'];
-        yield 'discover' => ['decouverte/index.html.twig'];
+        // Discover was replaced by upstream's Search page (1.3.0), which
+        // swaps its document listeners through its own bindDoc() instead.
     }
 
     #[DataProvider('convertedPages')]

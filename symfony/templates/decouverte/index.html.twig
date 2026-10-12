@@ -71,15 +71,15 @@
   .media-card[data-tmdb-id] .card-year { font-size: .62rem; color: rgba(255,255,255,.6); }
   .media-card[data-tmdb-id] .quality-badge {
     position: absolute; top: .4rem; left: .4rem;
-    font-size: .6875rem; font-weight: 700; padding: .1rem .35rem;
+    font-size: .6rem; font-weight: 700; padding: .1rem .35rem;
     border-radius: .25rem; background: rgba(0,0,0,.65); color: #fff;
     backdrop-filter: blur(4px);
   }
   .media-card[data-tmdb-id] .quality-badge.movie { background: rgba(255,194,48,.92); color: #1a1a1a; }
   .media-card[data-tmdb-id] .quality-badge.tv    { background: rgba(0,204,255,.92);  color: #1a1a1a; }
   .media-card[data-tmdb-id] .lib-badge {
-    position: absolute; top: .4rem; left: calc(.4rem + 2.7rem + .25rem);
-    font-size: .6875rem; font-weight: 700; padding: .1rem .35rem;
+    position: absolute; top: .4rem; left: calc(.4rem + 2.2rem + .25rem);
+    font-size: .6rem; font-weight: 700; padding: .1rem .35rem;
     border-radius: .25rem; color: #fff;
     backdrop-filter: blur(4px);
   }
@@ -148,90 +148,99 @@
   .media-card[data-tmdb-id] .wl-star.in-wl:hover { background: rgba(245,158,11,1); }
   .media-card[data-tmdb-id] .wl-star:not(.in-wl):hover { background: rgba(245,158,11,.6); }
 
-  /* ── Touch devices: hover-only actions made reachable (audit 2026-06-29)
-     Details/Add and the watchlist star only appear via :hover, which never
-     fires on touch. On hover-less devices the hover-info becomes a compact
-     persistent bottom bar (not the full-cover overlay) carrying title/year
-     + actions, replacing the plain card-overlay, and the star stays
-     visible. CSS-only; desktop hover behaviour unchanged. */
-  @media (hover: none) {
-    .media-card[data-tmdb-id] .hover-info {
-      opacity: 1; pointer-events: auto;
-      top: auto; /* bottom bar instead of inset:0 full cover */
-      background: linear-gradient(transparent, rgba(0,0,0,.88) 35%);
-      padding-top: 1.4rem;
-    }
-    .media-card[data-tmdb-id] .hover-info .h-overview { display: none; }
-    .media-card[data-tmdb-id] .card-overlay { display: none; } /* title/year now in hover-info */
-    .media-card[data-tmdb-id] .wl-star { opacity: 1; }
-    /* Tap targets: the 24px star and the tiny action buttons get a larger
-       hit area on coarse pointers. */
-    .media-card[data-tmdb-id] .wl-star { width: 32px; height: 32px; }
-    .media-card[data-tmdb-id] .wl-star svg { width: 16px; height: 16px; }
-    .media-card[data-tmdb-id] .hover-info .h-actions .btn { min-height: 32px; }
-    /* The compact "Vu récemment" strip (100px tiles) has no room for the
-       persistent bar — keep its plain overlay there. */
-    #tmdb-recent-row .media-card[data-tmdb-id] .hover-info { display: none; }
-    #tmdb-recent-row .media-card[data-tmdb-id] .card-overlay { display: block; }
-  }
-
   /* Overrides contextuels */
   .tmdb-results-grid .media-card[data-tmdb-id] { flex: none; width: auto; }
   .td-similar-row .media-card[data-tmdb-id] { flex: 0 0 110px; width: 110px; }
 
-  /* ── Barre de recherche + actions ── */
-  .tmdb-searchbar {
-    display: flex; gap: .5rem; align-items: center;
-    margin-bottom: 1.25rem; flex-wrap: wrap;
-  }
-  .tmdb-search-wrap {
-    flex: 1; min-width: 200px; display: flex; align-items: center; gap: .5rem;
+  /* ── Search: query box, inline filters, best match, people ── */
+  .srch { margin-bottom: 1.5rem; }
+  .srch-bar {
+    display: flex; align-items: center; gap: .75rem;
     background: var(--tblr-bg-surface);
     border: 1px solid var(--tblr-border-color);
-    border-radius: .5rem;
-    padding: .45rem .75rem;
+    border-radius: .85rem; padding: .7rem 1rem;
     transition: border-color .15s, box-shadow .15s;
   }
-  .tmdb-search-wrap:focus-within {
-    border-color: var(--tblr-primary);
-    box-shadow: 0 0 0 3px rgba(var(--tblr-primary-rgb),.12);
+  .srch-bar:focus-within { border-color: var(--tblr-primary); box-shadow: 0 0 0 4px rgba(var(--tblr-primary-rgb), .14); }
+  .srch-ico { color: var(--tblr-muted); flex-shrink: 0; }
+  .srch-bar:focus-within .srch-ico { color: var(--tblr-primary); }
+  .srch-input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--tblr-body-color); font-size: 1.05rem; }
+  .srch-input::placeholder { color: var(--tblr-muted); }
+  .srch-kbd {
+    background: var(--tblr-bg-surface-secondary); color: var(--tblr-muted);
+    border: 1px solid var(--tblr-border-color); border-radius: .3rem;
+    font-size: .7rem; padding: .1rem .45rem; font-weight: 600;
   }
-  .tmdb-search-ico { color: var(--tblr-muted); flex-shrink: 0; }
-  .tmdb-search-wrap:focus-within .tmdb-search-ico { color: var(--tblr-primary); }
-  .tmdb-search-input {
-    flex: 1; background: transparent; border: 0; outline: 0;
-    color: var(--tblr-body-color); font-size: .85rem;
-    min-width: 0;
+  .srch-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; margin-top: .75rem; }
+  @media (min-width: 992px) { .srch-filters { flex-wrap: nowrap; } .srch-filters > * { flex-shrink: 0; } }
+  .srch-seg { display: inline-flex; border: 1px solid var(--tblr-border-color); border-radius: .5rem; overflow: hidden; }
+  .srch-seg button { background: none; border: 0; color: var(--tblr-secondary); font-size: .8rem; padding: .3rem .6rem; cursor: pointer; }
+  .srch-seg button + button { border-left: 1px solid var(--tblr-border-color); }
+  .srch-seg button.is-active { background: rgba(var(--tblr-primary-rgb), .14); color: var(--tblr-primary); font-weight: 600; }
+  .srch-select { width: auto; min-width: 0; font-size: .8rem; padding-top: .3rem; padding-bottom: .3rem; }
+  .srch-check { display: inline-flex; align-items: center; gap: .35rem; font-size: .8rem; color: var(--tblr-secondary); cursor: pointer; white-space: nowrap; }
+  .srch-reset { background: none; border: 0; font-size: .8rem; color: var(--tblr-primary); cursor: pointer; padding: .2rem .3rem; }
+  .srch-btn {
+    display: inline-flex; align-items: center; gap: .35rem; white-space: nowrap;
+    padding: .32rem .7rem; border-radius: .5rem; font-size: .8rem; font-weight: 600; text-decoration: none;
+    color: var(--tblr-primary); background: rgba(var(--tblr-primary-rgb), .1);
+    border: 1px solid rgba(var(--tblr-primary-rgb), .35); transition: background .15s, border-color .15s;
   }
-  .tmdb-search-input::placeholder { color: var(--tblr-muted); }
-  .tmdb-search-kbd {
-    background: var(--tblr-bg-surface-secondary);
-    color: var(--tblr-muted);
-    border: 1px solid var(--tblr-border-color);
-    border-radius: .25rem; font-size: .6rem;
-    padding: .1rem .35rem; font-weight: 600;
-    letter-spacing: .5px;
-  }
-  .tmdb-action-btns { display: flex; gap: .35rem; align-items: center; }
-  .tmdb-action-btn {
-    display: inline-flex; align-items: center; gap: .35rem;
-    padding: .4rem .7rem;
-    background: var(--tblr-bg-surface);
-    border: 1px solid var(--tblr-border-color);
-    border-radius: .5rem;
-    color: var(--tblr-body-color); font-weight: 500; font-size: .78rem;
-    cursor: pointer; transition: all .15s; text-decoration: none;
-    white-space: nowrap;
-  }
-  .tmdb-action-btn:hover { background: rgba(var(--tblr-primary-rgb),.08); border-color: var(--tblr-primary); color: var(--tblr-primary); }
-  .tmdb-action-btn.active { background: var(--tblr-primary); color: #fff; border-color: var(--tblr-primary); }
-  .tmdb-action-btn svg { flex-shrink: 0; }
+  .srch-btn:hover { color: var(--tblr-primary); background: rgba(var(--tblr-primary-rgb), .18); border-color: var(--tblr-primary); }
   .tmdb-filter-badge {
     display: inline-flex; align-items: center; justify-content: center;
-    background: #ef4444; color: #fff;
-    width: 16px; height: 16px; border-radius: 50%;
-    font-size: .6rem; font-weight: 700;
-    margin-left: .15rem;
+    background: #ef4444; color: #fff; width: 16px; height: 16px; border-radius: 50%;
+    font-size: .6rem; font-weight: 700; margin-left: .15rem;
+  }
+  .srch-status { font-size: .85rem; color: var(--tblr-secondary); margin: 0 0 .75rem .1rem; }
+  .srch-correction { font-size: .95rem; margin: 0 0 .35rem .1rem; }
+  .srch-inline-link { background: none; border: 0; padding: 0; color: var(--tblr-primary); font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+  .srch-correction .srch-inline-link.is-quiet { font-weight: 400; color: var(--tblr-secondary); }
+  .srch-label { font-size: .72rem; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--tblr-secondary); margin: 1.25rem 0 .6rem .1rem; }
+  .srch-best {
+    position: relative; border-radius: 1rem; overflow: hidden; margin-bottom: .5rem;
+    background: var(--tblr-bg-surface-secondary) var(--srch-bg, none) center 25% / cover no-repeat;
+    border: 1px solid var(--tblr-border-color);
+  }
+  .srch-best-person { background: linear-gradient(120deg, rgba(var(--tblr-primary-rgb), .35), rgba(10,12,18,.9)); }
+  .srch-best::before { content: ""; position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,12,18,.94) 0%, rgba(10,12,18,.82) 45%, rgba(10,12,18,.45) 100%); }
+  .srch-best-inner { position: relative; display: flex; gap: 1.25rem; padding: 1.25rem; color: #fff; }
+  .srch-best-poster { width: 140px; flex: 0 0 140px; aspect-ratio: 2/3; object-fit: cover; border-radius: .6rem; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
+  .srch-best-body { min-width: 0; display: flex; flex-direction: column; gap: .35rem; }
+  .srch-best-kicker { font-size: .7rem; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: rgba(255,255,255,.65); }
+  .srch-best-title { margin: 0; font-size: 1.6rem; font-weight: 700; line-height: 1.15; color: #fff; }
+  .srch-best-orig { font-size: .85rem; color: rgba(255,255,255,.6); font-style: italic; }
+  .srch-best-meta { font-size: .85rem; color: rgba(255,255,255,.8); display: flex; align-items: center; gap: .2rem; flex-wrap: wrap; }
+  .srch-best-genres { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .srch-genre { font-size: .72rem; padding: .15rem .55rem; border-radius: 999px; background: rgba(255,255,255,.12); color: rgba(255,255,255,.9); }
+  .srch-best-overview { margin: .25rem 0 0; font-size: .88rem; line-height: 1.5; color: rgba(255,255,255,.85); max-width: 62ch; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .srch-best-actions { display: flex; align-items: center; gap: .5rem; margin-top: .6rem; }
+  .srch-best-wl { position: static; width: 32px; height: 32px; border-radius: 50%; background: rgba(0,0,0,.35); border: 1px solid rgba(255,255,255,.2); display: inline-flex; align-items: center; justify-content: center; }
+  .srch-best-wl svg { width: 16px; height: 16px; }
+  .srch-people { display: flex; gap: .6rem; overflow-x: auto; padding-bottom: .25rem; }
+  .srch-person {
+    display: flex; align-items: center; gap: .65rem; flex: 0 0 auto; max-width: 280px;
+    padding: .45rem .8rem .45rem .45rem; border-radius: 999px;
+    background: var(--tblr-bg-surface); border: 1px solid var(--tblr-border-color);
+    color: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s;
+  }
+  .srch-person:hover { border-color: var(--tblr-primary); background: rgba(var(--tblr-primary-rgb), .06); }
+  .srch-person img, .srch-person-initials { width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%; object-fit: cover; }
+  .srch-person-initials { display: inline-flex; align-items: center; justify-content: center; background: rgba(var(--tblr-primary-rgb), .15); color: var(--tblr-primary); font-weight: 600; font-size: .8rem; }
+  .srch-person-text { min-width: 0; display: flex; flex-direction: column; }
+  .srch-person-name { font-weight: 600; font-size: .85rem; }
+  .srch-person-sub { font-size: .72rem; color: var(--tblr-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .srch-person-head { display: flex; gap: 1rem; align-items: flex-start; margin-bottom: 1rem; }
+  .srch-person-head img { width: 110px; flex: 0 0 110px; aspect-ratio: 2/3; object-fit: cover; border-radius: .6rem; }
+  .srch-person-head .srch-best-title, .srch-person-head .srch-best-kicker { color: inherit; }
+  .srch-person-head .srch-best-kicker { color: var(--tblr-secondary); }
+  .srch-person-head .srch-best-overview { color: var(--tblr-secondary); margin-bottom: .6rem; }
+  .srch-grid { grid-template-columns: repeat(auto-fill, minmax(165px, 1fr)) !important; gap: 1rem !important; }
+  @media (max-width: 640px) {
+    .srch-best-inner { flex-direction: column; }
+    .srch-best-poster { width: 110px; flex-basis: auto; }
+    .srch-best-title { font-size: 1.3rem; }
+    .srch-select { flex: 1 1 45%; }
   }
 
   .tmdb-search-bar { margin-bottom: 1rem; }
@@ -461,29 +470,6 @@
   }
   .td-video-btn:hover { background: var(--tblr-primary); color: white; border-color: var(--tblr-primary); }
   .td-video-btn.active { background: var(--tblr-primary); color: white; border-color: var(--tblr-primary); }
-
-  /* ── Mobile/tablet readability floor (responsive audit 2026-06-29) ──
-     Floor sub-11px text at 11px (.6875rem) below the lg breakpoint. Kept
-     last in this block so it wins the cascade at equal specificity;
-     desktop (≥992px) keeps the original sizes. */
-  @media (max-width: 991.98px) {
-    .media-card[data-tmdb-id] .card-year,
-    .media-card[data-tmdb-id] .quality-badge,
-    .media-card[data-tmdb-id] .lib-badge,
-    .media-card[data-tmdb-id] .vote-badge,
-    .media-card[data-tmdb-id] .countdown-badge,
-    #tmdb-recent-row .media-card[data-tmdb-id] .card-title-text,
-    #tmdb-recent-row .media-card[data-tmdb-id] .card-year,
-    .media-card[data-tmdb-id] .hover-info .h-year,
-    .media-card[data-tmdb-id] .hover-info .h-actions .btn,
-    .tmdb-search-kbd,
-    .tmdb-filter-badge,
-    .tmdb-results-grid .media-card .card-year,
-    .tmdb-hero-label,
-    .td-cast-card .cast-role,
-    .td-season-card .season-meta,
-    .td-genre-badge { font-size: .6875rem; }
-  }
 </style>
 
 <div class="page-body">
@@ -492,7 +478,6 @@
     {% if error %}
       {% include 'error/_service_banner.html.twig' with {
         service: 'TMDb',
-        wizard_route: 'app_setup_tmdb',
         configured_url: service_url,
         reason: 'unreachable'
       } %}
@@ -500,109 +485,65 @@
 
     {% if not error %}
 
-    {# Search bar + filter button — refined version #}
-    <div class="tmdb-searchbar">
-      <div class="tmdb-search-wrap">
-        <svg class="tmdb-search-ico" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M10 10m-7 0a7 7 0 1 0 14 0a7 7 0 1 0 -14 0"/>
-          <path d="M21 21l-6 -6"/>
-        </svg>
-        <input id="tmdb-search" type="search"
-               class="tmdb-search-input"
-               placeholder="{{ 'decouverte.search_placeholder'|trans }}"
-               autocomplete="off">
-        <kbd class="tmdb-search-kbd d-none d-md-inline">TMDb</kbd>
+    {# Search: one query box + inline filters. Results replace the home
+       content (hero banners, recommendations, rows) while a search is active. #}
+    <div class="srch" data-srch>
+      <div class="srch-bar">
+        {{ ico.icon('search', 'srch-ico', 20) }}
+        <input id="tmdb-search" type="search" class="srch-input"
+               placeholder="{{ 'decouverte.srch.placeholder'|trans }}"
+               aria-label="{{ 'decouverte.srch.placeholder'|trans }}" autocomplete="off">
+        <kbd class="srch-kbd d-none d-md-inline" title="{{ 'decouverte.srch.shortcut'|trans }}">/</kbd>
       </div>
-      <div class="tmdb-action-btns">
-        <button type="button" class="tmdb-action-btn" id="tmdb-filters-toggle">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M3 4h18M7 12h10M11 20h2"/>
-          </svg>
-          {{ 'decouverte.actions.filters'|trans }}
-          <span class="tmdb-filter-badge" id="tmdb-filter-active-count" style="display:none;">0</span>
-        </button>
-        <a href="{{ path('tmdb_watchlist') }}" class="tmdb-action-btn" id="tmdb-watchlist-link">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="#f59e0b" stroke="#f59e0b" stroke-width="1.5" stroke-linejoin="round">
-            <path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4-6.2-4.5h7.6z"/>
-          </svg>
-          {{ 'decouverte.actions.watchlist'|trans }}
+      <div class="srch-filters">
+        <div class="srch-seg" role="group" aria-label="{{ 'decouverte.filters.type'|trans }}">
+          <button type="button" class="is-active" data-srch-type="all">{{ 'decouverte.filters.all'|trans }}</button>
+          <button type="button" data-srch-type="movie">{{ 'decouverte.filters.movies'|trans }}</button>
+          <button type="button" data-srch-type="tv">{{ 'decouverte.filters.series'|trans }}</button>
+        </div>
+        <select id="srch-genre" class="form-select form-select-sm srch-select" aria-label="{{ 'decouverte.filters.genre'|trans }}">
+          <option value="">{{ 'decouverte.srch.all_genres'|trans }}</option>
+        </select>
+        <select id="srch-vote" class="form-select form-select-sm srch-select" aria-label="{{ 'decouverte.srch.rating'|trans }}">
+          <option value="0">{{ 'decouverte.srch.any_rating'|trans }}</option>
+          <option value="6">★ 6+</option>
+          <option value="7">★ 7+</option>
+          <option value="8">★ 8+</option>
+        </select>
+        <select id="srch-sort" class="form-select form-select-sm srch-select" aria-label="{{ 'decouverte.filters.sort'|trans }}">
+          <option value="relevance">{{ 'decouverte.srch.sort.relevance'|trans }}</option>
+          <option value="popularity">{{ 'decouverte.srch.sort.popularity'|trans }}</option>
+          <option value="vote">{{ 'decouverte.srch.sort.vote'|trans }}</option>
+          <option value="newest">{{ 'decouverte.srch.sort.newest'|trans }}</option>
+        </select>
+        <label class="srch-check"><input type="checkbox" id="srch-hide-owned"> {{ 'decouverte.srch.hide_owned'|trans }}</label>
+        <button type="button" class="srch-reset" id="srch-reset" hidden>{{ 'decouverte.filters.reset'|trans }}</button>
+        <span class="flex-fill"></span>
+        <a href="{{ path('tmdb_watchlist') }}" class="srch-btn" id="tmdb-watchlist-link">
+          {{ ico.icon('star-filled', '', 14) }} {{ 'decouverte.actions.watchlist'|trans }}
           <span class="tmdb-filter-badge" id="tmdb-wl-count" style="display:none;">0</span>
         </a>
-        <a href="{{ path('tmdb_explorer') }}" class="tmdb-action-btn">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6366f1" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 000 20 14.5 14.5 0 000-20"/><path d="M2 12h20"/>
-          </svg>
-          {{ 'decouverte.actions.explorer'|trans }}
-        </a>
+        <a href="{{ path('tmdb_explorer') }}" class="srch-btn">{{ ico.icon('world', '', 14) }} {{ 'decouverte.actions.explorer'|trans }}</a>
       </div>
     </div>
 
-    {# Filter drawer (offcanvas at all widths) #}
-    <div id="tmdb-filters" class="offcanvas offcanvas-start" tabindex="-1" aria-labelledby="tmdb-filters-label">
-      <div class="offcanvas-header">
-        <h5 class="offcanvas-title" id="tmdb-filters-label">{{ 'decouverte.filters.drawer_title'|trans }}</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" data-bs-target="#tmdb-filters" aria-label="Close"></button>
+    <div id="srch-results" class="mb-4" hidden>
+      <div class="srch-correction" id="srch-correction" hidden></div>
+      <div class="srch-status" id="srch-status" aria-live="polite"></div>
+      <div id="srch-person-head" hidden></div>
+      <div id="srch-best"></div>
+      <div id="srch-people-wrap" hidden>
+        <div class="srch-label">{{ 'decouverte.srch.people'|trans }}</div>
+        <div class="srch-people" id="srch-people"></div>
       </div>
-      <div class="offcanvas-body">
-        <div class="d-flex flex-column gap-3">
-          <div>
-            <label class="form-label small mb-1">{{ 'decouverte.filters.type'|trans }}</label>
-            <div class="btn-group d-flex" role="group">
-              <input type="radio" class="btn-check" name="filter-type" id="filter-type-movie" value="movie" checked>
-              <label class="btn btn-outline-primary btn-sm" for="filter-type-movie">{{ 'decouverte.filters.movies'|trans }}</label>
-              <input type="radio" class="btn-check" name="filter-type" id="filter-type-tv" value="tv">
-              <label class="btn btn-outline-primary btn-sm" for="filter-type-tv">{{ 'decouverte.filters.series'|trans }}</label>
-            </div>
-          </div>
-          <div>
-            <label class="form-label small mb-1">{{ 'decouverte.filters.genre'|trans }}</label>
-            <select class="form-select form-select-sm" id="filter-genre">
-              <option value="">{{ 'decouverte.filters.all'|trans }}</option>
-            </select>
-          </div>
-          <div class="d-flex gap-2">
-            <div class="flex-fill">
-              <label class="form-label small mb-1">{{ 'decouverte.filters.year_from'|trans }}</label>
-              <input type="number" class="form-control form-control-sm" id="filter-year-min" placeholder="1970" min="1900" max="2030">
-            </div>
-            <div class="flex-fill">
-              <label class="form-label small mb-1">{{ 'decouverte.filters.year_to'|trans }}</label>
-              <input type="number" class="form-control form-control-sm" id="filter-year-max" placeholder="2030" min="1900" max="2030">
-            </div>
-          </div>
-          <div>
-            <label class="form-label small mb-1">{{ 'decouverte.filters.vote_min'|trans({value: '__VAL__'})|replace({'__VAL__': '<span id="filter-vote-val" class="fw-medium">0</span>'})|raw }}</label>
-            <input type="range" class="form-range" id="filter-vote-min" min="0" max="10" step="0.5" value="0">
-          </div>
-          <div>
-            <label class="form-label small mb-1">{{ 'decouverte.filters.sort'|trans }}</label>
-            <select class="form-select form-select-sm" id="filter-sort">
-              <option value="popularity.desc">{{ 'decouverte.filters.sort_options.popularity'|trans }}</option>
-              <option value="vote_average.desc">{{ 'decouverte.filters.sort_options.vote_avg'|trans }}</option>
-              <option value="vote_count.desc">{{ 'decouverte.filters.sort_options.vote_count'|trans }}</option>
-              <option value="primary_release_date.desc">{{ 'decouverte.filters.sort_options.release'|trans }}</option>
-              <option value="revenue.desc">{{ 'decouverte.filters.sort_options.revenue'|trans }}</option>
-            </select>
-          </div>
-          <div class="d-flex gap-2 justify-content-end mt-2 pt-2 border-top">
-            <button type="button" class="btn btn-ghost-secondary btn-sm" id="filter-reset">{{ 'decouverte.filters.reset'|trans }}</button>
-            <button type="button" class="btn btn-primary btn-sm" id="filter-apply">{{ 'decouverte.filters.apply'|trans }}</button>
-          </div>
-        </div>
+      <div class="srch-label" id="srch-grid-label" hidden></div>
+      <div class="tmdb-results-grid srch-grid" id="tmdb-search-grid"></div>
+      <div class="text-center mt-3">
+        <button type="button" class="btn btn-outline-secondary" id="srch-more" hidden>{{ 'decouverte.srch.more'|trans }}</button>
       </div>
     </div>
 
-    {# Search OR filter results #}
-    <div id="tmdb-search-results" class="mb-3" style="display:none;">
-      <div class="d-flex align-items-center justify-content-between mb-2">
-        <h3 class="mb-0" style="font-size:1rem;">
-          <span id="tmdb-search-title">{{ 'decouverte.search.results'|trans }}</span>
-          <span id="tmdb-search-count" class="text-secondary small ms-1"></span>
-        </h3>
-        <button type="button" class="btn btn-sm btn-ghost-secondary" id="tmdb-search-close">{{ 'decouverte.search.close'|trans }}</button>
-      </div>
-      <div class="tmdb-results-grid" id="tmdb-search-grid"></div>
-    </div>
+    <div id="srch-home">
 
     {% if heroMovie or heroTv %}
       <div class="row g-3 mb-3 tmdb-hero-row">
@@ -670,6 +611,7 @@
       </div>
       <div class="tmdb-row" id="tmdb-recent-row" style="gap:.5rem;"></div>
     </div>
+    </div>{# /#srch-home #}
 
   </div>
 </div>
@@ -1016,8 +958,6 @@
   {% elseif item.vote >= 5 %}{% set voteClass = 'mid' %}
   {% endif %}
   <div class="media-card"
-       tabindex="0" role="button" data-kb-activate
-       aria-label="{{ item.title }}"
        data-tmdb-id="{{ item.id }}"
        data-tmdb-type="{{ item.type }}"
        data-tmdb-title="{{ item.title }}"
@@ -1032,7 +972,7 @@
         <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path stroke="none" d="M0 0h24v24H0z" fill="none"/><path d="M7 4v16l13 -8z"/></svg>
       </div>
     {% endif %}
-    <span class="quality-badge {{ item.type }}">{{ item.type == 'movie' ? 'decouverte.badge_type_film'|trans : 'decouverte.badge_type_series'|trans }}</span>
+    <span class="quality-badge {{ item.type }}">{{ item.type == 'movie' ? 'decouverte.modal.type_film'|trans : 'decouverte.modal.type_series'|trans }}</span>
     {% if item.in_library %}
       {% set statusColors = {'downloaded':'#22c55e','missing':'#f59e0b','announced':'#6366f1','inCinemas':'#6366f1','partial':'#3b82f6','unmonitored':'#6b7280'} %}
       {% set statusShortKey = 'decouverte.card.status_short.' ~ (item.lib_status ?: 'default') %}
@@ -1061,7 +1001,8 @@
           {% set statusColors = {'downloaded':'#22c55e','missing':'#f59e0b','announced':'#6366f1','inCinemas':'#6366f1','partial':'#3b82f6','unmonitored':'#6b7280'} %}
           {% set statusKey = 'decouverte.modal.status.' ~ (item.lib_status ?: 'downloaded') %}
           {% set statusLabel = item.lib_status ? statusKey|trans : 'decouverte.card.in_library_short'|trans %}
-          <a href="{{ (item.type == 'movie' ? '/medias/' ~ current_slug('radarr') ~ '/films' : '/medias/' ~ current_slug('sonarr') ~ '/series') ~ '?open=' ~ item.lib_id }}" class="btn btn-sm" style="background:{{ statusColors[item.lib_status] ?? '#22c55e' }};color:#fff;">{{ statusLabel }}</a>
+          {% set basePath = app.request.getBasePath() %}
+          <a href="{{ (item.type == 'movie' ? basePath ~ '/medias/' ~ current_slug('radarr') ~ '/films' : basePath ~ '/medias/' ~ current_slug('sonarr') ~ '/series') ~ '?open=' ~ item.lib_id }}" class="btn btn-sm" style="background:{{ statusColors[item.lib_status] ?? '#22c55e' }};color:#fff;">{{ statusLabel }}</a>
         {% endif %}
       </div>
     </div>
@@ -1070,29 +1011,26 @@
 
 <script nonce="{{ csp_nonce() }}">
 (function() {
-  // Escapes &, < and > (text-node serialisation) plus the double quote: the
-  // helper is also used inside quoted attributes (data-tmdb-title, title,
-  // aria-label), where a bare " would close the attribute and let the rest of
-  // the TMDb string be parsed as markup.
+  // Turbo re-runs this script on every visit to the page. A listener bound
+  // on `document` would pile up (one more copy per visit: a card click then
+  // opens the detail modal N times) and keep pointing at the previous
+  // visit's DOM. bindDoc() swaps the previous copy for the new one.
+  function bindDoc(type, name, fn) {
+    var slot = '_prismarrSearchDoc_' + name;
+    if (window[slot]) document.removeEventListener(type, window[slot]);
+    window[slot] = fn;
+    document.addEventListener(type, fn);
+  }
+  var BASE = window.BASE_PATH;
+  // Also escapes the double quote: escHtml output lands inside quoted attributes
+  // (data-tmdb-title, title, aria-label) too.
   function escHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML.replace(/"/g, '&quot;'); }
-
-  // Every document-level listener below is declared through this collector
-  // instead of being bound straight away, so the shared page lifecycle helper
-  // (see base.html.twig) can bind them on turbo:load and take them all back
-  // off at turbo:before-render. Turbo re-runs this script on every visit, so
-  // without the removal each visit left another live copy behind: after K
-  // visits the watchlist star fired K POSTs (add, then remove, then add…) and
-  // the star silently reverted.
-  var pageDocListeners = [];
-  function onDoc(type, handler) { pageDocListeners.push([type, handler]); }
 
   // Localized strings used by the detail modal + toasts. Built server-side
   // so every label stays in sync with the current request locale.
   var TMDB_I18N = {
     type_film:    {{ 'decouverte.modal.type_film'|trans|json_encode|raw }},
     type_series:  {{ 'decouverte.modal.type_series'|trans|json_encode|raw }},
-    badge_film:   {{ 'decouverte.badge_type_film'|trans|json_encode|raw }},
-    badge_series: {{ 'decouverte.badge_type_series'|trans|json_encode|raw }},
     watchlist:    {{ 'decouverte.modal.watchlist'|trans|json_encode|raw }},
     in_watchlist: {{ 'decouverte.modal.in_watchlist'|trans|json_encode|raw }},
     in_library:   {{ 'decouverte.modal.in_library'|trans|json_encode|raw }},
@@ -1250,7 +1188,7 @@
       if (diff > 0 && diff <= 365) {
         var badge = document.createElement('span');
         badge.className = 'countdown-badge';
-        badge.textContent = '{{ 'decouverte.countdown_prefix'|trans|e('js') }}' + diff;
+        badge.textContent = 'J-' + diff;
         card.appendChild(badge);
       }
     });
@@ -1275,7 +1213,7 @@
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
 
-    fetch('/decouverte/resolve/' + type + '/' + id, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/resolve/' + type + '/' + id, { credentials: 'same-origin' })
       .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, body: d }; }); })
       .then(function(res) {
         btn.disabled = false;
@@ -1295,7 +1233,7 @@
       });
   }
 
-  onDoc('click', function(e) {
+  bindDoc('click', 'click1', function(e) {
     var addBtn = e.target.closest('.tmdb-add-btn');
     if (addBtn) {
       e.preventDefault();
@@ -1350,7 +1288,7 @@
       closeDetailModal();
     }
   });
-  onDoc('keydown', function(e) {
+  bindDoc('keydown', 'keydown2', function(e) {
     if (e.key === 'Escape' && detailModal.classList.contains('show')) {
       closeDetailModal();
     }
@@ -1509,7 +1447,7 @@
       actions.push('<button class="btn btn-primary tmdb-add-btn" data-tmdb-id="' + d.id + '" data-tmdb-type="' + d.type + '" data-tmdb-title="' + safeTitle + '">'
         + '<svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><path d="M12 5v14"/><path d="M5 12h14"/></svg>' + (d.type === 'movie' ? TMDB_I18N.add_to_radarr : TMDB_I18N.add_to_sonarr) + '</button>');
     } else {
-      var libUrl = d.type === 'movie' ? '/medias/' + DEFAULT_RADARR_SLUG + '/films' : '/medias/' + DEFAULT_SONARR_SLUG + '/series';
+      var libUrl = d.type === 'movie' ? BASE + '/medias/' + DEFAULT_RADARR_SLUG + '/films' : BASE + '/medias/' + DEFAULT_SONARR_SLUG + '/series';
       if (d.lib_id) libUrl += '?open=' + d.lib_id;
       var btnClass = d.lib_status === 'downloaded' ? 'btn-success' : (d.lib_status === 'missing' || d.lib_status === 'partial' ? 'btn-warning' : 'btn-outline-primary');
       actions.push('<a href="' + libUrl + '" class="btn ' + btnClass + '">'
@@ -1518,7 +1456,7 @@
     // Bouton watchlist dans la modal
     var wlKey = d.type + '_' + d.id;
     var isInWl = window._prismarrWatchlist && window._prismarrWatchlist[wlKey];
-    actions.push('<button class="btn ' + (isInWl ? 'btn-warning' : 'btn-outline-warning') + ' tmdb-wl-modal-btn" data-tmdb-id="' + d.id + '" data-tmdb-type="' + d.type + '" data-tmdb-title="' + safeTitle + '" data-poster-path="' + escHtml(d.poster_path || '') + '" data-vote="' + (d.vote || '') + '" data-year="' + (d.year || '') + '">'
+    actions.push('<button class="btn ' + (isInWl ? 'btn-warning' : 'btn-outline-warning') + ' tmdb-wl-modal-btn" data-tmdb-id="' + d.id + '" data-tmdb-type="' + d.type + '" data-tmdb-title="' + safeTitle + '" data-poster-path="' + (d.poster_path || '') + '" data-vote="' + (d.vote || '') + '" data-year="' + (d.year || '') + '">'
       + '<svg width="15" height="15" viewBox="0 0 24 24" fill="' + (isInWl ? '#fff' : 'none') + '" stroke="currentColor" stroke-width="2" class="me-1"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4-6.2-4.5h7.6z"/></svg>'
       + (isInWl ? TMDB_I18N.in_watchlist : TMDB_I18N.watchlist) + '</button>');
 
@@ -1528,9 +1466,6 @@
     var ext = [];
     ext.push('<a href="https://www.themoviedb.org/' + d.type + '/' + d.id + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">TMDb ↗</a>');
     if (d.imdb_id) ext.push('<a href="https://www.imdb.com/title/' + encodeURIComponent(d.imdb_id) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">IMDb ↗</a>');
-    // escHtml, not encodeURI: the homepage is an arbitrary third-party URL that
-    // may already carry percent-escapes, and encodeURI would double-encode them.
-    // The scheme is already pinned to http(s) by the test above.
     if (d.homepage && /^https?:\/\//.test(d.homepage)) ext.push('<a href="' + escHtml(d.homepage) + '" target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">Site ↗</a>');
     document.getElementById('td-external-links').innerHTML = ext.join('');
 
@@ -1592,7 +1527,7 @@
     if (d.cast && d.cast.length) {
       document.getElementById('td-cast').innerHTML = d.cast.map(function(c) {
         var photo = c.profile
-          ? '<img src="' + escHtml(c.profile) + '" alt="" loading="lazy">'
+          ? '<img src="' + c.profile + '" alt="" loading="lazy">'
           : '<img src="data:image/svg+xml;utf8,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'64\' height=\'64\' viewBox=\'0 0 24 24\' fill=\'%23888\'%3E%3Cpath d=\'M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z\'/%3E%3C/svg%3E">';
         return '<div class="td-cast-card">' + photo
           + '<div class="cast-name">' + escHtml(c.name || '—') + '</div>'
@@ -1704,8 +1639,6 @@
     var infoRows = [];
     function addRow(label, value) {
       if (value === null || value === undefined || value === '' || (Array.isArray(value) && !value.length)) return;
-      // Every caller but the "tags" row below passes plain text straight from
-      // the TMDb payload (crew names, countries, languages…), so escape here.
       var displayed = Array.isArray(value) ? value.map(function(v) { return escHtml(v); }).join(', ') : escHtml(value);
       infoRows.push('<tr><td class="text-muted" style="width:30%">' + label + '</td><td>' + displayed + '</td></tr>');
     }
@@ -1740,10 +1673,7 @@
     if (d.revenue && d.revenue > 0) addRow(TMDB_I18N.info_row.revenue, '$' + d.revenue.toLocaleString());
     if (d.episode_runtime) addRow(TMDB_I18N.info_row.episode_runtime, d.episode_runtime + ' min');
     if (d.keywords && d.keywords.length) {
-      // Pushed directly instead of via addRow(): this row is markup, not text,
-      // so it must not go through the escaping addRow() now applies.
-      var kwHtml = d.keywords.map(function(k) { return '<span class="td-genre-badge me-1" style="color:var(--tblr-secondary); background:var(--tblr-bg-surface-secondary); border-color:var(--tblr-border-color);">' + escHtml(k) + '</span>'; }).join('');
-      infoRows.push('<tr><td class="text-muted" style="width:30%">' + TMDB_I18N.info_row.tags + '</td><td>' + kwHtml + '</td></tr>');
+      addRow(TMDB_I18N.info_row.tags, d.keywords.map(function(k) { return '<span class="td-genre-badge me-1" style="color:var(--tblr-secondary); background:var(--tblr-bg-surface-secondary); border-color:var(--tblr-border-color);">' + escHtml(k) + '</span>'; }).join(''));
     }
     if (d.popularity) addRow(TMDB_I18N.info_row.popularity, d.popularity);
     var infoBlock = document.getElementById('td-info-block');
@@ -1765,7 +1695,7 @@
       });
       document.getElementById('td-seasons').innerHTML = sorted.map(function(s) {
         var poster = s.poster
-          ? '<img src="' + escHtml(s.poster) + '" alt="" loading="lazy">'
+          ? '<img src="' + s.poster + '" alt="" loading="lazy">'
           : '<div class="no-poster"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M7 4v16l13 -8z"/></svg></div>';
         var year = s.air_date ? s.air_date.substring(0, 4) : '—';
         var vote = s.vote ? '<span class="season-vote">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + s.vote + '</span>' : '';
@@ -1797,7 +1727,7 @@
       document.getElementById('td-reviews').innerHTML = d.reviews.map(function(r) {
         var excerpt = (r.content || '').substring(0, 300);
         if (r.content && r.content.length > 300) excerpt += '…';
-        var rating = r.rating ? ' <span class="badge bg-warning ms-2">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + escHtml(r.rating) + '/10</span>' : '';
+        var rating = r.rating ? ' <span class="badge bg-warning ms-2">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + r.rating + '/10</span>' : '';
         var link = r.url ? ' <a href="' + encodeURI(r.url) + '" target="_blank" rel="noopener" class="small">Lire ↗</a>' : '';
         return '<div class="mb-2 pb-2 border-bottom">'
           + '<div class="d-flex align-items-center gap-2 mb-1"><strong class="small">' + escHtml(r.author) + '</strong>' + rating + link + '</div>'
@@ -1812,7 +1742,7 @@
     var backdropsBlock = document.getElementById('td-backdrops-block');
     if (d.backdrops && d.backdrops.length) {
       document.getElementById('td-backdrops').innerHTML = d.backdrops.map(function(b) {
-        return '<div class="td-backdrop-thumb" data-td-lb-open="' + escHtml(b.full) + '"><img src="' + escHtml(b.thumb) + '" alt="" loading="lazy"></div>';
+        return '<div class="td-backdrop-thumb" data-td-lb-open="' + b.full + '"><img src="' + b.thumb + '" alt="" loading="lazy"></div>';
       }).join('');
       backdropsBlock.style.display = '';
     } else {
@@ -1830,7 +1760,7 @@
   }
 
   // Switch video in the gallery
-  onDoc('click', function(e) {
+  bindDoc('click', 'click3', function(e) {
     var vbtn = e.target.closest('.td-video-btn');
     if (!vbtn) return;
     var key = vbtn.dataset.ytKey;
@@ -1847,7 +1777,7 @@
   });
 
   // Scroll arrows for similar + seasons + backdrops (in the modal)
-  onDoc('click', function(e) {
+  bindDoc('click', 'click4', function(e) {
     var btn = e.target.closest('[data-td-scroll], [data-seasons-scroll], [data-backdrops-scroll]');
     if (!btn) return;
     var rowId, dirAttr;
@@ -1863,7 +1793,7 @@
   // Lightbox backdrops
   var lb = document.getElementById('td-lightbox');
   var lbImg = document.getElementById('td-lightbox-img');
-  onDoc('click', function(e) {
+  bindDoc('click', 'click5', function(e) {
     var open = e.target.closest('[data-td-lb-open]');
     if (open) {
       lbImg.src = open.dataset.tdLbOpen;
@@ -1875,7 +1805,7 @@
       lbImg.src = '';
     }
   });
-  onDoc('keydown', function(e) {
+  bindDoc('keydown', 'keydown6', function(e) {
     if (!document.getElementById('td-lightbox')) return;
     if (e.key === 'Escape' && lb.classList.contains('show')) {
       lb.classList.remove('show');
@@ -1887,7 +1817,7 @@
     var vc = item.vote >= 7 ? 'good' : (item.vote >= 5 ? 'mid' : 'bad');
     var safeTitle = escHtml(item.title || '');
     var poster = item.poster
-      ? '<img src="' + escHtml(item.poster) + '" alt="" loading="lazy">'
+      ? '<img src="' + item.poster + '" alt="" loading="lazy">'
       : '<div class="no-poster">' + {{ ico.icon('movie', '', 32)|json_encode|raw }} + '</div>';
     var statusColors = { downloaded: '#22c55e', missing: '#f59e0b', announced: '#6366f1', inCinemas: '#6366f1', partial: '#3b82f6', unmonitored: '#6b7280' };
     // Short labels (for card badges) — reuse the card.status_short keys
@@ -1905,7 +1835,7 @@
     var libBadge = item.in_library ? '<span class="lib-badge" style="background:' + (statusColors[item.lib_status] || '#22c55e') + ';">' + (cardShort[item.lib_status] || cardShort._default) + '</span>' : '';
     var voteBadge = item.vote ? '<span class="vote-badge ' + vc + '">' + {{ ico.icon('star-filled', '', 12)|json_encode|raw }} + ' ' + item.vote + '</span>' : '';
     var hoverBtn  = item.in_library
-      ? '<a href="' + (item.type === 'movie' ? '/medias/' + DEFAULT_RADARR_SLUG + '/films' : '/medias/' + DEFAULT_SONARR_SLUG + '/series') + '?open=' + (item.lib_id||'') + '" class="btn btn-sm" style="background:' + ({downloaded:'#22c55e',missing:'#f59e0b',announced:'#6366f1',inCinemas:'#6366f1',partial:'#3b82f6',unmonitored:'#6b7280'}[item.lib_status]||'#22c55e') + ';color:#fff;">' + (cardShort[item.lib_status] || inLibraryShort) + '</a>'
+      ? '<a href="' + (item.type === 'movie' ? BASE + '/medias/' + DEFAULT_RADARR_SLUG + '/films' : BASE + '/medias/' + DEFAULT_SONARR_SLUG + '/series') + '?open=' + (item.lib_id||'') + '" class="btn btn-sm" style="background:' + ({downloaded:'#22c55e',missing:'#f59e0b',announced:'#6366f1',inCinemas:'#6366f1',partial:'#3b82f6',unmonitored:'#6b7280'}[item.lib_status]||'#22c55e') + ';color:#fff;">' + (cardShort[item.lib_status] || inLibraryShort) + '</a>'
       : '<button type="button" class="btn btn-primary btn-sm tmdb-add-btn" data-tmdb-id="' + item.id + '" data-tmdb-type="' + item.type + '" data-tmdb-title="' + safeTitle + '">' + {{ 'decouverte.action.add'|trans|json_encode|raw }} + '</button>';
 
     var wlClass = (window._prismarrWatchlist && window._prismarrWatchlist[item.type + '_' + item.id]) ? ' in-wl' : '';
@@ -1915,7 +1845,7 @@
     var countdown = '';
     if (item.release) {
       var diff = Math.ceil((new Date(item.release) - new Date()) / 86400000);
-      if (diff > 0 && diff <= 365) countdown = '<span class="countdown-badge">{{ 'decouverte.countdown_prefix'|trans|e('js') }}' + diff + '</span>';
+      if (diff > 0 && diff <= 365) countdown = '<span class="countdown-badge">J-' + diff + '</span>';
     }
 
     // safeTitle is already escHtml'd above; also escape the textual fields
@@ -1924,9 +1854,9 @@
     // numeric but defense-in-depth costs nothing.
     var titleOrDash = item.title ? safeTitle : '—';
     var safeYear    = escHtml(item.year || '');
-    return '<div class="media-card" tabindex="0" role="button" data-kb-activate aria-label="' + safeTitle + '" data-tmdb-id="' + item.id + '" data-tmdb-type="' + item.type + '" data-tmdb-title="' + safeTitle + '" data-tmdb-vote="' + (item.vote||'') + '" data-tmdb-year="' + safeYear + '" data-release="' + escHtml(item.release||'') + '">'
+    return '<div class="media-card" data-tmdb-id="' + item.id + '" data-tmdb-type="' + item.type + '" data-tmdb-title="' + safeTitle + '" data-tmdb-vote="' + (item.vote||'') + '" data-tmdb-year="' + safeYear + '" data-release="' + escHtml(item.release||'') + '">'
       + poster
-      + '<span class="quality-badge ' + item.type + '">' + (item.type === 'movie' ? TMDB_I18N.badge_film : TMDB_I18N.badge_series) + '</span>'
+      + '<span class="quality-badge ' + item.type + '">' + (item.type === 'movie' ? TMDB_I18N.type_film : TMDB_I18N.type_series) + '</span>'
       + libBadge + countdown + wlStar + voteBadge
       + '<div class="card-overlay"><div class="card-title-text" title="' + safeTitle + '">' + titleOrDash + '</div>'
       + '<div class="card-year">' + safeYear + '</div></div>'
@@ -1937,7 +1867,7 @@
 
   function loadDetail(type, id) {
     openDetailModal();
-    fetch('/decouverte/detail/' + type + '/' + id, { credentials: 'same-origin' })
+    fetch(BASE + '/decouverte/detail/' + type + '/' + id, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(d) {
         if (d.error) {
@@ -1951,7 +1881,7 @@
       });
   }
 
-  onDoc('click', function(e) {
+  bindDoc('click', 'click7', function(e) {
     if (e.target.closest('.tmdb-add-btn') || e.target.closest('.h-actions') || e.target.closest('a') || e.target.closest('.wl-star')) return;
     var card = e.target.closest('.media-card[data-tmdb-id]');
     if (!card) return;
@@ -1960,49 +1890,279 @@
   });
 
 
-  // Recherche TMDb avec debounce
-  var searchInput = document.getElementById('tmdb-search');
-  var searchBlock = document.getElementById('tmdb-search-results');
-  var searchGrid  = document.getElementById('tmdb-search-grid');
-  var searchCount = document.getElementById('tmdb-search-count');
-  var searchAbort = null;
-  var searchTimer = null;
+  // ── Search page: query + filters → /decouverte/recherche ──────────
+  var srchInput      = document.getElementById('tmdb-search');
+  var srchResults    = document.getElementById('srch-results');
+  var srchHome       = document.getElementById('srch-home');
+  var srchStatus     = document.getElementById('srch-status');
+  var srchCorrection = document.getElementById('srch-correction');
+  var srchBest       = document.getElementById('srch-best');
+  var srchPeopleWrap = document.getElementById('srch-people-wrap');
+  var srchPeople     = document.getElementById('srch-people');
+  var srchPersonHead = document.getElementById('srch-person-head');
+  var srchGridLabel  = document.getElementById('srch-grid-label');
+  var srchGrid       = document.getElementById('tmdb-search-grid');
+  var srchMore       = document.getElementById('srch-more');
+  var srchReset      = document.getElementById('srch-reset');
+  var srchGenre      = document.getElementById('srch-genre');
+  var srchVote       = document.getElementById('srch-vote');
+  var srchSort       = document.getElementById('srch-sort');
+  var srchHideOwned  = document.getElementById('srch-hide-owned');
+  var SRCH_I18N = {
+    searching:   {{ 'decouverte.search.searching'|trans|json_encode|raw }},
+    noResults:   {{ 'decouverte.search.no_results'|trans|json_encode|raw }},
+    error:       {{ 'decouverte.search.search_error'|trans|json_encode|raw }},
+    count:       {{ 'decouverte.srch.count'|trans|json_encode|raw }},
+    browse:      {{ 'decouverte.srch.browse'|trans|json_encode|raw }},
+    best:        {{ 'decouverte.srch.best'|trans|json_encode|raw }},
+    others:      {{ 'decouverte.srch.others'|trans|json_encode|raw }},
+    details:     {{ 'decouverte.action.details'|trans|json_encode|raw }},
+    add:         {{ 'decouverte.action.add'|trans|json_encode|raw }},
+    inLibrary:   {{ 'decouverte.card.in_library_short'|trans|json_encode|raw }},
+    filmography: {{ 'decouverte.srch.filmography'|trans|json_encode|raw }},
+    back:        {{ 'decouverte.srch.back'|trans|json_encode|raw }},
+    allGenres:   {{ 'decouverte.srch.all_genres'|trans|json_encode|raw }},
+    didYouMean:  {{ 'decouverte.srch.did_you_mean'|trans|json_encode|raw }},
+    showingFor:  {{ 'decouverte.srch.showing_for'|trans|json_encode|raw }},
+    searchInstead: {{ 'decouverte.srch.search_instead'|trans|json_encode|raw }},
+    personKicker:  {{ 'decouverte.srch.person_kicker'|trans|json_encode|raw }},
+    seeFilmography: {{ 'decouverte.srch.see_filmography'|trans|json_encode|raw }},
+    film:        TMDB_I18N.type_film,
+    series:      TMDB_I18N.type_series
+  };
+  var srch = { type: 'all', page: 1, totalPages: 1, abort: null, timer: null, exact: false };
+  var srchGenresCache = { movie: null, tv: null };
 
-  var SEARCH_NO_RESULTS_HTML = '<div class="text-secondary py-4 px-2" style="grid-column: 1 / -1;">' + {{ 'decouverte.search.no_results'|trans|json_encode|raw }} + '</div>';
-
-  function runSearch(q) {
-    if (searchAbort) { try { searchAbort.abort(); } catch (e) {} }
-    if (!q || q.length < 2) {
-      searchBlock.style.display = 'none';
-      return;
-    }
-    searchAbort = new AbortController();
-    fetch('/decouverte/search?q=' + encodeURIComponent(q), { signal: searchAbort.signal, credentials: 'same-origin' })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        var results = d.results || [];
-        searchCount.textContent = '(' + results.length + ')';
-        searchBlock.style.display = '';
-        if (results.length === 0) {
-          searchGrid.innerHTML = SEARCH_NO_RESULTS_HTML;
-        } else {
-          searchGrid.innerHTML = results.map(renderCardHTML).join('');
-          if (window._prismarrWatchlistSync) window._prismarrWatchlistSync();
-        }
-      })
-      .catch(function() {});
+  function srchFiltersActive() {
+    return srch.type !== 'all' || !!srchGenre.value
+      || parseFloat(srchVote.value) > 0 || srchSort.value !== 'relevance' || srchHideOwned.checked;
   }
 
-  if (searchInput) {
-    searchInput.addEventListener('input', function() {
-      clearTimeout(searchTimer);
-      var v = searchInput.value.trim();
-      searchTimer = setTimeout(function() { runSearch(v); }, 300);
+  function srchShowHome(show) {
+    srchHome.hidden = !show;
+    srchResults.hidden = show;
+    if (show) srchCorrection.hidden = true;
+  }
+
+  function srchParams(page) {
+    var p = new URLSearchParams({ type: srch.type, sort: srchSort.value, page: String(page || 1) });
+    var q = srchInput.value.trim();
+    if (q) p.set('q', q);
+    if (q && srch.exact) p.set('exact', '1');
+    if (srchGenre.value) p.set('genre', srchGenre.value);
+    if (parseFloat(srchVote.value) > 0) p.set('vote_min', srchVote.value);
+    if (srchHideOwned.checked) p.set('hide_owned', '1');
+    return p;
+  }
+
+  function srchBestHTML(b) {
+    var typeLabel = b.type === 'movie' ? SRCH_I18N.film : SRCH_I18N.series;
+    var meta = [escHtml(String(b.year || '')), typeLabel];
+    if (b.vote) meta.push({{ ico.icon('star-filled', '', 13)|json_encode|raw }} + ' ' + escHtml(String(b.vote)));
+    var genres = (b.genres || []).map(function (g) { return '<span class="srch-genre">' + escHtml(g) + '</span>'; }).join('');
+    var poster = b.poster_hi || b.poster;
+    var action = b.in_library
+      ? '<a class="btn btn-success btn-sm" href="' + BASE + (b.type === 'movie' ? '/medias/' + DEFAULT_RADARR_SLUG + '/films' : '/medias/' + DEFAULT_SONARR_SLUG + '/series') + '?open=' + encodeURIComponent(b.lib_id || '') + '">' + escHtml(SRCH_I18N.inLibrary) + '</a>'
+      : '<button type="button" class="btn btn-primary btn-sm tmdb-add-btn" data-tmdb-id="' + b.id + '" data-tmdb-type="' + b.type + '" data-tmdb-title="' + escHtml(b.title || '') + '">' + escHtml(SRCH_I18N.add) + '</button>';
+    var wlOn = window._prismarrWatchlist && window._prismarrWatchlist[b.type + '_' + b.id];
+    return '<div class="srch-best"' + (b.backdrop ? ' style="--srch-bg:url(\'' + encodeURI(b.backdrop) + '\')"' : '') + '>'
+      + '<div class="srch-best-inner">'
+      + (poster ? '<img class="srch-best-poster" src="' + encodeURI(poster) + '" alt="" loading="lazy">' : '')
+      + '<div class="srch-best-body">'
+      + '<div class="srch-best-kicker">' + escHtml(SRCH_I18N.best) + '</div>'
+      + '<h2 class="srch-best-title">' + escHtml(b.title || '') + '</h2>'
+      + (b.original_title && b.original_title !== b.title ? '<div class="srch-best-orig">' + escHtml(b.original_title) + '</div>' : '')
+      + '<div class="srch-best-meta">' + meta.join(' · ') + '</div>'
+      + (genres ? '<div class="srch-best-genres">' + genres + '</div>' : '')
+      + (b.overview ? '<p class="srch-best-overview">' + escHtml(b.overview) + '</p>' : '')
+      + '<div class="srch-best-actions">' + action
+      + '<button type="button" class="btn btn-outline-light btn-sm tmdb-hero-details-btn" data-tmdb-type="' + b.type + '" data-tmdb-id="' + b.id + '">' + escHtml(SRCH_I18N.details) + '</button>'
+      + '<button type="button" class="wl-star srch-best-wl' + (wlOn ? ' in-wl' : '') + '" data-tmdb-id="' + b.id + '" data-tmdb-type="' + b.type + '" title="Watchlist"><svg viewBox="0 0 24 24" fill="' + (wlOn ? '#f59e0b' : 'none') + '" stroke="#f59e0b" stroke-width="2"><path d="M12 2l2.4 7.4h7.6l-6.2 4.5 2.4 7.4-6.2-4.6-6.2 4.6 2.4-7.4-6.2-4.5h7.6z"/></svg></button>'
+      + '</div></div></div></div>';
+  }
+
+  function srchBestPersonHTML(p) {
+    var sub = [p.known].concat(p.titles || []).filter(Boolean).map(escHtml).join(' · ');
+    return '<div class="srch-best srch-best-person">'
+      + '<div class="srch-best-inner">'
+      + (p.profile ? '<img class="srch-best-poster" src="' + encodeURI(p.profile) + '" alt="" loading="lazy">' : '')
+      + '<div class="srch-best-body">'
+      + '<div class="srch-best-kicker">' + escHtml(SRCH_I18N.personKicker) + '</div>'
+      + '<h2 class="srch-best-title">' + escHtml(p.name || '') + '</h2>'
+      + (sub ? '<div class="srch-best-meta">' + sub + '</div>' : '')
+      + '<div class="srch-best-actions"><button type="button" class="btn btn-primary btn-sm" data-srch-person="' + p.id + '" data-srch-person-name="' + escHtml(p.name || '') + '">' + escHtml(SRCH_I18N.seeFilmography) + '</button></div>'
+      + '</div></div></div>';
+  }
+
+  function srchPeopleHTML(list) {
+    return list.map(function (p) {
+      var avatar = p.profile
+        ? '<img src="' + encodeURI(p.profile) + '" alt="" loading="lazy">'
+        : '<span class="srch-person-initials">' + escHtml((p.name || '?').split(' ').map(function (w) { return w.charAt(0); }).join('').slice(0, 2)) + '</span>';
+      var sub = [p.known].concat(p.titles || []).filter(Boolean).map(escHtml).join(' · ');
+      return '<button type="button" class="srch-person" data-srch-person="' + p.id + '" data-srch-person-name="' + escHtml(p.name || '') + '">'
+        + avatar + '<span class="srch-person-text"><span class="srch-person-name">' + escHtml(p.name || '') + '</span>'
+        + '<span class="srch-person-sub">' + sub + '</span></span></button>';
+    }).join('');
+  }
+
+  function srchCorrectionHTML(d) {
+    if (d.corrected_from && d.corrected_to) {
+      return escHtml(SRCH_I18N.showingFor).replace('__S__', '<strong>' + escHtml(d.corrected_to) + '</strong>')
+        + ' <button type="button" class="srch-inline-link is-quiet" data-srch-exact="' + escHtml(d.corrected_from) + '">'
+        + escHtml(SRCH_I18N.searchInstead.replace('__Q__', d.corrected_from)) + '</button>';
+    }
+    if (d.suggestion) {
+      return escHtml(SRCH_I18N.didYouMean).replace('__S__', '<button type="button" class="srch-inline-link" data-srch-suggest="' + escHtml(d.suggestion) + '">' + escHtml(d.suggestion) + '</button>');
+    }
+    return '';
+  }
+
+  function srchRender(d, append) {
+    var results = d.results || [];
+    srchPersonHead.hidden = true;
+    if (!append) {
+      var corr = srchCorrectionHTML(d);
+      srchCorrection.innerHTML = corr;
+      srchCorrection.hidden = corr === '';
+    }
+    if (!append) {
+      srchBest.innerHTML = d.best_person ? srchBestPersonHTML(d.best_person) : (d.best ? srchBestHTML(d.best) : '');
+      srchPeople.innerHTML = srchPeopleHTML(d.people || []);
+      srchPeopleWrap.hidden = !(d.people && d.people.length);
+      srchGridLabel.hidden = !((d.best || d.best_person) && results.length);
+      srchGridLabel.textContent = SRCH_I18N.others;
+      srchGrid.innerHTML = results.map(renderCardHTML).join('');
+    } else {
+      srchGrid.insertAdjacentHTML('beforeend', results.map(renderCardHTML).join(''));
+    }
+    var total = d.mode === 'search' ? (d.total || 0) : srchGrid.children.length;
+    srchStatus.textContent = total === 0
+      ? SRCH_I18N.noResults
+      : (d.mode === 'search' ? SRCH_I18N.count.replace('__N__', total) : SRCH_I18N.browse);
+    srch.page = d.page || 1;
+    srch.totalPages = d.total_pages || 1;
+    srchMore.hidden = !(d.mode === 'discover' && srch.page < srch.totalPages);
+    if (window._prismarrWatchlistSync) window._prismarrWatchlistSync();
+  }
+
+  function srchRun(append) {
+    var q = srchInput.value.trim();
+    srchReset.hidden = !srchFiltersActive();
+    if (q.length < 2 && !srchFiltersActive()) {
+      if (srch.abort) { try { srch.abort.abort(); } catch (e) {} }
+      srchShowHome(true);
+      return;
+    }
+    srchShowHome(false);
+    var page = append ? srch.page + 1 : 1;
+    if (!append) {
+      srchStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + escHtml(SRCH_I18N.searching);
+    }
+    if (srch.abort) { try { srch.abort.abort(); } catch (e) {} }
+    srch.abort = new AbortController();
+    fetch(BASE + '/decouverte/recherche?' + srchParams(page).toString(), { signal: srch.abort.signal, credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.mode === 'error') { srchStatus.textContent = SRCH_I18N.error; return; }
+        srchRender(d, append);
+      })
+      .catch(function (e) { if (e && e.name !== 'AbortError') srchStatus.textContent = SRCH_I18N.error; });
+  }
+
+  function srchSchedule() {
+    clearTimeout(srch.timer);
+    srch.timer = setTimeout(function () { srchRun(false); }, 300);
+  }
+
+  function srchLoadGenres() {
+    var types = srch.type === 'all' ? ['movie', 'tv'] : [srch.type];
+    var pending = types.filter(function (t) { return !srchGenresCache[t]; });
+    Promise.all(pending.map(function (t) {
+      return fetch(BASE + '/decouverte/genres/' + t, { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { srchGenresCache[t] = d.genres || []; });
+    })).then(function () {
+      var seen = {}, list = [];
+      types.forEach(function (t) {
+        (srchGenresCache[t] || []).forEach(function (g) { if (!seen[g.id]) { seen[g.id] = true; list.push(g); } });
+      });
+      list.sort(function (a, b) { return String(a.name).localeCompare(String(b.name)); });
+      var current = srchGenre.value;
+      srchGenre.innerHTML = '<option value="">' + escHtml(SRCH_I18N.allGenres) + '</option>'
+        + list.map(function (g) { return '<option value="' + escHtml(String(g.id)) + '">' + escHtml(g.name) + '</option>'; }).join('');
+      if (list.some(function (g) { return String(g.id) === current; })) srchGenre.value = current;
+    }).catch(function () {});
+  }
+
+  function srchOpenPerson(id, name) {
+    srchShowHome(false);
+    srchCorrection.hidden = true;
+    srchBest.innerHTML = '';
+    srchPeopleWrap.hidden = true;
+    srchGridLabel.hidden = true;
+    srchMore.hidden = true;
+    srchGrid.innerHTML = '';
+    srchStatus.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>' + escHtml(SRCH_I18N.searching);
+    fetch(BASE + '/decouverte/person/' + encodeURIComponent(id), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d.error) { srchStatus.textContent = SRCH_I18N.error; return; }
+        srchPersonHead.innerHTML = '<div class="srch-person-head">'
+          + (d.profile ? '<img src="' + encodeURI(d.profile) + '" alt="">' : '')
+          + '<div><div class="srch-best-kicker">' + escHtml(SRCH_I18N.filmography) + '</div><h2 class="srch-best-title">' + escHtml(d.name || name || '') + '</h2>'
+          + (d.bio ? '<p class="srch-best-overview">' + escHtml(d.bio) + '</p>' : '')
+          + '<button type="button" class="btn btn-outline-secondary btn-sm" data-srch-back>' + escHtml(SRCH_I18N.back) + '</button></div></div>';
+        srchPersonHead.hidden = false;
+        srchGrid.innerHTML = (d.results || []).map(renderCardHTML).join('');
+        srchStatus.textContent = SRCH_I18N.count.replace('__N__', (d.results || []).length);
+        if (window._prismarrWatchlistSync) window._prismarrWatchlistSync();
+      })
+      .catch(function () { srchStatus.textContent = SRCH_I18N.error; });
+  }
+
+  if (srchInput) {
+    srchInput.addEventListener('input', function () { srch.exact = false; srchSchedule(); });
+    srchInput.addEventListener('search', function () { srchRun(false); });
+    [srchGenre, srchVote, srchSort, srchHideOwned].forEach(function (el) { el.addEventListener('change', function () { srchRun(false); }); });
+    document.querySelectorAll('[data-srch-type]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        srch.type = btn.dataset.srchType;
+        document.querySelectorAll('[data-srch-type]').forEach(function (b) { b.classList.toggle('is-active', b === btn); });
+        srchLoadGenres();
+        srchRun(false);
+      });
+    });
+    srchGenre.addEventListener('focus', srchLoadGenres, { once: true });
+    srchReset.addEventListener('click', function () {
+      srch.type = 'all';
+      document.querySelectorAll('[data-srch-type]').forEach(function (b) { b.classList.toggle('is-active', b.dataset.srchType === 'all'); });
+      srchGenre.value = '';
+      srchVote.value = '0'; srchSort.value = 'relevance'; srchHideOwned.checked = false;
+      srchRun(false);
+    });
+    srchMore.addEventListener('click', function () { srchRun(true); });
+    srchResults.addEventListener('click', function (e) {
+      var person = e.target.closest('[data-srch-person]');
+      if (person) { srchOpenPerson(person.dataset.srchPerson, person.dataset.srchPersonName); return; }
+      if (e.target.closest('[data-srch-back]')) { srchRun(false); return; }
+      var sugg = e.target.closest('[data-srch-suggest]');
+      if (sugg) { srchInput.value = sugg.dataset.srchSuggest; srch.exact = false; srchRun(false); return; }
+      var exact = e.target.closest('[data-srch-exact]');
+      if (exact) { srchInput.value = exact.dataset.srchExact; srch.exact = true; srchRun(false); }
+    });
+    // "/" focuses the search box from anywhere on the page (not while typing).
+    bindDoc('keydown', 'keydown8', function (e) {
+      if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
+      var t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      e.preventDefault();
+      srchInput.focus();
     });
   }
 
   // Hero "View details" button → opens Prismarr modal (not external TMDb)
-  onDoc('click', function(e) {
+  bindDoc('click', 'click9', function(e) {
     var btn = e.target.closest('.tmdb-hero-details-btn');
     if (!btn) return;
     e.preventDefault();
@@ -2024,19 +2184,10 @@
     r.addEventListener('change', function() { renderMyRecs(r.value); });
   });
 
-  // Close results (search / filters)
-  var searchClose = document.getElementById('tmdb-search-close');
-  if (searchClose) {
-    searchClose.addEventListener('click', function() {
-      searchBlock.style.display = 'none';
-      searchInput.value = '';
-    });
-  }
-
   // ── Recommendations based on the library (AJAX load on page load)
   var myRecsBlock = document.getElementById('tmdb-my-recs');
   var myRecsRow = document.getElementById('tmdb-my-recs-row');
-  fetch('/decouverte/mes-recommandations', { credentials: 'same-origin' })
+  fetch(BASE + '/decouverte/mes-recommandations', { credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       if (d.seeds === 0 || !d.results || !d.results.length) {
@@ -2051,148 +2202,6 @@
       if (window._prismarrWatchlistSync) window._prismarrWatchlistSync();
     })
     .catch(function() { myRecsBlock.style.display = 'none'; });
-
-  // ── Page filters
-  var filtersPanel = document.getElementById('tmdb-filters');
-  var filtersToggle = document.getElementById('tmdb-filters-toggle');
-  var filterGenre   = document.getElementById('filter-genre');
-  var filterYearMin = document.getElementById('filter-year-min');
-  var filterYearMax = document.getElementById('filter-year-max');
-  var filterVoteMin = document.getElementById('filter-vote-min');
-  var filterVoteVal = document.getElementById('filter-vote-val');
-  var filterSort    = document.getElementById('filter-sort');
-  var filterApply   = document.getElementById('filter-apply');
-  var filterReset   = document.getElementById('filter-reset');
-  var genresCache   = { movie: null, tv: null };
-
-  // This build ships Bootstrap under window.tabler (no window.bootstrap global),
-  // so resolve the Offcanvas class defensively rather than assuming `bootstrap`.
-  function offcanvasFor(el) {
-    var C = (window.bootstrap && window.bootstrap.Offcanvas)
-         || (window.tabler && (window.tabler.Offcanvas
-              || (window.tabler.bootstrap && window.tabler.bootstrap.Offcanvas)));
-    return C ? C.getOrCreateInstance(el) : null;
-  }
-
-  filtersToggle.addEventListener('click', function() {
-    var oc = offcanvasFor(filtersPanel);
-    if (oc) oc.toggle();
-    if (!genresCache.movie) loadGenres('movie');
-  });
-
-  function currentType() {
-    var radio = document.querySelector('input[name="filter-type"]:checked');
-    return radio ? radio.value : 'movie';
-  }
-
-  function loadGenres(type) {
-    fetch('/decouverte/genres/' + type, { credentials: 'same-origin' })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        genresCache[type] = d.genres || [];
-        populateGenreSelect();
-      });
-  }
-
-  function populateGenreSelect() {
-    var t = currentType();
-    var list = genresCache[t] || [];
-    var current = filterGenre.value;
-    filterGenre.innerHTML = '<option value="">Tous</option>' + list.map(function(g) {
-      return '<option value="' + escHtml(g.id) + '">' + escHtml(g.name) + '</option>';
-    }).join('');
-    if (list.some(function(g) { return String(g.id) === current; })) filterGenre.value = current;
-  }
-
-  // Type change → reload genres + adjust sort (primary_release_date is movie-only)
-  document.querySelectorAll('input[name="filter-type"]').forEach(function(r) {
-    r.addEventListener('change', function() {
-      var t = currentType();
-      if (!genresCache[t]) loadGenres(t);
-      else populateGenreSelect();
-      // For TV series, "primary_release_date" → "first_air_date"
-      Array.from(filterSort.options).forEach(function(o) {
-        if (t === 'tv' && o.value === 'primary_release_date.desc') { o.value = 'first_air_date.desc'; o.textContent = 'Date diffusion ↓'; }
-        if (t === 'movie' && o.value === 'first_air_date.desc')    { o.value = 'primary_release_date.desc'; o.textContent = 'Date sortie ↓'; }
-      });
-    });
-  });
-
-  filterVoteMin.addEventListener('input', function() {
-    filterVoteVal.textContent = filterVoteMin.value;
-  });
-
-  function updateFilterCount() {
-    var n = 0;
-    if (filterGenre.value) n++;
-    if (filterYearMin.value) n++;
-    if (filterYearMax.value) n++;
-    if (parseFloat(filterVoteMin.value) > 0) n++;
-    var badge = document.getElementById('tmdb-filter-active-count');
-    if (n > 0) {
-      badge.textContent = n;
-      badge.style.display = '';
-      filtersToggle.classList.add('active');
-    } else {
-      badge.style.display = 'none';
-      filtersToggle.classList.remove('active');
-    }
-  }
-
-  function applyFilters() {
-    var type = currentType();
-    updateFilterCount();
-    var params = new URLSearchParams({ type: type });
-    if (filterGenre.value)   params.set('genres', filterGenre.value);
-    if (filterYearMin.value) params.set('year_min', filterYearMin.value);
-    if (filterYearMax.value) params.set('year_max', filterYearMax.value);
-    if (parseFloat(filterVoteMin.value) > 0) {
-      params.set('vote_min', filterVoteMin.value);
-      params.set('vote_count_min', '100'); // évite les films avec 2 votes à 10
-    }
-    if (filterSort.value)    params.set('sort', filterSort.value);
-
-    var typeLabel = type === 'movie'
-      ? {{ 'decouverte.filters.movies'|trans|json_encode|raw }}
-      : {{ 'decouverte.filters.series'|trans|json_encode|raw }};
-    document.getElementById('tmdb-search-title').textContent = {{ 'decouverte.search.results_filtered'|trans({label: '__LABEL__'})|json_encode|raw }}.replace('__LABEL__', typeLabel);
-    searchGrid.innerHTML = '<div class="text-secondary p-3"><span class="spinner-border spinner-border-sm me-2"></span>' + {{ 'decouverte.search.searching'|trans|json_encode|raw }} + '</div>';
-    searchBlock.style.display = '';
-
-    fetch('/decouverte/filter?' + params.toString(), { credentials: 'same-origin' })
-      .then(function(r) { return r.json(); })
-      .then(function(d) {
-        searchGrid.innerHTML = (d.results || []).map(renderCardHTML).join('')
-          || '<div class="text-secondary p-3">' + {{ 'decouverte.search.no_filter_results'|trans|json_encode|raw }} + '</div>';
-        searchCount.textContent = {{ 'decouverte.search.count'|trans({count: '__N__'})|json_encode|raw }}.replace('__N__', d.total_results || (d.results||[]).length);
-        if (window._prismarrWatchlistSync) window._prismarrWatchlistSync();
-      })
-      .catch(function() {
-        searchGrid.innerHTML = '<div class="alert alert-danger">' + {{ 'decouverte.search.search_error'|trans|json_encode|raw }} + '</div>';
-      });
-  }
-  filterApply.addEventListener('click', function() {
-    applyFilters();
-    var oc = offcanvasFor(filtersPanel);
-    if (oc) oc.hide();
-  });
-  filterReset.addEventListener('click', function() {
-    filterGenre.value = '';
-    filterYearMin.value = '';
-    filterYearMax.value = '';
-    filterVoteMin.value = 0;
-    filterVoteVal.textContent = '0';
-    filterSort.value = 'popularity.desc';
-    searchBlock.style.display = 'none';
-    updateFilterCount();
-  });
-
-  // Reset the title on a new text search
-  if (searchInput) {
-    searchInput.addEventListener('focus', function() {
-      document.getElementById('tmdb-search-title').textContent = {{ 'decouverte.search.results'|trans|json_encode|raw }};
-    });
-  }
 
   // ── Watchlist ───────────────────────────────────────────
   window._prismarrWatchlist = {};
@@ -2215,7 +2224,7 @@
   }
   window._prismarrWatchlistSync = syncAllWlStars;
 
-  fetch('/decouverte/watchlist/status', { credentials: 'same-origin' })
+  fetch(BASE + '/decouverte/watchlist/status', { credentials: 'same-origin' })
     .then(function(r) { return r.json(); })
     .then(function(d) {
       window._prismarrWatchlist = d.index || {};
@@ -2248,7 +2257,7 @@
     else delete window._prismarrWatchlist[key];
     syncWlUI(tmdbId, type, willAdd);
 
-    fetch('/decouverte/watchlist/toggle', {
+    fetch(BASE + '/decouverte/watchlist/toggle', {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json' },
@@ -2280,7 +2289,7 @@
   }
 
   // Star click on cards (only .media-card, not .ex-card)
-  onDoc('click', function(e) {
+  bindDoc('click', 'click10', function(e) {
     var star = e.target.closest('.wl-star');
     if (!star) return;
     if (!star.closest('.media-card[data-tmdb-id]')) return;
@@ -2305,7 +2314,7 @@
   });
 
   // Clic bouton watchlist dans la modal
-  onDoc('click', function(e) {
+  bindDoc('click', 'click11', function(e) {
     var btn = e.target.closest('.tmdb-wl-modal-btn');
     if (!btn) return;
     e.stopPropagation();
@@ -2333,15 +2342,6 @@
       history.replaceState(null, '', window.location.pathname);
     }
   }
-
-  // Bind the collected document listeners for this page instance, and unbind
-  // every one of them when the user navigates away.
-  window.registerPageLifecycle(function () {
-    pageDocListeners.forEach(function (l) { document.addEventListener(l[0], l[1]); });
-    return function () {
-      pageDocListeners.forEach(function (l) { document.removeEventListener(l[0], l[1]); });
-    };
-  });
 })();
 </script>
 {% endblock %}

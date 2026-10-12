@@ -416,6 +416,7 @@
 {% block javascripts %}
 <script nonce="{{ csp_nonce() }}">
 (function () {
+    var BASE = window.BASE_PATH;
     var allEvents = {{ eventsJson|json_encode|raw }};
     // Calendar-scoped i18n (strings the JS renders on the fly).
     var CAL_I18N = {
@@ -964,12 +965,12 @@
         var url = null, fallback = null;
         if (ev.type === 'film' && ev.id) {
             var radarrSlug = ev._instanceSlug || DEFAULT_RADARR_SLUG;
-            url = '/tableau-de-bord/quicklook/movie/' + radarrSlug + '/' + ev.id;
-            fallback = '/medias/' + radarrSlug + '/films?open=' + ev.id;
+            url = BASE + '/tableau-de-bord/quicklook/movie/' + radarrSlug + '/' + ev.id;
+            fallback = BASE + '/medias/' + radarrSlug + '/films?open=' + ev.id;
         } else if (ev.type === 'episode' && ev.seriesId) {
             var sonarrSlug = ev._instanceSlug || DEFAULT_SONARR_SLUG;
-            url = '/tableau-de-bord/quicklook/series/' + sonarrSlug + '/' + ev.seriesId;
-            fallback = '/medias/' + sonarrSlug + '/series?open=' + ev.seriesId;
+            url = BASE + '/tableau-de-bord/quicklook/series/' + sonarrSlug + '/' + ev.seriesId;
+            fallback = BASE + '/medias/' + sonarrSlug + '/series?open=' + ev.seriesId;
         }
         if (url) {
             e.preventDefault();
