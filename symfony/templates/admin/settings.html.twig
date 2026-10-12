@@ -233,6 +233,24 @@
     margin-bottom: .3rem;
   }
 
+  /* Password fields in the Services list (admin/_services_list.html.twig)
+     use upstream's .secret-wrapper markup rather than forms.secret_input. */
+  .secret-wrapper { position: relative; }
+  .secret-wrapper input {
+    padding-right: 2.4rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, monospace;
+    font-size: .85rem;
+  }
+  .secret-toggle {
+    position: absolute; right: .55rem; top: 50%; transform: translateY(-50%);
+    background: transparent; border: 0; padding: 0;
+    cursor: pointer; color: inherit; opacity: .5;
+    display: inline-flex; align-items: center;
+    transition: opacity .15s ease;
+  }
+  .secret-toggle:hover { opacity: .95; }
+  .secret-toggle svg { width: 16px; height: 16px; }
+
   /* "Clear" button next to qBit user/password (issue #10 — reverse-proxy
      setups need to deliberately wipe these credentials; the default
      empty-value guard would otherwise silently restore the previous value). */
