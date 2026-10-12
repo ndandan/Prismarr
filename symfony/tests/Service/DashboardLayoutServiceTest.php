@@ -1,6 +1,7 @@
 <?php
 namespace App\Tests\Service;
 
+use App\Dashboard\DashboardSections;
 use App\Service\ConfigService;
 use App\Service\DashboardLayoutService;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -21,7 +22,7 @@ final class DashboardLayoutServiceTest extends TestCase
     {
         $r = $this->serviceFor([])->resolve();
         self::assertSame(
-            ['upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'trending', 'recent', 'server', 'network'],
+            ['upcoming', 'requests', 'health', 'houndarr', 'plex', 'emby', 'transmission', 'watchlist', 'trending', 'recent', 'server', 'network'],
             array_column($r, 'key'),
         );
         foreach ($r as $row) {
@@ -34,7 +35,7 @@ final class DashboardLayoutServiceTest extends TestCase
         $r = $this->serviceFor(['dashboard_section_order' => 'recent,plex,upcoming'])->resolve();
         // Stored keys first, in stored order; the rest appended in default order.
         self::assertSame(
-            ['recent', 'plex', 'upcoming', 'requests', 'health', 'houndarr', 'watchlist', 'trending', 'server', 'network'],
+            ['recent', 'plex', 'upcoming', 'requests', 'health', 'houndarr', 'emby', 'transmission', 'watchlist', 'trending', 'server', 'network'],
             array_column($r, 'key'),
         );
     }
@@ -44,7 +45,7 @@ final class DashboardLayoutServiceTest extends TestCase
         $r = $this->serviceFor(['dashboard_section_order' => 'trending,bogus,recent'])->resolve();
         $keys = array_column($r, 'key');
         self::assertNotContains('bogus', $keys);
-        self::assertSame(['trending', 'recent', 'upcoming', 'requests', 'health', 'houndarr', 'plex', 'watchlist', 'server', 'network'], $keys);
+        self::assertSame(['trending', 'recent', 'upcoming', 'requests', 'health', 'houndarr', 'plex', 'emby', 'transmission', 'watchlist', 'server', 'network'], $keys);
     }
 
     public function testDuplicateKeysAreCollapsed(): void
@@ -72,17 +73,18 @@ final class DashboardLayoutServiceTest extends TestCase
         });
         $svc = new DashboardLayoutService($config);
 
-        // First resolve: uncached, should call get() once for order + 10 times for per-section visibility = 11 total.
+        // First resolve: uncached, should call get() once for order + once per section for visibility.
+        $perResolve = 1 + count(DashboardSections::DEFAULT_ORDER);
         $svc->resolve();
-        self::assertSame(11, $calls, 'First resolve should call ConfigService::get() 11 times (1 order + 10 sections)');
+        self::assertSame($perResolve, $calls, 'First resolve should call ConfigService::get() once for the order + once per section');
 
         // Second resolve: cached, should not call get() again.
         $svc->resolve();
-        self::assertSame(11, $calls, 'Second resolve should use cache and not call ConfigService::get()');
+        self::assertSame($perResolve, $calls, 'Second resolve should use cache and not call ConfigService::get()');
 
         // After reset: cache cleared, next resolve should call get() again.
         $svc->reset();
         $svc->resolve();
-        self::assertSame(22, $calls, 'After reset, resolve should call ConfigService::get() another 11 times');
+        self::assertSame(2 * $perResolve, $calls, 'After reset, resolve should call ConfigService::get() again for the order + every section');
     }
 }

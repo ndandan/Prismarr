@@ -36,7 +36,7 @@ class SessionLockReleaseSubscriber implements EventSubscriberInterface
      * Non-GET routes that never write the session yet can run long — a
      * Bazarr provider download or the inline subtitle-index rebuild hold the
      * request for up to a minute or more, and keeping the lock that long
-     * freezes every other tab of that admin (review 2026-10-08).
+     * freezes every other tab of that admin.
      */
     private const LONG_POST_ROUTES = [
         'app_bazarr_api_download_movie',

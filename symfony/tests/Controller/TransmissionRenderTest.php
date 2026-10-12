@@ -47,7 +47,7 @@ class TransmissionRenderTest extends AbstractWebTestCase
 
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
 
-        if (preg_match('/\b(qbittorrent|transmission|deluge)\.[a-z_.]+/', $html, $m)) {
+        if (preg_match('/\b(qbittorrent|transmission|deluge)\.(?!svg\b)[a-z_.]+/', $html, $m)) {
             $this->fail(sprintf(
                 'Locale "%s": rendered page contains an unresolved translation key "%s" — it has no entry in either messages YAML and rendered as the raw id instead of translated text.',
                 $locale,

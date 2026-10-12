@@ -167,10 +167,10 @@ class MediaLibraryCacheTest extends TestCase
     }
 
     /**
-     * Final-review fix-wave: a stale read that has been overdue (requested
-     * >180 s ago, never answered) for longer than the throttle window must
-     * log exactly ONE error line across repeated reads, not one per read —
-     * mirrors BazarrSubtitleIndexSwrTest's overdue-log-rate-limited case.
+     * A stale read that has been overdue (requested >180 s ago, never
+     * answered) for longer than the throttle window must log exactly ONE
+     * error line across repeated reads, not one per read — the throttle
+     * marker is cross-request, not per-object.
      */
     public function testAStaleOverdueReadLogsExactlyOneErrorAcrossTwoReads(): void
     {

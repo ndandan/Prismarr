@@ -49,7 +49,7 @@
 
 <p align="center">
   <img src="docs/screenshots/dashboard.png" width="49%" alt="Dashboard">
-  <img src="docs/screenshots/discover.png" width="49%" alt="Discover">
+  <img src="docs/screenshots/discover.png" width="49%" alt="Search">
 </p>
 <p align="center">
   <img src="docs/screenshots/calendar.png" width="49%" alt="Calendar">
@@ -77,9 +77,9 @@
 
 ## About
 
-**Prismarr** brings qBittorrent, Radarr, Sonarr, Prowlarr, Seerr and
-TMDb together in a single modern Symfony interface. No more juggling six
-tabs to manage your library.
+**Prismarr** brings Radarr, Sonarr, Prowlarr, Seerr, your download
+clients and TMDb together in a single modern Symfony interface. No more
+juggling tabs to manage your library.
 
 It's not a replacement for Radarr or Sonarr - those run side by side and
 keep doing what they do best. Prismarr is the unified control surface:
@@ -90,9 +90,9 @@ and one settings page where every API key lives - never on disk in plain
 text and never in environment variables.
 
 The whole thing ships as a single Docker container with SQLite inside.
-First boot opens a 7-step wizard: create the admin, plug your services in,
-done. No external database, no Redis, no per-service `.env` files. Pull
-the image, mount one volume, you're up.
+First boot asks for a language and an admin account, then drops you on the
+Services settings to plug your services in. No external database, no Redis,
+no per-service `.env` files. Pull the image, mount one volume, you're up.
 
 Prismarr is created and maintained by [Shoshuo](https://github.com/Shoshuo).
 This repository is a personal fork of it — see below for what's different.
@@ -176,8 +176,11 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - **Dashboard customization (fork):** an admin can reorder and hide/show every dashboard section, and pick one of 17 theme presets (or leave it on Classic).
 - **Quick-look everywhere (fork):** clicking any media tile — dashboard, top-bar search result, Explorer, Plex activity — opens one rich in-place detail modal (poster, synopsis, ratings, release/air dates, watchlist, Add/Manage deep-links) instead of navigating away.
 - **Downloads:** full qBittorrent dashboard (server-side pagination, sorting, filters, drag-and-drop upload), a full Deluge tab (live table, labels, seeding columns, detail panel, add/limits — via deluge-web JSON-RPC), a full Transmission tab (same list/table/compact views, bulk actions, detail modal and add-by-URL/file, with a read-only filter over Transmission's own labels — via the Transmission RPC API), plus dedicated SABnzbd and NZBGet pages. Optional Gluetun integration.
-- **Discovery:** TMDb landing page with recommendations and trending, watchlist, an explorer with filters, and deep-links into your library.
+- **Search:** one box for movies, series and people, typo-tolerant with a Google-style "did you mean", inline filters (type, genre, rating, sort, hide what you have), a large best-match card and each result's library status. With the box empty: trending movie and series banners, recommendations from your library, trending rows, plus the watchlist and an explorer.
 - **Plex activity (Tautulli):** optional read-only page (now playing, watch stats, graphs with a per-user filter, history) plus a "Current Plex activity" dashboard widget. The API key stays server-side and responses are sanitised.
+- **Subtitles (Bazarr):** optional admin-only page with Wanted / Movies / Series / History views, plus a per-title subtitle badge on the Films and Series pages, in the quick-look modal and in `Ctrl+K` results — click a badge to search and download a subtitle without leaving Prismarr. Refreshes happen off the request path, so the badges cost nothing to render.
+- **Tracearr:** optional read-only page for Plex / Jellyfin / Emby activity (now playing, overview stats, graphs, history, users) via Tracearr's public API. The API key stays server-side and responses are sanitised.
+- **Emby activity:** optional "Current Emby activity" dashboard widget read straight from Emby Server's Sessions API (no Tautulli-style add-on needed). Same read-only, server-side-key, sanitised-payload rules as the Plex widget.
 - **Theming:** a full instance theme chosen in `/admin/settings → Display` from a catalogue of 17 glance-style presets (HSL colour model resolved to CSS variables server-side, light and dark). Picking a preset fixes the palette for everyone; the default **Classic** mode instead keeps the per-browser light/dark toggle in the topbar, so an install that never picks a theme looks exactly as it did before theming existed.
 - **Unraid server monitoring (fork):** optional admin-only dashboard section — array/parity health with live check progress, disks, CPU/RAM, Docker containers and UPS, via the Unraid 7 GraphQL API.
 - **Houndarr (fork):** optional dashboard stat tile with backlog-search totals and a health chip.
@@ -197,8 +200,8 @@ Everything upstream Prismarr does, plus the fork additions (marked **fork**):
 - Optional: Gluetun if qBittorrent runs behind a VPN
 - Optional: a Deluge instance (deluge-web URL + password) for the Deluge tab
 - Optional: a Transmission instance (RPC URL; user/password only if the daemon requires them) for the Transmission tab
-- Optional: a TMDb API key (free) to enable the Discovery page
-- Optional: a Tautulli instance (URL + API key) for the Plex activity page and widget
+- Optional: a TMDb API key (free) to enable the Search page
+- Optional: Tautulli, Tracearr or Emby for playback activity, Bazarr for subtitles
 - Optional: an Unraid 7 server (GraphQL API key) for the server monitoring widget
 - Optional: a Houndarr instance (URL + API key) for the backlog-search widget
 - Optional: a Wokeometer API key ([wokeometer.app/account/developer](https://wokeometer.app/account/developer), prepaid credits at $0.05/request — the initial sync took 279 requests (about $14) on a real install, then roughly 2-60 requests a month; see [docs/wokeometer.md](docs/wokeometer.md)) for the score in the detail views
@@ -260,16 +263,12 @@ docker compose up -d
 ```
 
 **Step 3.** Open `http://localhost:7070` in your browser. The setup wizard
-will guide you through:
+asks for the interface language and creates the admin account, then opens
+`/admin/settings` on the Services section, where you add TMDb, Radarr,
+Sonarr, Prowlarr, Seerr, your download clients and the optional services.
+Each card has a Test button.
 
-- admin account creation
-- TMDb API key (optional)
-- Radarr / Sonarr / Prowlarr / Seerr URLs and keys
-- qBittorrent + Gluetun, Deluge, Transmission (optional)
-
-Tautulli, Unraid and Houndarr are configured later from
-**Settings → Services** (each with its own enable toggle and Test-connection
-button).
+Unraid, UniFi and Houndarr (fork) are added from the same Services list.
 
 Wokeometer is configured from the same page (**Settings → Services → Metadata
 enrichment**), but it has no Test-connection button — a test would spend paid
@@ -295,7 +294,7 @@ ports:
 
 Everything is configured from the UI:
 
-- **First boot**: the 7-step setup wizard at `/setup`
+- **First boot**: the setup wizard at `/setup` (language + admin account)
 - **Later**: the Settings page at `/admin/settings` (admin only)
 
 External service credentials (TMDb / Radarr / Sonarr / Prowlarr / Seerr /
@@ -407,9 +406,10 @@ regularly, upstream-origin code is left untouched even when fork changes
 obsolete it, and fork features are built to sit on top rather than rewrite.
 
 **Does Prismarr need internet access?**
-Only for TMDb (cover art, metadata, discovery) and the services you point
-it at. The app itself works fully on a LAN; if you don't configure TMDb,
-the Discovery page is the only feature that goes dark.
+Only for TMDb (cover art, metadata, search) and the Servarr
+services you point it at. The app itself works fully on a LAN; if
+you don't configure TMDb, the Search page is the only feature
+that goes dark.
 
 **Can I run it behind a reverse proxy?**
 Yes. Set `TRUSTED_PROXIES` to your proxy network (see Configuration).

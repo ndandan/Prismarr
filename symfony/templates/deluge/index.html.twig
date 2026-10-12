@@ -286,7 +286,6 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
 {% if error %}
   {% include 'error/_service_banner.html.twig' with {
     service: 'Deluge',
-    wizard_route: 'app_setup_downloads',
     configured_url: service_url,
     reason: 'unreachable'
   } %}
@@ -810,7 +809,6 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
 <script nonce="{{ csp_nonce() }}">
 (function(){
     var BASE = '{{ path("app_deluge_index") }}';
-    var LOCALE = {{ app.request.locale|default('fr')|json_encode|raw }};
     var currentFilter = 'all';
     var selectedHashes = {};
     var deleteTarget = { hashes: [], mode: 'single' };
@@ -1584,7 +1582,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
             .then(function(r){ return r.json(); })
             .then(function(d){
                 if (d && d.found && d.url) {
-                    window.location.href = d.url;
+                    window.location.href = (window.BASE_PATH || '') + d.url;
                 } else {
                     tag.innerHTML = original;
                     if (window._prismarrToast) window._prismarrToast(tpl(QBT_I18N.toast.cat_resolve_no_match_tpl, { NAME: (name || '').substring(0, 50) }), 'warning');

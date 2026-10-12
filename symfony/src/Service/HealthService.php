@@ -15,6 +15,8 @@ use App\Service\Media\RadarrClient;
 use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
+use App\Service\Media\TracearrClient;
+use App\Service\Media\EmbyClient;
 use App\Service\Media\TmdbClient;
 use App\Service\Media\UnifiClient;
 use App\Service\Media\UnraidClient;
@@ -106,6 +108,10 @@ class HealthService implements ResetInterface
         // warm()). Null (legacy positional test constructors) keeps the
         // one-service-at-a-time path.
         private readonly ?ConcurrentCurl    $concurrent = null,
+        // Tracearr — nullable + last, same legacy-test-constructor reason.
+        private readonly ?TracearrClient $tracearr = null,
+        // Emby (current playback activity) — same nullable + last convention.
+        private readonly ?EmbyClient       $emby = null,
     ) {}
 
     /**
@@ -426,6 +432,8 @@ class HealthService implements ResetInterface
             'unraid'      => $this->unraid?->ping() ?? false,
             'houndarr'    => $this->houndarr?->ping() ?? false,
             'unifi'       => $this->unifi?->ping() ?? false,
+            'tracearr'    => $this->tracearr?->ping() ?? false,
+            'emby'        => $this->emby?->ping() ?? false,
             'transmission' => $this->transmission?->ping() ?? false,
             'bazarr'      => $this->bazarr?->ping() ?? false,
             default       => true,
@@ -444,7 +452,7 @@ class HealthService implements ResetInterface
      * (issue #15). Radarr/Sonarr are absent on purpose — they enable/disable
      * per instance via the `enabled` flag on `service_instance`.
      */
-    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi', 'bazarr'];
+    public const TOGGLEABLE_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi', 'bazarr', 'tracearr', 'emby'];
 
     /** Brand colors for the health chips — single source for dashboard + topbar. */
     private const SERVICE_COLORS = [
@@ -463,6 +471,8 @@ class HealthService implements ResetInterface
         'houndarr'    => '#c2703d',
         'unifi'       => '#006fff',
         'bazarr'      => '#be4bdb',
+        'tracearr'    => '#19cee6',
+        'emby'        => '#52b54b',
     ];
 
     /**
@@ -475,10 +485,11 @@ class HealthService implements ResetInterface
      */
     public function chips(bool $includeUnraid = false): array
     {
-        $labels = ['prowlarr' => 'Prowlarr', 'jellyseerr' => 'Seerr', 'qbittorrent' => 'qBittorrent', 'deluge' => 'Deluge', 'transmission' => 'Transmission', 'sabnzbd' => 'SABnzbd', 'nzbget' => 'NZBGet', 'tmdb' => 'TMDb', 'tautulli' => 'Tautulli', 'houndarr' => 'Houndarr', 'bazarr' => 'Bazarr'];
-        if ($includeUnraid) {
-            $labels['unraid'] = 'Unraid';
-            $labels['unifi']  = 'UniFi';
+        // HealthCatalog is the single flat-service list (topbar, API, dashboard);
+        // its admin-only entries (Unraid, UniFi) are dropped for everyone else.
+        $labels = HealthCatalog::FLAT_SERVICES;
+        if (!$includeUnraid) {
+            $labels = array_diff_key($labels, array_flip(HealthCatalog::ADMIN_ONLY));
         }
         $enabled = [];
         foreach ([ServiceInstance::TYPE_RADARR, ServiceInstance::TYPE_SONARR] as $type) {
@@ -590,6 +601,13 @@ class HealthService implements ResetInterface
             // X-API-KEY authenticated).
             'bazarr' =>
                 $this->config->has('bazarr_url') && $this->config->has('bazarr_api_key'),
+            // Tracearr's public API is Bearer-token only — URL + key both required.
+            'tracearr' =>
+                $this->config->has('tracearr_url') && $this->config->has('tracearr_api_key'),
+            // Emby needs both the URL and an API key (every endpoint the
+            // widget uses, /Sessions included, is token-authenticated).
+            'emby' =>
+                $this->config->has('emby_url') && $this->config->has('emby_api_key'),
             default => true,
         };
     }
@@ -616,7 +634,7 @@ class HealthService implements ResetInterface
         if ($service === null) {
             $this->statusCache = [];
             if ($this->serviceHealthCache !== null) {
-                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi', 'bazarr'] as $svc) {
+                foreach (['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'houndarr', 'unifi', 'bazarr', 'tracearr', 'emby'] as $svc) {
                     $this->serviceHealthCache->clear($svc);
                 }
             }
@@ -919,6 +937,45 @@ class HealthService implements ResetInterface
                 return [
                     'url'     => rtrim($url, '/') . '/api/v2?' . http_build_query(['apikey' => $key, 'cmd' => 'get_activity']),
                     'headers' => ['Accept: application/json'],
+                ];
+            }
+            case 'bazarr': {
+                $url = $get('bazarr_url');
+                $key = $get('bazarr_api_key');
+                if ($url === '' || $key === '') return null;
+                // Same read-only endpoint the client's ping() uses; a bad or
+                // revoked key answers 401 → diagnosed as `auth`.
+                return [
+                    'url'     => rtrim($url, '/') . '/api/system/status',
+                    'headers' => ['X-API-KEY: ' . $key, 'Accept: application/json'],
+                ];
+            }
+            case 'tracearr': {
+                $url = $get('tracearr_url');
+                $key = $get('tracearr_api_key');
+                if ($url === '' || $key === '') return null;
+                // /health is the cheapest key-authenticated public endpoint:
+                // a bad or revoked token answers 401 → `auth`.
+                return [
+                    'url'     => rtrim($url, '/') . TracearrClient::API_BASE . '/health',
+                    'headers' => ['Authorization: Bearer ' . $key, 'Accept: application/json'],
+                ];
+            }
+            case 'emby': {
+                $url = $get('emby_url');
+                $key = $get('emby_api_key');
+                if ($url === '' || $key === '') return null;
+                // /System/Info validates the key: Emby answers 401 on a bad
+                // X-Emby-Token, which diagnoseFromResponse() maps to `auth`.
+                // (/System/Info/Public would answer 200 for any key.) The key
+                // travels in a header so it never lands in an access log.
+                $base = rtrim($url, '/');
+                if (!str_ends_with(strtolower($base), '/emby')) {
+                    $base .= '/emby';
+                }
+                return [
+                    'url'     => $base . '/System/Info',
+                    'headers' => ['Accept: application/json', 'X-Emby-Token: ' . $key],
                 ];
             }
             case 'nzbget': {

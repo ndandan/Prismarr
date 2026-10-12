@@ -11,6 +11,7 @@ use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\TransmissionClient;
 use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
@@ -55,9 +56,9 @@ class DashboardControllerTest extends TestCase
     }
 
     /**
-     * Construction helper (2026-09-01 perf work): threads radarr/sonarr,
-     * libraryCache and the enabled-instance provider through named
-     * parameters; every other argument falls back to whatever the
+     * Construction helper: threads radarr/sonarr, libraryCache and the
+     * enabled-instance provider through named parameters; every other
+     * argument falls back to whatever the
      * neighbouring positional constructions above already pass. Defaults
      * $instances to one enabled Radarr instance (radarr-1) so a test that
      * only cares about the shared library cache doesn't have to restate the
@@ -237,6 +238,114 @@ class DashboardControllerTest extends TestCase
         // Unknown id, instance lookup returns null → null view-model.
         $instances->method('getBySlug')->willReturn(null);
         self::assertNull($m->invoke($controller, 'series', 'sonarr-1', 999));
+    }
+
+    public function testTransmissionWidgetIsEmptyWhenUnconfiguredOrClientMissing(): void
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('isConfigured')->willReturnCallback(fn(string $s) => $s !== 'transmission');
+
+        $trs = $this->createMock(TransmissionClient::class);
+        $trs->expects(self::never())->method('getTorrents');
+
+        $build = fn(?TransmissionClient $client) => new DashboardController(
+            $health,
+            $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class),
+            $this->createMock(JellyseerrClient::class),
+            $this->createMock(TmdbClient::class),
+            $this->createMock(WatchlistItemRepository::class),
+            $this->createMock(ServiceInstanceProvider::class),
+            new NullLogger(),
+            $this->createMock(TranslatorInterface::class),
+            $this->createMock(CacheInterface::class),
+            $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
+            transmission: $client,
+        );
+
+        // Empty body → the card hides itself client-side.
+        self::assertSame('', $build($trs)->widgetTransmission()->getContent());
+        self::assertSame('', $build(null)->widgetTransmission()->getContent());
+    }
+
+    /** Every HealthCatalog service gets a chip once configured — no hardcoded subset. */
+    public function testServicesHealthCoversEveryCatalogService(): void
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('statusFor')->willReturn(['status' => 'up', 'latencyMs' => 5]);
+
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturn([]);
+
+        $controller = new DashboardController(
+            $health,
+            $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class),
+            $this->createMock(JellyseerrClient::class),
+            $this->createMock(TmdbClient::class),
+            $this->createMock(WatchlistItemRepository::class),
+            $instances,
+            new NullLogger(),
+            $this->createMock(TranslatorInterface::class),
+            $this->createMock(CacheInterface::class),
+            $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
+        );
+
+        $m = new ReflectionMethod(DashboardController::class, 'servicesHealth');
+        $chips = $m->invoke($controller);
+
+        self::assertSame(array_keys(\App\Service\HealthCatalog::FLAT_SERVICES), array_column($chips, 'id'));
+        self::assertSame(array_values(\App\Service\HealthCatalog::FLAT_SERVICES), array_column($chips, 'name'));
+    }
+
+    public function testServicesHealthExpandsOneChipPerInstance(): void
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('statusFor')->willReturnCallback(
+            fn(string $service, ?string $slug = null): array => match (true) {
+                $service === 'radarr' && $slug === 'radarr-1'  => ['status' => 'up',   'latencyMs' => 120],
+                $service === 'radarr' && $slug === 'radarr-4k' => ['status' => 'down', 'latencyMs' => null],
+                $service === 'sonarr' && $slug === 'sonarr-1'  => ['status' => 'slow', 'latencyMs' => 1500],
+                $service === 'qbittorrent'                     => ['status' => 'up',   'latencyMs' => 40],
+                default                                        => ['status' => null,   'latencyMs' => null], // prowlarr/jellyseerr/tmdb not configured
+            }
+        );
+
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $type): array => match ($type) {
+                ServiceInstance::TYPE_RADARR => [$this->instance('radarr-1', 'Radarr 1080p'), $this->instance('radarr-4k', 'Radarr 4K')],
+                ServiceInstance::TYPE_SONARR => [$this->instance('sonarr-1', 'Sonarr')],
+                default                      => [],
+            }
+        );
+
+        $controller = new DashboardController(
+            $health,
+            $this->createMock(RadarrClient::class),
+            $this->createMock(SonarrClient::class),
+            $this->createMock(JellyseerrClient::class),
+            $this->createMock(TmdbClient::class),
+            $this->createMock(WatchlistItemRepository::class),
+            $instances,
+            new NullLogger(),
+            $this->createMock(TranslatorInterface::class),
+            $this->createMock(CacheInterface::class),
+            $this->createMock(TautulliClient::class), new DashboardLayoutService($this->createMock(ConfigService::class)),
+        );
+
+        $m = new ReflectionMethod(DashboardController::class, 'servicesHealth');
+        $m->setAccessible(true);
+        /** @var list<array{id: string, name: string, status: string, latencyMs: ?int}> $chips */
+        $chips = $m->invoke($controller);
+
+        // Two Radarr instances + one Sonarr + qBittorrent = 4 chips; the
+        // unconfigured single services (prowlarr/jellyseerr/tmdb) drop out.
+        self::assertCount(4, $chips);
+        self::assertSame(['id' => 'radarr', 'name' => 'Radarr 1080p', 'status' => 'up',   'latencyMs' => 120],  $chips[0]);
+        self::assertSame(['id' => 'radarr', 'name' => 'Radarr 4K',    'status' => 'down', 'latencyMs' => null], $chips[1]);
+        self::assertSame(['id' => 'sonarr', 'name' => 'Sonarr',       'status' => 'slow', 'latencyMs' => 1500], $chips[2]);
+        self::assertSame(['id' => 'qbittorrent', 'name' => 'qBittorrent', 'status' => 'up', 'latencyMs' => 40], $chips[3]);
     }
 
     public function testQuickLookTmdbMovieAndTv(): void

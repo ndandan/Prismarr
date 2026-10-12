@@ -5,6 +5,9 @@ namespace App\Controller;
 use App\Dashboard\NetworkUsageChart;
 use App\Entity\ServiceInstance;
 use App\Repository\Media\WatchlistItemRepository;
+use App\Service\ActivitySource;
+use App\Service\ConfigService;
+use App\Service\HealthCatalog;
 use App\Service\HealthService;
 use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
@@ -12,9 +15,12 @@ use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\RadarrClient;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
+use App\Service\Media\TracearrClient;
+use App\Service\Media\EmbyClient;
 use App\Service\Media\TmdbClient;
 use App\Service\Media\UnifiClient;
 use App\Service\Media\UnraidClient;
+use App\Service\Media\TransmissionClient;
 use App\Service\ServiceInstanceProvider;
 use App\Service\Wokeometer\WokeometerLookup;
 use Psr\Log\LoggerInterface;
@@ -42,6 +48,7 @@ class DashboardController extends AbstractController implements ResetInterface
     private const MAX_RECOMMENDATIONS = 16;
     private const MAX_RECENT          = 16;
     private const MAX_WATCHLIST       = 16;
+    private const MAX_TRANSMISSION    = 5;
     // #30 — short server-side cache for the heavy per-widget upstream calls.
     // Radarr/Sonarr aren't client-cached (unlike TMDb), so the async widget
     // fragments would each hit them live; this dedupes the calls shared across
@@ -91,6 +98,18 @@ class DashboardController extends AbstractController implements ResetInterface
         // Wokeometer score/TL;DR in the quick-look (local SQLite read only).
         // Nullable + last so legacy positional test constructors keep working.
         private readonly ?WokeometerLookup $wokeometer = null,
+        // Transmission — optional torrent widget. Nullable + last so existing
+        // positional constructions (tests) keep working.
+        private readonly ?TransmissionClient $transmission = null,
+        // Tracearr — fallback source for the activity widget. Nullable + last
+        // so the positional constructor calls in DashboardControllerTest hold.
+        private readonly ?TracearrClient $tracearr = null,
+        // Reads the activity-source preference; nullable + last for the same
+        // positional-constructor reason (null → auto).
+        private readonly ?ConfigService $config = null,
+        // Nullable + last: DashboardControllerTest builds this controller
+        // positionally, so a new dependency must not shift the signature.
+        private readonly ?EmbyClient $emby = null,
     ) {}
 
     /**
@@ -106,6 +125,23 @@ class DashboardController extends AbstractController implements ResetInterface
     {
         $this->moviesCache = null;
         $this->seriesCache = null;
+    }
+
+    /**
+     * Which service feeds the "current activity" widget — the admin
+     * preference via ActivitySource (auto = Tautulli first, unchanged
+     * behaviour), falling back to whichever one is configured.
+     */
+    private function activitySource(): ?string
+    {
+        return ActivitySource::resolve(
+            $this->config?->get(ActivitySource::SETTING),
+            fn(string $service) => match ($service) {
+                'tautulli' => $this->health->isConfigured('tautulli'),
+                'tracearr' => $this->tracearr !== null && $this->health->isConfigured('tracearr'),
+                default    => false,
+            },
+        );
     }
 
     /**
@@ -219,6 +255,9 @@ class DashboardController extends AbstractController implements ResetInterface
             'unraid'     => $this->health->isConfigured('unraid'),
             'houndarr'   => $this->health->isConfigured('houndarr'),
             'unifi'      => $this->health->isConfigured('unifi'),
+            'transmission' => $this->transmission !== null && $this->health->isConfigured('transmission'),
+            'tracearr'   => $this->health->isConfigured('tracearr'),
+            'emby'       => $this->health->isConfigured('emby'),
         ];
 
         return $this->render('dashboard/index.html.twig', [
@@ -371,26 +410,32 @@ class DashboardController extends AbstractController implements ResetInterface
     }
 
     /**
-     * Async fragment — current Plex activity from Tautulli. Skipped entirely
-     * (empty body → hidden client-side) when Tautulli isn't configured /
-     * enabled. Otherwise renders the widget body; the fragment re-fetches on a
-     * 10 s interval (see index.html.twig) and fails open to an error state, so
-     * a down/misconfigured Tautulli never breaks the dashboard.
+     * Async fragment — current media activity from Tautulli, or from Tracearr
+     * when Tautulli isn't set up (see activitySource()). Skipped entirely
+     * (empty body → hidden client-side) when neither is configured / enabled.
+     * Otherwise renders the widget body; the fragment re-fetches on a 10 s
+     * interval (see index.html.twig) and fails open to an error state, so a
+     * down/misconfigured source never breaks the dashboard.
      */
     #[Route('/tableau-de-bord/widget/plex', name: 'app_dashboard_widget_plex')]
     public function widgetPlex(): Response
     {
-        if (!$this->health->isConfigured('tautulli')) {
+        $source = $this->activitySource();
+        if ($source === null) {
             return new Response('');
         }
         set_time_limit(60);
 
-        $activity = $this->tautulli->getActivity();
-
         // History changes slowly; cache it ~60s so the 10s now-playing poll
-        // doesn't hit get_history every time. The relative time label is now
-        // formatted in the template via the relative_date Twig filter.
-        $history = $this->cached('plex_history', fn() => $this->tautulli->getHistory(8));
+        // doesn't hit the history endpoint every time. The relative time label
+        // is formatted in the template via the relative_date Twig filter.
+        if ($source === 'tracearr') {
+            $activity = $this->tracearr->getActivity();
+            $history  = $this->cached('tracearr_history', fn() => $this->tracearr->getHistory(null, 8)['rows']);
+        } else {
+            $activity = $this->tautulli->getActivity();
+            $history  = $this->cached('plex_history', fn() => $this->tautulli->getHistory(8));
+        }
 
         $streaming = ($activity['streamCount'] ?? 0) > 0;
 
@@ -398,6 +443,54 @@ class DashboardController extends AbstractController implements ResetInterface
             'plex'        => $activity,
             'plex_history'=> $history,
             'plex_tab'    => $streaming ? 'now' : 'recent',
+            'plex_source' => $source,
+        ]);
+    }
+
+    /**
+     * Async fragment — Transmission transfer summary: global speeds, state
+     * counts and the torrents currently downloading. Skipped (empty body →
+     * hidden client-side) when Transmission isn't configured / enabled.
+     * Re-fetched on a 10 s interval (see index.html.twig); a failed RPC
+     * renders the unreachable state instead of breaking the dashboard.
+     */
+    #[Route('/tableau-de-bord/widget/transmission', name: 'app_dashboard_widget_transmission')]
+    public function widgetTransmission(): Response
+    {
+        if ($this->transmission === null || !$this->health->isConfigured('transmission')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        $torrents = $this->safeFetch('transmission.torrents', fn() => $this->transmission->getTorrents());
+        $error    = $torrents === null || $this->transmission->isUnavailable() || $this->transmission->getLastError() !== null;
+        $torrents ??= [];
+        $active   = array_values(array_filter($torrents, fn($t) => $t['state'] === 'downloading'));
+        usort($active, fn($a, $b) => $b['dlspeed'] <=> $a['dlspeed']);
+
+        return $this->render('dashboard/_transmission.html.twig', [
+            'trs_error'  => $error,
+            'trs_stats'  => $error ? null : $this->transmission->getStats($torrents),
+            'trs_active' => array_slice($active, 0, self::MAX_TRANSMISSION),
+        ]);
+    }
+
+    /**
+     * Async fragment — current Emby playback, straight from the Emby
+     * Sessions API (no Tautulli-style middleman exists for Emby). Empty body
+     * when Emby isn't configured / enabled; otherwise the widget body, polled
+     * every 10 s (see index.html.twig). Fails open like the Plex widget.
+     */
+    #[Route('/tableau-de-bord/widget/emby', name: 'app_dashboard_widget_emby')]
+    public function widgetEmby(): Response
+    {
+        if ($this->emby === null || !$this->health->isConfigured('emby')) {
+            return new Response('');
+        }
+        set_time_limit(60);
+
+        return $this->render('dashboard/_emby_activity.html.twig', [
+            'emby' => $this->emby->getActivity(),
         ]);
     }
 
@@ -1044,6 +1137,7 @@ class DashboardController extends AbstractController implements ResetInterface
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $this->translator->trans('dashboard.quicklook.manage'),
             'inLibrary'    => true,
+            // Bare *arr ids, for the quick-look's subtitle badge.
             'radarrId'     => $type === 'movie' ? $id : null,
             'sonarrId'     => $type === 'series' ? $id : null,
             'airStatus'    => $airStatus,
@@ -1166,6 +1260,8 @@ class DashboardController extends AbstractController implements ResetInterface
             'actionUrl'    => $actionUrl,
             'actionLabel'  => $actionLabel,
             'inLibrary'    => $match !== null,
+            // Bare *arr ids of the matched library row, for the quick-look's
+            // subtitle badge. Null when the title is not in the library.
             'radarrId'     => (!$isTv && $match !== null) ? $match['id'] : null,
             'sonarrId'     => ($isTv && $match !== null) ? $match['id'] : null,
             'airStatus'    => $airStatus,

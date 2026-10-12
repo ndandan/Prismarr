@@ -3,6 +3,7 @@
 namespace App\Controller;
 
 use App\Entity\ServiceInstance;
+use App\Service\HealthCatalog;
 use App\Service\HealthService;
 use App\Service\ServiceInstanceProvider;
 use Doctrine\DBAL\Connection;
@@ -12,8 +13,6 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class HealthController extends AbstractController
 {
-    /** Single-instance services — kept on the legacy flat ping API. */
-    private const FLAT_SERVICES = ['prowlarr', 'jellyseerr', 'qbittorrent', 'transmission', 'sabnzbd', 'nzbget', 'tmdb'];
 
     #[Route('/api/health', name: 'api_health', methods: ['GET'])]
     public function health(Connection $db): JsonResponse
@@ -64,7 +63,11 @@ class HealthController extends AbstractController
         $instancesMap = ['radarr' => [], 'sonarr' => []];
 
         // Flat single-instance services first.
-        foreach (self::FLAT_SERVICES as $service) {
+        $isAdmin = $this->isGranted('ROLE_ADMIN');
+        foreach (array_keys(HealthCatalog::FLAT_SERVICES) as $service) {
+            if (!$isAdmin && in_array($service, HealthCatalog::ADMIN_ONLY, true)) {
+                continue;
+            }
             try {
                 $state = $health->isHealthy($service);
             } catch (\Throwable) {

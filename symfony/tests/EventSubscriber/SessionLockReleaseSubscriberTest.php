@@ -46,9 +46,9 @@ class SessionLockReleaseSubscriberTest extends TestCase
             self::request('POST', 'admin_instances_create', true),
             false,
         ];
-        // Long-running Bazarr POSTs that never write the session (review
-        // 2026-10-08): a 45 s provider download / ~78 s inline refresh must
-        // not hold the lock and freeze every other tab of that admin.
+        // Long-running Bazarr POSTs that never write the session: a 45 s
+        // provider download / ~86 s inline refresh must not hold the lock and
+        // freeze every other tab of that admin.
         foreach (['app_bazarr_api_download_movie', 'app_bazarr_api_download_episode', 'app_bazarr_api_refresh'] as $route) {
             yield 'POST ' . $route . ' releases the lock' => [self::request('POST', $route, true), true];
         }

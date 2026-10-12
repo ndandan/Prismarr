@@ -90,7 +90,7 @@ class HealthServiceChipsConcurrentTest extends HealthServiceChipsTest
             ['radarr' => ['r1'], 'sonarr' => ['s1']], pool: $pool);
 
         self::assertSame(
-            ['radarr|Radarr R1|up', 'sonarr|Sonarr S1|down', 'prowlarr|Prowlarr|up', 'tmdb|TMDb|up', 'bazarr|Bazarr|up'],
+            ['radarr|Radarr R1|up', 'sonarr|Sonarr S1|down', 'tmdb|TMDb|up', 'prowlarr|Prowlarr|up', 'bazarr|Bazarr|up'],
             self::summary($svc->chips()),
         );
         // Unconfigured services ride along (they resolve to null without a
@@ -147,7 +147,7 @@ class HealthServiceChipsConcurrentTest extends HealthServiceChipsTest
         try {
             $first = $this->make($settings, ['radarr:r1' => true, 'prowlarr' => false, 'tmdb' => true], ['radarr' => ['r1']], pool: $pool)->chips();
             self::assertCount(1, $this->batches);
-            self::assertSame(['radarr|Radarr R1|up', 'prowlarr|Prowlarr|down', 'tmdb|TMDb|up'], self::summary($first));
+            self::assertSame(['radarr|Radarr R1|up', 'tmdb|TMDb|up', 'prowlarr|Prowlarr|down'], self::summary($first));
 
             // Next request: everything pooled → no pings (mocks forbid them), no batch.
             $this->batches = [];
@@ -190,7 +190,7 @@ class HealthServiceChipsConcurrentTest extends HealthServiceChipsTest
 
             // B pinged nothing (mocks forbid it), ran no batch, waited for A
             // and served A's verdicts.
-            self::assertSame(['radarr|Radarr R1|up', 'prowlarr|Prowlarr|up', 'tmdb|TMDb|up'], self::summary($chips));
+            self::assertSame(['radarr|Radarr R1|up', 'tmdb|TMDb|up', 'prowlarr|Prowlarr|up'], self::summary($chips));
             self::assertSame([], $this->batches);
             self::assertGreaterThan(200, $ms, "B returned after {$ms} ms — it did not wait for A's sweep");
         } finally {

@@ -375,7 +375,7 @@ class TemplateStructureGuardTest extends TestCase
         $src = (string) file_get_contents(__DIR__ . '/../../templates/error/_service_banner.html.twig');
 
         $this->assertMatchesRegularExpression(
-            '/<a href="\{\{ path\(_target_route\) \}\}" data-turbo-frame="_top"/',
+            '/<a href="\{\{ path\(\'app_configure_services\'\) \}\}" data-turbo-frame="_top"/',
             $src,
             '_service_banner.html.twig: the CTA anchor must carry data-turbo-frame="_top"',
         );

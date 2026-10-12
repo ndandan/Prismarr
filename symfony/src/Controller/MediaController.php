@@ -944,12 +944,21 @@ class MediaController extends AbstractController
 
         // Apply options — issue #5: client choice wins, else this instance's
         // configured default, else the lookup's own value, else 1 (legacy).
-        $raw['qualityProfileId'] = (int) (
-            $data['qualityProfileId']
-            ?? $this->sonarr->getInstance()?->getDefaultQualityProfileId()
-            ?? $raw['qualityProfileId']
-            ?? 1
-        );
+        // 0 is treated the same as "absent" (matches filmAdd's convention),
+        // so a client that explicitly sends qualityProfileId: 0 to mean
+        // "no preference" still falls through to the instance default
+        // instead of literally requesting profile 0.
+        $qualityProfileId = (int) ($data['qualityProfileId'] ?? 0);
+        if ($qualityProfileId === 0) {
+            $qualityProfileId = $this->sonarr->getInstance()?->getDefaultQualityProfileId() ?? 0;
+        }
+        if ($qualityProfileId === 0) {
+            $qualityProfileId = (int) ($raw['qualityProfileId'] ?? 0);
+        }
+        if ($qualityProfileId === 0) {
+            $qualityProfileId = 1;
+        }
+        $raw['qualityProfileId'] = $qualityProfileId;
         $raw['rootFolderPath'] = $data['rootFolderPath'] ?? '/jellyfin/Series';
         $raw['monitored'] = (bool) ($data['monitored'] ?? true);
         $raw['seasonFolder'] = (bool) ($data['seasonFolder'] ?? true);
@@ -2036,8 +2045,8 @@ class MediaController extends AbstractController
             $results[] = array_merge($s, ['type' => 'serie', 'inLibrary' => true]);
         }
 
-        // Re-rank across the two kinds with the same rule, then cut to 12 and
-        // only THEN look up subtitle status — it used to run for every match.
+        // Re-rank across the two kinds with the same rule, cut to 12, and
+        // only THEN look up subtitle status — 12 lookups, not one per match.
         $results = $this->matchAndRank($results, $term);
         $results = array_slice($results, 0, 12);
 
@@ -2243,9 +2252,11 @@ class MediaController extends AbstractController
     }
 
     /**
-     * Construit l'index de recherche films (toutes instances Radarr activées).
-     * Partagé par `/search` et `/search/online` : les deux doivent produire
-     * ET consommer la même entrée de cache.
+     * Build the movie search index across every enabled Radarr instance.
+     * Shared by `/search` and `/search/online`: both must produce AND consume
+     * the same cache entry. Rows come from the shared MediaLibraryCache entry,
+     * so the index costs no extra API call and can no longer drift out of sync
+     * with the Films page.
      *
      * @return list<array<string, mixed>>
      */
@@ -2291,7 +2302,9 @@ class MediaController extends AbstractController
     }
 
     /**
-     * Pendant séries de buildMovieSearchIndex().
+     * Series counterpart of buildMovieSearchIndex(). Sonarr's normalized rows
+     * carry no originalTitle, and a series in the library always counts as
+     * "has file" for the dropdown's purposes.
      *
      * @return list<array<string, mixed>>
      */

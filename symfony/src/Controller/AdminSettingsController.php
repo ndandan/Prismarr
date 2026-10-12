@@ -127,6 +127,14 @@ class AdminSettingsController extends AbstractController
             // regenerating it there silently breaks the widget until re-saved here.
             ['key' => 'houndarr_api_key', 'type' => 'password', 'label' => 'admin.field.api_key', 'placeholder' => 'hndarr_…'],
         ],
+        'tracearr' => [
+            ['key' => 'tracearr_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:3000'],
+            ['key' => 'tracearr_api_key', 'type' => 'password', 'label' => 'admin.field.api_key', 'placeholder' => 'trr_pub_…'],
+        ],
+        'emby' => [
+            ['key' => 'emby_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8096'],
+            ['key' => 'emby_api_key', 'type' => 'password', 'label' => 'admin.field.api_key'],
+        ],
     ];
 
     /**
@@ -179,6 +187,8 @@ class AdminSettingsController extends AbstractController
         'unraid'      => 'Unraid',
         'unifi'       => 'UniFi',
         'houndarr'    => 'Houndarr',
+        'tracearr'    => 'Tracearr',
+        'emby'        => 'Emby',
     ];
 
     /**
@@ -332,6 +342,19 @@ class AdminSettingsController extends AbstractController
             ],
             'help' => 'admin.display.transmission_refresh.help',
         ],
+        // Live-activity source for the dashboard widget + sidebar pill
+        // (read by ActivitySource). `auto` = Tautulli first, then Tracearr.
+        'display_activity_source' => [
+            'label'   => 'admin.display.activity_source.label',
+            'type'    => 'select',
+            'default' => 'auto',
+            'options' => [
+                'auto'     => 'admin.display.activity_source.options.auto',
+                'tautulli' => 'admin.display.activity_source.options.tautulli',
+                'tracearr' => 'admin.display.activity_source.options.tracearr',
+            ],
+            'help' => 'admin.display.activity_source.help',
+        ],
         'display_ui_density' => [
             'label'   => 'admin.display.ui_density.label',
             'type'    => 'select',
@@ -435,6 +458,7 @@ class AdminSettingsController extends AbstractController
             'service_labels'     => self::SERVICE_LABELS,
             'values'             => $this->loadValues(),
             'service_enabled'    => $this->loadServiceEnabled(),
+            'toggleable_services' => HealthService::TOGGLEABLE_SERVICES,
             'sidebar_visibility' => $this->loadSidebarVisibility(),
             'internal_features'  => self::INTERNAL_FEATURES,
             'display_options'    => self::DISPLAY_OPTIONS,
@@ -600,6 +624,8 @@ class AdminSettingsController extends AbstractController
             'unraid'                                     => ['unraid_url', 'unraid_api_key', 'unraid_skip_tls_verify'],
             'unifi'                                      => ['unifi_url', 'unifi_api_key', 'unifi_site', 'unifi_skip_tls_verify'],
             'houndarr'                                   => ['houndarr_url', 'houndarr_api_key'],
+            'tracearr'                                   => ['tracearr_url', 'tracearr_api_key'],
+            'emby'                                       => ['emby_url', 'emby_api_key'],
             default                                      => [],
         };
         $overrides = [];
@@ -648,7 +674,7 @@ class AdminSettingsController extends AbstractController
     public function healthInvalidate(string $service): JsonResponse
     {
         $service = strtolower($service);
-        $allowed = ['radarr', 'sonarr', 'prowlarr', 'jellyseerr', 'qbittorrent', 'deluge', 'transmission', 'tmdb', 'sabnzbd', 'nzbget', 'tautulli', 'unraid', 'unifi', 'houndarr', 'bazarr'];
+        $allowed = array_merge(['radarr', 'sonarr'], HealthService::TOGGLEABLE_SERVICES);
         if (!in_array($service, $allowed, true)) {
             return new JsonResponse(['ok' => false], 400);
         }
@@ -1071,6 +1097,9 @@ class AdminSettingsController extends AbstractController
         'sonarr_api_key' => ['type' => ServiceInstance::TYPE_SONARR, 'kind' => 'api_key'],
     ];
 
+    /** Services whose settings live in service_instance rows, not flat keys. */
+    private const INSTANCE_TYPES_BY_SERVICE = ['radarr' => true, 'sonarr' => true];
+
     private function saveSubmitted(Request $request): void
     {
         $payload = [];
@@ -1079,10 +1108,20 @@ class AdminSettingsController extends AbstractController
         // per type below — this avoids two DB writes that could leave the
         // instance in a half-updated state if one of them throws.
         $instanceBuffer = [];
-        foreach (self::FIELDS as $group) {
+        foreach (self::FIELDS as $serviceId => $group) {
+            // "Remove" on a configured service (_remove_<service>=1): wipe every
+            // field of it, secrets included. Radarr/Sonarr instances have their
+            // own delete action and never take this path.
+            $removed = !isset(self::INSTANCE_TYPES_BY_SERVICE[$serviceId])
+                && (string) $request->request->get('_remove_' . $serviceId, '') === '1';
             foreach ($group as $field) {
                 $key   = $field['key'];
                 $value = trim((string) $request->request->get($key, ''));
+
+                if ($removed) {
+                    $payload[$key] = null;
+                    continue;
+                }
 
                 // Explicit clear via the dedicated trash button next to the
                 // input (only rendered for clearable fields — qBit user/
@@ -1223,14 +1262,13 @@ class AdminSettingsController extends AbstractController
             $payload[$key] = $this->normalizeDisplayValue($spec, $raw);
         }
 
-        // Final-review fix-wave: captured BEFORE setMany() below overwrites
-        // them, so this compares the value the form actually submitted
-        // against what was live until now — resubmitting the SAME
-        // bazarr_url on an unrelated section's save (every field in
-        // self::FIELDS rides along on the one shared settings form) must
-        // NOT count as a change. Only bazarr_api_key's PRESENCE in $payload
-        // is meaningful here (a password field lands in $payload only on a
-        // genuine non-empty resubmission — see the empty-value guard above).
+        // Captured BEFORE setMany() below overwrites them, so this compares
+        // the value the form actually submitted against what was live until
+        // now — resubmitting the SAME bazarr_url on an unrelated section's
+        // save (every field in self::FIELDS rides along on the one shared
+        // settings form) must NOT count as a change. Only bazarr_api_key's
+        // PRESENCE in $payload is meaningful here (a password field lands in
+        // $payload only on a genuine non-empty resubmission).
         $bazarrChanged = (array_key_exists('bazarr_url', $payload) && $payload['bazarr_url'] !== $this->config->get('bazarr_url'))
             || (array_key_exists('bazarr_api_key', $payload) && $payload['bazarr_api_key'] !== $this->config->get('bazarr_api_key'));
 

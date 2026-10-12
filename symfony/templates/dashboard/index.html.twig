@@ -446,6 +446,7 @@
   .service-chip-dot.is-very-slow { background: #f97316; box-shadow: 0 0 8px rgba(249,115,22,.5); }
   .service-chip-dot.is-degraded { background: #94a3b8; }
   .service-chip-dot.is-down { background: #ef4444; }
+  .service-chip-logo { flex-shrink: 0; object-fit: contain; }
   .service-chip-name { font-size: .82rem; font-weight: 500; line-height: 1; }
   .service-chip-state { font-size: .68rem; color: var(--tblr-secondary); margin-top: .15rem; }
   /* ── Unraid server widget ──────────────────────────────────────── */
@@ -664,6 +665,7 @@
 </div>
 
 {% include 'dashboard/_plex_info_modal.html.twig' with {} only %}
+{% include 'dashboard/_emby_quicklook.html.twig' with {} only %}
 {% endblock %}
 
 {% block javascripts %}
@@ -799,6 +801,33 @@
     if (window._dashLiveTimer) { clearInterval(window._dashLiveTimer); }
     window._dashLiveTimer = setInterval(dashTick, dashBaseTick);
 
+    // Transmission widget: same 10s live refresh (speeds/progress move fast).
+    function refreshTransmission() {
+      if (document.hidden) return;
+      var node = document.querySelector('[data-dash-widget="transmission"][data-dash-url]');
+      if (!node) return;
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { if ((html || '').trim()) applyFragment(node, html); })
+        .catch(function () {});
+    }
+    if (window._dashTrsTimer) { clearInterval(window._dashTrsTimer); }
+    window._dashTrsTimer = setInterval(refreshTransmission, 10000);
+
+    // Emby activity widget: same 10s cadence and fail-open fragment, its own
+    // timer so the two media-server widgets never share a handle.
+    function refreshEmby() {
+      if (document.hidden) return;
+      var node = document.querySelector('[data-dash-widget="emby"][data-dash-url]');
+      if (!node) return;
+      fetch(node.dataset.dashUrl, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : ''; })
+        .then(function (html) { if ((html || '').trim()) { applyFragment(node, html); } })
+        .catch(function () {});
+    }
+    if (window._dashEmbyTimer) { clearInterval(window._dashEmbyTimer); }
+    window._dashEmbyTimer = setInterval(refreshEmby, 10000);
+
     // Plex widget tabs: client-side pane toggle, remembers the active tab so the
     // 10s fragment refresh doesn't snap the user back to "Now playing".
     function applyPlexTab(scope) {
@@ -826,6 +855,10 @@
 
     document.addEventListener('turbo:before-render', function () {
       if (window._dashLiveTimer) { clearInterval(window._dashLiveTimer); window._dashLiveTimer = null; }
+      if (window._dashHealthTimer) { clearInterval(window._dashHealthTimer); window._dashHealthTimer = null; }
+      if (window._dashPlexTimer) { clearInterval(window._dashPlexTimer); window._dashPlexTimer = null; }
+      if (window._dashTrsTimer) { clearInterval(window._dashTrsTimer); window._dashTrsTimer = null; }
+      if (window._dashEmbyTimer) { clearInterval(window._dashEmbyTimer); window._dashEmbyTimer = null; }
     });
 
   })();
