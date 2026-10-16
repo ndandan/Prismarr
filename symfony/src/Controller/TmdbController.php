@@ -762,14 +762,15 @@ class TmdbController extends AbstractController
         ]);
     }
 
+    /** Wall-clock budget for smartSearch's worst path (~13 sequential TMDb calls). */
+    private const SMART_SEARCH_TIME_LIMIT = 120;
+
     /**
      * Search page backend. With a query: TMDb multi-search (two pages), people
      * pulled out, movies/series filtered and ranked by SearchRanker, the top
      * hit returned as "best" with its genres. Without a query but with
      * filters: a TMDb discover browse. Every item carries its library status.
      */
-    private const SMART_SEARCH_TIME_LIMIT = 120;
-
     #[Route('/decouverte/recherche', name: 'tmdb_smart_search', methods: ['GET'])]
     public function smartSearch(Request $request): JsonResponse
     {
