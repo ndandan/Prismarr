@@ -1015,12 +1015,26 @@
   // on `document` would pile up (one more copy per visit: a card click then
   // opens the detail modal N times) and keep pointing at the previous
   // visit's DOM. bindDoc() swaps the previous copy for the new one.
+  var boundDocTypes = {};
   function bindDoc(type, name, fn) {
     var slot = '_prismarrSearchDoc_' + name;
     if (window[slot]) document.removeEventListener(type, window[slot]);
     window[slot] = fn;
+    boundDocTypes[slot] = type;
     document.addEventListener(type, fn);
   }
+  // Navigating AWAY via Turbo must drop every document-level listener too,
+  // otherwise they stay live on other pages (for instance the "/" handler
+  // would swallow the key everywhere). Runs once at the next turbo:before-render.
+  window.registerPageLifecycle(function() {
+    return function() {
+      Object.keys(boundDocTypes).forEach(function(slot) {
+        if (window[slot]) document.removeEventListener(boundDocTypes[slot], window[slot]);
+        delete window[slot];
+      });
+      boundDocTypes = {};
+    };
+  });
   var BASE = window.BASE_PATH;
   // Also escapes the double quote: escHtml output lands inside quoted attributes
   // (data-tmdb-title, title, aria-label) too.
@@ -1965,7 +1979,7 @@
       ? '<a class="btn btn-success btn-sm" href="' + BASE + (b.type === 'movie' ? '/medias/' + DEFAULT_RADARR_SLUG + '/films' : '/medias/' + DEFAULT_SONARR_SLUG + '/series') + '?open=' + encodeURIComponent(b.lib_id || '') + '">' + escHtml(SRCH_I18N.inLibrary) + '</a>'
       : '<button type="button" class="btn btn-primary btn-sm tmdb-add-btn" data-tmdb-id="' + b.id + '" data-tmdb-type="' + b.type + '" data-tmdb-title="' + escHtml(b.title || '') + '">' + escHtml(SRCH_I18N.add) + '</button>';
     var wlOn = window._prismarrWatchlist && window._prismarrWatchlist[b.type + '_' + b.id];
-    return '<div class="srch-best"' + (b.backdrop ? ' style="--srch-bg:url(\'' + encodeURI(b.backdrop) + '\')"' : '') + '>'
+    return '<div class="srch-best"' + (b.backdrop ? ' style="--srch-bg:url(\'' + window.escCssUrl(b.backdrop) + '\')"' : '') + '>'
       + '<div class="srch-best-inner">'
       + (poster ? '<img class="srch-best-poster" src="' + encodeURI(poster) + '" alt="" loading="lazy">' : '')
       + '<div class="srch-best-body">'
@@ -2153,6 +2167,7 @@
     });
     // "/" focuses the search box from anywhere on the page (not while typing).
     bindDoc('keydown', 'keydown8', function (e) {
+      if (!srchInput.isConnected) return;
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
       var t = e.target;
       if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
@@ -2242,7 +2257,7 @@
       modalBtn.className = 'btn ' + (added ? 'btn-warning' : 'btn-outline-warning') + ' tmdb-wl-modal-btn';
       modalBtn.querySelector('svg').setAttribute('fill', added ? '#fff' : 'none');
       var textNode = modalBtn.childNodes[modalBtn.childNodes.length - 1];
-      textNode.textContent = added ? 'Dans la watchlist' : 'Watchlist';
+      textNode.textContent = added ? TMDB_I18N.in_watchlist : TMDB_I18N.watchlist;
     }
     if (window._prismarrWatchlistSync) window._prismarrWatchlistSync();
   }
