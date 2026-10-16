@@ -68,7 +68,6 @@
     // is `#[IsGranted('ROLE_ADMIN')]` on the whole class — so this flag only
     // controls whether the badge LOOKS clickable, it grants no capability by
     // itself.
-    window.PRISMARR_IS_ADMIN = {{ is_granted('ROLE_ADMIN') ? 'true' : 'false' }};
 
     // Global locale-aware byte formatter — must be defined here in <head>
     // BEFORE any child template's javascripts block runs. The original
