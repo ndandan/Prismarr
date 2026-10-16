@@ -768,9 +768,14 @@ class TmdbController extends AbstractController
      * hit returned as "best" with its genres. Without a query but with
      * filters: a TMDb discover browse. Every item carries its library status.
      */
+    private const SMART_SEARCH_TIME_LIMIT = 120;
+
     #[Route('/decouverte/recherche', name: 'tmdb_smart_search', methods: ['GET'])]
     public function smartSearch(Request $request): JsonResponse
     {
+        // Up to ~13 sequential TMDb calls (15 s timeout each) on the worst path;
+        // don't let a wall-clock PHP_MAX_EXECUTION_TIME kill it mid-flight.
+        set_time_limit(self::SMART_SEARCH_TIME_LIMIT);
         $type = (string) $request->query->get('type', 'all');
         if (!in_array($type, ['all', 'movie', 'tv'], true)) {
             $type = 'all';
