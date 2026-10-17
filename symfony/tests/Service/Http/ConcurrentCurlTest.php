@@ -149,4 +149,74 @@ class ConcurrentCurlTest extends TestCase
         $fiber->start();
         self::assertTrue($fiber->isTerminated());
     }
+
+    /**
+     * A task that blocks before its first transfer (the SSRF guard's
+     * synchronous DNS lookup, a hung resolver) must not eat into the timeout
+     * budget of transfers other tasks already queued: no handle's clock may
+     * start until every task has reached its first transfer. Before the fix,
+     * the earlier task's handle was kicked on add, so a stall longer than its
+     * timeout surfaced as CURLE_OPERATION_TIMEDOUT on a healthy service —
+     * whatever its position in the task order.
+     */
+    public function testABlockingTaskSetupDoesNotTimeOutOtherTasksTransfers(): void
+    {
+        $base = LocalHttp::serverUrl();
+        if ($base === null) {
+            self::markTestSkipped('PHP built-in server unavailable here');
+        }
+
+        $fast = static function () use ($base): array {
+            $ch = LocalHttp::serverHandle($base, 20, 200, 'fast');
+            // Generous for a 20 ms answer, far shorter than the stall below.
+            curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, 300);
+            curl_setopt($ch, CURLOPT_TIMEOUT_MS, 400);
+            $r = ConcurrentCurl::exec($ch);
+            return [$r, curl_errno($ch), curl_getinfo($ch, CURLINFO_HTTP_CODE)];
+        };
+        $blocking = static function () use ($base): array {
+            usleep(800_000); // synchronous setup, e.g. a stalled DNS lookup
+            $ch = LocalHttp::serverHandle($base, 20, 200, 'slow-setup');
+            $r  = ConcurrentCurl::exec($ch);
+            return [$r, curl_errno($ch), curl_getinfo($ch, CURLINFO_HTTP_CODE)];
+        };
+
+        $out = (new ConcurrentCurl())->run([
+            'a'       => $fast,
+            'b'       => $fast,
+            'stalled' => $blocking,
+            'c'       => $fast,
+        ]);
+
+        self::assertSame([
+            'a'       => ['value' => ['fast', 0, 200]],
+            'b'       => ['value' => ['fast', 0, 200]],
+            'stalled' => ['value' => ['slow-setup', 0, 200]],
+            'c'       => ['value' => ['fast', 0, 200]],
+        ], $out);
+    }
+
+    public function testTransfersStillOverlapWhenATaskBlocksBeforeItsTransfer(): void
+    {
+        $base = LocalHttp::serverUrl();
+        if ($base === null) {
+            self::markTestSkipped('PHP built-in server unavailable here');
+        }
+
+        $tasks = ['setup' => static function () use ($base): string|bool {
+            usleep(300_000);
+            return ConcurrentCurl::exec(LocalHttp::serverHandle($base, 400, 200, 'setup'));
+        }];
+        foreach (['a', 'b', 'c'] as $k) {
+            $tasks[$k] = static fn (): string|bool => ConcurrentCurl::exec(LocalHttp::serverHandle($base, 400, 200, $k));
+        }
+
+        $t   = hrtime(true);
+        $out = (new ConcurrentCurl())->run($tasks);
+        $ms  = self::elapsedMs($t);
+
+        self::assertSame(['setup' => ['value' => 'setup'], 'a' => ['value' => 'a'], 'b' => ['value' => 'b'], 'c' => ['value' => 'c']], $out);
+        // 300 ms setup + one overlapped 400 ms round; serial would be ~1900 ms.
+        self::assertLessThan(1300, $ms, "setup + 4 x 400 ms took {$ms} ms");
+    }
 }

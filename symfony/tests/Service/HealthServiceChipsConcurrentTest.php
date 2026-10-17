@@ -243,6 +243,84 @@ class HealthServiceChipsConcurrentTest extends HealthServiceChipsTest
         }
     }
 
+    /**
+     * Review fix #2/#17: a synchronous stall in a probe that sorts AFTER
+     * healthy ones in the catalog (Emby, after Radarr/Sonarr/Prowlarr) must
+     * neither time out their transfers — they used to be kicked into the
+     * multi loop before the stall, failing with CURLE_OPERATION_TIMEDOUT and
+     * reading as "down" — nor count in their latency.
+     */
+    public function testAStallInALaterProbeNeitherTimesOutNorSlowsEarlierOnes(): void
+    {
+        $base = LocalHttp::serverUrl();
+        if ($base === null) {
+            self::markTestSkipped('PHP built-in server unavailable here');
+        }
+        // A real transfer whose total timeout (400 ms) is far below the stall.
+        $ping = static function () use ($base): bool {
+            $ch = LocalHttp::serverHandle($base, 20);
+            curl_setopt($ch, CURLOPT_TIMEOUT_MS, 400);
+
+            return ConcurrentCurl::exec($ch) !== false;
+        };
+        $settings = ['prowlarr_url' => 'http://p', 'prowlarr_api_key' => 'k',
+            'emby_url' => 'http://e', 'emby_api_key' => 'k'];
+        $svc = $this->make($settings, [
+            'radarr:r1' => $ping,
+            'sonarr:s1' => $ping,
+            'prowlarr'  => $ping,
+            'emby'      => static function () use ($ping): bool {
+                usleep(900_000); // a blocking DNS lookup before the transfer
+                return $ping();
+            },
+        ], ['radarr' => ['r1'], 'sonarr' => ['s1']]);
+
+        $chips = $svc->chips();
+        self::assertCount(4, $chips);
+        foreach ($chips as $chip) {
+            if ($chip['name'] === 'Emby') {
+                continue;
+            }
+            self::assertSame('up', $chip['status'], $chip['name'] . ' must not be timed out or slowed by Emby\'s stall');
+            self::assertLessThan(750, $chip['latencyMs'], $chip['name']);
+        }
+    }
+
+    /**
+     * Review fix #17: ordering only protects probes started AFTER a stall.
+     * Tautulli (sync-setup group, earlier in the catalog) used to be kicked
+     * into the multi loop before Bazarr's blocking lookup ran, and timed out
+     * → "down". Its transfer must now survive; only its latency (measured
+     * from its own start) may include the sibling's stall.
+     */
+    public function testAStallInTheSetupGroupDoesNotTimeOutAnEarlierMemberOfIt(): void
+    {
+        $base = LocalHttp::serverUrl();
+        if ($base === null) {
+            self::markTestSkipped('PHP built-in server unavailable here');
+        }
+        $ping = static function () use ($base): bool {
+            $ch = LocalHttp::serverHandle($base, 20);
+            curl_setopt($ch, CURLOPT_TIMEOUT_MS, 400);
+
+            return ConcurrentCurl::exec($ch) !== false;
+        };
+        $settings = ['tautulli_url' => 'http://t', 'tautulli_api_key' => 'k',
+            'bazarr_url' => 'http://b', 'bazarr_api_key' => 'k'];
+        $svc = $this->make($settings, [
+            'tautulli' => $ping,
+            'bazarr'   => static function () use ($ping): bool {
+                usleep(900_000); // a blocking DNS lookup before the transfer
+                return $ping();
+            },
+        ]);
+
+        $byName = array_column($svc->chips(), 'status', 'name');
+        self::assertCount(2, $byName);
+        self::assertNotSame('down', $byName['Tautulli'], 'Tautulli\'s transfer must not time out during Bazarr\'s stall');
+        self::assertNotSame('down', $byName['Bazarr']);
+    }
+
     /** Review fix: a fully cached chips() call must not queue behind the sweep lock. */
     public function testAWarmChipsCallNeverTouchesTheSweepLock(): void
     {
