@@ -1034,17 +1034,6 @@ class HealthService implements ResetInterface
                     'insecure' => $get('unifi_skip_tls_verify') === '1',
                 ];
             }
-            case 'bazarr': {
-                $url = $get('bazarr_url');
-                $key = $get('bazarr_api_key');
-                if ($url === '' || $key === '') return null;
-                // Same read-only endpoint the client's ping() uses; a bad or
-                // revoked key answers 401 → diagnosed as `auth`.
-                return [
-                    'url'     => rtrim($url, '/') . '/api/system/status',
-                    'headers' => ['X-API-KEY: ' . $key, 'Accept: application/json'],
-                ];
-            }
             case 'transmission': {
                 $url  = $get('transmission_url');
                 $user = $get('transmission_user');
