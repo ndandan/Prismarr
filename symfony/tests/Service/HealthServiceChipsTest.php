@@ -8,6 +8,7 @@ use App\Service\HealthService;
 use App\Service\Http\ConcurrentCurl;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\DelugeClient;
+use App\Service\Media\EmbyClient;
 use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
@@ -17,6 +18,7 @@ use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\TracearrClient;
 use App\Service\Media\TransmissionClient;
 use App\Service\Media\UnifiClient;
 use App\Service\Media\UnraidClient;
@@ -103,6 +105,7 @@ class HealthServiceChipsTest extends TestCase
             'sabnzbd' => SabnzbdClient::class, 'nzbget' => NzbgetClient::class, 'tautulli' => TautulliClient::class,
             'unraid' => UnraidClient::class, 'houndarr' => HoundarrClient::class, 'deluge' => DelugeClient::class,
             'unifi' => UnifiClient::class, 'transmission' => TransmissionClient::class, 'bazarr' => BazarrClient::class,
+            'tracearr' => TracearrClient::class, 'emby' => EmbyClient::class,
         ];
         $this->clients = [];
         foreach ($classes as $svc => $class) {
@@ -135,6 +138,8 @@ class HealthServiceChipsTest extends TestCase
             transmission: $this->clients['transmission'],
             bazarr: $this->clients['bazarr'],
             concurrent: $this->runner,
+            tracearr: $this->clients['tracearr'],
+            emby: $this->clients['emby'],
         );
     }
 

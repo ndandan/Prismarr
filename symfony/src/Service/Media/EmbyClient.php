@@ -4,6 +4,7 @@ namespace App\Service\Media;
 
 use App\Service\ConfigService;
 use App\Service\HealthService;
+use App\Service\Http\ConcurrentCurl;
 use Psr\Log\LoggerInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
@@ -369,7 +370,9 @@ class EmbyClient implements ResetInterface
             // in Emby's access log or a proxy log.
             CURLOPT_HTTPHEADER     => ['Accept: application/json', 'X-Emby-Token: ' . $this->apiKey],
         ]);
-        $body = curl_exec($ch);
+        // Cooperative inside a concurrent health sweep (ping() runs here), a
+        // plain curl_exec() everywhere else.
+        $body = ConcurrentCurl::exec($ch);
         $code = (int) curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $err  = curl_error($ch);
         curl_close($ch);

@@ -10,7 +10,8 @@ namespace App\Tests\Support;
  *    completes in the kernel backlog, the request is sent, no reply ever
  *    comes — so a handle with TIMEOUT_MS=N fails with CURLE_OPERATION_TIMEDOUT
  *    after ~N ms, deterministically.
- *  - serverUrl(): PHP's built-in server (forking workers) whose router
+ *  - serverUrl(): a fork-per-connection PHP server (PHP's built-in server
+ *    when pcntl is missing) whose router
  *    sleeps ?ms= (or a /d<ms> path prefix) then answers ?code= with body
  *    ?body= (default "{}") — the success-path twin.
  */
@@ -71,6 +72,52 @@ final class LocalHttp
             http_response_code((int) ($_GET['code'] ?? 200));
             echo $_GET['body'] ?? '{}';
             PHP);
+        // Preferred server: fork per connection, so a burst of simultaneous
+        // connections is served in parallel. The built-in server's workers
+        // can each accept a second connection before answering the first,
+        // which serializes bursts (latencies in multiples of the delay) and
+        // made the concurrency timing tests flaky. Same routing as router.php.
+        file_put_contents($dir . '/server.php', <<<'PHP'
+            <?php
+            $srv = stream_socket_server('tcp://' . $argv[1], $errno, $errstr, STREAM_SERVER_BIND | STREAM_SERVER_LISTEN,
+                stream_context_create(['socket' => ['backlog' => 256]]));
+            if ($srv === false) {
+                exit(1);
+            }
+            pcntl_signal(SIGCHLD, SIG_IGN); // children reaped automatically
+            while (true) {
+                $c = @stream_socket_accept($srv, -1);
+                if ($c === false) {
+                    continue;
+                }
+                if (pcntl_fork() !== 0) {
+                    fclose($c);
+                    continue;
+                }
+                fclose($srv);
+                $head = '';
+                while (!str_contains($head, "\r\n\r\n") && ($chunk = fread($c, 8192)) !== false && $chunk !== '') {
+                    $head .= $chunk;
+                }
+                [$headers, $body] = explode("\r\n\r\n", $head, 2) + ['', ''];
+                if (preg_match('/^content-length:\s*(\d+)/mi', $headers, $m)) {
+                    while (strlen($body) < (int) $m[1] && ($chunk = fread($c, 8192)) !== false && $chunk !== '') {
+                        $body .= $chunk;
+                    }
+                }
+                $uri = explode(' ', $headers)[1] ?? '/';
+                parse_str((string) parse_url($uri, PHP_URL_QUERY), $q);
+                $ms = $q['ms'] ?? (preg_match('#^/d(\d+)#', $uri, $mm) ? $mm[1] : 0);
+                usleep(max(0, (int) $ms) * 1000);
+                $out = (string) ($q['body'] ?? '{}');
+                fwrite($c, sprintf(
+                    "HTTP/1.1 %d X\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Length: %d\r\nConnection: close\r\n\r\n%s",
+                    (int) ($q['code'] ?? 200), strlen($out), $out,
+                ));
+                fclose($c);
+                exit(0);
+            }
+            PHP);
 
         $probe = stream_socket_server('tcp://127.0.0.1:0');
         if ($probe === false) {
@@ -80,7 +127,9 @@ final class LocalHttp
         fclose($probe);
 
         $proc = proc_open(
-            [PHP_BINARY, '-S', $addr, $dir . '/router.php'],
+            extension_loaded('pcntl')
+                ? [PHP_BINARY, $dir . '/server.php', $addr]
+                : [PHP_BINARY, '-S', $addr, $dir . '/router.php'],
             [0 => ['pipe', 'r'], 1 => ['file', '/dev/null', 'w'], 2 => ['file', '/dev/null', 'w']],
             $pipes,
             $dir,
@@ -101,6 +150,7 @@ final class LocalHttp
                         proc_terminate(self::$serverProc);
                     }
                     @unlink($dir . '/router.php');
+                    @unlink($dir . '/server.php');
                     @rmdir($dir);
                 });
                 return self::$serverUrl;

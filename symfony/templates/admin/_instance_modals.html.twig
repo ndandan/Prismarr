@@ -104,25 +104,6 @@
             </select>
             <small class="form-hint">{{ 'admin.instances.field.default_quality_profile_hint'|trans }}</small>
           </div>
-          {# Issue #5 — default quality profile for this instance's quick-add /
-             suggested-add flows. Options are lazy-loaded from the instance's own
-             Radarr/Sonarr when the modal opens (see the script below); the stored
-             value is rendered as a fallback option so it round-trips even if the
-             live fetch fails. Empty value = "None" (fall back to the first profile). #}
-          <div class="mb-3">
-            <label class="form-label" for="instance-edit-qp-{{ instance.id }}">{{ 'admin.instances.field.default_quality_profile'|trans }}</label>
-            <select id="instance-edit-qp-{{ instance.id }}" name="default_quality_profile_id" class="form-select"
-                    data-qp-select
-                    data-instance-slug="{{ instance.slug }}"
-                    data-service-id="{{ service_id }}"
-                    data-current="{{ instance.defaultQualityProfileId is null ? '' : instance.defaultQualityProfileId }}">
-              <option value="">{{ 'admin.instances.field.default_quality_profile_none'|trans }}</option>
-              {% if instance.defaultQualityProfileId is not null %}
-                <option value="{{ instance.defaultQualityProfileId }}" selected>#{{ instance.defaultQualityProfileId }}</option>
-              {% endif %}
-            </select>
-            <small class="form-hint">{{ 'admin.instances.field.default_quality_profile_hint'|trans }}</small>
-          </div>
           <details>
             <summary style="cursor: pointer; font-size: .85rem; color: var(--tblr-secondary);">
               {{ 'admin.instances.field.advanced'|trans }}

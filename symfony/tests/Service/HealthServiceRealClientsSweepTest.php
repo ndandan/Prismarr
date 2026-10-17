@@ -8,6 +8,7 @@ use App\Service\HealthService;
 use App\Service\Http\ConcurrentCurl;
 use App\Service\Media\BazarrClient;
 use App\Service\Media\DelugeClient;
+use App\Service\Media\EmbyClient;
 use App\Service\Media\HoundarrClient;
 use App\Service\Media\JellyseerrClient;
 use App\Service\Media\ProwlarrClient;
@@ -17,6 +18,7 @@ use App\Service\Media\ServiceHealthCache;
 use App\Service\Media\SonarrClient;
 use App\Service\Media\TautulliClient;
 use App\Service\Media\TmdbClient;
+use App\Service\Media\TracearrClient;
 use App\Service\Media\TransmissionClient;
 use App\Service\Media\UnifiClient;
 use App\Service\Media\UnraidClient;
@@ -48,7 +50,7 @@ class HealthServiceRealClientsSweepTest extends TestCase
     {
         $url = $base . 'd' . self::DELAY_MS;
         $settings = [];
-        foreach (['prowlarr', 'jellyseerr', 'sabnzbd', 'tautulli', 'houndarr', 'bazarr', 'unraid', 'unifi'] as $svc) {
+        foreach (['prowlarr', 'jellyseerr', 'sabnzbd', 'tautulli', 'houndarr', 'bazarr', 'unraid', 'unifi', 'tracearr', 'emby'] as $svc) {
             $settings[$svc . '_url']     = $url;
             $settings[$svc . '_api_key'] = 'k';
         }
@@ -96,7 +98,66 @@ class HealthServiceRealClientsSweepTest extends TestCase
             transmission: new TransmissionClient($config, $log, $breaker),
             bazarr: new BazarrClient($config, $log, $breaker),
             concurrent: $runner,
+            tracearr: new TracearrClient($config, $log, $breaker),
+            emby: new EmbyClient($config, $log, $breaker),
         );
+    }
+
+    /**
+     * Review fix #2: Emby's and Tracearr's ping went through a plain blocking
+     * curl_exec() inside the sweep — serializing their round-trip into the
+     * multi loop and stalling every in-flight probe. Each must now overlap
+     * with the others (a blocking client would push this past 2 x DELAY).
+     */
+    public function testEmbyAndTracearrPingsAreCooperative(): void
+    {
+        $base = LocalHttp::serverUrl();
+        if ($base === null) {
+            self::markTestSkipped('PHP built-in server unavailable here');
+        }
+        $delay    = 600;
+        $url      = $base . 'd' . $delay;
+        $settings = ['emby_url' => $url, 'emby_api_key' => 'k', 'tracearr_url' => $url, 'tracearr_api_key' => 'k'];
+        $config   = $this->getMockBuilder(ConfigService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['get'])
+            ->getMock();
+        $config->method('get')->willReturnCallback(fn (string $k) => $settings[$k] ?? null);
+        $log = new NullLogger();
+
+        $emby     = new EmbyClient($config, $log);
+        $tracearr = new TracearrClient($config, $log);
+
+        // Deterministic witness, independent of timing: tasks run in order
+        // until their first transfer, so a cooperative ping is still
+        // in flight when the next task starts; a blocking one has finished.
+        $finished = [];
+        $ping = static function (string $name, \Closure $p) use (&$finished): bool {
+            $r = $p();
+            $finished[$name] = true;
+            return $r;
+        };
+
+        $t   = hrtime(true);
+        $out = (new ConcurrentCurl())->run([
+            'emby'     => static fn (): bool => $ping('emby', $emby->ping(...)),
+            'tracearr' => static function () use ($ping, $tracearr, &$finished): array {
+                $embyDoneFirst = isset($finished['emby']);
+                return [$embyDoneFirst, $ping('tracearr', $tracearr->ping(...))];
+            },
+            'other'    => static function () use ($base, $delay, &$finished): array {
+                $tracearrDoneFirst = isset($finished['tracearr']);
+                return [$tracearrDoneFirst, ConcurrentCurl::exec(LocalHttp::serverHandle($base, $delay))];
+            },
+        ]);
+        $ms = (hrtime(true) - $t) / 1e6;
+
+        self::assertSame([
+            'emby'     => ['value' => true],
+            'tracearr' => ['value' => [false, true]],
+            'other'    => ['value' => [false, 'ok']],
+        ], $out, 'Emby/Tracearr ping must suspend on ConcurrentCurl::exec(), not block in curl_exec()');
+        self::assertLessThan(2 * $delay - 100, $ms, "3 x {$delay} ms pings took {$ms} ms");
     }
 
     /**
@@ -123,15 +184,15 @@ class HealthServiceRealClientsSweepTest extends TestCase
         $overlap = $this->build($base, new ConcurrentCurl())->chips(true);
         $fastMs  = (hrtime(true) - $t) / 1e6;
 
-        self::assertCount(14, $serial, implode(', ', self::summary($serial)));
+        self::assertCount(16, $serial, implode(', ', self::summary($serial)));
         self::assertSame(self::summary($serial), self::summary($overlap));
         foreach ($overlap as $chip) {
             if ($chip['latencyMs'] !== null) {
                 self::assertGreaterThanOrEqual(self::DELAY_MS - 20, $chip['latencyMs'], $chip['name']);
             }
         }
-        // 14 services x >=250 ms serially; overlapped ≈ the slowest one.
-        self::assertGreaterThan(14 * self::DELAY_MS, $serialMs);
+        // 16 services x >=250 ms serially; overlapped ≈ the slowest one.
+        self::assertGreaterThan(16 * self::DELAY_MS, $serialMs);
         self::assertLessThan(4 * self::DELAY_MS + 300, $fastMs, sprintf('serial %.0f ms, concurrent %.0f ms', $serialMs, $fastMs));
     }
 }
