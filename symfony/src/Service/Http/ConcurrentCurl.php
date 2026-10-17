@@ -15,6 +15,14 @@ namespace App\Service\Http;
  * response parsing, a second request after a login — runs unchanged, so a
  * task's observable behaviour is identical to running it on its own.
  *
+ * Blocking work is single-threaded: while any task runs PHP code, no transfer
+ * makes progress, yet a transfer libcurl has already started keeps its
+ * timeout clock running. So run() starts every task up to its first transfer
+ * BEFORE driving the multi handle once — a task's blocking setup (an SSRF
+ * guard's synchronous DNS lookup) can't time out another task's transfer.
+ * Blocking work a task does AFTER a transfer (parsing, a lookup before a
+ * second request) still runs while siblings are in flight; keep it short.
+ *
  * Outside a runner-owned fiber, exec() IS curl_exec(): zero behaviour change
  * for every other caller of the same client code. A foreign fiber (someone
  * else's, or one left from an earlier request in FrankenPHP worker mode) is
@@ -67,6 +75,13 @@ class ConcurrentCurl
         $pending = [];
 
         try {
+            // Phase 1: run every task up to its first transfer. Handles join
+            // the multi but nothing drives it yet, so no transfer's clock
+            // (connect/total timeout) starts while a later task does blocking
+            // setup — a synchronous DNS lookup in an SSRF guard, a slow
+            // config read. A handle that was already driven once would be
+            // charged for that stall and could fail with a timeout without
+            // its server ever being slow.
             foreach ($tasks as $key => $task) {
                 $key   = (string) $key;
                 $fiber = new \Fiber($task);
@@ -75,6 +90,8 @@ class ConcurrentCurl
                 $this->advance($key, $fiber, static fn () => $fiber->start(), $mh, $pending, $out);
             }
 
+            // Phase 2: every task is parked on a transfer (or done) — drive
+            // them all together.
             $idle = 0;
             while ($pending !== []) {
                 $status = curl_multi_exec($mh, $running);
@@ -155,9 +172,10 @@ class ConcurrentCurl
             while (!$fiber->isTerminated()) {
                 if ($multiplex && $suspended instanceof \CurlHandle && curl_multi_add_handle($mh, $suspended) === CURLM_OK) {
                     $pending[spl_object_id($suspended)] = ['key' => $key, 'fiber' => $fiber, 'ch' => $suspended];
-                    // Kick the transfer off now (DNS/connect) rather than
-                    // after every other task has been started.
-                    curl_multi_exec($mh, $running);
+                    // Deliberately NOT kicked here (no curl_multi_exec): the
+                    // run loop drives it once every task started or resumed
+                    // in this round has parked, so blocking work in a sibling
+                    // task can never run out this transfer's timeouts.
                     return;
                 }
                 // Not something the loop can multiplex: a handle the multi
