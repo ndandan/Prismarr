@@ -44,10 +44,11 @@ class HealthService implements ResetInterface
 
     /**
      * Services whose ping does synchronous work before its first transfer
-     * (BazarrClient / TautulliClient run the SSRF guard's DNS lookup inline):
-     * started first in a concurrent sweep — see sweep().
+     * (Bazarr / Tautulli / Tracearr / Emby clients run the SSRF guard's DNS
+     * lookup inline): started first in a concurrent sweep so that work isn't
+     * counted in other services' latency — see sweep().
      */
-    private const SYNC_SETUP_FIRST = ['bazarr', 'tautulli'];
+    private const SYNC_SETUP_FIRST = ['bazarr', 'tautulli', 'tracearr', 'emby'];
 
     /**
      * Pool key of the cache "generation" — a random token mixed into every
@@ -327,12 +328,16 @@ class HealthService implements ResetInterface
                 return; // nothing to overlap — statusFor() handles a lone miss as before
             }
 
-            // Probes that do synchronous work before their transfer (the SSRF
-            // guard's DNS lookup) start FIRST: fibers run in order until their
-            // first transfer, so a stalled lookup then finishes before any
-            // other probe's clock starts or handle joins the multi loop —
-            // instead of being charged to every in-flight service (false
-            // "slow", or a curl timeout that marks a healthy service down).
+            // Curl timeouts are safe whatever the order: ConcurrentCurl runs
+            // every probe up to its first transfer before it drives any
+            // transfer, so a stalled synchronous step (the SSRF guard's DNS
+            // lookup) can't time out — and mark down — a healthy service.
+            // The order still matters for LATENCY: each probe's timer starts
+            // when its fiber starts, and probes run one after another until
+            // their first transfer. Probes with synchronous setup therefore
+            // start FIRST, so a slow lookup isn't counted in every other
+            // service's round-trip (false "slow"). Within that group an
+            // earlier probe's latency can still include a later one's lookup.
             $first = array_filter($misses, static fn (array $t): bool => in_array($t[0], self::SYNC_SETUP_FIRST, true));
             $misses = $first + array_diff_key($misses, $first);
 
