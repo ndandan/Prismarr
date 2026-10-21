@@ -974,8 +974,8 @@ Gluetun `X-API-Key` fix.
 ## Verification
 
 - Full gate green in CI on `main`: PHP lint, Twig lint, PHPStan level 7
-  (baseline shrink-only, added 2026-07-31) and the PHPUnit suite (2,042 tests /
-  ~7,550 assertions as of 2026-10-12). GHCR `:latest` rebuilds automatically on
+  (baseline shrink-only, added 2026-07-31) and the PHPUnit suite (2,067 tests /
+  ~7,700 assertions as of 2026-10-21). GHCR `:latest` rebuilds automatically on
   every push to `main`; CI runs independently, so tests are verified green
   *before* pushing.
 - Every feature above was live-verified on a real Unraid deployment (usually
