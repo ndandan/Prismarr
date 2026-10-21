@@ -18,6 +18,15 @@ on:
   push:
     branches: [main]
 
+# One build per published tag at a time: a newer run cancels an older one
+# still in flight, so a slower older build can't finish last and overwrite
+# :latest with a stale main-<sha> stamp (seen 2026-10-21 with two pushes 10 s
+# apart). Every non-main dispatch writes the same :beta tag, so all branches
+# share the beta group.
+concurrency:
+  group: ghcr-${{ github.ref_name == 'main' && 'latest' || 'beta' }}
+  cancel-in-progress: true
+
 jobs:
   publish:
     name: Build and push to GHCR (amd64)
