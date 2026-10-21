@@ -5,7 +5,7 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-10-12 (covers 2026-06-13 → 2026-10-12).*
+*Last updated: 2026-10-21 (covers 2026-06-13 → 2026-10-21).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
@@ -941,6 +941,22 @@ parity).
   real deployment before merging. Upstream's `beta.yml`/`release.yml` Docker
   Hub paths are left untouched (they no-op on the fork without Docker Hub
   secrets).
+- **Patch-floating base image with a PHP security floor** (2026-10-21, for
+  PHP2Shell, CVE-2026-109618 / CVE-2026-109619). The Dockerfile was pinned to
+  `dunglas/frankenphp:1.3.6-php8.4-alpine`, an exact tag that froze PHP at
+  8.4.2 (December 2024) and never received a patch. It now builds from
+  `1.13-php8.4-alpine`, so every rebuild takes the newest FrankenPHP 1.13 and
+  PHP 8.4 patch release, and an `ARG PHP_MIN_VERSION` check (8.4.27) fails the
+  build on an older PHP, so CI and GHCR can never publish a vulnerable image.
+  Raise the floor when the next PHP advisory lands. The bundled Mercure moved
+  to its new Caddyfile syntax (`transport bolt { path }`, an `issuer prismarr`
+  block, modern token validation; subscribers use `?match=`, not `?topic=`),
+  and the SSE path is excluded from compression. Nothing in the app publishes
+  or subscribes, so this has no visible effect, but `symfony/mercure` 0.7.2
+  still mints old-style tokens that modern mode rejects; any future Mercure
+  use needs RFC 9068 tokens or `protocol_version_compatibility 8`.
+  Upstream fixed the same CVEs in its 1.3.0 release, so expect conflicts on the
+  `FROM` line and the Mercure block at the next sync.
 - **`.gitattributes`** pinning `docker/**` and `*.sh` to `eol=lf`, so a
   Windows checkout can still `docker build` a bootable image (CRLF in the
   s6-overlay control files makes `s6-rc-compile` reject every service).
