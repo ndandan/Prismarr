@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- **PHP2Shell (CVE-2026-109618 / CVE-2026-109619): the image now runs a patched PHP.** The base image was pinned to FrankenPHP 1.3.6, which froze PHP at 8.4.2 (December 2024) and missed every PHP security release since, including these two critical unauthenticated remote-code-execution flaws fixed in PHP 8.4.27. The image now tracks `dunglas/frankenphp:1.13-php8.4-alpine`, so every rebuild picks up the latest FrankenPHP 1.13 and PHP 8.4 patch release, and the build refuses to finish on a PHP older than 8.4.27. The bundled Mercure hub moved to its new configuration syntax (`transport`, an `issuer` block, modern access-token validation) and the SSE endpoint is no longer compressed; Prismarr does not publish to or subscribe from the hub, so nothing visible changes.
+
 ### Fixed
 - **A slow or offline Emby or Tracearr no longer marks healthy services down.** Their health pings ran as blocking calls inside the concurrent health check, so while one of them hung, the other checks already in flight (Radarr, Sonarr, Bazarr, Tautulli…) ran out their connect timeout without their server ever being slow, were marked down and tripped the circuit breaker on every check cycle. Both now take part in the concurrent check, and no transfer starts until every service's check has reached its first request, so blocking setup work (such as the outbound-request guard's DNS lookup) can't time out another service.
 - **The default quality profile can be changed when editing a Radarr/Sonarr instance.** The Edit modal rendered the profile dropdown twice; only the first was filled with your profiles but the second one was the value saved, so the choice was silently discarded.

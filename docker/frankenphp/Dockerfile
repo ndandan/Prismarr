@@ -1,4 +1,16 @@
-FROM dunglas/frankenphp:1.3.6-php8.4-alpine
+# Minor-pinned, patch-floating: every rebuild picks up the newest FrankenPHP
+# 1.13.x and PHP 8.4.x patch release. The old exact pin (1.3.6) froze the
+# image on PHP 8.4.2 (Dec 2024) and silently missed two years of PHP security
+# fixes, including PHP2Shell (CVE-2026-109618 / CVE-2026-109619).
+FROM dunglas/frankenphp:1.13-php8.4-alpine
+
+# Refuse to build on a PHP older than the last critical security fix, so a
+# stale base-image cache can never publish a vulnerable image. Bump this
+# floor whenever a PHP security advisory lands. Local experiments on an
+# unpatched base can override it with --build-arg PHP_MIN_VERSION=0.
+ARG PHP_MIN_VERSION=8.4.27
+RUN php -r 'exit(version_compare(PHP_VERSION, getenv("PHP_MIN_VERSION"), ">=") ? 0 : 1);' \
+    || { echo "PHP $(php -r 'echo PHP_VERSION;') is below the security floor ${PHP_MIN_VERSION}" >&2; exit 1; }
 
 # ── Build-time version injection ────────────────────────────────────────
 # The release workflow passes `--build-arg PRISMARR_VERSION=$TAG`, the beta
