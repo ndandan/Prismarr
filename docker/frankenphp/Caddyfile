@@ -52,8 +52,11 @@
 		level WARN
 	}
 
-	# Compression
-	encode zstd gzip
+	# Compression — skipped for the Mercure SSE stream: compressed streams
+	# cost memory per subscriber and enable BREACH-style attacks (mirrors
+	# the FrankenPHP 1.13 default Caddyfile).
+	@compressible not path /.well-known/mercure
+	encode @compressible zstd gzip
 
 	# Browser caching for static assets.
 	# /assets/* are AssetMapper-compiled files with a content digest in the
@@ -72,10 +75,22 @@
 	# cors_origins is exposed via env so public deployments can restrict
 	# which origins may subscribe to the hub. Default '*' keeps local/LAN
 	# homelab setups working out of the box.
+	# Mercure (bundled with FrankenPHP >= 1.13) dropped `transport_url` and
+	# only accepts top-level publisher_jwt/subscriber_jwt in a relaxed
+	# compatibility mode, so the keys live in an `issuer` block (modern
+	# mode: tokens must carry `iss: prismarr`).
 	mercure {
-		transport_url bolt:///var/www/html/var/data/mercure.db
-		publisher_jwt {env.MERCURE_JWT_SECRET}
-		subscriber_jwt {env.MERCURE_JWT_SECRET}
+		transport bolt {
+			path /var/www/html/var/data/mercure.db
+		}
+		issuer prismarr {
+			publisher {
+				jwt {env.MERCURE_JWT_SECRET} HS256
+			}
+			subscriber {
+				jwt {env.MERCURE_JWT_SECRET} HS256
+			}
+		}
 		cors_origins {$PRISMARR_MERCURE_CORS_ORIGINS:*}
 		anonymous
 	}
