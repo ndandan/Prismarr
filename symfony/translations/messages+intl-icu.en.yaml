@@ -1074,6 +1074,8 @@ admin:
     unifi:
       site: Site name
       skip_tls_verify: Skip TLS certificate verification (self-signed console certificate)
+      plan_down: 'Internet plan download (Mbps, optional — scales the map''s internet link)'
+      plan_up: 'Internet plan upload (Mbps, optional)'
   internal:
     calendar:
       label: Calendar

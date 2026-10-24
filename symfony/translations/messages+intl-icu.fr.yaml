@@ -1072,6 +1072,8 @@ admin:
     unifi:
       site: Nom du site
       skip_tls_verify: Ignorer la vérification du certificat TLS (certificat auto-signé de la console)
+      plan_down: 'Débit descendant de l''abonnement (Mbit/s, facultatif — échelle du lien internet de la carte)'
+      plan_up: 'Débit montant de l''abonnement (Mbit/s, facultatif)'
   internal:
     calendar:
       label: Calendrier
