@@ -24,31 +24,33 @@ use Symfony\Contracts\Service\ResetInterface;
  * The id comes straight from a URL segment and ends up in a POST body, so it is
  * validated against the exact node-id shape before anything is built from it.
  *
- * UnifiClient memoises GETs only; this is a POST, so every call would reach the
- * console. The per-id 300 s cache is what keeps a click-happy admin from doing
- * that. Only successes are cached (a failure or an empty result retries on the
- * next click), and expired entries are pruned on every write so a long-lived
- * worker's cache holds at most the clients looked at in the last TTL.
+ * UnifiClient memoises GETs only; this is a POST, so every read() would reach
+ * the console. The per-id memo below only dedupes repeated read() calls within
+ * ONE request / worker cycle: this is a ResetInterface service, so a fresh
+ * kernel (classic FrankenPHP) or services_resetter (worker mode) clears it
+ * before the next request. It is NOT a cross-request cache. What actually stops
+ * a click-happy admin from re-querying the console is the page's client-side
+ * per-id memo of the fetched fragment (map JS, Task 9). Only successes are
+ * memoised — a failure or an empty result is retried on the next call.
  */
 final class UnifiSparkReader implements ResetInterface
 {
     private const PATH_REPORT = '/stat/report/5minutes.user';
 
-    /** Five-minute buckets don't change faster than this. */
+    /** How long a memoised result is served — in practice, the rest of the request. */
     private const TTL = 300;
 
     /** The sparkline's window. */
     private const WINDOW_SECONDS = 3600;
 
-    /** Test seam — the one clock for both the report window and cache expiry. */
+    /** Test seam — the one clock for both the report window and memo expiry. */
     public ?int $nowOverride = null;
 
     /**
-     * Keyed by node id. int|string because PHP turns an all-digit id such as
-     * '112233445566' into an int key; every lookup normalises the same way, so
-     * that is invisible here.
+     * Per-request memo, keyed by node id; emptied by reset() between requests,
+     * so it never outlives one (see the class docblock).
      *
-     * @var array<int|string, array{at: int, rows: list<array{ts: int, downBytes: float, upBytes: float}>}>
+     * @var array<string, array{at: int, rows: list<array{ts: int, downBytes: float, upBytes: float}>}>
      */
     private array $cache = [];
 
@@ -83,14 +85,9 @@ final class UnifiSparkReader implements ResetInterface
             'end'   => $now * 1000,
         ]));
         if ($rows === null) {
-            return null; // don't cache — retry on the next selection
+            return null; // don't memoise — retry on the next call
         }
 
-        foreach ($this->cache as $id => $entry) {
-            if (($now - $entry['at']) >= self::TTL) {
-                unset($this->cache[$id]);
-            }
-        }
         $this->cache[$nodeId] = ['at' => $now, 'rows' => $rows];
         return $rows;
     }

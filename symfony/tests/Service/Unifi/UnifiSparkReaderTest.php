@@ -67,20 +67,22 @@ class UnifiSparkReaderTest extends TestCase
         $this->assertSame([], $stub->paths);               // no fetch for any of them
     }
 
-    public function testCachesPerId(): void
+    // The memo is a per-request dedupe only (the service is reset between
+    // requests — see testResetClearsMemo), so these pin in-request behaviour.
+    public function testMemoisesPerIdWithinOneRequest(): void
     {
         [$reader, $stub] = $this->reader(['5minutes.user' => $this->rows()]);
 
         $this->assertSame($reader->read(self::ID), $reader->read(self::ID));
         $this->assertCount(1, $stub->paths);
 
-        // A different client is its own cache entry and its own query.
+        // A different client is its own memo entry and its own query.
         $reader->read('112233445566');
         $this->assertCount(2, $stub->paths);
         $this->assertSame(['11:22:33:44:55:66'], $stub->bodies[1]['macs']);
     }
 
-    public function testCacheExpiresAfterTtl(): void
+    public function testMemoExpiresAfterTtl(): void
     {
         [$reader, $stub] = $this->reader(['5minutes.user' => $this->rows()]);
 
@@ -94,31 +96,16 @@ class UnifiSparkReaderTest extends TestCase
         $this->assertCount(2, $stub->paths); // expired → refetched
     }
 
-    public function testExpiredEntriesArePrunedOnWrite(): void
-    {
-        [$reader] = $this->reader(['5minutes.user' => $this->rows()]);
-
-        $reader->read(self::ID);
-        $reader->read('112233445566');
-        $this->assertCount(2, $this->cacheOf($reader));
-
-        // Both are now stale; the next write must drop them, not just add one.
-        $reader->nowOverride = self::NOW + 301;
-        $reader->read('665544332211');
-        // (strval: an all-digit id is an int array key.)
-        $this->assertSame(['665544332211'], array_map('strval', array_keys($this->cacheOf($reader))));
-    }
-
-    public function testNoRowsReturnsNullAndIsNotCached(): void
+    public function testNoRowsReturnsNullAndIsNotMemoised(): void
     {
         [$reader, $stub] = $this->reader(['5minutes.user' => []]);
 
         $this->assertNull($reader->read(self::ID));
         $this->assertNull($reader->read(self::ID));
-        $this->assertCount(2, $stub->paths); // retried, not served from cache
+        $this->assertCount(2, $stub->paths); // retried, not served from the memo
     }
 
-    public function testFetchFailureReturnsNullAndIsNotCached(): void
+    public function testFetchFailureReturnsNullAndIsNotMemoised(): void
     {
         [$reader, $stub] = $this->reader([], fail: true);
 
@@ -143,7 +130,9 @@ class UnifiSparkReaderTest extends TestCase
         $this->assertSame(1.0e6, $r[1]['downBytes']);
     }
 
-    public function testResetClearsCache(): void
+    // What services_resetter (worker mode) does between requests: the memo is
+    // gone, so nothing carries over from one request to the next.
+    public function testResetClearsMemo(): void
     {
         [$reader, $stub] = $this->reader(['5minutes.user' => $this->rows()]);
 
@@ -151,12 +140,5 @@ class UnifiSparkReaderTest extends TestCase
         $reader->reset();
         $reader->read(self::ID);
         $this->assertCount(2, $stub->paths);
-    }
-
-    /** @return array<string, mixed> */
-    private function cacheOf(UnifiSparkReader $reader): array
-    {
-        $p = new \ReflectionProperty($reader, 'cache');
-        return $p->getValue($reader);
     }
 }
