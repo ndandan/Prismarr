@@ -1,0 +1,383 @@
+{# Live topology map + detail strip. 10s cadence, first region on the page.
+   `map` = UnifiMapReader::read(): UnifiTopologyBuilder's nodes / edges /
+   busiest plus `layout` (TopologyLayout geometry, nullable). Rates are
+   BYTES/s; every rate goes through net.rate(), and so does every link speed
+   (Mb/s × 125 000 = bytes/s) so the page speaks one unit vocabulary.
+
+   DOM contract for the map JS in unifi/index.html.twig — keep it exact:
+   [data-unifi-map] root card; [data-unifi-map-scroll] wrapper; edges
+   `g.unifi-edge[data-edge-to]`; nodes `g.unifi-node[data-select][data-parent]`;
+   strip [data-unifi-strip] with one `section[data-detail=id] hidden` per node
+   (Wi-Fi included, each also naming its data-parent so a client that is not
+   drawn can still light its path) + `section[data-detail=""]` (busiest, the
+   default view); `[data-spark-slot]` in client sections; clickable strip rows
+   carry data-select. The JS keeps selection and scroll OUTSIDE this fragment
+   and re-applies them after every swap.
+
+   Ids are always read from values (n.id, p.from/p.to, e.to), never from array
+   keys: an all-digit MAC key is an int in PHP. Lookups below are keyed with a
+   letter prefix for the same reason — `merge` renumbers int keys.
+
+   No style or script tags here: the fragment is re-injected every poll.
+   Classes live in the shell's stylesheets block. #}
+{% import 'dashboard/_network.html.twig' as net %}
+{% import _self as m %}
+
+{# A link speed in Mb/s, spelled like a rate ("2.5 Gbit/s"). #}
+{% macro speed(mbps) %}{% if mbps is null %}—{% else %}{{ net.rate(mbps * 125000) }}{% endif %}{% endmacro %}
+
+{% macro rates(down, up) %}↓ {{ net.rate(down) }} · ↑ {{ net.rate(up) }}{% endmacro %}
+
+{# Load bar + percentage. The bar is clamped (it is a picture of "full");
+   the number is not — a WAN plan slower than real throughput reads 112 %. #}
+{% macro load(e) %}
+  {%- if e.linkMbps is null -%}
+    <span class="text-secondary">—</span>
+  {%- else -%}
+    <div class="d-flex align-items-center">
+      <div class="progress progress-sm flex-fill me-2">
+        <div class="progress-bar {{ {quiet: 'bg-teal', busy: 'bg-orange', saturated: 'bg-red'}[e.tier] ?? 'bg-secondary' }}"
+             style="width: {{ (min(e.util, 1) * 100)|round(1) }}%"></div>
+      </div>
+      <span class="text-nowrap unifi-nums">{{ (e.util * 100)|round }}%</span>
+    </div>
+  {%- endif -%}
+{% endmacro %}
+
+{# "of 1000 Mb/s plan" / "of last speedtest" / "of port speed" — the internet
+   edge's denominator. mbps goes in as a string so ICU prints it as typed. #}
+{% macro basis(e) %}
+  {%- if e.basis == 'plan' -%}{{ 'unifi.map.basis.plan'|trans({mbps: e.linkMbps ~ ''}) }}
+  {%- elseif e.basis is not null -%}{{ ('unifi.map.basis.' ~ e.basis)|trans }}
+  {%- endif -%}
+{% endmacro %}
+
+{# Same thresholds as the live panel's average-signal badge. #}
+{% macro signal(dbm) %}
+  {%- if dbm is null -%}—
+  {%- else -%}<span class="badge {{ dbm >= -60 ? 'bg-green-lt' : (dbm >= -72 ? 'bg-yellow-lt' : 'bg-red-lt') }}">{{ dbm }} dBm</span>
+  {%- endif -%}
+{% endmacro %}
+
+{# Wi-Fi clients, busiest first. Rows select the client. #}
+{% macro clientTable(list) %}
+  {% if list is empty %}
+    <div class="text-secondary">{{ 'unifi.map.no_clients'|trans }}</div>
+  {% else %}
+    <div class="table-responsive unifi-strip-scroll">
+      <table class="table table-sm table-vcenter table-hover mb-0 unifi-nums">
+        <thead>
+          <tr>
+            <th>{{ 'unifi.map.client'|trans }}</th>
+            <th class="text-end">{{ 'unifi.infra.signal'|trans }}</th>
+            <th class="text-end">{{ 'unifi.map.rate'|trans }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for c in list %}
+            <tr data-select="{{ c.id }}" tabindex="0">
+              <td>{{ c.name }}</td>
+              <td class="text-end">{{ m.signal(c.detail.signal) }}</td>
+              <td class="text-end text-nowrap">{{ m.rates(c.downBps, c.upBps) }}</td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% endmacro %}
+
+{% macro item(title, content) %}
+  <div class="datagrid-item">
+    <div class="datagrid-title">{{ title }}</div>
+    <div class="datagrid-content">{{ content }}</div>
+  </div>
+{% endmacro %}
+
+{% if map is null %}
+  <div class="card">
+    <div class="card-body">
+      <div class="empty">
+        <p class="empty-title">{{ 'unifi.unreachable'|trans }}</p>
+        <div class="empty-action">
+          <button type="button" class="btn btn-primary" data-dash-retry>{{ 'unifi.retry'|trans }}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{% else %}
+
+{# Prefixed lookups (see the header note): node by id, edge by its child end. #}
+{% set byId = {} %}
+{% for n in map.nodes %}{% set byId = byId|merge({('n' ~ n.id): n}) %}{% endfor %}
+{% set edgeTo = {} %}
+{% for e in map.edges %}{% set edgeTo = edgeTo|merge({('e' ~ e.to): e}) %}{% endfor %}
+{# The internet → gateway edge: the WAN, whose rates both ends display. #}
+{% set wanEdge = map.edges|filter(e => e.from is same as('internet'))|first ?: null %}
+{% set L = map.layout ?? null %}
+
+<div class="card" data-unifi-map>
+  <div class="card-header unifi-map-head">
+    <h3 class="card-title">{{ 'unifi.map.title'|trans }}</h3>
+    <div class="card-subtitle ms-auto text-secondary small unifi-map-legend">
+      <span><span class="legend bg-teal"></span> {{ 'unifi.map.legend.quiet'|trans }}</span>
+      <span><span class="legend bg-orange"></span> {{ 'unifi.map.legend.busy'|trans }}</span>
+      <span><span class="legend bg-red"></span> {{ 'unifi.map.legend.saturated'|trans }}</span>
+      <span><span class="unifi-legend-under"></span> {{ 'unifi.map.legend.under'|trans }}</span>
+    </div>
+  </div>
+
+  <div class="unifi-map-scroll" data-unifi-map-scroll>
+    {% if L is not null %}
+      {# Drawn at 1.2 px per viewBox unit, never squashed to the card: the
+         smallest label is 9.2 units, so it lands at 11 px on screen — the
+         sub-lg readability floor — at every width. A wide tree scrolls
+         sideways in this wrapper instead (the JS keeps scrollLeft across
+         polls). Three text rows only fit a 36-unit box at sub-11 unit sizes,
+         hence the scale rather than bigger text. #}
+      {% set scale = 1.2 %}
+      <svg class="unifi-map-svg" viewBox="0 0 {{ L.width }} {{ L.height }}"
+           width="{{ (L.width * scale)|round }}" height="{{ (L.height * scale)|round }}"
+           role="group" aria-label="{{ 'unifi.map.aria'|trans }}">
+        <defs>
+          {# One clip for every node: user-space units resolve inside each
+             node's own translate(), so long labels stop at the box edge. #}
+          <clipPath id="unifi-map-clip"><rect x="0" y="0" width="{{ constant('App\\Dashboard\\TopologyLayout::NODE_W') - 6 }}" height="{{ constant('App\\Dashboard\\TopologyLayout::NODE_H') }}"/></clipPath>
+        </defs>
+
+        {# Edges first so nodes paint over the curve ends. Width follows load
+           within a small range (1.5–4.5) so quiet links stay visible; dots
+           flow downstream unless upload dominates, faster as load rises. #}
+        <g class="unifi-edges" aria-hidden="true">
+          {% for p in L.paths %}
+            {% set e = edgeTo['e' ~ p.to] ?? null %}
+            {% if e is not null %}
+              {% set w = (1.5 + 3 * min(e.util, 1))|round(2) %}
+              <g class="unifi-edge tier-{{ e.tier }}{{ e.underNegotiated ? ' under' }}" data-edge-to="{{ p.to }}">
+                <path class="unifi-link" d="{{ p.d }}" stroke-width="{{ w }}"/>
+                {% if e.tier != 'idle' %}
+                  <path class="unifi-flow speed-{{ e.util < 0.2 ? 1 : (e.util < 0.6 ? 2 : 3) }}{{ e.upBps > e.downBps ? ' reverse' }}" d="{{ p.d }}" stroke-width="{{ (w + 1.5)|round(2) }}"/>
+                {% endif %}
+              </g>
+            {% endif %}
+          {% endfor %}
+        </g>
+
+        {# Column by column, top to bottom: the Tab order then walks the
+           picture the way it reads (the node list is stat/device order). #}
+        <g class="unifi-nodes">
+          {% for n in map.nodes
+               |filter(n => n.onMap and L.boxes[n.id] is defined)
+               |sort((a, b) => L.boxes[a.id].x <=> L.boxes[b.id].x ?: L.boxes[a.id].y <=> L.boxes[b.id].y) %}
+            {% set b = L.boxes[n.id] %}
+            {% set e = edgeTo['e' ~ n.id] ?? null %}
+            {% set under = e is not null and e.underNegotiated %}
+            {# Sub-line: the "slower than capable" flag wins; else link speed
+               for a wired client, client count for an AP, model for a device
+               and the ISP for the internet. #}
+            {% if under %}
+              {% set sub = 'unifi.map.slower_than_capable'|trans({link: m.speed(e.linkMbps) ~ '', capable: m.speed(e.capableMbps) ~ ''}) %}
+            {% elseif n.kind == 'wired' %}
+              {% set sub = m.speed(n.detail.linkMbps) ~ '' %}
+            {% elseif n.kind == 'ap' %}
+              {% set sub = 'unifi.map.clients'|trans({count: n.detail.clientCount}) %}
+            {% elseif n.kind == 'internet' %}
+              {% set sub = n.detail.isp ?? '' %}
+            {% else %}
+              {% set sub = n.model ?? '' %}
+            {% endif %}
+            {% set label = n.name|length > 24 ? n.name|slice(0, 23) ~ '…' : n.name %}
+            <g class="unifi-node{{ n.online ? '' : ' offline' }}" data-select="{{ n.id }}" data-parent="{{ n.parentId }}" tabindex="0" role="button" aria-label="{{ n.name }}" transform="translate({{ b.x }} {{ b.y }})">
+              <title>{{ n.name }}</title>
+              <rect class="unifi-node-box" width="{{ b.w }}" height="{{ b.h }}" rx="6"/>
+              <text class="unifi-node-name" x="8" y="12" clip-path="url(#unifi-map-clip)">{{ label }}</text>
+              <text class="unifi-node-sub{{ under ? ' is-under' }}" x="8" y="22.6" clip-path="url(#unifi-map-clip)">{{ sub }}</text>
+              <text class="unifi-node-rate" x="8" y="32.4" clip-path="url(#unifi-map-clip)">
+                {%- if n.online %}{{ m.rates(n.downBps, n.upBps) }}{% else %}{{ 'unifi.map.offline'|trans }}{% endif -%}
+              </text>
+            </g>
+          {% endfor %}
+        </g>
+      </svg>
+    {% else %}
+      <div class="empty"><p class="empty-title">{{ 'unifi.empty'|trans }}</p></div>
+    {% endif %}
+  </div>
+
+  {# ── Detail strip: one section per node, shown by the JS on selection ── #}
+  <div class="unifi-strip" data-unifi-strip>
+
+    <section data-detail="">
+      <div>
+        <div class="h3 mb-1">{{ 'unifi.map.busiest'|trans }}</div>
+        <div class="text-secondary small">{{ 'unifi.map.busiest_hint'|trans }}</div>
+      </div>
+      <div>
+        {% if map.busiest is not empty %}
+          <div class="table-responsive">
+            <table class="table table-sm table-vcenter table-hover mb-0 unifi-nums">
+              <thead>
+                <tr>
+                  <th>{{ 'unifi.map.link'|trans }}</th>
+                  <th class="text-end">{{ 'unifi.map.rate'|trans }}</th>
+                  <th class="unifi-load-col">{{ 'unifi.map.load'|trans }}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for e in map.busiest %}
+                  {% set from = byId['n' ~ e.from] ?? null %}
+                  {% set to = byId['n' ~ e.to] ?? null %}
+                  <tr data-select="{{ e.to }}" tabindex="0">
+                    <td>{{ from is not null ? from.name : e.from }} <span class="text-secondary">→</span> {{ to is not null ? to.name : e.to }}</td>
+                    <td class="text-end text-nowrap">{{ m.rates(e.downBps, e.upBps) }}</td>
+                    <td class="unifi-load-col">{{ m.load(e) }}</td>
+                  </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="text-secondary">{{ 'unifi.map.all_idle'|trans }}</div>
+        {% endif %}
+      </div>
+    </section>
+
+    {% for n in map.nodes %}
+      {% set d = n.detail %}
+      {% set e = n.kind == 'internet' ? wanEdge : (edgeTo['e' ~ n.id] ?? null) %}
+      <section data-detail="{{ n.id }}" data-parent="{{ n.parentId }}" hidden>
+        <div>
+          <div class="text-secondary small">
+            {{ ('unifi.map.kind.' ~ n.kind)|trans }}{% if n.model is not null %} · {{ n.model }}{% endif %}
+          </div>
+          <div class="h3 mb-2 text-break">
+            {{ n.name }}
+            {% if not n.online %}<span class="badge bg-red-lt ms-1">{{ 'unifi.map.offline'|trans }}</span>{% endif %}
+          </div>
+          <div class="text-secondary small">
+            {{ (n.kind in ['internet', 'gateway'] ? 'unifi.map.wan' : (n.kind in ['switch', 'ap'] ? 'unifi.map.uplink' : 'unifi.map.live'))|trans }}
+          </div>
+          <div class="h3 mb-0 unifi-nums">
+            ↓ {{ net.rate(n.downBps) }} <span class="text-secondary">/</span> ↑ {{ net.rate(n.upBps) }}
+          </div>
+          {% if e is not null %}
+            <div class="mt-2">
+              <div class="text-secondary small">
+                {%- if n.kind in ['internet', 'gateway'] -%}
+                  {{ 'unifi.map.utilisation'|trans }} {{ m.basis(e) }}
+                {%- else -%}
+                  {{ 'unifi.map.link'|trans }} · {{ m.speed(e.linkMbps) }}
+                {%- endif -%}
+              </div>
+              {{ m.load(e) }}
+              {% if e.underNegotiated %}
+                <div class="text-red small mt-1">
+                  {{ 'unifi.map.slower_than_capable'|trans({link: m.speed(e.linkMbps) ~ '', capable: m.speed(e.capableMbps) ~ ''}) }}
+                </div>
+              {% endif %}
+            </div>
+          {% endif %}
+          {% if n.kind in ['wired', 'wifi'] %}
+            <div data-spark-slot="{{ n.id }}"></div>
+          {% endif %}
+        </div>
+
+        <div>
+          {% if n.kind in ['internet', 'gateway'] %}
+            {# Utilisation and its basis are already in the summary column. #}
+            <div class="datagrid">
+              {{ m.item('unifi.map.latency'|trans, d.latencyMs is null ? '—' : d.latencyMs ~ ' ms') }}
+              {{ m.item('unifi.map.drops'|trans, d.drops ?? '—') }}
+              {{ m.item('unifi.map.isp'|trans, d.isp ?? '—') }}
+              {% if n.kind == 'gateway' %}
+                {{ m.item('CPU', d.cpuPercent is null ? '—' : d.cpuPercent|round ~ '%') }}
+                {{ m.item('RAM', d.memPercent is null ? '—' : d.memPercent|round ~ '%') }}
+              {% endif %}
+            </div>
+            {# A gateway with radios hosts Wi-Fi clients itself; they are not
+               drawn, so this list is how they are reached. #}
+            {% if n.kind == 'gateway' %}
+              {% set own = map.nodes
+                   |filter(c => c.kind == 'wifi' and c.parentId is same as(n.id))
+                   |sort((a, b) => (b.downBps + b.upBps) <=> (a.downBps + a.upBps)) %}
+              {% if own is not empty %}
+                <div class="text-secondary small mt-3 mb-1">{{ 'unifi.map.wifi_clients'|trans }}</div>
+                {{ m.clientTable(own) }}
+              {% endif %}
+            {% endif %}
+
+          {% elseif n.kind == 'switch' %}
+            <div class="text-secondary small mb-2">{{ 'unifi.map.ports'|trans }}</div>
+            {% if d.ports is not empty %}
+              <div class="unifi-ports">
+                {% for p in d.ports %}
+                  {% set t = p.nodeId is not null ? (byId['n' ~ p.nodeId] ?? null) : null %}
+                  <div class="unifi-port tier-{{ p.tier }}{{ p.up ? '' : ' is-down' }}"
+                       {%- if p.nodeId is not null %} data-select="{{ p.nodeId }}" tabindex="0" role="button" aria-label="{{ 'unifi.map.port'|trans({port: p.idx}) }}{{ t is not null ? ' · ' ~ t.name }}"{% endif %}>
+                    <div class="unifi-port-idx">{{ p.idx }}</div>
+                    <div class="text-secondary">{{ p.up ? m.speed(p.linkMbps) : 'unifi.map.port_down'|trans }}</div>
+                    {% if p.poeW is not null %}<div class="text-secondary unifi-nums">{{ p.poeW|round(1) }} W</div>{% endif %}
+                    {% if t is not null %}<div class="text-truncate">{{ t.name }}</div>{% endif %}
+                  </div>
+                {% endfor %}
+              </div>
+            {% else %}
+              <div class="text-secondary">—</div>
+            {% endif %}
+
+          {% elseif n.kind == 'ap' %}
+            {{ m.clientTable(d.clientIds|map(id => byId['n' ~ id] ?? null)|filter(c => c is not null)) }}
+
+          {% elseif n.kind == 'wired' %}
+            <div class="datagrid">
+              <div class="datagrid-item">
+                <div class="datagrid-title">{{ 'unifi.map.switch_port'|trans }}</div>
+                <div class="datagrid-content">
+                  {{ d.switchName ?? '—' }}{% if d.port is not null %} · {{ 'unifi.map.port'|trans({port: d.port}) }}{% endif %}
+                </div>
+              </div>
+              <div class="datagrid-item">
+                <div class="datagrid-title">{{ 'unifi.map.link_speed'|trans }}</div>
+                <div class="datagrid-content">
+                  {{ m.speed(d.linkMbps) }}
+                  {# Neutral, never a flag: the client's NIC capability is unknown. #}
+                  {% if d.portCapableMbps is not null and d.linkMbps is not null and d.portCapableMbps > d.linkMbps %}
+                    <div class="text-secondary small">
+                      {{ 'unifi.map.port_note'|trans({capable: m.speed(d.portCapableMbps) ~ '', link: m.speed(d.linkMbps) ~ ''}) }}
+                    </div>
+                  {% endif %}
+                </div>
+              </div>
+              {{ m.item('unifi.infra.uptime'|trans, d.uptime is null ? '—' : net.dur(d.uptime)) }}
+              {{ m.item('unifi.map.errors'|trans, d.errors ?? '—') }}
+            </div>
+
+          {% elseif n.kind == 'wifi' %}
+            {# radio_proto: be/ax/ac/n, or na/ng (n on 5/2.4 GHz). #}
+            {% set std = d.proto in ['na', 'ng'] ? 'n' : d.proto %}
+            {% set gen = {be: 'Wi-Fi 7', ax: 'Wi-Fi 6', ac: 'Wi-Fi 5', n: 'Wi-Fi 4'}[std ?? ''] ?? null %}
+            <div class="datagrid">
+              {{ m.item('unifi.clients.access_point'|trans, d.apName) }}
+              {{ m.item('unifi.clients.ssid'|trans, d.ssid ?? '—') }}
+              {{ m.item('unifi.map.band_channel'|trans,
+                   [d.band, d.channel is null ? null : 'unifi.map.channel'|trans({channel: d.channel})]|filter(v => v is not null)|join(' · ') ?: '—') }}
+              {{ m.item('unifi.map.generation'|trans,
+                   std is null ? '—' : (gen is not null ? gen ~ ' (802.11' ~ std ~ ')' : '802.11' ~ std)) }}
+              {{ m.item('unifi.infra.signal'|trans, m.signal(d.signal)) }}
+              <div class="datagrid-item">
+                <div class="datagrid-title">{{ 'unifi.infra.retry_pct'|trans }}</div>
+                <div class="datagrid-content {{ d.retryPct is not null and d.retryPct >= 25 ? 'text-red' : (d.retryPct is not null and d.retryPct >= 15 ? 'text-yellow' : '') }}">
+                  {{ d.retryPct is null ? '—' : d.retryPct|round(1) ~ '%' }}
+                </div>
+              </div>
+              {{ m.item('unifi.map.roams'|trans, d.roams ?? '—') }}
+              {{ m.item('unifi.infra.uptime'|trans, d.uptime is null ? '—' : net.dur(d.uptime)) }}
+            </div>
+          {% endif %}
+        </div>
+      </section>
+    {% endfor %}
+
+  </div>
+</div>
+{% endif %}

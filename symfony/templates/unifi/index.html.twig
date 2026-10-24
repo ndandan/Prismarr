@@ -35,6 +35,105 @@
   @media (max-width: 991.98px) {
     .unifi-chart-axis { font-size: .6875rem; }
   }
+
+  /* ── Topology map (unifi/_map.html.twig) ──
+     Load colours are fixed semantic tokens, never --tblr-primary: on the green
+     presets a "busy" primary would read as "fine" (the widget's lesson).
+     Primary only marks what the admin selected or focused.
+     On a phone the legend drops under the title instead of squeezing it. */
+  .unifi-map-head { flex-wrap: wrap; gap: .25rem 1rem; }
+  .unifi-map-head .card-title { white-space: nowrap; }
+  .unifi-map-legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
+  .unifi-legend-under { display: inline-block; width: 1.25em; height: 0; border-top: 2px dashed var(--tblr-red); vertical-align: middle; }
+
+  /* The SVG keeps its own pixel width (1.2 px per unit, set by the fragment);
+     a wide tree scrolls sideways here rather than shrinking its labels. */
+  .unifi-map-scroll { overflow-x: auto; overflow-y: hidden; padding: .75rem; }
+  .unifi-map-svg { display: block; max-width: none; margin: 0 auto; }
+
+  .unifi-edge { --c: var(--tblr-border-color); transition: opacity .2s ease; }
+  :is(.unifi-edge, .unifi-port).tier-quiet     { --c: var(--tblr-teal); }
+  :is(.unifi-edge, .unifi-port).tier-busy      { --c: var(--tblr-orange); }
+  :is(.unifi-edge, .unifi-port).tier-saturated { --c: var(--tblr-red); }
+  /* stroke-width comes from the element (it encodes load) — never set it here,
+     CSS would override the attribute. The track is faint so the dots read. */
+  .unifi-link { fill: none; stroke: var(--c); stroke-opacity: .5; }
+  .unifi-edge.tier-idle .unifi-link { stroke-opacity: 1; }
+  .unifi-edge.under .unifi-link { stroke: var(--tblr-red); stroke-opacity: 1; stroke-dasharray: 4 3; }
+  .unifi-flow {
+    fill: none; stroke: var(--c); stroke-linecap: round;
+    stroke-dasharray: 1 11;
+    animation: unifi-flow var(--d) linear infinite;
+  }
+  .unifi-flow.speed-1 { --d: 3s; }
+  .unifi-flow.speed-2 { --d: 1.6s; }
+  .unifi-flow.speed-3 { --d: .8s; }
+  /* Paths run parent → child, so forward is downstream; upload-heavy links
+     flow back toward the internet. */
+  .unifi-flow.reverse { animation-direction: reverse; }
+  /* Two dash periods (12 each): the loop is seamless. */
+  @keyframes unifi-flow { to { stroke-dashoffset: -24; } }
+
+  /* Selected item's path to the internet: full strength, everything else
+     steps back while a selection exists. */
+  .unifi-edge.on-path .unifi-link { stroke-opacity: 1; }
+  .unifi-edge.tier-idle.on-path .unifi-link { stroke: var(--tblr-secondary); }
+  .unifi-map-svg:has(.on-path) .unifi-edge:not(.on-path) { opacity: .3; }
+
+  .unifi-node { cursor: pointer; outline: none; }
+  .unifi-node-box { fill: var(--tblr-bg-surface); stroke: var(--tblr-border-color); stroke-width: 1; transition: stroke .15s ease; }
+  .unifi-node:hover .unifi-node-box { stroke: var(--tblr-secondary); }
+  .unifi-node.is-selected .unifi-node-box { stroke: var(--tblr-primary); stroke-width: 2; fill: rgba(var(--tblr-primary-rgb), .1); }
+  /* Keyboard focus is thicker than selection so the two stay distinct. */
+  .unifi-node:focus-visible .unifi-node-box { stroke: var(--tblr-primary); stroke-width: 3; }
+  .unifi-node.offline { opacity: .55; }
+  .unifi-node.offline .unifi-node-box { stroke-dasharray: 3 2; }
+  /* Sizes are viewBox units; at the fragment's 1.2 scale 9.2 units = 11.04 px,
+     so the map meets the 11 px floor under lg (and everywhere else). */
+  .unifi-node-name { font-size: 10.5px; font-weight: 600; fill: var(--tblr-body-color); }
+  .unifi-node-sub  { font-size: 9.2px; fill: var(--tblr-secondary); }
+  .unifi-node-sub.is-under { fill: var(--tblr-red); font-weight: 600; }
+  .unifi-node-rate { font-size: 9.2px; fill: var(--tblr-body-color); font-variant-numeric: tabular-nums; }
+
+  /* Detail strip: each section is a two-column grid (summary | detail) that
+     stacks under lg. The [hidden] guard keeps the JS's show/hide authoritative. */
+  .unifi-strip { border-top: 1px solid var(--tblr-border-color); }
+  .unifi-strip > section:not([hidden]) {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 1rem 1.5rem; padding: 1rem 1.25rem;
+  }
+  .unifi-strip .datagrid { --tblr-datagrid-item-width: 9rem; --tblr-datagrid-padding: 1rem; }
+  .unifi-strip-scroll { max-height: 18rem; overflow-y: auto; }
+  .unifi-load-col { min-width: 8rem; }
+  .unifi-strip [data-select] { cursor: pointer; }
+  /* Rows hover via .table-hover; keyboard focus reuses the same state
+     variable (cells paint over a tr background), plus a visible ring. */
+  .unifi-strip tr[data-select]:focus-visible > * { --tblr-table-bg-state: var(--tblr-table-hover-bg); }
+  .unifi-strip [data-select]:focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: -2px; }
+
+  /* Switch ports: top rule in the port's load colour, PoE and what's plugged in. */
+  .unifi-ports { display: grid; grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: .5rem; }
+  .unifi-port {
+    --c: var(--tblr-border-color);
+    min-width: 0; padding: .35rem .5rem; font-size: .75rem; line-height: 1.35;
+    border: 1px solid var(--tblr-border-color); border-top: 3px solid var(--c);
+    border-radius: var(--tblr-border-radius);
+  }
+  .unifi-port[data-select]:hover { background: var(--tblr-active-bg); }
+  .unifi-port.is-down { opacity: .5; }
+  .unifi-port-idx { font-size: .875rem; font-weight: 600; }
+
+  @media (max-width: 991.98px) {
+    .unifi-strip > section:not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* Motion off means OFF: no dots and no fades. The links keep their colour
+     and width, at full strength since there are no dots to read against. */
+  @media (prefers-reduced-motion: reduce) {
+    .unifi-flow { display: none; }
+    .unifi-link { stroke-opacity: 1; }
+    .unifi-edge, .unifi-node-box { transition: none; }
+  }
 </style>
 {% endblock %}
 
@@ -54,10 +153,14 @@
 <div class="page-body">
   <div class="container-xl">
 
-    {# Three regions, three cadences. Each carries the same data-* contract the
+    {# Four regions, three cadences. Each carries the same data-* contract the
        dashboard widgets use, so the scheduler below is a near-copy of the
-       dashboard's — deliberately, because that one is shipped and debugged. #}
+       dashboard's — deliberately, because that one is shipped and debugged.
+       The map leads: "which cable is busy, and who's on it" is the first
+       question the page answers. It shares live's 10s tick, so the two ride
+       one batched request. #}
     {% for region in [
+      { name: 'map',     poll: 10000  },
       { name: 'live',    poll: 10000  },
       { name: 'infra',   poll: 60000  },
       { name: 'history', poll: 300000 }

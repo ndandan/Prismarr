@@ -627,6 +627,59 @@ unifi:
     status_ok: Match
     status_mismatch: Mismatch
     status_offline: Offline
+  map:
+    title: 'Network map'
+    aria: 'Network topology'
+    legend:
+      quiet: Quiet
+      busy: 'Busy (> 50 %)'
+      saturated: Saturated
+      under: 'Slower than capable'
+    kind:
+      internet: Internet
+      gateway: Gateway
+      switch: Switch
+      ap: 'Access point'
+      wired: 'Wired client'
+      wifi: 'Wi-Fi client'
+    clients: '{count, plural, one {# client} other {# clients}}'
+    # link/capable arrive formatted ("1 Gbit/s") — no units here.
+    slower_than_capable: '{link} — can do {capable}'
+    offline: Offline
+    # The internet link's utilisation denominator. mbps arrives as a plain string.
+    basis:
+      plan: 'of {mbps} Mb/s plan'
+      speedtest: 'of last speedtest'
+      port: 'of port speed'
+    wan: WAN
+    uplink: Uplink
+    live: Live
+    busiest: 'Busiest links'
+    busiest_hint: 'Select anything on the map for its details.'
+    all_idle: 'No traffic on any link right now'
+    link: Link
+    rate: Rate
+    load: Load
+    utilisation: Utilisation
+    latency: Latency
+    drops: Drops
+    isp: ISP
+    client: Client
+    wifi_clients: 'Wi-Fi clients'
+    no_clients: 'No Wi-Fi clients'
+    ports: Ports
+    port: 'Port {port}'
+    port_down: down
+    switch_port: 'Switch port'
+    link_speed: 'Link speed'
+    port_note: 'Port supports {capable}, linked at {link}'
+    errors: 'Errors / drops'
+    band_channel: 'Band / channel'
+    channel: 'ch {channel}'
+    generation: 'Wi-Fi generation'
+    roams: Roams
+    # Shown by the map JS when a client's 1-hour sparkline comes back empty.
+    no_history: 'No traffic history for the last hour'
 
 tracearr:
   title: Tracearr Activity
