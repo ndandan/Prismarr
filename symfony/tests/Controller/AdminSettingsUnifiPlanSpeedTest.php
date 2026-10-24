@@ -43,8 +43,8 @@ final class AdminSettingsUnifiPlanSpeedTest extends AbstractWebTestCase
         self::assertCount(1, $down, 'plan download input is rendered');
         self::assertCount(1, $up, 'plan upload input is rendered');
         self::assertSame('text', $down->attr('type'), 'free text, not a number input');
-        self::assertSame('e.g. 1000', $down->attr('placeholder'));
-        self::assertSame('e.g. 40', $up->attr('placeholder'));
+        self::assertSame('1000', $down->attr('placeholder'));
+        self::assertSame('40', $up->attr('placeholder'));
         // Optional → rendered with the explicit Clear button like the other clearable fields.
         self::assertCount(1, $crawler->filter('input[name="_clear_' . self::DOWN . '"]'));
         self::assertCount(1, $crawler->filter('input[name="_clear_' . self::UP . '"]'));
