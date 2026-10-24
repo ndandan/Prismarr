@@ -497,22 +497,25 @@ class UnifiTopologyBuilderTest extends TestCase
     public function testInternetBasisFallbackChain(): void
     {
         // www: 12.5 MB/s down = 100 Mb/s, 1 MB/s up = 8 Mb/s.
-        $e = self::edgeTo(self::build(null, null, null, 1000.0, 40.0), self::GW);
+        $e = self::edgeTo(self::build(null, null, null, 1000.0, 400.0), self::GW);
         $this->assertSame('internet', $e['from']);
         $this->assertSame(12_500_000.0, $e['downBps']);
         $this->assertSame(1_000_000.0, $e['upBps']);
         $this->assertSame('plan', $e['basis']);
+        $this->assertSame('down', $e['basisDir']);
         $this->assertSame(1000, $e['linkMbps']);
-        $this->assertEqualsWithDelta(0.2, $e['util'], 1e-9); // max(100/1000, 8/40)
+        $this->assertEqualsWithDelta(0.1, $e['util'], 1e-9); // max(100/1000, 8/400)
 
-        $e = self::edgeTo(self::build(null, null, self::health(['xput_down' => 900, 'xput_up' => 40])), self::GW);
+        $e = self::edgeTo(self::build(null, null, self::health(['xput_down' => 900, 'xput_up' => 400])), self::GW);
         $this->assertSame('speedtest', $e['basis']);
+        $this->assertSame('down', $e['basisDir']);
         $this->assertSame(900, $e['linkMbps']);
-        $this->assertEqualsWithDelta(0.2, $e['util'], 1e-9); // max(100/900, 8/40)
+        $this->assertEqualsWithDelta(100 / 900, $e['util'], 1e-9); // max(100/900, 8/400)
 
         $t = self::build();
         $e = self::edgeTo($t, self::GW);
         $this->assertSame('port', $e['basis']);
+        $this->assertSame('down', $e['basisDir']);
         $this->assertSame(2500, $e['linkMbps']); // the gateway's uplink.speed
         $this->assertEqualsWithDelta(0.04, $e['util'], 1e-9);
         $this->assertSame('port', self::node($t, 'internet')['detail']['basis']);
@@ -523,6 +526,7 @@ class UnifiTopologyBuilderTest extends TestCase
         });
         $e = self::edgeTo(self::build($devices), self::GW);
         $this->assertNull($e['basis']);
+        $this->assertNull($e['basisDir']);
         $this->assertNull($e['linkMbps']);
         $this->assertSame(0.0, $e['util']);
 
@@ -534,6 +538,55 @@ class UnifiTopologyBuilderTest extends TestCase
         $e = self::edgeTo(self::build($devices), self::GW);
         $this->assertNull($e['basis']);
         $this->assertSame(0.0, $e['util']);
+    }
+
+    /**
+     * The percentage is max(down ÷ its denominator, up ÷ its denominator), so
+     * linkMbps and basis must describe the side that produced it. A saturated
+     * 40 Mb/s upload on a 1000/40 plan must not read "95 % of 1000 Mb/s plan".
+     */
+    public function testInternetBasisFollowsTheSideThatSetTheUtilisation(): void
+    {
+        // 100 Mb/s down of 1000 = 0.1; 38 Mb/s up of 40 = 0.95 → upload wins.
+        $health = self::health(['tx_bytes-r' => 4_750_000]);
+        $e = self::edgeTo(self::build(null, null, $health, 1000.0, 40.0), self::GW);
+        $this->assertEqualsWithDelta(0.95, $e['util'], 1e-9);
+        $this->assertSame('up', $e['basisDir']);
+        $this->assertSame('plan', $e['basis']);
+        $this->assertSame(40, $e['linkMbps']);
+        $this->assertSame('saturated', $e['tier']);
+
+        // Mixed bases: download plan set, upload falls back to the port.
+        $e = self::edgeTo(self::build(null, null, self::health(['tx_bytes-r' => 250_000_000]), 1000.0), self::GW);
+        $this->assertSame('up', $e['basisDir']);
+        $this->assertSame('port', $e['basis']);
+        $this->assertSame(2500, $e['linkMbps']);
+        $this->assertEqualsWithDelta(0.8, $e['util'], 1e-9); // 2000 Mb/s of 2500
+
+        // Only the upload side has a denominator at all.
+        $devices = self::withDevice(self::devices(), self::GW, static function (array $d): array {
+            unset($d['uplink']['speed']);
+            return $d;
+        });
+        $e = self::edgeTo(self::build($devices, null, null, null, 40.0), self::GW);
+        $this->assertSame('up', $e['basisDir']);
+        $this->assertSame('plan', $e['basis']);
+        $this->assertSame(40, $e['linkMbps']);
+        $this->assertEqualsWithDelta(0.2, $e['util'], 1e-9);
+
+        // A tie (an idle WAN) keeps the download side: the headline figure.
+        $idle = self::health(['rx_bytes-r' => 0, 'tx_bytes-r' => 0]);
+        $e = self::edgeTo(self::build(null, null, $idle, 1000.0, 40.0), self::GW);
+        $this->assertSame('down', $e['basisDir']);
+        $this->assertSame(1000, $e['linkMbps']);
+    }
+
+    public function testOnlyTheInternetEdgeHasABasisDirection(): void
+    {
+        foreach (self::build()['edges'] as $e) {
+            if ($e['from'] === 'internet') continue;
+            $this->assertNull($e['basisDir'], "edge to {$e['to']}");
+        }
     }
 
     public function testInternetAndGatewayDetail(): void

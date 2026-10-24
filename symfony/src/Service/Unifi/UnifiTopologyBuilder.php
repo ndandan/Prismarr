@@ -25,7 +25,9 @@ namespace App\Service\Unifi;
  *  Edge = ['from' => string, 'to' => string, 'linkMbps' => ?int, 'downBps' => float,
  *          'upBps' => float, 'util' => float, 'tier' => 'idle'|'quiet'|'busy'|'saturated',
  *          'underNegotiated' => bool, 'capableMbps' => ?int,
- *          'basis' => null|'plan'|'speedtest'|'port' (internet edge only)]
+ *          'basis' => null|'plan'|'speedtest'|'port' (internet edge only),
+ *          'basisDir' => null|'down'|'up' (internet edge only: the side util, linkMbps
+ *                        and basis describe — whichever direction is busier)]
  *
  * Rates are BYTES/s like every other reader; "down" always means away from the
  * internet. Node ids are lowercase MACs without separators so they survive a
@@ -220,8 +222,11 @@ final class UnifiTopologyBuilder
      * WAN link. Down/up are the www subsystem's rx/tx (wan's as a fallback, as
      * UnifiLiveReader does). Each direction's denominator is the first that
      * exists of: plan speed → last speedtest → the gateway's WAN port speed.
-     * The edge's single `basis` names the download side's choice — the headline
-     * figure — or the upload side's when only that one is known.
+     *
+     * util is the busier direction against ITS denominator, so linkMbps, basis
+     * and basisDir all describe that side: on a 1000/40 plan a saturated
+     * upload reads "95 % of 40 Mb/s upload plan", not "of 1000 Mb/s plan". A
+     * tie (an idle WAN included) keeps the download side, the headline figure.
      */
     private static function internetLink(array $www, array $wan, array $gw, ?float $planDown, ?float $planUp): array
     {
@@ -233,21 +238,30 @@ final class UnifiTopologyBuilder
         [$denUp, $basisUp]     = self::denominator($planUp, self::positive($www['xput_up'] ?? null), $port);
 
         // Can exceed 1.0 (a plan slower than real throughput) — kept raw; the tier caps it.
-        $util = max(
-            $denDown === null ? 0.0 : $down * 8 / 1e6 / $denDown,
-            $denUp === null ? 0.0 : $up * 8 / 1e6 / $denUp,
-        );
-        $den = $denDown ?? $denUp;
+        $utilDown = $denDown === null ? null : $down * 8 / 1e6 / $denDown;
+        $utilUp   = $denUp === null ? null : $up * 8 / 1e6 / $denUp;
+        $dir = match (true) {
+            $utilDown === null && $utilUp === null => null,
+            $utilDown === null                     => 'up',
+            $utilUp === null                       => 'down',
+            default                                => $utilUp > $utilDown ? 'up' : 'down',
+        };
+        [$den, $basis, $util] = match ($dir) {
+            'down'  => [$denDown, $basisDown, $utilDown],
+            'up'    => [$denUp, $basisUp, $utilUp],
+            default => [null, null, 0.0],
+        };
 
         return [
             'down'     => $down,
             'up'       => $up,
             'linkMbps' => $den === null ? null : (int) round($den),
-            'util'     => $util,
+            'util'     => $util ?? 0.0,
             // The internet is not a UniFi device: never under-negotiated.
             'capable'  => null,
             'under'    => false,
-            'basis'    => $basisDown ?? $basisUp,
+            'basis'    => $basis,
+            'basisDir' => $dir,
             'port'     => null,
             'row'      => null,
         ];
@@ -312,6 +326,7 @@ final class UnifiTopologyBuilder
             'capable'  => $capable,
             'under'    => $child['online'] && $capable !== null && $linkMb !== null && $linkMb < $capable,
             'basis'    => null,
+            'basisDir' => null,
             'port'     => $k,
             'row'      => $row,
         ];
@@ -349,6 +364,7 @@ final class UnifiTopologyBuilder
             'capable'  => null,
             'under'    => false,
             'basis'    => null,
+            'basisDir' => null,
             'port'     => $k,
             'row'      => $row,
         ];
@@ -487,6 +503,7 @@ final class UnifiTopologyBuilder
             'underNegotiated' => $link['under'],
             'capableMbps'     => $link['capable'],
             'basis'           => $link['basis'],
+            'basisDir'        => $link['basisDir'],
         ];
     }
 

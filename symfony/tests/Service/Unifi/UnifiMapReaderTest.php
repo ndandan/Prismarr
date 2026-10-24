@@ -204,7 +204,16 @@ class UnifiMapReaderTest extends TestCase
         [$reader] = $this->reader($this->all(), down: '1000', up: '40');
         $e = self::edgeTo($reader->read(), self::GW);
 
+        // 100 Mb/s down of 1000 = 10 %, 8 Mb/s up of 40 = 20 %: the upload
+        // plan sets the percentage, so both settings reached the builder.
         $this->assertSame('plan', $e['basis']);
+        $this->assertSame('up', $e['basisDir']);
+        $this->assertSame(40, $e['linkMbps']);
+        $this->assertEqualsWithDelta(0.2, $e['util'], 1e-9);
+
+        [$reader] = $this->reader($this->all(), down: '1000', up: '400');
+        $e = self::edgeTo($reader->read(), self::GW);
+        $this->assertSame('down', $e['basisDir']);
         $this->assertSame(1000, $e['linkMbps']);
     }
 
