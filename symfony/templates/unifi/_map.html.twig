@@ -59,12 +59,15 @@
   {%- endif -%}
 {% endmacro %}
 
-{# Wi-Fi clients, busiest first. Rows select the client. #}
+{# Wi-Fi clients, busiest first. Rows select the client. Deliberately NOT a
+   capped-height scroller: this fragment is swapped every 10 s, which would
+   snap an inner scrollTop back to 0 mid-read. The list grows with the page,
+   whose own scroll survives the swap. #}
 {% macro clientTable(list) %}
   {% if list is empty %}
     <div class="text-secondary">{{ 'unifi.map.no_clients'|trans }}</div>
   {% else %}
-    <div class="table-responsive unifi-strip-scroll">
+    <div class="table-responsive">
       <table class="table table-sm table-vcenter table-hover mb-0 unifi-nums">
         <thead>
           <tr>

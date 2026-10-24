@@ -377,6 +377,34 @@ class UnifiMapRenderTest extends KernelTestCase
         $this->assertSame(['internet', self::GW, self::FLEX10], array_slice($m[1], 0, 3));
     }
 
+    /**
+     * The fragment is re-rendered every 10 s and swapped in with innerHTML, so
+     * a nested vertical scroller's scrollTop snaps back to 0 on every poll
+     * (an AP with ~25 clients was unreadable past the cap). The lists must
+     * grow with the page, whose own scroll survives the swap.
+     */
+    public function testStripClientListsAreNotNestedVerticalScrollers(): void
+    {
+        $clients   = self::clients();
+        $clients[] = ['mac' => '11:22:33:44:55:09', 'name' => 'Kitchen speaker', 'is_wired' => false,
+                      'ap_mac' => 'aa:bb:cc:00:00:01', 'radio' => 'ng', 'tx_bytes-r' => 3_000];
+        $html = $this->render(self::map(null, $clients));
+
+        foreach ([self::U7, self::GW] as $host) {
+            $section = self::section($html, $host);
+            $this->assertStringContainsString('<div class="table-responsive">', $section, "$host client list");
+            $this->assertDoesNotMatchRegularExpression('~max-height|overflow-y~', $section);
+        }
+
+        // No strip rule in the shell's CSS caps a height or scrolls vertically.
+        $shell = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/unifi/index.html.twig');
+        preg_match_all('~([^{}]*\.unifi-strip[^{}]*)\{([^}]*)\}~', $shell, $rules, PREG_SET_ORDER);
+        $this->assertNotEmpty($rules);
+        foreach ($rules as [, $selector, $body]) {
+            $this->assertDoesNotMatchRegularExpression('~max-height|overflow-y~', $body, trim($selector));
+        }
+    }
+
     public function testNullLayoutStillRendersTheStrip(): void
     {
         $map           = self::map();

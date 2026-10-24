@@ -103,7 +103,9 @@
     gap: 1rem 1.5rem; padding: 1rem 1.25rem;
   }
   .unifi-strip .datagrid { --tblr-datagrid-item-width: 9rem; --tblr-datagrid-padding: 1rem; }
-  .unifi-strip-scroll { max-height: 18rem; overflow-y: auto; }
+  /* No max-height/overflow-y scroller in the strip: the fragment is swapped
+     every 10 s and an inner scrollTop would snap back to 0 (pinned by
+     UnifiMapRenderTest). Long client lists grow with the page instead. */
   .unifi-load-col { min-width: 8rem; }
   .unifi-strip [data-select] { cursor: pointer; }
   /* Rows hover via .table-hover; keyboard focus reuses the same state
