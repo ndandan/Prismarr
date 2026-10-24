@@ -33,6 +33,7 @@ class UnifiClientTest extends TestCase
             public array $pathsRequested = [];
             public array $bodiesSent = [];
             public ?int $nowOverride = null;
+            public ?float $monotonic = null;
             public function __construct($config, $logger, private array $responses, private bool $failTransport)
             {
                 parent::__construct($config, $logger);
@@ -53,6 +54,8 @@ class UnifiClientTest extends TestCase
                 return null;
             }
             protected function now(): int { return $this->nowOverride ?? parent::now(); }
+            protected function memoClock(): float { return $this->monotonic ?? parent::memoClock(); }
+            public function forceTransportDown(): void { $this->transportDown = true; }
         };
     }
 
@@ -235,5 +238,98 @@ class UnifiClientTest extends TestCase
 
         $i = array_search('/stat/report/hourly.site', $client->pathsRequested, true);
         $this->assertSame(['attrs' => ['time']], $client->bodiesSent[$i]);
+    }
+
+    public function testRepeatedGetWithinTtlHitsTheConsoleOnce(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $first  = $client->fetch('/stat/sta');
+        $second = $client->fetch('/stat/sta');
+
+        $this->assertSame([['mac' => 'aa:bb:cc:dd:ee:ff']], $first);
+        $this->assertSame($first, $second);
+        $this->assertCount(1, $client->pathsRequested); // the second read was a memo hit
+    }
+
+    public function testMemoIsKeyedPerPath(): void
+    {
+        $client = $this->makeClient($this->allEndpoints());
+
+        $client->fetch('/stat/health');
+        $client->fetch('/stat/device');
+        $client->fetch('/stat/health');
+
+        $this->assertSame(['/stat/health', '/stat/device'], $client->pathsRequested);
+    }
+
+    public function testPostIsNeverMemoised(): void
+    {
+        $client = $this->makeClient(['stat/report' => [['time' => 1751742000000]]]);
+
+        $client->fetch('/stat/report/5minutes.user', ['macs' => ['x']]);
+        $client->fetch('/stat/report/5minutes.user', ['macs' => ['x']]);
+
+        $this->assertCount(2, $client->pathsRequested);
+    }
+
+    public function testNullResultIsNotMemoised(): void
+    {
+        $client = $this->makeClient([]); // every path answers null
+
+        $this->assertNull($client->fetch('/stat/sta'));
+        $this->assertNull($client->fetch('/stat/sta'));
+
+        $this->assertCount(2, $client->pathsRequested); // a failure must retry, not stick
+    }
+
+    public function testResetClearsTheMemo(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $client->fetch('/stat/sta');
+        $client->reset();
+        $client->fetch('/stat/sta');
+
+        $this->assertCount(2, $client->pathsRequested);
+    }
+
+    public function testMemoHitLeavesTransportFailedFalse(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $client->fetch('/stat/sta');
+        $client->fetch('/stat/sta');
+
+        $this->assertFalse($client->transportFailed());
+    }
+
+    public function testMemoHitClearsAStaleTransportFlag(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+        $client->fetch('/stat/sta');
+
+        // Some other call leaves the flag set, then the memoised path is
+        // served from the memo: that fetch() must report "no failure".
+        $client->forceTransportDown();
+        $this->assertTrue($client->transportFailed());
+        $client->fetch('/stat/sta');
+
+        $this->assertFalse($client->transportFailed());
+    }
+
+    public function testMemoExpiresAfterTtl(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $client->monotonic = 1000.0;
+        $client->fetch('/stat/sta');
+        $client->monotonic = 1004.9;
+        $client->fetch('/stat/sta');
+        $this->assertCount(1, $client->pathsRequested); // still inside 5 s
+
+        $client->monotonic = 1005.1;
+        $client->fetch('/stat/sta');
+        $this->assertCount(2, $client->pathsRequested); // expired → real call
     }
 }

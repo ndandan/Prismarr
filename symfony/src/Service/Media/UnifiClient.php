@@ -48,6 +48,20 @@ class UnifiClient implements ResetInterface, UnifiFetcher
     private float  $overviewCacheAt = 0.0;
 
     /**
+     * How long a fetch() GET is reused. The /unifi tab batches poll groups in
+     * one HTTP request (`?p=live,map`) and several readers read the same
+     * endpoints (/stat/sta, /stat/health). With worker mode off each request
+     * builds fresh services, so this per-instance memo is what lets them share
+     * ONE console call within that request. Kept well under the fastest poll
+     * cadence (the 10 s live group) so it never serves a reader data from the
+     * previous poll.
+     */
+    private const FETCH_MEMO_TTL = 5.0;
+
+    /** @var array<string, array{at: float, data: array}> keyed by request path */
+    private array $fetchMemo = [];
+
+    /**
      * Set by request() when a call fails at the transport layer (connect
      * refused / timed out / DNS) as opposed to an HTTP/application error.
      * overview() reads it to fail fast on a dead console instead of waiting
@@ -90,6 +104,7 @@ class UnifiClient implements ResetInterface, UnifiFetcher
         $this->enabled         = true;
         $this->overviewCache   = null;
         $this->overviewCacheAt = 0.0;
+        $this->fetchMemo       = [];
         $this->transportDown   = false;
     }
 
@@ -100,12 +115,38 @@ class UnifiClient implements ResetInterface, UnifiFetcher
 
     /**
      * UnifiFetcher — raw single-call access for the App\Service\Unifi readers.
-     * Deliberately thin: no caching and no mapping here, because each reader
-     * owns a TTL matching its own poll cadence and its own normalized shape.
+     * Deliberately thin: no mapping here, because each reader owns a TTL
+     * matching its own poll cadence and its own normalized shape. The one
+     * exception is a FETCH_MEMO_TTL memo of successful GETs per path, so
+     * readers batched into one request share a console call.
+     *
+     * POSTs (report queries) are never memoised — the body changes the answer
+     * — and neither are null results, so a failure is retried on the next read
+     * instead of sticking. overview() stays on request() and is unaffected.
      */
     public function fetch(string $path, ?array $body = null): ?array
     {
-        return $this->request($path, $body);
+        if ($body !== null) {
+            return $this->request($path, $body);
+        }
+
+        $hit = $this->fetchMemo[$path] ?? null;
+        if ($hit !== null && ($this->memoClock() - $hit['at']) < self::FETCH_MEMO_TTL) {
+            // transportFailed() describes the last fetch(); a memo hit made no
+            // call, so it must not inherit a failure from an earlier one.
+            $this->transportDown = false;
+            return $hit['data'];
+        }
+
+        $data = $this->request($path);
+        if ($data === null) {
+            unset($this->fetchMemo[$path]); // drop an expired entry, never keep a miss
+            return null;
+        }
+        // Stamped after the call: a slow console must not hand back an
+        // entry that is already stale.
+        $this->fetchMemo[$path] = ['at' => $this->memoClock(), 'data' => $data];
+        return $data;
     }
 
     /** UnifiFetcher — see the interface: state of the LAST fetch() only. */
@@ -290,6 +331,12 @@ class UnifiClient implements ResetInterface, UnifiFetcher
     protected function now(): int
     {
         return time();
+    }
+
+    /** Clock seam for the fetch memo — sub-second, so TTL expiry is testable. */
+    protected function memoClock(): float
+    {
+        return microtime(true);
     }
 
     /**
