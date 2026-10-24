@@ -15,8 +15,14 @@ namespace App\Service\Unifi;
 interface UnifiFetcher
 {
     /**
-     * One API call. Returns the ok-envelope's `data` list, or null on
+     * At most one API call. Returns the ok-envelope's `data` list, or null on
      * transport error / non-200 / error envelope — never throws.
+     *
+     * "At most": UnifiClient answers a repeated GET to the same path from a
+     * short memo (a few seconds, well under any poll cadence) so readers
+     * batched into one request share a console call — a success is reused,
+     * and so is a transport failure, which comes back as null with
+     * transportFailed() raised. POSTs always make the call.
      *
      * @param  ?array $body  when non-null, sent as a JSON POST body
      * @return ?array<mixed>
@@ -28,7 +34,7 @@ interface UnifiFetcher
      * (connect refused, DNS failure, timeout) rather than returning an HTTP
      * or application-level error. Readers use this to skip their remaining
      * calls against a dead console instead of burning one connect timeout
-     * per endpoint. Reset at the start of every fetch().
+     * per endpoint. Re-evaluated by every fetch(), memo answers included.
      */
     public function transportFailed(): bool;
 }

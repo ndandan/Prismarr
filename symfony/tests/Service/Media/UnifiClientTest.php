@@ -33,7 +33,8 @@ class UnifiClientTest extends TestCase
             public array $pathsRequested = [];
             public array $bodiesSent = [];
             public ?int $nowOverride = null;
-            public function __construct($config, $logger, private array $responses, private bool $failTransport)
+            public ?float $monotonic = null;
+            public function __construct($config, $logger, private array $responses, public bool $failTransport)
             {
                 parent::__construct($config, $logger);
             }
@@ -41,6 +42,7 @@ class UnifiClientTest extends TestCase
             {
                 $this->pathsRequested[] = $path;
                 $this->bodiesSent[]     = $jsonBody;
+                $this->transportDown    = false; // per-call, as the real request() does
                 if ($this->failTransport) {
                     $this->transportDown = true;
                     return null;
@@ -53,6 +55,8 @@ class UnifiClientTest extends TestCase
                 return null;
             }
             protected function now(): int { return $this->nowOverride ?? parent::now(); }
+            protected function memoClock(): float { return $this->monotonic ?? parent::memoClock(); }
+            public function forceTransportDown(): void { $this->transportDown = true; }
         };
     }
 
@@ -235,5 +239,171 @@ class UnifiClientTest extends TestCase
 
         $i = array_search('/stat/report/hourly.site', $client->pathsRequested, true);
         $this->assertSame(['attrs' => ['time']], $client->bodiesSent[$i]);
+    }
+
+    public function testRepeatedGetWithinTtlHitsTheConsoleOnce(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $first  = $client->fetch('/stat/sta');
+        $second = $client->fetch('/stat/sta');
+
+        $this->assertSame([['mac' => 'aa:bb:cc:dd:ee:ff']], $first);
+        $this->assertSame($first, $second);
+        $this->assertCount(1, $client->pathsRequested); // the second read was a memo hit
+    }
+
+    public function testMemoIsKeyedPerPath(): void
+    {
+        $client = $this->makeClient($this->allEndpoints());
+
+        $client->fetch('/stat/health');
+        $client->fetch('/stat/device');
+        $client->fetch('/stat/health');
+
+        $this->assertSame(['/stat/health', '/stat/device'], $client->pathsRequested);
+    }
+
+    public function testPostIsNeverMemoised(): void
+    {
+        $client = $this->makeClient(['stat/report' => [['time' => 1751742000000]]]);
+
+        $client->fetch('/stat/report/5minutes.user', ['macs' => ['x']]);
+        $client->fetch('/stat/report/5minutes.user', ['macs' => ['x']]);
+
+        $this->assertCount(2, $client->pathsRequested);
+    }
+
+    public function testNullResultIsNotMemoised(): void
+    {
+        $client = $this->makeClient([]); // every path answers null
+
+        $this->assertNull($client->fetch('/stat/sta'));
+        $this->assertNull($client->fetch('/stat/sta'));
+
+        $this->assertCount(2, $client->pathsRequested); // a failure must retry, not stick
+    }
+
+    public function testResetClearsTheMemo(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $client->fetch('/stat/sta');
+        $client->reset();
+        $client->fetch('/stat/sta');
+
+        $this->assertCount(2, $client->pathsRequested);
+    }
+
+    public function testMemoHitLeavesTransportFailedFalse(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $client->fetch('/stat/sta');
+        $client->fetch('/stat/sta');
+
+        $this->assertFalse($client->transportFailed());
+    }
+
+    public function testMemoHitClearsAStaleTransportFlag(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+        $client->fetch('/stat/sta');
+
+        // Some other call leaves the flag set, then the memoised path is
+        // served from the memo: that fetch() must report "no failure".
+        $client->forceTransportDown();
+        $this->assertTrue($client->transportFailed());
+        $client->fetch('/stat/sta');
+
+        $this->assertFalse($client->transportFailed());
+    }
+
+    public function testMemoExpiresAfterTtl(): void
+    {
+        $client = $this->makeClient(['stat/sta' => [['mac' => 'aa:bb:cc:dd:ee:ff']]]);
+
+        $client->monotonic = 1000.0;
+        $client->fetch('/stat/sta');
+        $client->monotonic = 1004.9;
+        $client->fetch('/stat/sta');
+        $this->assertCount(1, $client->pathsRequested); // still inside 5 s
+
+        $client->monotonic = 1005.1;
+        $client->fetch('/stat/sta');
+        $this->assertCount(2, $client->pathsRequested); // expired → real call
+    }
+
+    /**
+     * A dead console: the map and live readers batched into one request both
+     * open with /stat/health. The second one must not wait out another
+     * connect timeout — it gets the remembered failure, flag included, so it
+     * stops early exactly as if it had made the call.
+     */
+    public function testTransportFailureIsRememberedForTheTtl(): void
+    {
+        $client = $this->makeClient($this->allEndpoints(), failTransport: true);
+        $client->monotonic = 1000.0;
+
+        $this->assertNull($client->fetch('/stat/health'));
+        $this->assertTrue($client->transportFailed());
+
+        $client->monotonic = 1004.9;
+        $this->assertNull($client->fetch('/stat/health'));
+        $this->assertTrue($client->transportFailed(), 'a remembered failure still reports as one');
+        $this->assertCount(1, $client->pathsRequested, 'no second call inside the TTL');
+
+        // Expired → a real call again; the console is back.
+        $client->failTransport = false;
+        $client->monotonic = 1005.1;
+        $this->assertSame(self::HEALTH_DATA, $client->fetch('/stat/health'));
+        $this->assertFalse($client->transportFailed());
+        $this->assertCount(2, $client->pathsRequested);
+    }
+
+    /**
+     * Per path, not console-wide: curl reports a slow endpoint's transfer
+     * timeout with the same errno as a dead host, so one slow path must not
+     * blank the healthy ones for the rest of the request.
+     */
+    public function testTransportFailureMemoIsPerPath(): void
+    {
+        $client = $this->makeClient($this->allEndpoints(), failTransport: true);
+        $client->fetch('/stat/health');
+
+        $client->failTransport = false;
+        $this->assertSame(self::DEVICE_DATA, $client->fetch('/stat/device'));
+        $this->assertSame(['/stat/health', '/stat/device'], $client->pathsRequested);
+    }
+
+    public function testApplicationMissIsNotRememberedAsDown(): void
+    {
+        // A non-transport null (error envelope, missing endpoint) stays a
+        // plain miss: retried on the next read, never flagged as down.
+        $client = $this->makeClient([]);
+        $client->fetch('/stat/sta');
+        $this->assertNull($client->fetch('/stat/sta'));
+        $this->assertFalse($client->transportFailed());
+        $this->assertCount(2, $client->pathsRequested);
+    }
+
+    public function testPostIsNeitherShortCircuitedNorRememberedAsDown(): void
+    {
+        $client = $this->makeClient(['stat/report' => [['time' => 1751742000000]]], failTransport: true);
+        $client->fetch('/stat/report/5minutes.user', ['macs' => ['x']]);
+        $client->fetch('/stat/report/5minutes.user', ['macs' => ['x']]);
+
+        $this->assertCount(2, $client->pathsRequested);
+    }
+
+    public function testResetClearsTheDownMemo(): void
+    {
+        $client = $this->makeClient($this->allEndpoints(), failTransport: true);
+        $client->fetch('/stat/health');
+        $client->reset();
+
+        $client->failTransport = false;
+        $this->assertSame(self::HEALTH_DATA, $client->fetch('/stat/health'));
+        $this->assertCount(2, $client->pathsRequested);
     }
 }

@@ -120,6 +120,11 @@ class AdminSettingsController extends AbstractController
             ['key' => 'unifi_api_key',         'type' => 'password', 'label' => 'admin.field.api_key'],
             ['key' => 'unifi_site',            'type' => 'text',     'label' => 'admin.field.unifi.site', 'placeholder' => 'default', 'clearable' => true],
             ['key' => 'unifi_skip_tls_verify', 'type' => 'checkbox', 'label' => 'admin.field.unifi.skip_tls_verify'],
+            // Optional ISP plan, in Mbps, free text (the topology map parses it
+            // and treats blank / non-numeric / <= 0 as "no plan"). Deliberately
+            // absent from TEST_FIELDS + test(): they don't affect connectivity.
+            ['key' => 'unifi_plan_down_mbps',  'type' => 'text',     'label' => 'admin.field.unifi.plan_down', 'placeholder' => '1000', 'clearable' => true],
+            ['key' => 'unifi_plan_up_mbps',    'type' => 'text',     'label' => 'admin.field.unifi.plan_up', 'placeholder' => '40', 'clearable' => true],
         ],
         'houndarr' => [
             ['key' => 'houndarr_url',     'type' => 'text',     'label' => 'admin.field.url',     'placeholder' => 'http://host.docker.internal:8877'],

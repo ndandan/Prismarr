@@ -3,14 +3,20 @@
 namespace App\Tests\Controller;
 
 use App\Controller\UnifiController;
+use App\Service\ConfigService;
 use App\Service\HealthService;
 use App\Service\Unifi\UnifiHistoryReader;
 use App\Service\Unifi\UnifiInfraReader;
 use App\Service\Unifi\UnifiFetcher;
 use App\Service\Unifi\UnifiLiveReader;
+use App\Service\Unifi\UnifiMapReader;
+use App\Service\Unifi\UnifiSparkReader;
 use App\Tests\Service\Unifi\StubUnifiFetcher;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Twig\Environment;
@@ -18,8 +24,11 @@ use Twig\Environment;
 #[AllowMockObjectsWithoutExpectations]
 class UnifiControllerTest extends TestCase
 {
+    /** Every (template, context) the mocked Twig was asked to render, in order. */
+    private array $renders = [];
+
     /**
-     * The three readers are `final` (per the plan's Global Constraints), so
+     * The five readers are `final` (per the plan's Global Constraints), so
      * they cannot be doubled. Real readers are built instead, each over its own
      * UnifiFetcher double — an interface, and the seam that exists precisely so
      * the readers run with no network. A stub answering null to every path makes
@@ -29,15 +38,24 @@ class UnifiControllerTest extends TestCase
      * Payload shapes are Tasks 4-6's business, asserted in their own tests.
      * This test covers gating, dispatch and error containment only.
      *
-     * @param list<string> $throwOn group names whose reader throws
+     * @param list<string>          $throwOn   group names whose reader throws
+     * @param array<string, ?array> $responses per-group stub payloads, keyed by
+     *                                         path substring (only the spark
+     *                                         tests need one — it is the only
+     *                                         reader whose output the controller
+     *                                         post-processes)
      */
     private function makeController(
         bool $configured = true,
         array $throwOn = [],
+        array $responses = [],
+        array $renderThrowsOn = [],
+        ?LoggerInterface $logger = null,
     ): UnifiController {
-        $fetcher = function (string $group) use ($throwOn): UnifiFetcher {
+        $this->renders = [];
+        $fetcher = function (string $group) use ($throwOn, $responses): UnifiFetcher {
             if (!in_array($group, $throwOn, true)) {
-                return new StubUnifiFetcher();
+                return new StubUnifiFetcher($responses[$group] ?? []);
             }
             $mock = $this->createMock(UnifiFetcher::class);
             $mock->method('fetch')->willThrowException(new \RuntimeException('upstream exploded'));
@@ -54,15 +72,28 @@ class UnifiControllerTest extends TestCase
         // 8-11 own the templates and Task 12 renders them for real on :beta.
         $twig = $this->createMock(Environment::class);
         $twig->method('render')->willReturnCallback(
-            static fn(string $tpl, array $ctx = []): string => 'RENDERED:' . $tpl
+            function (string $tpl, array $ctx = []) use ($renderThrowsOn): string {
+                $this->renders[] = [$tpl, $ctx];
+                if (in_array($tpl, $renderThrowsOn, true)) {
+                    throw new \Twig\Error\RuntimeError('template exploded');
+                }
+                return 'RENDERED:' . $tpl;
+            }
         );
+
+        // The map reader reads the optional plan-speed settings; none are set
+        // here, which is the unconfigured-plan path and irrelevant to dispatch.
+        $config = $this->createStub(ConfigService::class);
+        $config->method('get')->willReturn(null);
 
         $controller = new UnifiController(
             new UnifiLiveReader($fetcher('live'), new NullLogger()),
             new UnifiInfraReader($fetcher('infra'), new NullLogger()),
             new UnifiHistoryReader($fetcher('history'), new NullLogger()),
+            new UnifiMapReader($fetcher('map'), $config, new NullLogger()),
+            new UnifiSparkReader($fetcher('spark')),
             $health,
-            new NullLogger(),
+            $logger ?? new NullLogger(),
         );
 
         // has() answers truthfully per id rather than blanket-true: json()
@@ -123,6 +154,45 @@ class UnifiControllerTest extends TestCase
         $this->assertSame('RENDERED:unifi/_live.html.twig',    $c->panel('live')->getContent());
         $this->assertSame('RENDERED:unifi/_infra.html.twig',   $c->panel('infra')->getContent());
         $this->assertSame('RENDERED:unifi/_history.html.twig', $c->panel('history')->getContent());
+        $this->assertSame('RENDERED:unifi/_map.html.twig',     $c->panel('map')->getContent());
+    }
+
+    public function testMapPanelDispatches(): void
+    {
+        // The stub answers null to everything, so the map reader returns null —
+        // the template still renders (its empty state + retry), exactly as the
+        // other three panels do.
+        $r = $this->makeController()->panel('map');
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame('RENDERED:unifi/_map.html.twig', $r->getContent());
+        $this->assertSame(['map' => null], $this->renders[0][1], 'map gets one variable named after the group');
+    }
+
+    public function testMapPanelSurvivesReaderThrow(): void
+    {
+        $r = $this->makeController(throwOn: ['map'])->panel('map');
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame('RENDERED:unifi/_map.html.twig', $r->getContent());
+        $this->assertSame(['map' => null], $this->renders[0][1]);
+    }
+
+    public function testMapPanelIsEmptyWhenUnconfigured(): void
+    {
+        $r = $this->makeController(configured: false)->panel('map');
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame('', $r->getContent());
+        $this->assertSame([], $this->renders, 'unconfigured must not render anything');
+    }
+
+    public function testPanelRouteRequirementWhitelistsMap(): void
+    {
+        $route = (new \ReflectionMethod(UnifiController::class, 'panel'))
+            ->getAttributes(\Symfony\Component\Routing\Attribute\Route::class)[0]->newInstance();
+
+        $this->assertSame('live|infra|history|map', $route->requirements['panel']);
     }
 
     public function testAThrowingReaderStillAnswersTwoHundred(): void
@@ -145,6 +215,48 @@ class UnifiControllerTest extends TestCase
         $this->assertSame('RENDERED:unifi/_live.html.twig', $map['live']);
     }
 
+    public function testBatchIncludesMap(): void
+    {
+        // The page poller asks for the map in the same cycle as the live group.
+        $r = $this->makeController()->panels(new Request(['p' => 'live,map']));
+
+        $map = json_decode((string) $r->getContent(), true);
+        $this->assertSame(['live', 'map'], array_keys($map));
+        $this->assertSame('RENDERED:unifi/_map.html.twig', $map['map']);
+    }
+
+    /**
+     * The map rides live's 10 s tick in one batched request. A Twig error in
+     * the map template must not 500 that JSON — live would freeze with it.
+     * The failing group is omitted (the client keeps its last-good content)
+     * and logged; the others still arrive.
+     */
+    public function testBatchOmitsAGroupWhoseTemplateThrows(): void
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<array{0: mixed, 1: string, 2: array}> */
+            public array $records = [];
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->records[] = [$level, (string) $message, $context];
+            }
+        };
+        $c = $this->makeController(renderThrowsOn: ['unifi/_map.html.twig'], logger: $logger);
+
+        $r   = $c->panels(new Request(['p' => 'map,live']));
+        $map = json_decode((string) $r->getContent(), true);
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame(['live'], array_keys($map));
+        $this->assertSame('RENDERED:unifi/_live.html.twig', $map['live']);
+
+        $this->assertCount(1, $logger->records);
+        [$level, , $context] = $logger->records[0];
+        $this->assertSame(LogLevel::WARNING, $level);
+        $this->assertSame('map', $context['panel']);
+        $this->assertSame('template exploded', $context['message']);
+    }
+
     public function testBatchDeduplicatesAndToleratesAnEmptyQuery(): void
     {
         $c = $this->makeController();
@@ -159,9 +271,89 @@ class UnifiControllerTest extends TestCase
     {
         // First paint must not block on cURL. Readers that throw would surface
         // here if the shell called them; the shell must render regardless.
-        $r = $this->makeController(throwOn: ['live', 'infra', 'history'])->index();
+        $r = $this->makeController(throwOn: ['live', 'infra', 'history', 'map', 'spark'])->index();
 
         $this->assertSame(200, $r->getStatusCode());
         $this->assertSame('RENDERED:unifi/index.html.twig', $r->getContent());
+    }
+
+    private const SPARK_ID = 'aabbccddeeff';
+
+    public function testSparkRendersTheChartGeometryForARealSeries(): void
+    {
+        // Two 5-minute buckets — the fewest NetworkUsageChart::build() will draw.
+        // Report `time` is epoch ms; the sparkline's hover/axis labels are 'H:i'
+        // (a one-hour window needs no date).
+        $t0 = 1_700_000_000;
+        $c = $this->makeController(responses: ['spark' => ['report/5minutes.user' => [
+            ['time' => $t0 * 1000,           'rx_bytes' => 100, 'tx_bytes' => 900],
+            ['time' => ($t0 + 300) * 1000,   'rx_bytes' => 200, 'tx_bytes' => 800],
+        ]]]);
+
+        $r = $c->spark(self::SPARK_ID);
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame('RENDERED:unifi/_spark.html.twig', $r->getContent());
+        $this->assertCount(1, $this->renders);
+        $spark = $this->renders[0][1]['spark'];
+        $this->assertIsArray($spark);
+        $this->assertSame(date('H:i', $t0), $spark['startLabel']);
+        $this->assertSame(date('H:i', $t0 + 300), $spark['endLabel']);
+    }
+
+    public function testSparkEmptyWhenNoData(): void
+    {
+        // The stub answers null: the reader returns null, and the controller
+        // answers an empty body without asking Twig to render nothing.
+        $r = $this->makeController()->spark(self::SPARK_ID);
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame('', $r->getContent());
+        $this->assertSame([], $this->renders);
+    }
+
+    public function testSparkEmptyWhenUnconfigured(): void
+    {
+        $r = $this->makeController(configured: false)->spark(self::SPARK_ID);
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame('', $r->getContent());
+        $this->assertSame([], $this->renders);
+    }
+
+    public function testSparkSurvivesReaderThrow(): void
+    {
+        // The reader is built not to throw, but the controller must not depend
+        // on that: a thrown fetch still answers an empty 200, never a 500.
+        $r = $this->makeController(throwOn: ['spark'])->spark(self::SPARK_ID);
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame('', $r->getContent());
+        $this->assertSame([], $this->renders);
+    }
+
+    public function testSparkRouteRequirement(): void
+    {
+        // Routing is the first line of defence for an id that ends up in a POST
+        // body: a MAC is 12 lowercase hex digits, nothing else reaches the action.
+        $route = (new \ReflectionMethod(UnifiController::class, 'spark'))
+            ->getAttributes(\Symfony\Component\Routing\Attribute\Route::class)[0]->newInstance();
+
+        $this->assertSame('/api/spark/{id}', $route->path);
+        $this->assertSame('spark', $route->name);
+        $this->assertSame('[0-9a-f]{12}', $route->requirements['id']);
+    }
+
+    public function testSparkIsDeclaredBeforeThePanelRoute(): void
+    {
+        // Routes match in declaration order. `/api/{panel}` can't match the
+        // two-segment spark path today, but a future loosening of its
+        // requirement must not silently shadow this one.
+        $methods = array_map(
+            static fn(\ReflectionMethod $m): string => $m->getName(),
+            (new \ReflectionClass(UnifiController::class))->getMethods(\ReflectionMethod::IS_PUBLIC),
+        );
+
+        $this->assertLessThan(array_search('panel', $methods, true), array_search('spark', $methods, true));
     }
 }

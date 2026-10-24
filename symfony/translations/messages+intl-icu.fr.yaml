@@ -625,6 +625,59 @@ unifi:
     status_ok: Conforme
     status_mismatch: Incohérente
     status_offline: 'Hors ligne'
+  map:
+    title: 'Carte du réseau'
+    aria: 'Topologie du réseau'
+    legend:
+      quiet: Calme
+      busy: 'Chargé (> 50 %)'
+      saturated: Saturé
+      under: 'Plus lent que possible'
+    kind:
+      internet: Internet
+      gateway: Passerelle
+      switch: Commutateur
+      ap: "Point d'accès"
+      wired: 'Client filaire'
+      wifi: 'Client Wi-Fi'
+    clients: '{count, plural, one {# client} other {# clients}}'
+    slower_than_capable: "{link} — jusqu'à {capable}"
+    offline: 'Hors ligne'
+    basis:
+      plan: 'du forfait de {mbps} Mb/s'
+      plan_up: 'du débit montant du forfait ({mbps} Mb/s)'
+      speedtest: 'du dernier test de débit'
+      speedtest_up: 'du débit montant du dernier test'
+      port: 'de la vitesse du port'
+    wan: WAN
+    uplink: 'Liaison montante'
+    live: 'En direct'
+    busiest: 'Liens les plus chargés'
+    busiest_hint: "Sélectionnez un élément de la carte pour afficher ses détails."
+    back: 'Retour aux liens les plus chargés'
+    all_idle: 'Aucun trafic sur les liens pour le moment'
+    link: Lien
+    rate: Débit
+    load: Charge
+    utilisation: Utilisation
+    latency: Latence
+    drops: Pertes
+    isp: FAI
+    client: Client
+    wifi_clients: 'Clients Wi-Fi'
+    no_clients: 'Aucun client Wi-Fi'
+    ports: Ports
+    port: 'Port {port}'
+    port_down: inactif
+    switch_port: 'Port du commutateur'
+    link_speed: 'Vitesse du lien'
+    port_note: 'Le port accepte {capable}, lien établi à {link}'
+    errors: 'Erreurs / pertes'
+    band_channel: 'Bande / canal'
+    channel: 'canal {channel}'
+    generation: 'Génération Wi-Fi'
+    roams: Itinérances
+    no_history: "Aucun historique de trafic sur la dernière heure"
 
 tracearr:
   title: Activité Tracearr
@@ -1072,6 +1125,8 @@ admin:
     unifi:
       site: Nom du site
       skip_tls_verify: Ignorer la vérification du certificat TLS (certificat auto-signé de la console)
+      plan_down: 'Débit descendant de l''abonnement (Mbit/s, facultatif — échelle du lien internet de la carte)'
+      plan_up: 'Débit montant de l''abonnement (Mbit/s, facultatif)'
   internal:
     calendar:
       label: Calendrier

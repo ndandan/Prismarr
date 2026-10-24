@@ -35,6 +35,130 @@
   @media (max-width: 991.98px) {
     .unifi-chart-axis { font-size: .6875rem; }
   }
+
+  /* ── Topology map (unifi/_map.html.twig) ──
+     Load colours are fixed semantic tokens, never --tblr-primary: on the green
+     presets a "busy" primary would read as "fine" (the widget's lesson).
+     Primary only marks what the admin selected or focused.
+     On a phone the legend drops under the title instead of squeezing it. */
+  .unifi-map-head { flex-wrap: wrap; gap: .25rem 1rem; }
+  .unifi-map-head .card-title { white-space: nowrap; }
+  .unifi-map-legend { display: flex; flex-wrap: wrap; gap: .25rem 1rem; }
+  .unifi-legend-under { display: inline-block; width: 1.25em; height: 0; border-top: 2px dashed var(--tblr-red); vertical-align: middle; }
+
+  /* The SVG keeps its own pixel width (1.2 px per unit, set by the fragment);
+     a wide tree scrolls sideways here rather than shrinking its labels. */
+  .unifi-map-scroll { overflow-x: auto; overflow-y: hidden; padding: .75rem; }
+  .unifi-map-svg { display: block; max-width: none; margin: 0 auto; }
+
+  .unifi-edge { --c: var(--tblr-border-color); transition: opacity .2s ease; }
+  :is(.unifi-edge, .unifi-port).tier-quiet     { --c: var(--tblr-teal); }
+  :is(.unifi-edge, .unifi-port).tier-busy      { --c: var(--tblr-orange); }
+  :is(.unifi-edge, .unifi-port).tier-saturated { --c: var(--tblr-red); }
+  /* stroke-width comes from the element (it encodes load) — never set it here,
+     CSS would override the attribute. The track is faint so the dots read. */
+  .unifi-link { fill: none; stroke: var(--c); stroke-opacity: .5; }
+  .unifi-edge.tier-idle .unifi-link { stroke-opacity: 1; }
+  .unifi-edge.under .unifi-link { stroke: var(--tblr-red); stroke-opacity: 1; stroke-dasharray: 4 3; }
+  .unifi-flow {
+    fill: none; stroke: var(--c); stroke-linecap: round;
+    stroke-dasharray: 1 11;
+    animation: unifi-flow var(--d) linear infinite;
+  }
+  /* --p1..--p3 are negative delays the map JS sets on the SVG after every
+     swap (now mod each duration), so a recreated path resumes the phase its
+     predecessor had instead of restarting at 0 — the dots no longer jump on
+     each 10 s poll. The JS keeps a copy of these durations (FLOW_MS);
+     UnifiMapRenderTest pins the two together. */
+  .unifi-flow.speed-1 { --d: 3s; animation-delay: var(--p1, 0s); }
+  .unifi-flow.speed-2 { --d: 1.6s; animation-delay: var(--p2, 0s); }
+  .unifi-flow.speed-3 { --d: .8s; animation-delay: var(--p3, 0s); }
+  /* Paths run parent → child, so forward is downstream; upload-heavy links
+     flow back toward the internet. */
+  .unifi-flow.reverse { animation-direction: reverse; }
+  /* Two dash periods (12 each): the loop is seamless. */
+  @keyframes unifi-flow { to { stroke-dashoffset: -24; } }
+
+  /* Selected item's path to the internet: full strength, everything else
+     steps back while a selection exists. */
+  .unifi-edge.on-path .unifi-link { stroke-opacity: 1; }
+  .unifi-edge.tier-idle.on-path .unifi-link { stroke: var(--tblr-secondary); }
+  .unifi-map-svg:has(.on-path) .unifi-edge:not(.on-path) { opacity: .3; }
+
+  .unifi-node { cursor: pointer; outline: none; }
+  .unifi-node-box { fill: var(--tblr-bg-surface); stroke: var(--tblr-border-color); stroke-width: 1; transition: stroke .15s ease; }
+  .unifi-node:hover .unifi-node-box { stroke: var(--tblr-secondary); }
+  .unifi-node.is-selected .unifi-node-box { stroke: var(--tblr-primary); stroke-width: 2; fill: rgba(var(--tblr-primary-rgb), .1); }
+  /* Keyboard focus is thicker than selection so the two stay distinct. */
+  .unifi-node:focus-visible .unifi-node-box { stroke: var(--tblr-primary); stroke-width: 3; }
+  .unifi-node.offline { opacity: .55; }
+  .unifi-node.offline .unifi-node-box { stroke-dasharray: 3 2; }
+  /* Sizes are viewBox units; at the fragment's 1.2 scale 9.2 units = 11.04 px,
+     so the map meets the 11 px floor under lg (and everywhere else). */
+  .unifi-node-name { font-size: 10.5px; font-weight: 600; fill: var(--tblr-body-color); }
+  .unifi-node-sub  { font-size: 9.2px; fill: var(--tblr-secondary); }
+  .unifi-node-sub.is-under { fill: var(--tblr-red); font-weight: 600; }
+  .unifi-node-rate { font-size: 9.2px; fill: var(--tblr-body-color); font-variant-numeric: tabular-nums; }
+
+  /* Detail strip: each section is a two-column grid (summary | detail) that
+     stacks under lg. The [hidden] guard keeps the JS's show/hide authoritative. */
+  .unifi-strip { border-top: 1px solid var(--tblr-border-color); }
+  .unifi-strip > section:not([hidden]) {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+    gap: 1rem 1.5rem; padding: 1rem 1.25rem;
+  }
+  .unifi-strip .datagrid { --tblr-datagrid-item-width: 9rem; --tblr-datagrid-padding: 1rem; }
+  /* No max-height/overflow-y scroller in the strip: the fragment is swapped
+     every 10 s and an inner scrollTop would snap back to 0 (pinned by
+     UnifiMapRenderTest). Long client lists grow with the page instead. */
+  .unifi-load-col { min-width: 8rem; }
+  /* ↓ and ↑ on one line where there is room; each direction never splits. */
+  .unifi-rates, .unifi-rate { white-space: nowrap; }
+  /* Filled by the map JS on selection (sparkline or "no history" note). */
+  .unifi-strip [data-spark-slot]:not(:empty) { margin-top: .75rem; }
+  .unifi-strip [data-select] { cursor: pointer; }
+  /* Ghost button: pull its label flush with the section text below it. */
+  .unifi-back { margin-left: calc(-1 * var(--tblr-btn-padding-x)); }
+  /* Rows hover via .table-hover; keyboard focus reuses the same state
+     variable (cells paint over a tr background), plus a visible ring. The
+     back button keeps Tabler's own focus ring. */
+  .unifi-strip tr[data-select]:focus-visible > * { --tblr-table-bg-state: var(--tblr-table-hover-bg); }
+  .unifi-strip [data-select]:not(button):focus-visible { outline: 2px solid var(--tblr-primary); outline-offset: -2px; }
+
+  /* Switch ports: top rule in the port's load colour, PoE and what's plugged in. */
+  .unifi-ports { display: grid; grid-template-columns: repeat(auto-fill, minmax(6rem, 1fr)); gap: .5rem; }
+  .unifi-port {
+    --c: var(--tblr-border-color);
+    min-width: 0; padding: .35rem .5rem; font-size: .75rem; line-height: 1.35;
+    border: 1px solid var(--tblr-border-color); border-top: 3px solid var(--c);
+    border-radius: var(--tblr-border-radius);
+  }
+  .unifi-port[data-select]:hover { background: var(--tblr-active-bg); }
+  .unifi-port.is-down { opacity: .5; }
+  .unifi-port-idx { font-size: .875rem; font-weight: 600; }
+
+  @media (max-width: 991.98px) {
+    .unifi-strip > section:not([hidden]) { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* Phones: the busiest and AP client tables must fit, not scroll sideways —
+     .table-responsive's scrollLeft would snap back on every 10 s swap. The
+     rate cell stacks ↓ over ↑ and the load column narrows; no font shrinks,
+     so the 11 px floor is untouched. */
+  @media (max-width: 575.98px) {
+    .unifi-rates { white-space: normal; }
+    .unifi-rates .unifi-rate { display: block; }
+    .unifi-rates .unifi-rate-sep { display: none; }
+    .unifi-load-col { min-width: 5rem; }
+  }
+
+  /* Motion off means OFF: no dots and no fades. The links keep their colour
+     and width, at full strength since there are no dots to read against. */
+  @media (prefers-reduced-motion: reduce) {
+    .unifi-flow { display: none; }
+    .unifi-link { stroke-opacity: 1; }
+    .unifi-edge, .unifi-node-box { transition: none; }
+  }
 </style>
 {% endblock %}
 
@@ -54,10 +178,14 @@
 <div class="page-body">
   <div class="container-xl">
 
-    {# Three regions, three cadences. Each carries the same data-* contract the
+    {# Four regions, three cadences. Each carries the same data-* contract the
        dashboard widgets use, so the scheduler below is a near-copy of the
-       dashboard's — deliberately, because that one is shipped and debugged. #}
+       dashboard's — deliberately, because that one is shipped and debugged.
+       The map leads: "which cable is busy, and who's on it" is the first
+       question the page answers. It shares live's 10s tick, so the two ride
+       one batched request. #}
     {% for region in [
+      { name: 'map',     poll: 10000  },
       { name: 'live',    poll: 10000  },
       { name: 'infra',   poll: 60000  },
       { name: 'history', poll: 300000 }
@@ -71,6 +199,12 @@
             <span class="spinner-border spinner-border-sm"></span>
           </div>
         </div>
+        {% if region.name == 'map' %}
+          {# Announces a selection made from the map (focus stays on the node).
+             Outside the swapped body on purpose: a live region recreated by
+             the 10 s poll is not reliably announced. #}
+          <div class="visually-hidden" aria-live="polite" data-unifi-map-live></div>
+        {% endif %}
       </div>
     {% endfor %}
 
@@ -84,13 +218,51 @@
 (function () {
   'use strict';
 
+  // ?node= is read FIRST, before anything on this page can rewrite the URL:
+  // a reader that runs after an early replaceState sees a bare search and
+  // takes a deep link for a plain visit (the library ?open= trap, 2026-07).
+  // It is applied by the first map swap: the sections it names don't exist yet.
+  var DEEP_NODE = (function () {
+    try { return new URLSearchParams(window.location.search).get('node'); } catch (e) { return null; }
+  })();
+
   var PANELS_URL = '{{ path('app_unifi_panels') }}';
   var UPDATED_TPL = {{ 'unifi.updated'|trans({ seconds: '%S%' })|json_encode|raw }};
+
+  // The spark route only accepts a 12-hex id, so the template is generated
+  // on a placeholder that satisfies it and the real id is swapped in.
+  var SPARK_TPL = '{{ path('app_unifi_spark', { id: '000000000000' }) }}';
+  var SPARK_PH = '000000000000';
+  var NO_HISTORY = {{ 'unifi.map.no_history'|trans|json_encode|raw }};
+  // The report behind a sparkline has 5-minute buckets: refetching sooner
+  // cannot show anything new.
+  var SPARK_TTL = 300000;
+  var MAC_ID = /^[0-9a-f]{12}$/;
+  // The stylesheet's .unifi-flow.speed-N durations (--d), in ms, keyed by
+  // the custom property each one reads its delay from. See phaseFlows().
+  var FLOW_MS = { p1: 3000, p2: 1600, p3: 800 };
+
+  // Map state lives HERE, outside the fragment that every 10 s poll replaces
+  // wholesale. sel '' = nothing selected (the busiest-links view).
+  var mapState = {
+    sel: DEEP_NODE && (MAC_ID.test(DEEP_NODE) || DEEP_NODE === 'internet') ? DEEP_NODE : '',
+    scrollLeft: 0,
+    sparks: {}
+  };
 
   function body(node) { return node.querySelector('[data-dash-body]') || node; }
 
   function applyFragment(node, html) {
-    body(node).innerHTML = html;
+    // The map region re-applies its selection, scroll and focus around the
+    // swap. Routed through the window pointer, not the local swapMap: the
+    // retry handler is bound by the FIRST run of this script, so after a
+    // Turbo revisit it calls an old run's hydrate → applyFragment, and only
+    // the pointer reaches the live run's state.
+    if (node.dataset.dashWidget === 'map' && window._prismarrUnifiMap) {
+      window._prismarrUnifiMap.swap(node, html);
+    } else {
+      body(node).innerHTML = html;
+    }
     // Un-hide: a region hidden by an earlier empty body ("not applicable")
     // must come back if the console later starts returning content — e.g. the
     // admin configures UniFi in another tab mid-session. Without this, the
@@ -145,6 +317,260 @@
       node.dataset.dashLoaded = '';
       body(node).innerHTML = '<div class="text-center text-secondary py-4"><span class="spinner-border spinner-border-sm"></span></div>';
       hydrate(node);
+    });
+  }
+
+  // ── Map: selection, path highlight, deep link, sparklines ──
+  // Every function here looks the map up in the live document and returns
+  // quietly when it is absent: the null-state card has no [data-unifi-map],
+  // and a late response may land after Turbo has moved to another page.
+
+  // Ids are compared in JS rather than spliced into a selector string: they
+  // arrive from the URL and from third-party device data.
+  function findBy(root, selector, attr, value) {
+    var list = root.querySelectorAll(selector);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].getAttribute(attr) === value) return list[i];
+    }
+    return null;
+  }
+
+  // how: null for a poll swap or the deep link — nothing is announced and
+  // focus is left alone. For a click or key press, {toggle, moveFocus}:
+  //  - toggle: map nodes are toggle buttons (aria-pressed); re-activating the
+  //    selected one returns to the busiest view. Strip rows, port cells and
+  //    the back button move the selection instead.
+  //  - moveFocus: the activated element sat in the strip, in the section this
+  //    is about to hide, so focus would fall to <body>.
+  function select(id, how) {
+    var map = document.querySelector('[data-unifi-map]');
+    var strip = map && map.querySelector('[data-unifi-strip]');
+    if (!strip) return; // keep mapState.sel: the map may come back next poll
+
+    id = id || '';
+    if (how && how.toggle && id === mapState.sel) { id = ''; }
+    var shown = findBy(strip, 'section[data-detail]', 'data-detail', id);
+    // Unknown or vanished (a phone left the network) → the busiest view.
+    if (!shown) {
+      id = '';
+      shown = findBy(strip, 'section[data-detail]', 'data-detail', '');
+    }
+    var sections = strip.querySelectorAll('section[data-detail]');
+    for (var i = 0; i < sections.length; i++) {
+      sections[i].hidden = sections[i] !== shown;
+    }
+
+    mapState.sel = id;
+    highlight(map, id);
+    syncUrl(id);
+    if (id) { loadSpark(strip, id); }
+    if (how) { announce(shown, how.moveFocus); }
+  }
+
+  // A selection the user made is spoken once. From the strip, focus moves to
+  // the new section's heading (tabindex=-1), which reads it. From a map node,
+  // which keeps focus, the polite live region in the shell — outside the
+  // swapped fragment — says the heading's text. Not both: the focus move
+  // already reads the heading. A focus move clears the region, so the next
+  // node selection always changes its text and is announced.
+  function announce(section, moveFocus) {
+    var heading = section && section.querySelector('[data-detail-heading]');
+    var live = document.querySelector('[data-unifi-map-live]');
+    if (moveFocus) {
+      if (live) { live.textContent = ''; }
+      if (heading) { heading.focus(); }
+      return;
+    }
+    if (live && heading) { live.textContent = heading.textContent.replace(/\s+/g, ' ').trim(); }
+  }
+
+  // .is-selected on the node (when drawn) and .on-path on each edge from it
+  // up to the internet. The walk reads data-parent from the map node, or
+  // from the detail section for a Wi-Fi client, which has no node. The hop
+  // cap only guards a malformed chain — the builder emits a tree.
+  function highlight(map, id) {
+    var lit = map.querySelectorAll('.is-selected, .on-path');
+    for (var i = 0; i < lit.length; i++) { lit[i].classList.remove('is-selected', 'on-path'); }
+    // aria-pressed mirrors .is-selected on every node. The fragment renders
+    // them all "false", so this also restores the state after each swap.
+    var drawn = map.querySelectorAll('g.unifi-node');
+    for (var j = 0; j < drawn.length; j++) {
+      drawn[j].setAttribute('aria-pressed', id && drawn[j].getAttribute('data-select') === id ? 'true' : 'false');
+    }
+    if (!id) return;
+
+    var own = findBy(map, 'g.unifi-node', 'data-select', id);
+    if (own) { own.classList.add('is-selected'); }
+    for (var cur = id, hops = 0; cur && cur !== 'internet' && hops < 32; hops++) {
+      var edge = findBy(map, '[data-edge-to]', 'data-edge-to', cur);
+      if (edge) { edge.classList.add('on-path'); }
+      var holder = findBy(map, 'g.unifi-node', 'data-select', cur) ||
+                   findBy(map, 'section[data-detail]', 'data-detail', cur);
+      cur = holder ? holder.getAttribute('data-parent') : null;
+    }
+  }
+
+  // ?node= mirrors the selection; other params and the hash are kept. So is
+  // history.state: Turbo stores its restoration id there and ignores a
+  // Back/Forward onto an entry whose state has been nulled.
+  function syncUrl(id) {
+    var params = new URLSearchParams(window.location.search);
+    var cur = params.get('node');
+    if (id ? cur === id : cur === null) return;
+    if (id) { params.set('node', id); } else { params.delete('node'); }
+    var qs = params.toString();
+    history.replaceState(history.state, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+  }
+
+  // One fetch per client per SPARK_TTL, never one per poll: the swap empties
+  // the slot and the cache refills it. A stale entry keeps painting while it
+  // refetches, so the slot doesn't blink empty every five minutes. An empty
+  // body ("no history") is an answer and is cached; a failed request is not.
+  function loadSpark(strip, id) {
+    var slot = findBy(strip, '[data-spark-slot]', 'data-spark-slot', id);
+    if (!slot) return; // not a client: no sparkline
+    var hit = mapState.sparks[id];
+    if (hit && hit.html !== null) { paintSpark(slot, hit.html); }
+    if (hit && (hit.busy || Date.now() - hit.at < SPARK_TTL)) return;
+    if (!MAC_ID.test(id)) { paintSpark(slot, ''); return; } // the route can't name it
+
+    if (!hit) { hit = mapState.sparks[id] = { html: null, at: 0, busy: false }; }
+    hit.busy = true;
+    fetch(SPARK_TPL.replace(SPARK_PH, id), { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+      // redirected = an expired session answered with the login page.
+      .then(function (r) { return r.ok && !r.redirected ? r.text() : null; })
+      .then(function (html) {
+        hit.busy = false;
+        if (html === null) return;
+        hit.html = html.trim();
+        hit.at = Date.now();
+        // Selection moved on while this was in flight: cached, not painted.
+        if (mapState.sel !== id) return;
+        var map = document.querySelector('[data-unifi-map]');
+        var now = map && findBy(map, '[data-spark-slot]', 'data-spark-slot', id);
+        if (now) { paintSpark(now, hit.html); }
+      })
+      .catch(function () { hit.busy = false; });
+  }
+
+  function paintSpark(slot, html) {
+    if (html) { slot.innerHTML = html; return; }
+    var note = document.createElement('div');
+    note.className = 'text-secondary small';
+    note.textContent = NO_HISTORY;
+    slot.textContent = '';
+    slot.appendChild(note);
+  }
+
+  // The innerHTML swap destroys whatever had focus. Remember the item, the
+  // kind of element and the section it sat in, then focus its twin after the
+  // swap — a keyboard user isn't thrown back to the top of the page every 10 s.
+  // A section heading counts: select() puts focus there.
+  function focusKey(node) {
+    var el = document.activeElement;
+    if (!el || !node.contains(el)) return null;
+    var heading = el.hasAttribute('data-detail-heading');
+    if (!heading && !el.hasAttribute('data-select')) return null;
+    var sec = el.closest('section[data-detail]');
+    var visible = false;
+    try { visible = el.matches(':focus-visible'); } catch (e) {}
+    return {
+      heading: heading,
+      id: el.getAttribute('data-select'),
+      tag: el.tagName,
+      section: sec ? sec.getAttribute('data-detail') : null,
+      visible: visible
+    };
+  }
+
+  function refocus(node, key) {
+    var scope = key.section === null
+      ? node.querySelector('[data-unifi-map-scroll]')
+      : findBy(node, 'section[data-detail]', 'data-detail', key.section);
+    if (!scope) return;
+    var list = scope.querySelectorAll(key.heading ? '[data-detail-heading]' : '[data-select]');
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].tagName === key.tag && (key.heading || list[i].getAttribute('data-select') === key.id)) {
+        list[i].focus({ preventScroll: true, focusVisible: key.visible });
+        return;
+      }
+    }
+  }
+
+  // innerHTML recreates every .unifi-flow path, and a new CSS animation
+  // starts at offset 0: the dots jumped back on every poll. A negative delay
+  // of (timeline time mod duration) starts each new path at the phase it
+  // would have reached running since the timeline's origin — the phase its
+  // predecessor was at. Written in the same task as the swap, before the
+  // first style pass, so no animation starts at 0 (first hydration too).
+  // CSSOM, so CSP-safe. performance.now() shares the timeline's origin.
+  function phaseFlows(node) {
+    var svg = node.querySelector('.unifi-map-svg');
+    if (!svg) return;
+    var tl = document.timeline;
+    var t = tl && typeof tl.currentTime === 'number' ? tl.currentTime : performance.now();
+    for (var k in FLOW_MS) {
+      if (FLOW_MS.hasOwnProperty(k)) {
+        svg.style.setProperty('--' + k, (-(t % FLOW_MS[k])).toFixed(1) + 'ms');
+      }
+    }
+  }
+
+  // The map region's swap. Order matters: everything that sets the strip's
+  // height (which section shows, the cached sparkline) is written before
+  // scrollLeft is restored, which forces the first layout of the new HTML.
+  // Otherwise the page lays out the short default view in between and a
+  // reader scrolled near the bottom is clamped upward.
+  function swapMap(node, html) {
+    var live = document.documentElement.contains(node);
+    var scroller = node.querySelector('[data-unifi-map-scroll]');
+    if (live && scroller) { mapState.scrollLeft = scroller.scrollLeft; }
+    var focus = live ? focusKey(node) : null;
+    body(node).innerHTML = html;
+    if (!live) return; // a late response for a page already left
+
+    phaseFlows(node);
+    select(mapState.sel, null);
+    scroller = node.querySelector('[data-unifi-map-scroll]');
+    if (scroller) { scroller.scrollLeft = mapState.scrollLeft; }
+    if (focus) { refocus(node, focus); }
+  }
+
+  // This run's map, for the handlers bound once below and for applyFragment
+  // (each re-run of this script on a Turbo revisit replaces it).
+  window._prismarrUnifiMap = {
+    swap: swapMap,
+    // el: the activated [data-select] element; see select() for the flags.
+    pick: function (el) {
+      select(el.getAttribute('data-select'), {
+        toggle: el.classList.contains('unifi-node'),
+        moveFocus: !!el.closest('[data-unifi-strip]')
+      });
+    }
+  };
+
+  // ── Map clicks and keys, delegated and bound once per session ──
+  // Rows, port cells, nodes and the back buttons all carry data-select;
+  // Enter or Space is the keyboard activation of the non-button ones (Space
+  // would otherwise scroll the page).
+  if (!window._prismarrUnifiMapBound) {
+    window._prismarrUnifiMapBound = true;
+    var mapTarget = function (e) {
+      var el = e.target && e.target.closest ? e.target.closest('[data-select]') : null;
+      return el && el.closest('[data-unifi-map]') ? el : null;
+    };
+    document.addEventListener('click', function (e) {
+      var el = mapTarget(e);
+      if (el) { window._prismarrUnifiMap.pick(el); }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var el = mapTarget(e);
+      // A real <button> already turns Enter/Space into a click.
+      if (!el || el.tagName === 'BUTTON') return;
+      if (e.key === ' ') { e.preventDefault(); }
+      if (e.repeat) return; // a held key would toggle the selection on and off
+      window._prismarrUnifiMap.pick(el);
     });
   }
 
