@@ -1,0 +1,35 @@
+{# One client's last-hour sparkline, fetched on selection and slotted into that
+   client's detail section by the map JS. `spark` is NetworkUsageChart::build()
+   output (or null). Null renders NOTHING — not even whitespace — because the
+   route's contract is "empty body = no history", which the JS turns into a note.
+
+   Drawn like the history panel's usage chart: same .unifi-chart* classes (page
+   CSS in the shell's stylesheets block — a fragment is re-injected and must not
+   carry <style> or <script>), same geometry. The viewBox comes from the helper's
+   constants because the points are already mapped into that box; only the
+   rendered height differs, set inline (CSP allows style attributes) over the
+   shell's 120px. preserveAspectRatio="none" squashes the box vertically, so the
+   strokes opt out of scaling or they would thin to under a pixel at 48px.
+
+   The SVG is aria-hidden: the visible ↓/↑ totals line is its text alternative,
+   and the per-bucket <title> tooltips are a mouse-only extra. #}
+{%- if spark is not null -%}
+{% set vw = constant('App\\Dashboard\\NetworkUsageChart::WIDTH') %}
+{% set vh = constant('App\\Dashboard\\NetworkUsageChart::HEIGHT') %}
+<div class="unifi-spark">
+  <div class="d-flex justify-content-end text-secondary small">
+    ↓ {{ spark.downTotal }} · ↑ {{ spark.upTotal }}
+  </div>
+  <svg class="unifi-chart" style="height:48px" viewBox="0 0 {{ vw }} {{ vh }}" preserveAspectRatio="none" aria-hidden="true" focusable="false">
+    <polygon class="unifi-chart-fill" points="{{ spark.downArea }}"/>
+    <polyline class="unifi-chart-down" vector-effect="non-scaling-stroke" points="{{ spark.downLine }}"/>
+    <polyline class="unifi-chart-up" vector-effect="non-scaling-stroke" points="{{ spark.upLine }}"/>
+    {% for p in spark.points %}
+      <rect x="{{ p.x }}" y="0" width="{{ p.w }}" height="{{ vh }}" fill="transparent"><title>{{ p.label }}</title></rect>
+    {% endfor %}
+  </svg>
+  <div class="unifi-chart-axis">
+    <span>{{ spark.startLabel }}</span><span>{{ spark.endLabel }}</span>
+  </div>
+</div>
+{%- endif -%}
