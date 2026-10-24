@@ -645,13 +645,16 @@ unifi:
     offline: 'Hors ligne'
     basis:
       plan: 'du forfait de {mbps} Mb/s'
+      plan_up: 'du débit montant du forfait ({mbps} Mb/s)'
       speedtest: 'du dernier test de débit'
+      speedtest_up: 'du débit montant du dernier test'
       port: 'de la vitesse du port'
     wan: WAN
     uplink: 'Liaison montante'
     live: 'En direct'
     busiest: 'Liens les plus chargés'
     busiest_hint: "Sélectionnez un élément de la carte pour afficher ses détails."
+    back: 'Retour aux liens les plus chargés'
     all_idle: 'Aucun trafic sur les liens pour le moment'
     link: Lien
     rate: Débit

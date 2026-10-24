@@ -646,16 +646,20 @@ unifi:
     # link/capable arrive formatted ("1 Gbit/s") — no units here.
     slower_than_capable: '{link} — can do {capable}'
     offline: Offline
-    # The internet link's utilisation denominator. mbps arrives as a plain string.
+    # The internet link's utilisation denominator, on the side that set the
+    # percentage (_up = upload was the busier side). mbps arrives as a plain string.
     basis:
       plan: 'of {mbps} Mb/s plan'
+      plan_up: 'of {mbps} Mb/s upload plan'
       speedtest: 'of last speedtest'
+      speedtest_up: 'of last speedtest upload'
       port: 'of port speed'
     wan: WAN
     uplink: Uplink
     live: Live
     busiest: 'Busiest links'
     busiest_hint: 'Select anything on the map for its details.'
+    back: 'Back to busiest links'
     all_idle: 'No traffic on any link right now'
     link: Link
     rate: Rate

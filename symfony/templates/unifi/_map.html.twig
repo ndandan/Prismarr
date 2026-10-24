@@ -6,13 +6,17 @@
 
    DOM contract for the map JS in unifi/index.html.twig — keep it exact:
    [data-unifi-map] root card; [data-unifi-map-scroll] wrapper; edges
-   `g.unifi-edge[data-edge-to]`; nodes `g.unifi-node[data-select][data-parent]`;
-   strip [data-unifi-strip] with one `section[data-detail=id] hidden` per node
-   (Wi-Fi included, each also naming its data-parent so a client that is not
-   drawn can still light its path) + `section[data-detail=""]` (busiest, the
-   default view); `[data-spark-slot]` in client sections; clickable strip rows
-   carry data-select. The JS keeps selection and scroll OUTSIDE this fragment
-   and re-applies them after every swap.
+   `g.unifi-edge[data-edge-to]`; nodes `g.unifi-node[data-select][data-parent]`,
+   toggle buttons rendered aria-pressed="false" (the JS flips the selected
+   one); strip [data-unifi-strip] with one `section[data-detail=id] hidden`
+   per node (Wi-Fi included, each also naming its data-parent so a client that
+   is not drawn can still light its path) + `section[data-detail=""]`
+   (busiest, the default view); every section has one `[data-detail-heading]`
+   (tabindex=-1: where focus lands after a selection made from the strip);
+   every node section has a `button[data-select=""]` back to busiest;
+   `[data-spark-slot]` in client sections; clickable strip rows carry
+   data-select. The JS keeps selection and scroll OUTSIDE this fragment and
+   re-applies them after every swap.
 
    Ids are always read from values (n.id, p.from/p.to, e.to), never from array
    keys: an all-digit MAC key is an int in PHP. Lookups below are keyed with a
@@ -26,29 +30,44 @@
 {# A link speed in Mb/s, spelled like a rate ("2.5 Gbit/s"). #}
 {% macro speed(mbps) %}{% if mbps is null %}—{% else %}{{ net.rate(mbps * 125000) }}{% endif %}{% endmacro %}
 
+{# Plain-text form, for the SVG labels: a <span> inside <text> would not render. #}
 {% macro rates(down, up) %}↓ {{ net.rate(down) }} · ↑ {{ net.rate(up) }}{% endmacro %}
 
+{# Table-cell form (in a td.unifi-rates): one unbreakable span per direction,
+   so on a phone the cell breaks between ↓ and ↑ instead of pushing the table
+   into a sideways scroller whose scrollLeft every 10 s swap would reset. #}
+{% macro rateSpans(down, up) %}<span class="unifi-rate">↓ {{ net.rate(down) }}</span><span class="unifi-rate-sep"> · </span><span class="unifi-rate">↑ {{ net.rate(up) }}</span>{% endmacro %}
+
 {# Load bar + percentage. The bar is clamped (it is a picture of "full");
-   the number is not — a WAN plan slower than real throughput reads 112 %. #}
+   the number is not — a WAN plan slower than real throughput reads 112 %.
+   One decimal under 10 %: home-LAN links mostly sit below 1 %, and the
+   busiest list only holds links with util > 0, so a bare "0%" was false. #}
 {% macro load(e) %}
   {%- if e.linkMbps is null -%}
     <span class="text-secondary">—</span>
   {%- else -%}
+    {%- set pct = e.util * 100 -%}
     <div class="d-flex align-items-center">
       <div class="progress progress-sm flex-fill me-2">
         <div class="progress-bar {{ {quiet: 'bg-teal', busy: 'bg-orange', saturated: 'bg-red'}[e.tier] ?? 'bg-secondary' }}"
              style="width: {{ (min(e.util, 1) * 100)|round(1) }}%"></div>
       </div>
-      <span class="text-nowrap unifi-nums">{{ (e.util * 100)|round }}%</span>
+      <span class="text-nowrap unifi-nums">
+        {%- if pct > 0 and pct < 0.05 %}&lt;0.1{% elseif pct < 10 %}{{ pct|round(1) }}{% else %}{{ pct|round }}{% endif -%}
+      %</span>
     </div>
   {%- endif -%}
 {% endmacro %}
 
 {# "of 1000 Mb/s plan" / "of last speedtest" / "of port speed" — the internet
-   edge's denominator. mbps goes in as a string so ICU prints it as typed. #}
+   edge's denominator on the side that set the percentage (basisDir): on a
+   1000/40 plan a busy upload reads "of 40 Mb/s upload plan". The port has
+   one speed for both directions, so it never needs the upload wording.
+   mbps goes in as a string so ICU prints it as typed. #}
 {% macro basis(e) %}
-  {%- if e.basis == 'plan' -%}{{ 'unifi.map.basis.plan'|trans({mbps: e.linkMbps ~ ''}) }}
-  {%- elseif e.basis is not null -%}{{ ('unifi.map.basis.' ~ e.basis)|trans }}
+  {%- set sfx = e.basisDir == 'up' and e.basis != 'port' ? '_up' : '' -%}
+  {%- if e.basis == 'plan' -%}{{ ('unifi.map.basis.plan' ~ sfx)|trans({mbps: e.linkMbps ~ ''}) }}
+  {%- elseif e.basis is not null -%}{{ ('unifi.map.basis.' ~ e.basis ~ sfx)|trans }}
   {%- endif -%}
 {% endmacro %}
 
@@ -79,9 +98,9 @@
         <tbody>
           {% for c in list %}
             <tr data-select="{{ c.id }}" tabindex="0">
-              <td>{{ c.name }}</td>
+              <td class="text-break">{{ c.name }}</td>
               <td class="text-end">{{ m.signal(c.detail.signal) }}</td>
-              <td class="text-end text-nowrap">{{ m.rates(c.downBps, c.upBps) }}</td>
+              <td class="text-end unifi-rates">{{ m.rateSpans(c.downBps, c.upBps) }}</td>
             </tr>
           {% endfor %}
         </tbody>
@@ -190,7 +209,7 @@
               {% set sub = n.model ?? '' %}
             {% endif %}
             {% set label = n.name|length > 24 ? n.name|slice(0, 23) ~ '…' : n.name %}
-            <g class="unifi-node{{ n.online ? '' : ' offline' }}" data-select="{{ n.id }}" data-parent="{{ n.parentId }}" tabindex="0" role="button" aria-label="{{ n.name }}" transform="translate({{ b.x }} {{ b.y }})">
+            <g class="unifi-node{{ n.online ? '' : ' offline' }}" data-select="{{ n.id }}" data-parent="{{ n.parentId }}" tabindex="0" role="button" aria-label="{{ n.name }}" aria-pressed="false" transform="translate({{ b.x }} {{ b.y }})">
               <title>{{ n.name }}</title>
               <rect class="unifi-node-box" width="{{ b.w }}" height="{{ b.h }}" rx="6"/>
               <text class="unifi-node-name" x="8" y="12" clip-path="url(#unifi-map-clip)">{{ label }}</text>
@@ -212,7 +231,7 @@
 
     <section data-detail="">
       <div>
-        <div class="h3 mb-1">{{ 'unifi.map.busiest'|trans }}</div>
+        <h4 class="h3 mb-1" tabindex="-1" data-detail-heading>{{ 'unifi.map.busiest'|trans }}</h4>
         <div class="text-secondary small">{{ 'unifi.map.busiest_hint'|trans }}</div>
       </div>
       <div>
@@ -231,8 +250,8 @@
                   {% set from = byId['n' ~ e.from] ?? null %}
                   {% set to = byId['n' ~ e.to] ?? null %}
                   <tr data-select="{{ e.to }}" tabindex="0">
-                    <td>{{ from is not null ? from.name : e.from }} <span class="text-secondary">→</span> {{ to is not null ? to.name : e.to }}</td>
-                    <td class="text-end text-nowrap">{{ m.rates(e.downBps, e.upBps) }}</td>
+                    <td class="text-break">{{ from is not null ? from.name : e.from }} <span class="text-secondary">→</span> {{ to is not null ? to.name : e.to }}</td>
+                    <td class="text-end unifi-rates">{{ m.rateSpans(e.downBps, e.upBps) }}</td>
                     <td class="unifi-load-col">{{ m.load(e) }}</td>
                   </tr>
                 {% endfor %}
@@ -250,13 +269,18 @@
       {% set e = n.kind == 'internet' ? wanEdge : (edgeTo['e' ~ n.id] ?? null) %}
       <section data-detail="{{ n.id }}" data-parent="{{ n.parentId }}" hidden>
         <div>
+          {# The way back to the default view. Re-clicking a selected map node
+             also gets there, but a Wi-Fi client has no node to re-click. #}
+          <button type="button" class="btn btn-ghost-secondary mb-2 unifi-back" data-select="">
+            <span aria-hidden="true">←</span> {{ 'unifi.map.back'|trans }}
+          </button>
           <div class="text-secondary small">
             {{ ('unifi.map.kind.' ~ n.kind)|trans }}{% if n.model is not null %} · {{ n.model }}{% endif %}
           </div>
-          <div class="h3 mb-2 text-break">
+          <h4 class="h3 mb-2 text-break" tabindex="-1" data-detail-heading>
             {{ n.name }}
             {% if not n.online %}<span class="badge bg-red-lt ms-1">{{ 'unifi.map.offline'|trans }}</span>{% endif %}
-          </div>
+          </h4>
           <div class="text-secondary small">
             {{ (n.kind in ['internet', 'gateway'] ? 'unifi.map.wan' : (n.kind in ['switch', 'ap'] ? 'unifi.map.uplink' : 'unifi.map.live'))|trans }}
           </div>

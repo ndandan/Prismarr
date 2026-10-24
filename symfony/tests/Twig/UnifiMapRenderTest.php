@@ -130,10 +130,10 @@ class UnifiMapRenderTest extends KernelTestCase
 
     /** The reader's shape: builder output plus the layout. */
     private static function map(?array $devices = null, ?array $clients = null, ?array $health = null,
-                                ?float $planDown = null): array
+                                ?float $planDown = null, ?float $planUp = null): array
     {
         $t = UnifiTopologyBuilder::build($devices ?? self::devices(), $clients ?? self::clients(),
-            $health ?? self::health(), $planDown, null);
+            $health ?? self::health(), $planDown, $planUp);
         self::assertNotNull($t);
         return $t + ['layout' => TopologyLayout::build($t['nodes'], $t['edges'])];
     }
@@ -333,6 +333,166 @@ class UnifiMapRenderTest extends KernelTestCase
 
         $speedtest = $this->render(self::map(null, null, self::health(['xput_down' => 940.0])));
         $this->assertStringContainsString('of last speedtest', self::section($speedtest, 'internet'));
+    }
+
+    /**
+     * The percentage is the busier direction against its own denominator; the
+     * label must name that side. 100 Mb/s down of 1000 = 10 %, 38 Mb/s up of
+     * 40 = 95 % → "95% … of 40 Mb/s upload plan", never "of 1000 Mb/s plan".
+     */
+    public function testInternetBasisNamesTheSideBehindThePercentage(): void
+    {
+        $html = $this->render(self::map(null, null, self::health(['tx_bytes-r' => 4_750_000]), 1000.0, 40.0));
+
+        foreach (['internet', self::GW] as $id) {
+            $section = self::section($html, $id);
+            $this->assertStringContainsString('of 40 Mb/s upload plan', $section, $id);
+            $this->assertStringContainsString('95%', $section, $id);
+            $this->assertStringNotContainsString('1000 Mb/s', $section, $id);
+        }
+
+        // Download-heavy on the same plan: the plain headline wording.
+        $down = $this->render(self::map(null, null, null, 1000.0, 400.0));
+        $this->assertStringContainsString('of 1000 Mb/s plan', self::section($down, 'internet'));
+        $this->assertStringNotContainsString('upload', self::section($down, 'internet'));
+
+        $speedtest = $this->render(self::map(null, null,
+            self::health(['tx_bytes-r' => 4_750_000, 'xput_down' => 900.0, 'xput_up' => 40.0])));
+        $this->assertStringContainsString('of last speedtest upload', self::section($speedtest, 'internet'));
+    }
+
+    /**
+     * util × 100 rounded to a whole number read "0%" on almost every home-LAN
+     * row of the busiest list, whose rows are there BECAUSE util > 0.
+     */
+    public function testLoadShowsOneDecimalBelowTenPercent(): void
+    {
+        $busiest = self::section($this->render(self::map()), '');
+
+        $row = static function (string $html, string $to): string {
+            $found = preg_match('~<tr data-select="' . $to . '"[^>]*>.*?</tr>~s', $html, $m);
+            self::assertSame(1, $found, "no busiest row for $to");
+            return $m[0];
+        };
+        // NAS: 1 MB/s = 8 Mb/s of 2.5 Gb/s = 0.32 %.
+        $this->assertStringContainsString('>0.3%<', $row($busiest, self::NAS));
+        // Internet: 100 Mb/s of the 2.5 Gb/s port = 4 % (a whole number prints bare).
+        $this->assertStringContainsString('>4%<', $row($busiest, self::GW));
+        // Flex 5: 30 kB/s = 0.24 Mb/s of 2.5 Gb/s = 0.0096 % — on the list, so not "0%".
+        $this->assertStringContainsString('>&lt;0.1%<', $row($busiest, self::FLEX5));
+        $this->assertDoesNotMatchRegularExpression('~>0%<~', $busiest);
+
+        // From 10 % up, whole numbers: 20 Mb/s of 40 → "20%", 40 % of the WAN → "40%".
+        $html = $this->render(self::map(null, null, null, null, 40.0));
+        $this->assertStringContainsString('>20%<', $row(self::section($html, ''), self::GW));
+    }
+
+    /**
+     * Map nodes are toggle buttons (re-activating the selected one returns to
+     * the busiest view), so they carry aria-pressed — rendered false, flipped
+     * by the shell JS. Strip rows and port cells move the selection; they are
+     * not toggles and must not claim to be.
+     */
+    public function testOnlyMapNodesCarryAriaPressed(): void
+    {
+        $html = $this->render(self::map());
+
+        $nodes = preg_match_all('~<g class="unifi-node(?: offline)?"[^>]*>~', $html, $m);
+        $this->assertSame(6, $nodes);
+        foreach ($m[0] as $tag) {
+            $this->assertStringContainsString('role="button"', $tag);
+            $this->assertStringContainsString('aria-pressed="false"', $tag);
+        }
+        $this->assertSame(6, substr_count($html, 'aria-pressed='), 'nothing but the six nodes');
+    }
+
+    public function testEveryDetailSectionHasABackButtonAndAFocusableHeading(): void
+    {
+        $map  = self::map();
+        $html = $this->render($map);
+
+        foreach (array_column($map['nodes'], 'id') as $id) {
+            $section = self::section($html, $id);
+            $this->assertMatchesRegularExpression(
+                '~<button type="button" class="[^"]*" data-select="">.*?Back to busiest links\s*</button>~s', $section, $id);
+            $this->assertSame(1, preg_match_all('~<h4 class="[^"]*" tabindex="-1" data-detail-heading>~', $section), $id);
+        }
+        // The busiest view is where "back" leads: a heading to land on, no button.
+        $busiest = self::section($html, '');
+        $this->assertStringContainsString('tabindex="-1" data-detail-heading>Busiest links</h4>', $busiest);
+        $this->assertStringNotContainsString('<button', $busiest);
+
+        // The heading carries the node's name — what focus lands on and reads.
+        $this->assertMatchesRegularExpression('~data-detail-heading>\s*Unraid~', self::section($html, self::NAS));
+    }
+
+    /**
+     * Phones: the strip's tables must fit without a sideways scroller — its
+     * scrollLeft would snap back on every 10 s swap. Rate cells break between
+     * ↓ and ↑ there, so each direction is its own unbreakable span and the
+     * cell itself is not text-nowrap (a utility with !important would pin it).
+     */
+    public function testStripRateCellsCanBreakBetweenDirections(): void
+    {
+        $clients   = self::clients();
+        $clients[] = ['mac' => '11:22:33:44:55:09', 'name' => 'Kitchen speaker', 'is_wired' => false,
+                      'ap_mac' => 'aa:bb:cc:00:00:01', 'radio' => 'ng', 'tx_bytes-r' => 3_000];
+        $html = $this->render(self::map(null, $clients));
+
+        foreach (['', self::U7, self::GW] as $id) {
+            $section = self::section($html, $id);
+            $this->assertMatchesRegularExpression(
+                '~<td class="text-end unifi-rates"><span class="unifi-rate">↓ [^<]+</span><span class="unifi-rate-sep"> · </span><span class="unifi-rate">↑ [^<]+</span></td>~u',
+                $section, "section '$id'");
+            $this->assertStringNotContainsString('text-nowrap">↓', $section);
+        }
+
+        // The SVG labels keep the plain text form: a <span> inside <text> would not render.
+        $this->assertMatchesRegularExpression('~<text class="unifi-node-rate"[^>]*>↓ [^<]+ · ↑ [^<]+</text>~u',
+            self::node($html, self::NAS));
+
+        $shell = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/unifi/index.html.twig');
+        $this->assertMatchesRegularExpression(
+            '~@media \(max-width: 575\.98px\) \{[^}]*\.unifi-rates \{ white-space: normal; \}~', $shell);
+    }
+
+    /**
+     * The polite live region that announces a selection must sit OUTSIDE the
+     * fragment: the swap replaces the fragment every 10 s, and a live region
+     * that is re-created is not reliably announced (nor would a pending
+     * announcement survive).
+     */
+    public function testSelectionLiveRegionLivesInTheShellNotTheFragment(): void
+    {
+        $this->assertStringNotContainsString('aria-live', $this->render(self::map()));
+
+        $shell = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/unifi/index.html.twig');
+        $this->assertMatchesRegularExpression(
+            '~<div class="visually-hidden" aria-live="polite" data-unifi-map-live></div>~', $shell);
+        // A sibling of the swapped body, not inside it.
+        $this->assertMatchesRegularExpression(
+            '~<div data-dash-body>.*?</div>\s*</div>\s*{% if region.name == \'map\' %}\s*(?:\{#.*?#\}\s*)?<div class="visually-hidden" aria-live~s',
+            $shell);
+    }
+
+    /**
+     * The flow dots keep their phase across swaps: the shell JS sets
+     * --p1/--p2/--p3 from the timeline using the same three durations the CSS
+     * animates with. The two lists must agree, or the dots jump again.
+     */
+    public function testFlowPhaseDurationsMatchTheCss(): void
+    {
+        $shell = (string) file_get_contents(dirname(__DIR__, 2) . '/templates/unifi/index.html.twig');
+
+        preg_match_all('~\.unifi-flow\.speed-(\d) \{ --d: ([\d.]+)s; animation-delay: var\(--p(\d), 0s\); \}~',
+            $shell, $css, PREG_SET_ORDER);
+        $this->assertCount(3, $css);
+        $this->assertSame(1, preg_match('~var FLOW_MS = \{ p1: (\d+), p2: (\d+), p3: (\d+) \};~', $shell, $js));
+
+        foreach ($css as [, $speed, $seconds, $var]) {
+            $this->assertSame($speed, $var, 'speed-N reads --pN');
+            $this->assertSame((int) round((float) $seconds * 1000), (int) $js[(int) $speed], "speed-$speed");
+        }
     }
 
     public function testWifiClientOnTheGatewaysOwnRadioIsReachable(): void
