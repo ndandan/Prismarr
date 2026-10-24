@@ -107,6 +107,8 @@
      every 10 s and an inner scrollTop would snap back to 0 (pinned by
      UnifiMapRenderTest). Long client lists grow with the page instead. */
   .unifi-load-col { min-width: 8rem; }
+  /* Filled by the map JS on selection (sparkline or "no history" note). */
+  .unifi-strip [data-spark-slot]:not(:empty) { margin-top: .75rem; }
   .unifi-strip [data-select] { cursor: pointer; }
   /* Rows hover via .table-hover; keyboard focus reuses the same state
      variable (cells paint over a tr background), plus a visible ring. */
@@ -189,13 +191,48 @@
 (function () {
   'use strict';
 
+  // ?node= is read FIRST, before anything on this page can rewrite the URL:
+  // a reader that runs after an early replaceState sees a bare search and
+  // takes a deep link for a plain visit (the library ?open= trap, 2026-07).
+  // It is applied by the first map swap: the sections it names don't exist yet.
+  var DEEP_NODE = (function () {
+    try { return new URLSearchParams(window.location.search).get('node'); } catch (e) { return null; }
+  })();
+
   var PANELS_URL = '{{ path('app_unifi_panels') }}';
   var UPDATED_TPL = {{ 'unifi.updated'|trans({ seconds: '%S%' })|json_encode|raw }};
+
+  // The spark route only accepts a 12-hex id, so the template is generated
+  // on a placeholder that satisfies it and the real id is swapped in.
+  var SPARK_TPL = '{{ path('app_unifi_spark', { id: '000000000000' }) }}';
+  var SPARK_PH = '000000000000';
+  var NO_HISTORY = {{ 'unifi.map.no_history'|trans|json_encode|raw }};
+  // The report behind a sparkline has 5-minute buckets: refetching sooner
+  // cannot show anything new.
+  var SPARK_TTL = 300000;
+  var MAC_ID = /^[0-9a-f]{12}$/;
+
+  // Map state lives HERE, outside the fragment that every 10 s poll replaces
+  // wholesale. sel '' = nothing selected (the busiest-links view).
+  var mapState = {
+    sel: DEEP_NODE && (MAC_ID.test(DEEP_NODE) || DEEP_NODE === 'internet') ? DEEP_NODE : '',
+    scrollLeft: 0,
+    sparks: {}
+  };
 
   function body(node) { return node.querySelector('[data-dash-body]') || node; }
 
   function applyFragment(node, html) {
-    body(node).innerHTML = html;
+    // The map region re-applies its selection, scroll and focus around the
+    // swap. Routed through the window pointer, not the local swapMap: the
+    // retry handler is bound by the FIRST run of this script, so after a
+    // Turbo revisit it calls an old run's hydrate → applyFragment, and only
+    // the pointer reaches the live run's state.
+    if (node.dataset.dashWidget === 'map' && window._prismarrUnifiMap) {
+      window._prismarrUnifiMap.swap(node, html);
+    } else {
+      body(node).innerHTML = html;
+    }
     // Un-hide: a region hidden by an earlier empty body ("not applicable")
     // must come back if the console later starts returning content — e.g. the
     // admin configures UniFi in another tab mid-session. Without this, the
@@ -250,6 +287,195 @@
       node.dataset.dashLoaded = '';
       body(node).innerHTML = '<div class="text-center text-secondary py-4"><span class="spinner-border spinner-border-sm"></span></div>';
       hydrate(node);
+    });
+  }
+
+  // ── Map: selection, path highlight, deep link, sparklines ──
+  // Every function here looks the map up in the live document and returns
+  // quietly when it is absent: the null-state card has no [data-unifi-map],
+  // and a late response may land after Turbo has moved to another page.
+
+  // Ids are compared in JS rather than spliced into a selector string: they
+  // arrive from the URL and from third-party device data.
+  function findBy(root, selector, attr, value) {
+    var list = root.querySelectorAll(selector);
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].getAttribute(attr) === value) return list[i];
+    }
+    return null;
+  }
+
+  // byUser: a click or key press. Re-selecting the current item clears the
+  // selection — the only way back to the busiest view without editing the URL.
+  function select(id, byUser) {
+    var map = document.querySelector('[data-unifi-map]');
+    var strip = map && map.querySelector('[data-unifi-strip]');
+    if (!strip) return; // keep mapState.sel: the map may come back next poll
+
+    id = id || '';
+    if (byUser && id === mapState.sel) { id = ''; }
+    var sections = strip.querySelectorAll('section[data-detail]');
+    // Unknown or vanished (a phone left the network) → the busiest view.
+    if (!findBy(strip, 'section[data-detail]', 'data-detail', id)) { id = ''; }
+    for (var i = 0; i < sections.length; i++) {
+      sections[i].hidden = sections[i].getAttribute('data-detail') !== id;
+    }
+
+    mapState.sel = id;
+    highlight(map, id);
+    syncUrl(id);
+    if (id) { loadSpark(strip, id); }
+  }
+
+  // .is-selected on the node (when drawn) and .on-path on each edge from it
+  // up to the internet. The walk reads data-parent from the map node, or
+  // from the detail section for a Wi-Fi client, which has no node. The hop
+  // cap only guards a malformed chain — the builder emits a tree.
+  function highlight(map, id) {
+    var lit = map.querySelectorAll('.is-selected, .on-path');
+    for (var i = 0; i < lit.length; i++) { lit[i].classList.remove('is-selected', 'on-path'); }
+    if (!id) return;
+
+    var own = findBy(map, 'g.unifi-node', 'data-select', id);
+    if (own) { own.classList.add('is-selected'); }
+    for (var cur = id, hops = 0; cur && cur !== 'internet' && hops < 32; hops++) {
+      var edge = findBy(map, '[data-edge-to]', 'data-edge-to', cur);
+      if (edge) { edge.classList.add('on-path'); }
+      var holder = findBy(map, 'g.unifi-node', 'data-select', cur) ||
+                   findBy(map, 'section[data-detail]', 'data-detail', cur);
+      cur = holder ? holder.getAttribute('data-parent') : null;
+    }
+  }
+
+  // ?node= mirrors the selection; other params and the hash are kept. So is
+  // history.state: Turbo stores its restoration id there and ignores a
+  // Back/Forward onto an entry whose state has been nulled.
+  function syncUrl(id) {
+    var params = new URLSearchParams(window.location.search);
+    var cur = params.get('node');
+    if (id ? cur === id : cur === null) return;
+    if (id) { params.set('node', id); } else { params.delete('node'); }
+    var qs = params.toString();
+    history.replaceState(history.state, '', window.location.pathname + (qs ? '?' + qs : '') + window.location.hash);
+  }
+
+  // One fetch per client per SPARK_TTL, never one per poll: the swap empties
+  // the slot and the cache refills it. A stale entry keeps painting while it
+  // refetches, so the slot doesn't blink empty every five minutes. An empty
+  // body ("no history") is an answer and is cached; a failed request is not.
+  function loadSpark(strip, id) {
+    var slot = findBy(strip, '[data-spark-slot]', 'data-spark-slot', id);
+    if (!slot) return; // not a client: no sparkline
+    var hit = mapState.sparks[id];
+    if (hit && hit.html !== null) { paintSpark(slot, hit.html); }
+    if (hit && (hit.busy || Date.now() - hit.at < SPARK_TTL)) return;
+    if (!MAC_ID.test(id)) { paintSpark(slot, ''); return; } // the route can't name it
+
+    if (!hit) { hit = mapState.sparks[id] = { html: null, at: 0, busy: false }; }
+    hit.busy = true;
+    fetch(SPARK_TPL.replace(SPARK_PH, id), { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+      // redirected = an expired session answered with the login page.
+      .then(function (r) { return r.ok && !r.redirected ? r.text() : null; })
+      .then(function (html) {
+        hit.busy = false;
+        if (html === null) return;
+        hit.html = html.trim();
+        hit.at = Date.now();
+        // Selection moved on while this was in flight: cached, not painted.
+        if (mapState.sel !== id) return;
+        var map = document.querySelector('[data-unifi-map]');
+        var now = map && findBy(map, '[data-spark-slot]', 'data-spark-slot', id);
+        if (now) { paintSpark(now, hit.html); }
+      })
+      .catch(function () { hit.busy = false; });
+  }
+
+  function paintSpark(slot, html) {
+    if (html) { slot.innerHTML = html; return; }
+    var note = document.createElement('div');
+    note.className = 'text-secondary small';
+    note.textContent = NO_HISTORY;
+    slot.textContent = '';
+    slot.appendChild(note);
+  }
+
+  // The innerHTML swap destroys whatever had focus. Remember the item, the
+  // kind of element and the section it sat in, then focus its twin after the
+  // swap — a keyboard user isn't thrown back to the top of the page every 10 s.
+  function focusKey(node) {
+    var el = document.activeElement;
+    if (!el || !node.contains(el) || !el.hasAttribute('data-select')) return null;
+    var sec = el.closest('section[data-detail]');
+    var visible = false;
+    try { visible = el.matches(':focus-visible'); } catch (e) {}
+    return {
+      id: el.getAttribute('data-select'),
+      tag: el.tagName,
+      section: sec ? sec.getAttribute('data-detail') : null,
+      visible: visible
+    };
+  }
+
+  function refocus(node, key) {
+    var scope = key.section === null
+      ? node.querySelector('[data-unifi-map-scroll]')
+      : findBy(node, 'section[data-detail]', 'data-detail', key.section);
+    if (!scope) return;
+    var list = scope.querySelectorAll('[data-select]');
+    for (var i = 0; i < list.length; i++) {
+      if (list[i].tagName === key.tag && list[i].getAttribute('data-select') === key.id) {
+        list[i].focus({ preventScroll: true, focusVisible: key.visible });
+        return;
+      }
+    }
+  }
+
+  // The map region's swap. Order matters: everything that sets the strip's
+  // height (which section shows, the cached sparkline) is written before
+  // scrollLeft is restored, which forces the first layout of the new HTML.
+  // Otherwise the page lays out the short default view in between and a
+  // reader scrolled near the bottom is clamped upward.
+  function swapMap(node, html) {
+    var live = document.documentElement.contains(node);
+    var scroller = node.querySelector('[data-unifi-map-scroll]');
+    if (live && scroller) { mapState.scrollLeft = scroller.scrollLeft; }
+    var focus = live ? focusKey(node) : null;
+    body(node).innerHTML = html;
+    if (!live) return; // a late response for a page already left
+
+    select(mapState.sel, false);
+    scroller = node.querySelector('[data-unifi-map-scroll]');
+    if (scroller) { scroller.scrollLeft = mapState.scrollLeft; }
+    if (focus) { refocus(node, focus); }
+  }
+
+  // This run's map, for the handlers bound once below and for applyFragment
+  // (each re-run of this script on a Turbo revisit replaces it).
+  window._prismarrUnifiMap = {
+    swap: swapMap,
+    pick: function (id) { select(id, true); }
+  };
+
+  // ── Map clicks and keys, delegated and bound once per session ──
+  // Rows, port cells and nodes all carry data-select; Enter or Space is
+  // their keyboard activation (Space would otherwise scroll the page).
+  if (!window._prismarrUnifiMapBound) {
+    window._prismarrUnifiMapBound = true;
+    var mapTarget = function (e) {
+      var el = e.target && e.target.closest ? e.target.closest('[data-select]') : null;
+      return el && el.closest('[data-unifi-map]') ? el : null;
+    };
+    document.addEventListener('click', function (e) {
+      var el = mapTarget(e);
+      if (el) { window._prismarrUnifiMap.pick(el.getAttribute('data-select')); }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var el = mapTarget(e);
+      if (!el) return;
+      if (e.key === ' ') { e.preventDefault(); }
+      if (e.repeat) return; // a held key would toggle the selection on and off
+      window._prismarrUnifiMap.pick(el.getAttribute('data-select'));
     });
   }
 
