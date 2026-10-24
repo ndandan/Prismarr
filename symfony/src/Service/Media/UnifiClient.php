@@ -166,8 +166,7 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             return null;
         }
 
-        $this->transportDown = false; // request() resets it too; the memo below must not depend on that
-        $data = $this->request($path);
+        $data = $this->request($path); // sets transportDown for this call
         // Stamped after the call (either memo): a slow console must not hand
         // back an entry that is already stale.
         if ($data === null) {

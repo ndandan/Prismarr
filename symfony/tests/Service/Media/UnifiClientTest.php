@@ -42,6 +42,7 @@ class UnifiClientTest extends TestCase
             {
                 $this->pathsRequested[] = $path;
                 $this->bodiesSent[]     = $jsonBody;
+                $this->transportDown    = false; // per-call, as the real request() does
                 if ($this->failTransport) {
                     $this->transportDown = true;
                     return null;
