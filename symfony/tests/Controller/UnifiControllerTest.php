@@ -14,6 +14,9 @@ use App\Service\Unifi\UnifiSparkReader;
 use App\Tests\Service\Unifi\StubUnifiFetcher;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
+use Psr\Log\AbstractLogger;
+use Psr\Log\LoggerInterface;
+use Psr\Log\LogLevel;
 use Psr\Log\NullLogger;
 use Symfony\Component\HttpFoundation\Request;
 use Twig\Environment;
@@ -46,6 +49,8 @@ class UnifiControllerTest extends TestCase
         bool $configured = true,
         array $throwOn = [],
         array $responses = [],
+        array $renderThrowsOn = [],
+        ?LoggerInterface $logger = null,
     ): UnifiController {
         $this->renders = [];
         $fetcher = function (string $group) use ($throwOn, $responses): UnifiFetcher {
@@ -67,8 +72,11 @@ class UnifiControllerTest extends TestCase
         // 8-11 own the templates and Task 12 renders them for real on :beta.
         $twig = $this->createMock(Environment::class);
         $twig->method('render')->willReturnCallback(
-            function (string $tpl, array $ctx = []): string {
+            function (string $tpl, array $ctx = []) use ($renderThrowsOn): string {
                 $this->renders[] = [$tpl, $ctx];
+                if (in_array($tpl, $renderThrowsOn, true)) {
+                    throw new \Twig\Error\RuntimeError('template exploded');
+                }
                 return 'RENDERED:' . $tpl;
             }
         );
@@ -85,7 +93,7 @@ class UnifiControllerTest extends TestCase
             new UnifiMapReader($fetcher('map'), $config, new NullLogger()),
             new UnifiSparkReader($fetcher('spark')),
             $health,
-            new NullLogger(),
+            $logger ?? new NullLogger(),
         );
 
         // has() answers truthfully per id rather than blanket-true: json()
@@ -215,6 +223,38 @@ class UnifiControllerTest extends TestCase
         $map = json_decode((string) $r->getContent(), true);
         $this->assertSame(['live', 'map'], array_keys($map));
         $this->assertSame('RENDERED:unifi/_map.html.twig', $map['map']);
+    }
+
+    /**
+     * The map rides live's 10 s tick in one batched request. A Twig error in
+     * the map template must not 500 that JSON — live would freeze with it.
+     * The failing group is omitted (the client keeps its last-good content)
+     * and logged; the others still arrive.
+     */
+    public function testBatchOmitsAGroupWhoseTemplateThrows(): void
+    {
+        $logger = new class extends AbstractLogger {
+            /** @var list<array{0: mixed, 1: string, 2: array}> */
+            public array $records = [];
+            public function log($level, \Stringable|string $message, array $context = []): void
+            {
+                $this->records[] = [$level, (string) $message, $context];
+            }
+        };
+        $c = $this->makeController(renderThrowsOn: ['unifi/_map.html.twig'], logger: $logger);
+
+        $r   = $c->panels(new Request(['p' => 'map,live']));
+        $map = json_decode((string) $r->getContent(), true);
+
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertSame(['live'], array_keys($map));
+        $this->assertSame('RENDERED:unifi/_live.html.twig', $map['live']);
+
+        $this->assertCount(1, $logger->records);
+        [$level, , $context] = $logger->records[0];
+        $this->assertSame(LogLevel::WARNING, $level);
+        $this->assertSame('map', $context['panel']);
+        $this->assertSame('template exploded', $context['message']);
     }
 
     public function testBatchDeduplicatesAndToleratesAnEmptyQuery(): void

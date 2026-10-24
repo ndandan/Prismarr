@@ -62,6 +62,22 @@ class UnifiClient implements ResetInterface, UnifiFetcher
     private array $fetchMemo = [];
 
     /**
+     * When a fetch() GET to each path last failed at the transport layer,
+     * remembered for FETCH_MEMO_TTL. The batched `?p=live,map` tick has two
+     * readers that both open with /stat/health and both stop on
+     * transportFailed(); without this a dead console cost two connect
+     * timeouts per tick instead of one.
+     *
+     * Per path, not console-wide: curl reports a slow endpoint's transfer
+     * timeout with the same errno as an unreachable host, and a console-wide
+     * "down" would then blank every healthy endpoint for the rest of the
+     * request — the opposite of "a drifted endpoint degrades one block".
+     *
+     * @var array<string, float> path → memoClock() of the failure
+     */
+    private array $downMemo = [];
+
+    /**
      * Set by request() when a call fails at the transport layer (connect
      * refused / timed out / DNS) as opposed to an HTTP/application error.
      * overview() reads it to fail fast on a dead console instead of waiting
@@ -105,6 +121,7 @@ class UnifiClient implements ResetInterface, UnifiFetcher
         $this->overviewCache   = null;
         $this->overviewCacheAt = 0.0;
         $this->fetchMemo       = [];
+        $this->downMemo        = [];
         $this->transportDown   = false;
     }
 
@@ -117,12 +134,15 @@ class UnifiClient implements ResetInterface, UnifiFetcher
      * UnifiFetcher — raw single-call access for the App\Service\Unifi readers.
      * Deliberately thin: no mapping here, because each reader owns a TTL
      * matching its own poll cadence and its own normalized shape. The one
-     * exception is a FETCH_MEMO_TTL memo of successful GETs per path, so
-     * readers batched into one request share a console call.
+     * exception is a FETCH_MEMO_TTL memo per GET path, so readers batched into
+     * one request share a console call: a success is reused, and so is a
+     * transport failure (see $downMemo) — the second reader gets null with
+     * transportFailed() raised, without waiting out another timeout.
      *
      * POSTs (report queries) are never memoised — the body changes the answer
-     * — and neither are null results, so a failure is retried on the next read
-     * instead of sticking. overview() stays on request() and is unaffected.
+     * — and neither is an application-level null (error envelope, missing
+     * endpoint), so that kind of failure is retried on the next read instead
+     * of sticking. overview() stays on request() and is unaffected.
      */
     public function fetch(string $path, ?array $body = null): ?array
     {
@@ -130,21 +150,36 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             return $this->request($path, $body);
         }
 
+        $now = $this->memoClock();
         $hit = $this->fetchMemo[$path] ?? null;
-        if ($hit !== null && ($this->memoClock() - $hit['at']) < self::FETCH_MEMO_TTL) {
+        if ($hit !== null && ($now - $hit['at']) < self::FETCH_MEMO_TTL) {
             // transportFailed() describes the last fetch(); a memo hit made no
             // call, so it must not inherit a failure from an earlier one.
             $this->transportDown = false;
             return $hit['data'];
         }
-
-        $data = $this->request($path);
-        if ($data === null) {
-            unset($this->fetchMemo[$path]); // drop an expired entry, never keep a miss
+        $down = $this->downMemo[$path] ?? null;
+        if ($down !== null && ($now - $down) < self::FETCH_MEMO_TTL) {
+            // Answered as the failed call would be, flag included, so the
+            // caller's fail-fast branch runs exactly as after a real timeout.
+            $this->transportDown = true;
             return null;
         }
-        // Stamped after the call: a slow console must not hand back an
-        // entry that is already stale.
+
+        $this->transportDown = false; // request() resets it too; the memo below must not depend on that
+        $data = $this->request($path);
+        // Stamped after the call (either memo): a slow console must not hand
+        // back an entry that is already stale.
+        if ($data === null) {
+            unset($this->fetchMemo[$path]); // drop an expired entry, never keep a miss
+            if ($this->transportDown) {
+                $this->downMemo[$path] = $this->memoClock();
+            } else {
+                unset($this->downMemo[$path]);
+            }
+            return null;
+        }
+        unset($this->downMemo[$path]);
         $this->fetchMemo[$path] = ['at' => $this->memoClock(), 'data' => $data];
         return $data;
     }

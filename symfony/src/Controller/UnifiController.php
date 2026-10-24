@@ -68,9 +68,9 @@ class UnifiController extends AbstractController
      * {group: html} JSON map. Declared BEFORE the {panel} route because
      * `/unifi/api/panels` would otherwise match it.
      *
-     * A group that renders empty is omitted from the map rather than sent as
-     * "", so the client leaves that region at its last-good content — the same
-     * contract as the dashboard's /widgets route.
+     * A group that renders empty — or fails to render at all — is omitted from
+     * the map rather than sent as "", so the client leaves that region at its
+     * last-good content — the same contract as the dashboard's /widgets route.
      */
     #[Route('/api/panels', name: 'panels')]
     public function panels(Request $request): Response
@@ -81,7 +81,19 @@ class UnifiController extends AbstractController
         $out = [];
         foreach (array_unique($names) as $name) {
             if (!isset(self::PANELS[$name])) continue;
-            $html = (string) $this->renderPanel($name)->getContent();
+            // Per group: renderPanel() contains reader failures, but a Twig
+            // error in the template itself would otherwise 500 the whole
+            // batch — and the map shares live's tick, so one bad render would
+            // freeze both. Omitted = last-good, like an empty render.
+            try {
+                $html = (string) $this->renderPanel($name)->getContent();
+            } catch (\Throwable $e) {
+                $this->logger->warning('UniFi panel {panel} failed to render: {message}', [
+                    'panel'   => $name,
+                    'message' => $e->getMessage(),
+                ]);
+                continue;
+            }
             if (trim($html) === '') continue;
             $out[$name] = $html;
         }
