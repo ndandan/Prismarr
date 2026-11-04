@@ -7,6 +7,8 @@ use App\Service\Media\UnraidClient;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * UnraidClient — GraphQL client for the Unraid 7 API.
@@ -17,7 +19,7 @@ use Psr\Log\LoggerInterface;
 class UnraidClientTest extends TestCase
 {
     /** @param array<string, ?array> $responses  keyed by a substring of the query */
-    private function makeClient(array $responses, array $settings = []): UnraidClient
+    private function makeClient(array $responses, array $settings = [], ?CacheInterface $cache = null): UnraidClient
     {
         $settings += [
             'unraid_url'             => 'https://tower.local',
@@ -28,12 +30,12 @@ class UnraidClientTest extends TestCase
         $config = $this->createMock(ConfigService::class);
         $config->method('get')->willReturnCallback(fn(string $k) => $settings[$k] ?? null);
 
-        return new class($config, $this->createMock(LoggerInterface::class), $responses) extends UnraidClient {
+        return new class($config, $this->createMock(LoggerInterface::class), $responses, $cache) extends UnraidClient {
             public array $queriesSent = [];
             public ?int $nowOverride = null;
-            public function __construct($config, $logger, private array $responses)
+            public function __construct($config, $logger, private array $responses, ?CacheInterface $cache)
             {
-                parent::__construct($config, $logger);
+                parent::__construct($config, $logger, $cache);
             }
             protected function gql(string $query): ?array
             {
@@ -214,6 +216,42 @@ class UnraidClientTest extends TestCase
         $sent = count($client->queriesSent);
         $client->overview();
         $this->assertSame($sent, count($client->queriesSent), 'second overview() within TTL must not re-query');
+    }
+
+    /**
+     * reset() runs after every request, so a memo on the instance never
+     * reached the next dashboard poll. The overview lives in the shared
+     * cache instead: a second client (= the next request) must not re-query.
+     */
+    public function testOverviewIsSharedAcrossRequestsThroughTheCache(): void
+    {
+        $cache = new ArrayAdapter();
+        $first = $this->makeClient($this->allGroups(), cache: $cache);
+        $expected = $first->overview();
+        $first->reset();
+
+        $next = $this->makeClient($this->allGroups(), cache: $cache);
+        $this->assertSame($expected, $next->overview());
+        $this->assertSame([], $next->queriesSent, 'the next request must reuse the cached overview');
+    }
+
+    public function testUnreachableOverviewIsNotCachedForTheNextRequest(): void
+    {
+        $cache = new ArrayAdapter();
+        $this->assertNull($this->makeClient([], cache: $cache)->overview());
+
+        $next = $this->makeClient($this->allGroups(), cache: $cache);
+        $this->assertNotNull($next->overview(), 'a failed overview must not be served from the cache');
+    }
+
+    public function testOverviewCacheIsKeyedByTheConfiguredServer(): void
+    {
+        $cache = new ArrayAdapter();
+        $this->makeClient($this->allGroups(), cache: $cache)->overview();
+
+        $other = $this->makeClient($this->allGroups(), ['unraid_url' => 'https://other.local'], $cache);
+        $other->overview();
+        $this->assertNotSame([], $other->queriesSent, 'a different server must not get the old server\'s overview');
     }
 
     public function testSystemSurvivesMetricsBeingUnavailable(): void

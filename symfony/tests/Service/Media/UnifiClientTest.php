@@ -7,6 +7,8 @@ use App\Service\Media\UnifiClient;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Contracts\Cache\CacheInterface;
 
 /**
  * UnifiClient — classic Network API client on a UniFi OS console.
@@ -17,7 +19,7 @@ use Psr\Log\LoggerInterface;
 class UnifiClientTest extends TestCase
 {
     /** @param array<string, ?array> $responses  keyed by a substring of the path */
-    private function makeClient(array $responses, array $settings = [], bool $failTransport = false): UnifiClient
+    private function makeClient(array $responses, array $settings = [], bool $failTransport = false, ?CacheInterface $cache = null): UnifiClient
     {
         $settings += [
             'unifi_url'             => 'https://192.168.1.1',
@@ -29,14 +31,14 @@ class UnifiClientTest extends TestCase
         $config = $this->createMock(ConfigService::class);
         $config->method('get')->willReturnCallback(fn(string $k) => $settings[$k] ?? null);
 
-        return new class($config, $this->createMock(LoggerInterface::class), $responses, $failTransport) extends UnifiClient {
+        return new class($config, $this->createMock(LoggerInterface::class), $responses, $failTransport, $cache) extends UnifiClient {
             public array $pathsRequested = [];
             public array $bodiesSent = [];
             public ?int $nowOverride = null;
             public ?float $monotonic = null;
-            public function __construct($config, $logger, private array $responses, public bool $failTransport)
+            public function __construct($config, $logger, private array $responses, public bool $failTransport, ?CacheInterface $cache)
             {
-                parent::__construct($config, $logger);
+                parent::__construct($config, $logger, $cache);
             }
             protected function request(string $path, ?array $jsonBody = null): ?array
             {
@@ -194,6 +196,42 @@ class UnifiClientTest extends TestCase
         $second = $client->overview();
         $this->assertSame($first, $second);
         $this->assertCount(3, $client->pathsRequested); // not 6
+    }
+
+    /**
+     * reset() runs after every request, so a memo on the instance never
+     * reached the next dashboard poll. The overview lives in the shared
+     * cache instead: a second client (= the next request) must not re-query.
+     */
+    public function testOverviewIsSharedAcrossRequestsThroughTheCache(): void
+    {
+        $cache = new ArrayAdapter();
+        $first = $this->makeClient($this->allEndpoints(), cache: $cache);
+        $expected = $first->overview();
+        $first->reset();
+
+        $next = $this->makeClient($this->allEndpoints(), cache: $cache);
+        $this->assertSame($expected, $next->overview());
+        $this->assertSame([], $next->pathsRequested, 'the next request must reuse the cached overview');
+    }
+
+    public function testUnreachableOverviewIsNotCachedForTheNextRequest(): void
+    {
+        $cache = new ArrayAdapter();
+        $this->assertNull($this->makeClient([], failTransport: true, cache: $cache)->overview());
+
+        $next = $this->makeClient($this->allEndpoints(), cache: $cache);
+        $this->assertNotNull($next->overview(), 'a failed overview must not be served from the cache');
+    }
+
+    public function testOverviewCacheIsKeyedByTheConfiguredConsoleAndSite(): void
+    {
+        $cache = new ArrayAdapter();
+        $this->makeClient($this->allEndpoints(), cache: $cache)->overview();
+
+        $otherSite = $this->makeClient($this->allEndpoints(), ['unifi_site' => 'branch'], cache: $cache);
+        $otherSite->overview();
+        $this->assertNotSame([], $otherSite->pathsRequested, 'another site must not get the first site\'s overview');
     }
 
     public function testAllNullEndpointsMeansNullAndNoCache(): void

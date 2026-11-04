@@ -5,6 +5,9 @@ namespace App\Service\Media;
 use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
@@ -58,11 +61,15 @@ class UnraidClient implements ResetInterface
     private const QUERY_PARITY_STATUS  = 'query { vars { mdResyncPos mdResyncSize mdResyncDt mdResyncDb sbSynced sbSynced2 sbSyncErrs sbSyncExit } }';
     private const QUERY_PARITY_HISTORY = 'query { parityHistory { date duration errors status } }';
 
-    /** Widget polls every 30s; TTL keeps a paint + poll from double-querying. */
-    private const OVERVIEW_TTL = 20.0;
+    /**
+     * Widget polls every 30s; TTL keeps a paint + poll (and a second open tab)
+     * from re-running the seven group queries. Held in the shared app cache,
+     * not on the instance: reset() runs after every request, so an instance
+     * memo never reached the next poll.
+     */
+    private const OVERVIEW_TTL = 20;
 
-    private ?array $overviewCache = null;
-    private float  $overviewCacheAt = 0.0;
+    private readonly CacheInterface $cache;
 
     /**
      * Set by gql() when a request fails at the transport layer (connect
@@ -82,7 +89,10 @@ class UnraidClient implements ResetInterface
     public function __construct(
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
-    ) {}
+        ?CacheInterface $cache = null,
+    ) {
+        $this->cache = $cache ?? new ArrayAdapter();
+    }
 
     private function ensureConfig(): void
     {
@@ -101,8 +111,6 @@ class UnraidClient implements ResetInterface
         $this->apiKey          = '';
         $this->skipTlsVerify   = false;
         $this->enabled         = true;
-        $this->overviewCache   = null;
-        $this->overviewCacheAt = 0.0;
         $this->transportDown   = false;
     }
 
@@ -120,11 +128,20 @@ class UnraidClient implements ResetInterface
             return null;
         }
 
-        $now = microtime(true);
-        if ($this->overviewCache !== null && ($now - $this->overviewCacheAt) < self::OVERVIEW_TTL) {
-            return $this->overviewCache;
-        }
+        // Keyed by server + key: a settings change must not serve the old box.
+        $key = 'unraid.overview.' . hash('xxh128', $this->baseUrl . "\0" . $this->apiKey);
 
+        return $this->cache->get($key, function (ItemInterface $item, bool &$save): ?array {
+            $item->expiresAfter(self::OVERVIEW_TTL);
+            $overview = $this->fetchOverview();
+            // A failed read is never cached — the next poll retries.
+            $save = $overview !== null;
+            return $overview;
+        });
+    }
+
+    private function fetchOverview(): ?array
+    {
         $this->transportDown = false;
         $array = $this->mapArray($this->gql(self::QUERY_ARRAY));
         // Fail fast on a dead host: if the first query couldn't even reach the
@@ -149,9 +166,7 @@ class UnraidClient implements ResetInterface
             return null; // fully unreachable — don't cache, retry next call
         }
 
-        $this->overviewCache   = ['array' => $array, 'system' => $system, 'docker' => $docker, 'ups' => $ups, 'parity' => $parity];
-        $this->overviewCacheAt = $now;
-        return $this->overviewCache;
+        return ['array' => $array, 'system' => $system, 'docker' => $docker, 'ups' => $ups, 'parity' => $parity];
     }
 
     private function mapArray(?array $data): ?array
