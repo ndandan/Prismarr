@@ -15,12 +15,15 @@ namespace App\Service\Unifi;
  * Shape (null only when stat/device holds no gateway — there is no root):
  *  [
  *    'nodes'   => list<Node>,  // internet, gateway, devices (input order), clients (input order)
- *    'edges'   => list<Edge>,  // one per onMap node except the internet: parent → node
+ *    'edges'   => list<Edge>,  // one per non-wifi node except the internet: parent → node
+ *                              // (an off-map wired client keeps its edge for its link facts;
+ *                              // the layout only draws edges between laid-out boxes)
  *    'busiest' => list<Edge>,  // top 5 by util, util > 0, desc — the strip's default view
  *  ]
  *  Node = ['id' => string, 'kind' => 'internet'|'gateway'|'switch'|'ap'|'wired'|'wifi',
  *          'name' => string, 'model' => ?string, 'parentId' => ?string, 'online' => bool,
- *          'onMap' => bool (false only for wifi), 'downBps' => float, 'upBps' => float,
+ *          'onMap' => bool (false for wifi, and for a crowded switch's quietest wired
+ *                     clients — see WIRED_ON_MAP_PER_SWITCH), 'downBps' => float, 'upBps' => float,
  *          'detail' => array (per kind, see the *Detail() helpers)]
  *  Edge = ['from' => string, 'to' => string, 'linkMbps' => ?int, 'downBps' => float,
  *          'upBps' => float, 'util' => float, 'tier' => 'idle'|'quiet'|'busy'|'saturated',
@@ -42,6 +45,12 @@ final class UnifiTopologyBuilder
 
     /** The strip's "nothing selected" view. */
     private const BUSIEST = 5;
+    /**
+     * Wired clients drawn per switch. Each one is a map row, so a crowded
+     * switch made the map thousands of pixels tall. Past this, the quietest
+     * come off the map (like Wi-Fi clients) and are reached from the port grid.
+     */
+    public const WIRED_ON_MAP_PER_SWITCH = 12;
     /** Under 1 kB/s combined a link is keep-alive noise: drawn idle, no flow dots. */
     private const IDLE_BPS  = 1000.0;
     private const BUSY      = 0.5;
@@ -128,7 +137,7 @@ final class UnifiTopologyBuilder
 
         $edges = [];
         foreach ($nodes as $n) {
-            if (!$n['onMap'] || $n['parentId'] === null) continue;
+            if ($n['kind'] === 'wifi' || $n['parentId'] === null) continue;
             $edges[] = self::edge($n['parentId'], $n['id'], $links[$n['id']]);
         }
 
@@ -422,11 +431,14 @@ final class UnifiTopologyBuilder
         }
         unset($list);
 
+        [$offMap, $offMapCount] = self::crowdedSwitchOverflow($devs, $clientRows, $links, $onPort);
+
         foreach ($parents as $id => [$pid]) {
             $dev    = $devs[$id];
             $hosted = $byHost[$dev['id']] ?? [];
             $detail = match ($dev['kind']) {
-                'switch' => ['ports' => self::switchPorts($dev, $onPort[$id] ?? [])],
+                'switch' => ['ports' => self::switchPorts($dev, $onPort[$id] ?? []),
+                             'offMapCount' => $offMapCount[(string) $id] ?? 0],
                 'ap'     => ['clientIds' => array_column($hosted, 'id'), 'clientCount' => count($hosted)],
                 default  => [],
             };
@@ -438,8 +450,8 @@ final class UnifiTopologyBuilder
             $id  = $w['id'];
             $c   = $w['row'];
             if ($w['wired']) {
-                $row = $links[$id]['row'];
-                $nodes[] = self::node($id, 'wired', self::nameOf($c, $id), null, $w['parent'], true,
+                $row  = $links[$id]['row'];
+                $node = self::node($id, 'wired', self::nameOf($c, $id), null, $w['parent'], true,
                     $links[$id], [
                         'switchName'      => $w['known'] ? $devs[$w['parent']]['name'] : null,
                         'port'            => $links[$id]['port'],
@@ -449,6 +461,8 @@ final class UnifiTopologyBuilder
                         'uptime'          => self::int($c['uptime'] ?? null),
                         'errors'          => $row === null ? null : self::errorsOf($row),
                     ]);
+                if (isset($offMap[$id])) $node['onMap'] = false;
+                $nodes[] = $node;
                 continue;
             }
             $nodes[] = self::node($id, 'wifi', self::nameOf($c, $id), null, $w['parent'], true,
@@ -470,6 +484,40 @@ final class UnifiTopologyBuilder
                 ]);
         }
         return $nodes;
+    }
+
+    /**
+     * Which wired clients a crowded switch leaves off the map: beyond
+     * WIRED_ON_MAP_PER_SWITCH, the quietest ones (ties keep stat/sta order).
+     * Only a client that owns a port in the switch's grid is moved — that
+     * port is then its only way in, so a client sharing a port (behind an
+     * unmanaged switch) or on a port the grid doesn't list stays drawn.
+     *
+     * @return array{0: array<string, true>, 1: array<string, int>} off-map client ids, count per switch
+     */
+    private static function crowdedSwitchOverflow(array $devs, array $clientRows, array $links, array $onPort): array
+    {
+        $perSwitch = [];
+        foreach ($clientRows as $c) {
+            if (!$c['wired'] || ($devs[$c['parent']]['kind'] ?? null) !== 'switch') continue;
+            $rate = $links[$c['id']];
+            $perSwitch[(string) $c['parent']][] = ['id' => (string) $c['id'], 'bps' => $rate['down'] + $rate['up']];
+        }
+
+        $offMap = [];
+        $count  = [];
+        foreach ($perSwitch as $sw => $list) {
+            if (count($list) <= self::WIRED_ON_MAP_PER_SWITCH) continue;
+            usort($list, static fn(array $a, array $b): int => $b['bps'] <=> $a['bps']);
+            foreach (array_slice($list, self::WIRED_ON_MAP_PER_SWITCH) as $c) {
+                $port = $links[$c['id']]['port'];
+                if ($port === null || !isset($devs[$sw]['ports'][$port])) continue;
+                if ((string) ($onPort[$sw][$port] ?? '') !== $c['id']) continue;
+                $offMap[$c['id']] = true;
+                $count[$sw] = ($count[$sw] ?? 0) + 1;
+            }
+        }
+        return [$offMap, $count];
     }
 
     /** A node's rates are its uplink's: `$link` carries `down` / `up` in BYTES/s. */

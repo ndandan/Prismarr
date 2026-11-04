@@ -715,4 +715,80 @@ class UnifiTopologyBuilderTest extends TestCase
         $this->assertSame('Unraid', self::node($t, self::NAS)['name']);
         $this->assertSame(9, self::node($t, 'internet')['detail']['latencyMs']);
     }
+
+    /**
+     * 15 more wired clients on the Flex 10, each on its own port (port N
+     * carries N kB/s, so higher ports are busier), plus the NAS on port 1.
+     *
+     * @return array{0: array, 1: array, 2: list<string>} devices, clients, the extra client ids busiest first
+     */
+    private static function crowdedSwitch(): array
+    {
+        $devices = self::withDevice(self::devices(), self::FLEX10, static function (array $d): array {
+            for ($idx = 11; $idx <= 25; $idx++) {
+                $d['port_table'][] = self::port($idx, 1000, 'GE', $idx * 1000, 0);
+            }
+            return $d;
+        });
+        $clients = self::clients();
+        $ids = [];
+        for ($idx = 11; $idx <= 25; $idx++) {
+            $mac = sprintf('11:22:33:44:56:%02d', $idx);
+            $clients[] = ['mac' => $mac, 'name' => "Box $idx", 'is_wired' => true,
+                          'sw_mac' => 'aa:bb:cc:00:00:02', 'sw_port' => $idx];
+            $ids[] = self::idOf($mac);
+        }
+        return [$devices, $clients, array_reverse($ids)];
+    }
+
+    /**
+     * A switch full of wired clients drew every one as its own map row, so a
+     * big site's map grew thousands of pixels tall. Past the cap, the quietest
+     * clients come off the map like Wi-Fi clients do: still a node with a
+     * detail section and an edge (for its link facts), reached from the
+     * switch's port grid.
+     */
+    public function testACrowdedSwitchDrawsOnlyItsBusiestWiredClients(): void
+    {
+        [$devices, $clients, $busiestFirst] = self::crowdedSwitch();
+        $t   = self::build($devices, $clients);
+        $cap = UnifiTopologyBuilder::WIRED_ON_MAP_PER_SWITCH;
+
+        $wired = array_values(array_filter($t['nodes'],
+            static fn(array $n): bool => $n['kind'] === 'wired' && $n['parentId'] === self::FLEX10));
+        $this->assertCount(16, $wired);
+        $onMap = array_column(array_filter($wired, static fn(array $n): bool => $n['onMap']), 'id');
+        $this->assertCount($cap, $onMap);
+        $this->assertContains(self::NAS, $onMap, 'the NAS is the busiest client');
+
+        $offMap = array_slice($busiestFirst, $cap - 1); // the NAS takes one of the cap's slots
+        $this->assertSame(16 - $cap, count($offMap));
+        $ports = array_column(self::node($t, self::FLEX10)['detail']['ports'], 'nodeId');
+        foreach ($offMap as $id) {
+            $this->assertFalse(self::node($t, $id)['onMap'], $id);
+            $this->assertSame(self::FLEX10, self::edgeTo($t, $id)['from'], "$id keeps its link facts");
+            $this->assertContains($id, $ports, "$id is reachable from the port grid");
+        }
+        $this->assertSame(16 - $cap, self::node($t, self::FLEX10)['detail']['offMapCount']);
+    }
+
+    /** A client that doesn't own a port in the grid has no other way in, so it stays drawn. */
+    public function testAnOverflowClientWithoutItsOwnPortStaysOnTheMap(): void
+    {
+        [$devices, $clients] = self::crowdedSwitch();
+        // Behind an unmanaged switch on port 11: port 11 is already claimed by "Box 11".
+        $clients[] = ['mac' => '11:22:33:44:57:01', 'name' => 'Behind dumb switch', 'is_wired' => true,
+                      'sw_mac' => 'aa:bb:cc:00:00:02', 'sw_port' => 11];
+        $t = self::build($devices, $clients);
+
+        $this->assertTrue(self::node($t, '112233445701')['onMap']);
+    }
+
+    public function testAQuietSwitchKeepsEveryWiredClientOnTheMap(): void
+    {
+        $t = self::build();
+
+        $this->assertTrue(self::node($t, self::NAS)['onMap']);
+        $this->assertSame(0, self::node($t, self::FLEX10)['detail']['offMapCount']);
+    }
 }
