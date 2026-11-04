@@ -6,6 +6,9 @@ use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use App\Service\Unifi\UnifiFetcher;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
+use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Service\ResetInterface;
 
 /**
@@ -41,11 +44,15 @@ class UnifiClient implements ResetInterface, UnifiFetcher
     private const PATH_REPORT = '/stat/report/hourly.site';
     private const PATH_DEVICE = '/stat/device';
 
-    /** Widget polls every 30s; TTL keeps a paint + poll from double-querying. */
-    private const OVERVIEW_TTL = 20.0;
+    /**
+     * Widget polls every 30s; TTL keeps a paint + poll (and a second open tab)
+     * from re-running the three endpoint calls. Held in the shared app cache,
+     * not on the instance: reset() runs after every request, so an instance
+     * memo never reached the next poll.
+     */
+    private const OVERVIEW_TTL = 20;
 
-    private ?array $overviewCache = null;
-    private float  $overviewCacheAt = 0.0;
+    private readonly CacheInterface $cache;
 
     /**
      * How long a fetch() GET is reused. The /unifi tab batches poll groups in
@@ -96,7 +103,10 @@ class UnifiClient implements ResetInterface, UnifiFetcher
     public function __construct(
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
-    ) {}
+        ?CacheInterface $cache = null,
+    ) {
+        $this->cache = $cache ?? new ArrayAdapter();
+    }
 
     private function ensureConfig(): void
     {
@@ -118,8 +128,6 @@ class UnifiClient implements ResetInterface, UnifiFetcher
         $this->site            = 'default';
         $this->skipTlsVerify   = false;
         $this->enabled         = true;
-        $this->overviewCache   = null;
-        $this->overviewCacheAt = 0.0;
         $this->fetchMemo       = [];
         $this->downMemo        = [];
         $this->transportDown   = false;
@@ -197,11 +205,21 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             return null;
         }
 
-        $now = microtime(true);
-        if ($this->overviewCache !== null && ($now - $this->overviewCacheAt) < self::OVERVIEW_TTL) {
-            return $this->overviewCache;
-        }
+        // Keyed by console + site + key: a settings change must not serve the
+        // old console's numbers.
+        $key = 'unifi.overview.' . hash('xxh128', $this->baseUrl . "\0" . $this->site . "\0" . $this->apiKey);
 
+        return $this->cache->get($key, function (ItemInterface $item, bool &$save): ?array {
+            $item->expiresAfter(self::OVERVIEW_TTL);
+            $overview = $this->fetchOverview();
+            // A failed read is never cached — the next poll retries.
+            $save = $overview !== null;
+            return $overview;
+        });
+    }
+
+    private function fetchOverview(): ?array
+    {
         $this->transportDown = false;
         $health = $this->mapHealth($this->request(self::PATH_HEALTH));
         // Fail fast on a dead console: the remaining two calls would each burn
@@ -222,15 +240,13 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             return null; // fully unreachable — don't cache, retry next call
         }
 
-        $this->overviewCache = [
+        return [
             'wan'      => $health['wan'] ?? null,
             'clients'  => $health['clients'] ?? null,
             'gateway'  => $health['gateway'] ?? null,
             'usage24h' => $usage,
             'devices'  => $devices,
         ];
-        $this->overviewCacheAt = $now;
-        return $this->overviewCache;
     }
 
     /**

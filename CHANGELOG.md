@@ -5,6 +5,17 @@ All notable changes to Prismarr are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Seerr media issues in Prismarr** ([#133](https://github.com/Shoshuo/Prismarr/issues/133)). Problems users report in Seerr (bad video or audio, missing subtitles, other) now have a read-only **Issues** page next to Requests: each issue shows the movie or show (a click opens the quick-look), the issue type, open/resolved, the season and episode for shows, the reporter's description, who reported it and when, and the reply count, with an "Open in Seerr" link for commenting or resolving. Open / Resolved / All filters (open by default), newest / last-modified sort and a counts row (open, resolved, per type). The dashboard's Requests card gains an "N open issues reported" row linking to the page, shown only when something is open; if Seerr fails to answer the row is hidden rather than showing zero. Reporter avatars hosted outside Seerr (Plex, Gravatar) show an initial instead, since the CSP only allows Seerr's own images. EN + FR.
+- **UniFi topology map (`/unifi`, fork-only).** The UniFi tab now opens with a left-to-right map of the network — internet, gateway, switches, access points and wired clients — with every link labelled with its live rate and utilisation, drawn thicker and with faster flow dots the busier it is, plus a "busiest links" list. Selecting a node (click, keyboard, or a `?node=` deep link) highlights its path to the internet and opens a detail strip: ports and what's plugged into them, AP clients, rates, and a lazy 1-hour sparkline per client. Under-negotiated ports are flagged. Optional **internet plan speed** settings (download / upload, Mbps) scale the internet link against your ISP plan instead of the last speedtest. Fail-soft like the rest of the tab: a dead console is remembered per endpoint for 5 s so batched panels don't each wait out a connect timeout, and one panel's render error no longer blanks the whole batch. EN + FR.
+
+### Fixed
+- **UniFi tab and dashboard retry buttons no longer collide.** Both pages bound a once-per-session click handler on the same retry attribute, so after visiting both, one Retry click ran both handlers: two requests for the same panel, and whichever answered last painted it the other page's way (a dashboard tile could read "UniFi console unreachable"). The UniFi tab now uses its own attribute and only ever hydrates its own regions.
+- **UniFi tab no longer sticks on a spinner after Back.** A panel still loading when you left was restored from Turbo's snapshot as "already loaded", so it kept spinning until its next poll — up to 5 minutes for history. The page also stopped adding one more `turbo:load` listener on every visit.
+- **Unraid and UniFi dashboard sections reuse their 20 s cache.** The cache lived on the service object, which is reset after every request, so every 30 s poll (per open tab) re-ran all seven Unraid queries and all three UniFi calls. It now lives in the app cache, keyed by server, and a failed read is never cached.
+
 ## [1.3.0] - 2026-10-21
 
 ### Security

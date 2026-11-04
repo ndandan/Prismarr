@@ -5,7 +5,7 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-10-21 (covers 2026-06-13 → 2026-10-21).*
+*Last updated: 2026-11-04 (covers 2026-06-13 → 2026-11-04).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
@@ -383,6 +383,35 @@ coalescing confirmed and polling confirmed to stop after a Turbo navigation.
 Fork-only in practice — it is deep infrastructure monitoring rather than media
 management, so it is a poor upstream fit (same reasoning as the Unraid widget in
 §4), but nothing in it is fork-specific if upstream ever wants it.
+
+**Topology map (2026-10-24, merge `917b3b0`).** The tab now opens with a
+left-to-right map: internet → gateway → switches → APs → wired clients.
+- `UnifiTopologyBuilder` turns `stat/device` + `stat/sta` into a graph with
+  per-link rates and utilisation (the busier of down/up against the link
+  speed; the internet edge uses the optional plan speed, else the last
+  speedtest). Uplink loops and self-uplinks fall back to the gateway;
+  under-negotiated ports are flagged. `TopologyLayout` does the geometry
+  server-side; the fragment is SVG plus a detail strip, re-rendered on the
+  10 s live tick.
+- Selection (click, keyboard, `?node=` deep link) highlights the path and
+  opens the node's detail section; map state lives in the shell, outside the
+  swapped fragment, so selection, scroll and focus survive every poll. Nodes
+  are toggle buttons with `aria-pressed`, and a polite live region in the
+  shell announces map selections.
+- Per-client 1-hour sparklines load lazily from `/unifi/api/spark/{mac}`
+  (MAC-validated, cached client-side for five minutes).
+- Optional `unifi_plan_down_mbps` / `unifi_plan_up_mbps` settings in the UniFi
+  card (Mbps, free text, clearable).
+- Console GETs are memoised for 5 s so batched panels share one call, and a
+  transport failure is remembered per path for the same window, so a dead
+  console costs one connect timeout per tick instead of one per panel.
+
+**Review fixes (2026-11-04).** The tab's retry buttons now use their own
+`data-unifi-retry` attribute and its hydrator only selects `[data-unifi-region]`
+nodes: sharing the dashboard's `data-dash-retry` meant one click ran both pages'
+once-per-session handlers. Its `turbo:load` listener is bound once per session,
+and a `turbo:before-cache` handler clears `data-dash-loaded` so a Back restore
+re-hydrates regions that were still loading.
 
 ### Transmission tab (2026-07-25) — superseded upstream 2026-08-15
 
@@ -885,6 +914,17 @@ tests; the reliable local run copies the tree into the container's own
 filesystem first. Final gate: PHP lint, Twig lint, container lint, PHPStan 0
 and **2,042 / 2,042** tests, CI green, live-verified on `:beta`.
 
+### Seerr issues page (2026-11-04) — [#133](https://github.com/Shoshuo/Prismarr/issues/133), upstream PR [#134](https://github.com/Shoshuo/Prismarr/pull/134) open
+
+A read-only **Issues** page next to Requests (merge `4ce53be`): Seerr's
+`/api/v1/issue` list with Open / Resolved / All filters, newest /
+last-modified sort and a `/issue/count` totals row. Each card shows the title
+(quick-look on click), type, status, season/episode, the reporter's
+description and reply count, with an "Open in Seerr" link for anything that
+writes. The dashboard's Requests card gains an "N open issues reported" row,
+hidden when nothing is open or Seerr doesn't answer. Admin-only like the rest
+of the Seerr pages; EN + FR.
+
 ---
 
 ## 4. Fork-only — declined upstream
@@ -919,7 +959,9 @@ trigger an API call — the route and partial are both role-gated.
   the widget converts).
 
 The client queries each group independently so one failing group doesn't
-blank the rest, caches for 20 s, fails open, and fail-fasts the remaining
+blank the rest, caches for 20 s in the app cache (until 2026-11-04 that cache
+sat on the service object and was cleared after every request, so it never
+hit), fails open, and fail-fasts the remaining
 groups when the host itself is unreachable (~15 s → ~3 s first paint after an
 outage).
 

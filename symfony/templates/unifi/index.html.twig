@@ -191,6 +191,7 @@
       { name: 'history', poll: 300000 }
     ] %}
       <div class="mb-3"
+           data-unifi-region
            data-dash-widget="{{ region.name }}"
            data-dash-poll="{{ region.poll }}"
            data-dash-url="{{ path('app_unifi_panel', { panel: region.name }) }}">
@@ -275,13 +276,15 @@
       '<div class="card"><div class="card-body"><div class="empty">' +
         '<p class="empty-title">{{ 'unifi.unreachable'|trans|e('js') }}</p>' +
         '<div class="empty-action">' +
-          '<button type="button" class="btn btn-primary" data-dash-retry>{{ 'unifi.retry'|trans|e('js') }}</button>' +
+          '<button type="button" class="btn btn-primary" data-unifi-retry>{{ 'unifi.retry'|trans|e('js') }}</button>' +
         '</div>' +
       '</div></div></div>';
   }
 
   function nodes() {
-    return document.querySelectorAll('[data-dash-widget][data-dash-url]');
+    // Scoped to this page's regions: the dashboard's widgets carry the same
+    // data-dash-* contract, and a leaked hydrator must never reach them.
+    return document.querySelectorAll('[data-unifi-region][data-dash-url]');
   }
 
   // ── First hydration: one request per region, after first paint ──
@@ -307,12 +310,15 @@
   }
 
   // ── Retry, delegated and bound once per session ──
+  // Its own attribute, not the dashboard's retry attribute: both pages bind
+  // a once-per-session document click, so a shared attribute ran BOTH
+  // handlers on one click (two fetches, the other page's renderer).
   if (!window._prismarrUnifiRetryBound) {
     window._prismarrUnifiRetryBound = true;
     document.addEventListener('click', function (e) {
-      var btn = e.target.closest('[data-dash-retry]');
+      var btn = e.target.closest('[data-unifi-retry]');
       if (!btn) return;
-      var node = btn.closest('[data-dash-widget]');
+      var node = btn.closest('[data-unifi-region]');
       if (!node) return;
       node.dataset.dashLoaded = '';
       body(node).innerHTML = '<div class="text-center text-secondary py-4"><span class="spinner-border spinner-border-sm"></span></div>';
@@ -640,7 +646,26 @@
   }
 
   hydrateAll();
-  document.addEventListener('turbo:load', hydrateAll);
+
+  // Turbo re-runs this script on every visit, so the document listeners are
+  // bound once per session and reach the live run through the pointer —
+  // binding hydrateAll itself added one more listener (and kept one more old
+  // run alive) per visit.
+  window._prismarrUnifiHydrateAll = hydrateAll;
+  if (!window._prismarrUnifiLifecycleBound) {
+    window._prismarrUnifiLifecycleBound = true;
+    document.addEventListener('turbo:load', function () {
+      if (window._prismarrUnifiHydrateAll) { window._prismarrUnifiHydrateAll(); }
+    });
+    // A region still loading when the user leaves is snapshotted with its
+    // spinner and data-dash-loaded="1"; Back restores that snapshot and
+    // hydrate() would skip the region until its next poll (up to 300 s for
+    // history). Forget the flag so the restored page hydrates every region.
+    document.addEventListener('turbo:before-cache', function () {
+      var regions = document.querySelectorAll('[data-unifi-region]');
+      for (var i = 0; i < regions.length; i++) { delete regions[i].dataset.dashLoaded; }
+    });
+  }
 
   // Singleton timer. base.html.twig's turbo:before-render handler clears
   // _prismarrUnifiPollTimer (Task 7 Step 11) — without that registration this

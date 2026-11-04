@@ -267,7 +267,7 @@ class UnifiMapRenderTest extends KernelTestCase
     {
         $html = $this->render(null);
 
-        $this->assertStringContainsString('data-dash-retry', $html);
+        $this->assertStringContainsString('data-unifi-retry', $html);
         $this->assertStringContainsString('UniFi console unreachable', $html);
         $this->assertStringNotContainsString('data-unifi-map', $html);
     }
