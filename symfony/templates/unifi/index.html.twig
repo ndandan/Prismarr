@@ -238,6 +238,9 @@
   // The report behind a sparkline has 5-minute buckets: refetching sooner
   // cannot show anything new.
   var SPARK_TTL = 300000;
+  // A hung sparkline request is abandoned after this, so the slot can retry
+  // on the next selection or poll instead of staying blank for the session.
+  var SPARK_TIMEOUT = 15000;
   var MAC_ID = /^[0-9a-f]{12}$/;
   // The stylesheet's .unifi-flow.speed-N durations (--d), in ms, keyed by
   // the custom property each one reads its delay from. See phaseFlows().
@@ -299,6 +302,8 @@
         return r.text().then(function (html) {
           if (!html.trim()) { node.style.display = 'none'; return; }
           applyFragment(node, html);
+          lastTick = Date.now();
+          paintUpdated();
         });
       })
       .catch(function () { applyFailure(node); });
@@ -442,10 +447,15 @@
 
     if (!hit) { hit = mapState.sparks[id] = { html: null, at: 0, busy: false }; }
     hit.busy = true;
-    fetch(SPARK_TPL.replace(SPARK_PH, id), { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+    // Without a deadline a hung request kept busy set for the whole session,
+    // so this client's sparkline could never load again.
+    var ctl = new AbortController();
+    var timer = setTimeout(function () { ctl.abort(); }, SPARK_TIMEOUT);
+    fetch(SPARK_TPL.replace(SPARK_PH, id), { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin', signal: ctl.signal })
       // redirected = an expired session answered with the login page.
       .then(function (r) { return r.ok && !r.redirected ? r.text() : null; })
       .then(function (html) {
+        clearTimeout(timer);
         hit.busy = false;
         if (html === null) return;
         hit.html = html.trim();
@@ -456,7 +466,7 @@
         var now = map && findBy(map, '[data-spark-slot]', 'data-spark-slot', id);
         if (now) { paintSpark(now, hit.html); }
       })
-      .catch(function () { hit.busy = false; });
+      .catch(function () { clearTimeout(timer); hit.busy = false; });
   }
 
   function paintSpark(slot, html) {
@@ -602,9 +612,14 @@
   })();
 
   var lastTick = 0;
+  // One /panels request at a time: a console slower than the tick stacked
+  // requests, and an older answer could land after a newer one. The deadline
+  // keeps a hung request from blocking every later tick.
+  var inFlight = false;
+  var POLL_TIMEOUT = 30000;
 
   function tick() {
-    if (document.hidden) return;
+    if (document.hidden || inFlight) return;
     var list = nodes();
     if (!list.length) return;
 
@@ -619,8 +634,11 @@
     }
     if (!due.length) return;
 
+    inFlight = true;
+    var poll = new AbortController();
+    var pollTimer = setTimeout(function () { poll.abort(); }, POLL_TIMEOUT);
     fetch(PANELS_URL + '?p=' + encodeURIComponent(due.join(',')),
-          { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+          { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin', signal: poll.signal })
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (map) {
         if (!map) return;
@@ -634,7 +652,8 @@
         lastTick = Date.now();
         paintUpdated();
       })
-      .catch(function () {});
+      .catch(function () {})
+      .then(function () { clearTimeout(pollTimer); inFlight = false; });
   }
 
   // ── "Updated Ns ago" chip ──
@@ -665,13 +684,21 @@
       var regions = document.querySelectorAll('[data-unifi-region]');
       for (var i = 0; i < regions.length; i++) { delete regions[i].dataset.dashLoaded; }
     });
+    // The 1 s chip timer stops on every navigation; a revisit starts it again.
+    document.addEventListener('turbo:before-render', function () {
+      if (window._prismarrUnifiChipTimer) { clearInterval(window._prismarrUnifiChipTimer); window._prismarrUnifiChipTimer = null; }
+    });
   }
 
   // Singleton timer. base.html.twig's turbo:before-render handler clears
   // _prismarrUnifiPollTimer (Task 7 Step 11) — without that registration this
   // interval keeps polling a detached DOM after navigating away.
   if (window._prismarrUnifiPollTimer) { clearInterval(window._prismarrUnifiPollTimer); }
-  window._prismarrUnifiPollTimer = setInterval(function () { tick(); paintUpdated(); }, baseTick);
+  window._prismarrUnifiPollTimer = setInterval(tick, baseTick);
+  // The "Updated Ns ago" chip counts every second, not once per 10 s tick.
+  // Cleared on navigation by the turbo:before-render handler above.
+  if (window._prismarrUnifiChipTimer) { clearInterval(window._prismarrUnifiChipTimer); }
+  window._prismarrUnifiChipTimer = setInterval(paintUpdated, 1000);
 })();
 </script>
 {% endblock %}

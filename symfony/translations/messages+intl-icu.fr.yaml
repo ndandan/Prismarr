@@ -671,6 +671,7 @@ unifi:
     ports: Ports
     port: 'Port {port}'
     port_down: inactif
+    off_map_wired: '{count, plural, one {# client moins actif n’est pas dessiné sur la carte — choisissez-le depuis son port ci-dessus.} other {# clients moins actifs ne sont pas dessinés sur la carte — choisissez-les depuis leurs ports ci-dessus.}}'
     switch_port: 'Port du commutateur'
     link_speed: 'Vitesse du lien'
     port_note: 'Le port accepte {capable}, lien établi à {link}'

@@ -109,6 +109,36 @@ class DashboardControllerTest extends TestCase
         return $controller;
     }
 
+    /**
+     * The 7-day release calendar barely moves, but it shared the 45 s widget
+     * TTL, so most cold dashboard opens re-fetched every Radarr/Sonarr
+     * calendar. It keeps 5 minutes; the other aggregates keep 45 s, and an
+     * empty result is still not cached.
+     */
+    public function testUpcomingCalendarIsCachedLongerThanTheOtherWidgets(): void
+    {
+        $ttls  = [];
+        $cache = $this->createMock(CacheInterface::class);
+        $cache->method('get')->willReturnCallback(function (string $key, callable $cb) use (&$ttls) {
+            $item = $this->createMock(\Symfony\Contracts\Cache\ItemInterface::class);
+            $item->method('expiresAfter')->willReturnCallback(function ($ttl) use (&$ttls, $key, $item) {
+                $ttls[$key] = $ttl;
+                return $item;
+            });
+            return $cb($item);
+        });
+        $controller = $this->makeController(cache: $cache);
+        $cached = new \ReflectionMethod($controller, 'cached');
+
+        $cached->invoke($controller, 'upcoming', fn() => [['title' => 'x']]);
+        $cached->invoke($controller, 'plex_history', fn() => [['title' => 'x']]);
+        $cached->invoke($controller, 'houndarr.arr_wanted', fn() => []);
+
+        $this->assertSame(300, $ttls['dash.upcoming']);
+        $this->assertSame(45, $ttls['dash.plex_history']);
+        $this->assertSame(0, $ttls['dash.houndarr.arr_wanted'], 'an empty result is not cached');
+    }
+
     public function testDashboardMoviesComeFromTheSharedLibraryCacheAndStayInstanceTagged(): void
     {
         $pool = new \Symfony\Component\Cache\Adapter\ArrayAdapter();

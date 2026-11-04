@@ -61,6 +61,63 @@ class UnifiShellLifecycleTest extends TestCase
             $shell);
     }
 
+    /**
+     * A hung sparkline request left hit.busy = true for the whole page
+     * session, so that client's sparkline never loaded again.
+     */
+    public function testSparklineFetchIsAbortedAfterATimeout(): void
+    {
+        $shell = self::read('index.html.twig');
+
+        $this->assertMatchesRegularExpression(
+            "~function loadSpark\(.*?new AbortController\(\).*?setTimeout\(function \(\) \{ ctl\.abort\(\); \}, SPARK_TIMEOUT\).*?signal: ctl\.signal~s",
+            $shell);
+        $this->assertMatchesRegularExpression('~var SPARK_TIMEOUT = \d+;~', $shell);
+    }
+
+    /**
+     * nextDue advanced before the fetch with no in-flight guard, so a console
+     * slower than the tick stacked /panels requests and an older answer could
+     * land after a newer one.
+     */
+    public function testPollSkipsATickWhileARequestIsInFlight(): void
+    {
+        $shell = self::read('index.html.twig');
+
+        $this->assertMatchesRegularExpression(
+            "~function tick\(\) \{\s*if \(document\.hidden \|\| inFlight\) return;~", $shell);
+        // ...and a hung request can't block every later tick: it has a deadline,
+        // and the guard is released however the request ends.
+        $this->assertMatchesRegularExpression(
+            "~inFlight = true;.*?setTimeout\(function \(\) \{ poll\.abort\(\); \}, POLL_TIMEOUT\);\s*fetch\(PANELS_URL.*?signal: poll\.signal~s",
+            $shell);
+        $this->assertMatchesRegularExpression(
+            "~\.catch\(function \(\) \{\}\)\s*\.then\(function \(\) \{ clearTimeout\(pollTimer\); inFlight = false; \}\);~", $shell);
+    }
+
+    /**
+     * The "Updated Ns ago" chip read "—" until the first poll (hydration never
+     * stamped it) and only repainted on the 10 s tick.
+     */
+    public function testUpdatedChipIsStampedOnHydrationAndRepaintedEverySecond(): void
+    {
+        $shell = self::read('index.html.twig');
+
+        $this->assertMatchesRegularExpression(
+            "~function hydrate\(node\) \{.*?applyFragment\(node, html\);\s*lastTick = Date\.now\(\);\s*paintUpdated\(\);~s",
+            $shell);
+        $this->assertStringContainsString(
+            'window._prismarrUnifiChipTimer = setInterval(paintUpdated, 1000);', $shell);
+
+        // Cleared on navigation by the page's own once-per-session handler, or
+        // it keeps running after leaving the tab (base.html.twig's pinned list
+        // only knows the poll timer).
+        $this->assertMatchesRegularExpression(
+            "~if \(!window\._prismarrUnifiLifecycleBound\) \{.*?document\.addEventListener\('turbo:before-render', function \(\) \{\s*"
+            . "if \(window\._prismarrUnifiChipTimer\) \{ clearInterval\(window\._prismarrUnifiChipTimer\); window\._prismarrUnifiChipTimer = null; \}~s",
+            $shell);
+    }
+
     public function testSnapshotForgetsWhichRegionsWereLoaded(): void
     {
         $shell = self::read('index.html.twig');

@@ -54,6 +54,8 @@ class DashboardController extends AbstractController implements ResetInterface
     // fragments would each hit them live; this dedupes the calls shared across
     // the parallel fragments and makes revisits within the window instant.
     private const WIDGET_CACHE_TTL    = 45;
+    /** dash.upcoming only: a new release can show up to 5 minutes late. */
+    private const UPCOMING_CACHE_TTL  = 300;
 
     /**
      * Per-request memoization for the expensive library listings — each
@@ -157,9 +159,13 @@ class DashboardController extends AbstractController implements ResetInterface
      */
     private function cached(string $key, callable $fn): array
     {
-        return $this->cache->get('dash.' . $key, function (ItemInterface $item) use ($fn) {
+        // The 7-day release calendar barely moves; at 45 s most cold dashboard
+        // opens re-fetched every Radarr/Sonarr calendar for the hero.
+        $ttl = $key === 'upcoming' ? self::UPCOMING_CACHE_TTL : self::WIDGET_CACHE_TTL;
+
+        return $this->cache->get('dash.' . $key, function (ItemInterface $item) use ($fn, $ttl) {
             $result = $fn();
-            $item->expiresAfter($result === [] ? 0 : self::WIDGET_CACHE_TTL);
+            $item->expiresAfter($result === [] ? 0 : $ttl);
             return $result;
         });
     }

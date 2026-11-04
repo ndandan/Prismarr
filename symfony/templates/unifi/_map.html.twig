@@ -351,6 +351,9 @@
             {% else %}
               <div class="text-secondary">—</div>
             {% endif %}
+            {% if (d.offMapCount ?? 0) > 0 %}
+              <div class="text-secondary small mt-2" data-unifi-off-map>{{ 'unifi.map.off_map_wired'|trans({count: d.offMapCount}) }}</div>
+            {% endif %}
 
           {% elseif n.kind == 'ap' %}
             {{ m.clientTable(d.clientIds|map(id => byId['n' ~ id] ?? null)|filter(c => c is not null)) }}

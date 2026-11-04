@@ -676,6 +676,7 @@ unifi:
     ports: Ports
     port: 'Port {port}'
     port_down: down
+    off_map_wired: '{count, plural, one {# quieter client isn’t drawn on the map — pick it from its port above.} other {# quieter clients aren’t drawn on the map — pick them from their ports above.}}'
     switch_port: 'Switch port'
     link_speed: 'Link speed'
     port_note: 'Port supports {capable}, linked at {link}'

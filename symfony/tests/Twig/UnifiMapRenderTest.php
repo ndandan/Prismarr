@@ -565,6 +565,21 @@ class UnifiMapRenderTest extends KernelTestCase
         }
     }
 
+    /** A crowded switch says how many of its clients aren't drawn, and where to find them. */
+    public function testCrowdedSwitchSaysWhichClientsAreOffTheMap(): void
+    {
+        $map = self::map();
+        foreach ($map['nodes'] as $i => $n) {
+            if ($n['id'] === self::FLEX10) $map['nodes'][$i]['detail']['offMapCount'] = 3;
+        }
+
+        $flex = self::section($this->render($map), self::FLEX10);
+        $this->assertStringContainsString('data-unifi-off-map', $flex);
+        $this->assertStringContainsString('3 quieter clients aren’t drawn on the map', $flex);
+
+        $this->assertStringNotContainsString('data-unifi-off-map', self::section($this->render(self::map()), self::FLEX10));
+    }
+
     public function testNullLayoutStillRendersTheStrip(): void
     {
         $map           = self::map();
