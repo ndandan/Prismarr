@@ -36,4 +36,16 @@ final class DiscoverTemplateGuardTest extends TestCase
         self::assertStringContainsString('delete window[slot]', $src);
         self::assertStringContainsString('if (!srchInput.isConnected) return;', $src);
     }
+
+    public function testDetailFetchValidatesTypeAndId(): void
+    {
+        // DD-15(1): the pair also comes from ?detail=<type>/<id>; a crafted
+        // `..\../logout` turned into an authenticated GET /logout.
+        $src = $this->src();
+        self::assertMatchesRegularExpression(
+            '/function loadDetail\(type, id\)\s*\{\s*(?:\/\/[^\n]*\s*)*if \(!\/\^\(movie\|tv\)\$\/\.test\(String\(type\)\) \|\| !\/\^\\\\d\{1,12\}\$\/\.test\(String\(id\)\)\) return;/',
+            $src,
+            'loadDetail must validate type (movie|tv) and a numeric id before building the URL'
+        );
+    }
 }

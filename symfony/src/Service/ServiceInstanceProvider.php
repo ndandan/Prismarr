@@ -363,6 +363,17 @@ class ServiceInstanceProvider implements ResetInterface
     }
 
     /**
+     * Forget the stored API key (review 2026-11-06, S2): used when an import
+     * moves the instance to another host, so the key never travels there.
+     */
+    public function clearApiKey(ServiceInstance $instance): void
+    {
+        $instance->setApiKey(null);
+        $this->repository->save($instance);
+        $this->invalidate();
+    }
+
+    /**
      * Delete an instance. If it was the default, promote the next one of
      * the same type. Returns true if a row was actually deleted.
      */

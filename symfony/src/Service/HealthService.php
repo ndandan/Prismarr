@@ -1093,6 +1093,14 @@ class HealthService implements ResetInterface
         if (!is_string($host) || $host === '') {
             return 'host';
         }
+        // Review 2026-11-06 (S3): parse_url() accepts `;`, `,`, spaces and
+        // quotes inside the host. Such a "host" can never be dialled, but it
+        // DID land verbatim in the CSP img-src list (directive injection) and
+        // in log lines. Only hostname characters, or a bracketed IPv6
+        // literal, pass.
+        if (!preg_match('/^(?:[A-Za-z0-9._\-]+|\[[0-9A-Fa-f:.]+\])$/', $host)) {
+            return 'host';
+        }
         // Normalize evasions: a trailing dot (rooted FQDN / numeric) and IPv6
         // literal brackets, both of which slip past FILTER_VALIDATE_IP yet still
         // resolve at curl time.

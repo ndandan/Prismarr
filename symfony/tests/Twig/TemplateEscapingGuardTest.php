@@ -11,9 +11,10 @@ use PHPUnit\Framework\TestCase;
  * motif ci-dessous a été un XSS confirmé le 2026-07-31 ; le test échoue si
  * l'un d'eux réapparaît sans échappement.
  *
- * La CSP n'est PAS un filet de sécurité ici : script-src porte
- * 'unsafe-inline' (imposé par les ~96 templates à script inline), donc la
- * charge s'exécute. Voir la Phase 2 du plan de remédiation.
+ * La CSP (nonce, enforcing depuis la Phase 2) bloque l'EXÉCUTION de scripts
+ * injectés, mais pas l'injection de balisage : faux formulaires, <style>
+ * inline, <meta http-equiv="refresh"> (traité à l'insertion) restent des
+ * vecteurs de phishing. Chaque puits reste donc à échapper.
  */
 class TemplateEscapingGuardTest extends TestCase
 {
@@ -391,6 +392,115 @@ class TemplateEscapingGuardTest extends TestCase
             'media/series.html.twig',
             "/\\+\\s*w\\s*\\+/",
             'Sonarr healthWarnings text lands raw in the page banner innerHTML (films sibling uses esc(w))',
+        ];
+
+        // Review 2026-11-06 (S4): remaining innerHTML sinks fed by TMDb /
+        // Radarr / Sonarr / Seerr text (each file has esc() on neighbouring
+        // values — these were omissions).
+        yield 'collections: TMDb/Radarr overview' => [
+            'media/films_collections.html.twig',
+            "/\\+\\s*overview\\s*\\+/",
+            'the collection overview is TMDb text',
+        ];
+        yield 'collections: poster url' => [
+            'media/films_collections.html.twig',
+            "/src=\"'\\s*\\+\\s*poster\\s*\\+/",
+            'img.remoteUrl lands in a src attribute',
+        ];
+        yield 'collections: movie title' => [
+            'media/films_collections.html.twig',
+            "/\\+\\s*\\(m\\.title\\s*\\|\\|/",
+            'collection movie titles come from TMDb',
+        ];
+        yield 'series: episode title in the season list' => [
+            'media/series.html.twig',
+            "/\\+\\s*\\(ep\\.title\\s*\\|\\|/",
+            'episode titles are TVDB text',
+        ];
+        yield 'series: history action badge' => [
+            'media/series.html.twig',
+            "/-lt\">'\\s*\\+\\s*action\\s*\\+/",
+            'history event labels are Sonarr strings',
+        ];
+        yield 'series: history quality badge' => [
+            'media/series.html.twig',
+            "/bg-blue-lt\">'\\s*\\+\\s*quality\\s*\\+/",
+            'history quality names are Sonarr strings',
+        ];
+        yield 'series: add-modal tag label' => [
+            'media/series.html.twig',
+            "/\\+\\s*t\\.label;/",
+            'tag labels are Sonarr strings (the other two tag loops use esc(t.label))',
+        ];
+        yield 'series: lookup network' => [
+            'media/series.html.twig',
+            "/\\+\\s*\\(s\\.network\\s*\\|\\|/",
+            'network names come from TVDB via Sonarr lookup',
+        ];
+        yield 'films: command message into a tpl() banner' => [
+            'media/films.html.twig',
+            "/MSG:\\s*display\\s*[,}]/",
+            'Radarr command messages embed titles; tpl() does not escape — esc() before tpl()',
+        ];
+        yield 'films: lookup title into a tpl() result' => [
+            'media/films.html.twig',
+            "/TITLE:\\s*movieTitle\\s*[,}]/",
+            'TMDb lookup titles land in result.innerHTML through tpl()',
+        ];
+        yield 'films: indexer name into tpl()' => [
+            'media/films.html.twig',
+            "/\\{SRC:\\s*src\\}/",
+            'indexer names come from Prowlarr/Radarr',
+        ];
+        yield 'films missing: command message' => [
+            'media/films_missing.html.twig',
+            "/\\+\\s*msg\\s*\\+/",
+            'Radarr command messages embed titles',
+        ];
+        yield 'films missing: progress text from the command message' => [
+            'media/films_missing.html.twig',
+            "/progressText\\s*=\\s*msg;/",
+            'the raw message is handed to showBanner() as HTML',
+        ];
+        yield 'films missing: title from the command message' => [
+            'media/films_missing.html.twig',
+            "/__TITLE__',\\s*lastFilmSeen\\)/",
+            'the title parsed out of the command message lands in the banner HTML',
+        ];
+        yield 'radarr import: scanned folder name' => [
+            'radarr/library_import.html.twig',
+            "/\\+\\s*f\\.name\\s*\\+/",
+            'folder names come from the Radarr filesystem scan (the Sonarr twin escapes them)',
+        ];
+        yield 'radarr import: lookup title' => [
+            'radarr/library_import.html.twig',
+            "/[+]\\s*\\(m\\.title\\s*\\|\\|\\s*'\\?'\\)/",
+            'TMDb lookup titles land in the suggestion list',
+        ];
+        yield 'radarr import: lookup title attribute' => [
+            'radarr/library_import.html.twig',
+            "/\\(m\\.title\\s*\\|\\|\\s*''\\)\\.replace/",
+            'a half-escaped attribute (only quotes) still breaks on other characters',
+        ];
+        yield 'seerr user detail: jellyfin username through |raw' => [
+            'jellyseerr/user_detail.html.twig',
+            "/user\\.jellyfinUsername\\s*~/",
+            'the Jellyfin username is concatenated into a |raw string',
+        ];
+        yield 'seerr services: field value attribute' => [
+            'jellyseerr/settings/services.html.twig',
+            "/value=\"'\\s*\\+\\s*\\(value\\s*\\|\\|/",
+            'a quote in a server field truncates the attribute and corrupts the next save',
+        ];
+        yield 'seerr services: server host/port/key attributes' => [
+            'jellyseerr/settings/services.html.twig',
+            "/value=\"'\\s*\\+\\s*\\(srv\\.(hostname|port|apiKey)/",
+            'same for the inline host/port/apiKey inputs',
+        ];
+        yield 'seerr services: select option label' => [
+            'jellyseerr/settings/services.html.twig',
+            "/'>'\\s*\\+\\s*o\\.label\\s*\\+/",
+            'profile / root folder names come from the *arr',
         ];
 
         // Wokeometer modal integration: the TL;DR, title and url are third-party

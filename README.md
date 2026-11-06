@@ -328,7 +328,7 @@ rotate or back them up manually.
 |---|---|---|
 | `APP_ENV` | `prod` | Switch to `dev` for local development only |
 | `PRISMARR_PORT` | `7070` | Internal listening port |
-| `TRUSTED_PROXIES` | `127.0.0.1,REMOTE_ADDR` | Adjust if running behind Traefik / nginx / Caddy / Cloudflare Tunnel |
+| `TRUSTED_PROXIES` | `127.0.0.1,REMOTE_ADDR` | Peers whose `X-Forwarded-*` headers are believed. `REMOTE_ADDR` means "whichever peer connects directly", re-resolved on every request (also in worker mode), so a proxy / cloudflared on the Docker network works out of the box. It also means a client that can reach the port **directly** may forward a fake IP or scheme for itself (login throttling keys on that IP) — when the port is reachable from untrusted networks, pin the value to your proxy's address or CIDR (e.g. `172.18.0.0/16`) or `PRIVATE_SUBNETS` |
 | `PRISMARR_TRUSTED_ORIGINS` | _(unset)_ | Extra browser origins allowed to submit forms, comma-separated (e.g. `prismarr.lan` or `https://dash.example.com`). Only needed if your reverse proxy **rewrites the Host header** and logins / saves fail with a "cross-site request blocked" warning in the log — the app otherwise refuses state-changing requests that the browser reports as coming from another site |
 | `TZ` | `UTC` | Container time zone (e.g. `Europe/Paris`, `Pacific/Honolulu`). Drives both the OS clock and the PHP date helpers — see upstream issue [#12](https://github.com/Shoshuo/Prismarr/issues/12) |
 | `PHP_MEMORY_LIMIT` | `1024M` | PHP memory ceiling per request. Bump (e.g. `2048M`, `-1` for unlimited) if you have a very large Radarr / Sonarr library — see upstream issue [#13](https://github.com/Shoshuo/Prismarr/issues/13) |
