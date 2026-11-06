@@ -27,7 +27,7 @@ final class NetworkUsageChart
      *                downTotal: string, upTotal: string,
      *                startLabel: string, endLabel: string}
      */
-    public static function build(?array $series, string $labelFormat = 'H:i'): ?array
+    public static function build(?array $series, string $labelFormat = 'H:i', ?\DateTimeZone $tz = null): ?array
     {
         $rows = [];
         foreach ((array) ($series ?? []) as $r) {
@@ -59,7 +59,7 @@ final class NetworkUsageChart
             $points[]  = [
                 'x'     => round(max(0.0, $x - $stepX / 2), 1),
                 'w'     => round($stepX, 1),
-                'label' => date($labelFormat, $r['ts'])
+                'label' => self::label($labelFormat, $r['ts'], $tz)
                     . ' — ↓ ' . self::bytes($r['down'])
                     . ' · ↑ ' . self::bytes($r['up']),
             ];
@@ -75,8 +75,8 @@ final class NetworkUsageChart
             'points'     => $points,
             'downTotal'  => self::bytes(array_sum(array_column($rows, 'down'))),
             'upTotal'    => self::bytes(array_sum(array_column($rows, 'up'))),
-            'startLabel' => date($labelFormat, $rows[0]['ts']),
-            'endLabel'   => date($labelFormat, $rows[$n - 1]['ts']),
+            'startLabel' => self::label($labelFormat, $rows[0]['ts'], $tz),
+            'endLabel'   => self::label($labelFormat, $rows[$n - 1]['ts'], $tz),
         ];
     }
 
@@ -89,5 +89,13 @@ final class NetworkUsageChart
             }
         }
         return round($b) . ' B';
+    }
+
+    /** FF-3 (review 2026-11-06): labels in the DISPLAY zone, not the process zone. */
+    private static function label(string $format, int|float $ts, ?\DateTimeZone $tz): string
+    {
+        return (new \DateTimeImmutable('@' . (int) $ts))
+            ->setTimezone($tz ?? new \DateTimeZone(date_default_timezone_get()))
+            ->format($format);
     }
 }

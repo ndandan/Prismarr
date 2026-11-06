@@ -948,7 +948,9 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->client->script = [$this->page([], null), $this->page([], null, 'tv')];
         $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun())->status);
         $this->assertSame(1, $this->mediaCount(), 'an empty full catalog response never wipes the mirror');
-        $this->assertSame(self::T0, $this->st()['full_sync_completed_at']);
+        // FF-4 (review 2026-11-06): nor does it count as a completed full sync —
+        // marking it complete left the install on incrementals over an empty mirror.
+        $this->assertNull($this->st()['full_sync_completed_at']);
     }
 
     public function testAScheduledStartResumesAnInterruptedForcedFullResync(): void
@@ -1371,5 +1373,48 @@ final class TestableWokeometerSyncService extends WokeometerSyncService
     {
         $this->pauses++;
         $this->pausedMicros[] = $micros;
+    }
+
+    // ── FF-4 / FF-5 (review 2026-11-06) ────────────────────────────────────
+
+    public function testAFullRunThatReturnedNoRowsDoesNotCountAsCompleted(): void
+    {
+        // A provider glitch answering empty pages must not flip the install
+        // to incremental-only mode (full_sync_completed_at / watermark set).
+        $this->client->script = [
+            $this->page([], null),
+            $this->page([], null, 'tv'),
+        ];
+        $runId = $this->startRun();
+
+        $r = $this->sync->runChunk($runId);
+
+        $this->assertSame(WokeometerChunkResult::DONE, $r->status);
+        $s = $this->st();
+        $this->assertSame('ok', $s['last_status']);
+        $this->assertNull($s['full_sync_completed_at'], 'zero rows is not a completed full sync');
+        $this->assertNull($s['watermark']);
+    }
+
+    public function testAScheduledRunStopsWhenAutomaticSyncIsSwitchedOffMidRun(): void
+    {
+        $autoSync = true;
+        $settings = $this->createStub(WokeometerSettings::class);
+        $settings->method('isEnabled')->willReturn(true);
+        $settings->method('isAutoSyncEnabled')->willReturnCallback(function () use (&$autoSync): bool { return $autoSync; });
+        $settings->method('apiKey')->willReturn('wok_test');
+        $this->sync = $this->service($settings);
+        $this->scriptFullCatalog();
+        $runId = $this->startRun('scheduled');
+
+        $autoSync = false; // the admin unticked "Automatic sync" while the run was in progress
+
+        $r = $this->sync->runChunk($runId);
+
+        $this->assertNotSame(WokeometerChunkResult::CONTINUE, $r->status, 'docs promise mid-run settings apply');
+        $s = $this->st();
+        $this->assertSame('error', $s['last_status']);
+        $this->assertStringContainsString('auto', (string) $s['last_error_message']);
+        $this->assertCount(0, $this->client->calls, 'no page was fetched after the switch');
     }
 }

@@ -31,6 +31,15 @@ abstract class AbstractWebTestCase extends WebTestCase
 
         $this->client = static::createClient();
 
+        // TQ-7 (review 2026-11-06): the filesystem pools outlive a kernel
+        // reboot, so breaker states, SWR datasets and DNS memos from one web
+        // test leaked into the next. Start every test from empty pools.
+        foreach (['cache.app', 'cache.swr'] as $pool) {
+            if (static::getContainer()->has($pool)) {
+                static::getContainer()->get($pool)->clear();
+            }
+        }
+
         $em = $this->em();
         $this->resetSchema($em);
         $this->admin = $this->seedAdmin($em);

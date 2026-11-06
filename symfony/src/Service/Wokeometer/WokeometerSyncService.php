@@ -475,6 +475,11 @@ class WokeometerSyncService implements ResetInterface
                 if (!$this->settings->isEnabled()) {
                     return $this->stop($runId, self::STATUS_ERROR, null, 'disabled mid-run', self::TRANSIENT_BACKOFF_SECONDS, true);
                 }
+                if (($s['run_trigger'] ?? null) !== 'manual' && !$this->settings->isAutoSyncEnabled()) {
+                    // FF-5 (review 2026-11-06): the docs promise mid-run settings
+                    // apply — an automatic run must not outlive the switch.
+                    return $this->stop($runId, self::STATUS_ERROR, null, 'automatic sync disabled mid-run', self::TRANSIENT_BACKOFF_SECONDS, true);
+                }
                 if ($phase !== 'movie' && $phase !== 'tv') {
                     return $this->stop($runId, self::STATUS_HALTED, null, 'invalid run phase', self::ERROR_BACKOFF_SECONDS, false);
                 }
@@ -658,8 +663,14 @@ class WokeometerSyncService implements ResetInterface
             }
         }
 
+        // FF-4 (review 2026-11-06): a FULL run that stored nothing is a provider
+        // glitch, not a completed catalog — leave full_sync_completed_at and
+        // the watermark alone so the next run is a full one again instead of
+        // incrementals on top of an empty mirror.
+        $completedFull = $full && $records > 0;
+
         $fields = array_merge($fields, [
-            'watermark'            => $startedAt,
+            'watermark'            => (!$full || $completedFull) ? $startedAt : self::intOrNull($s['watermark']),
             'last_success_at'      => $now,
             'last_status'          => self::STATUS_OK,
             'last_error_code'      => null,
@@ -672,7 +683,7 @@ class WokeometerSyncService implements ResetInterface
             'run_idempotency_key'  => null,
             'next_attempt_after'   => null,
         ]);
-        if ($full) {
+        if ($completedFull) {
             $fields['full_sync_completed_at'] = $now;
         }
 

@@ -103,4 +103,27 @@ class JellyseerrControllerHardeningTest extends TestCase
             // render() has no Twig in this harness — the getLogs() expectation above is the assertion
         }
     }
+
+    public function testRequestTitlesAreResolvedOnceAcrossRenders(): void
+    {
+        // MS-4 (review 2026-11-06): every page/filter change re-did 20
+        // sequential TMDb-via-Seerr lookups; the issue-title cache now backs
+        // the request list too.
+        $client = $this->createMock(JellyseerrClient::class);
+        $client->method('getAbout')->willReturn(['version' => '2']);
+        $client->method('getStatus')->willReturn([]);
+        $client->method('getRequests')->willReturn(['results' => [
+            ['id' => 1, 'type' => 'movie', 'status' => 1, 'media' => ['tmdbId' => 603, 'mediaType' => 'movie', 'status' => 1]],
+        ], 'pageInfo' => ['results' => 1]]);
+        $client->expects($this->once())->method('searchMovie')->with(603)->willReturn(['title' => 'The Matrix']);
+
+        $controller = $this->controller($client);
+        foreach ([1, 2] as $_) {
+            try {
+                $controller->index(Request::create('/jellyseerr'));
+            } catch (\Throwable) {
+                // no Twig in this harness — the searchMovie() expectation is the assertion
+            }
+        }
+    }
 }

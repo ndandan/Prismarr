@@ -2,6 +2,8 @@
 
 namespace App\Service\Media;
 
+use Symfony\Contracts\Cache\ItemInterface;
+use Symfony\Contracts\Cache\CacheInterface;
 use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use Psr\Log\LoggerInterface;
@@ -35,6 +37,11 @@ class HoundarrClient implements ResetInterface
     public function __construct(
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
+        // MS-11 (review 2026-11-06): the widget memo lives in the shared pool
+        // so it survives the per-request reset() (the in-process copy was
+        // dead in worker mode: a fresh upstream GET — and a fresh 401 — per
+        // poll). Nullable for the legacy in-process path and the tests.
+        private readonly ?CacheInterface $cache = null,
     ) {}
 
     /**
@@ -83,12 +90,42 @@ class HoundarrClient implements ResetInterface
         if (!$this->enabled || $this->baseUrl === '' || $this->apiKey === '') {
             return null;
         }
+        if ($this->cache === null) {
+            return $this->widgetMemo();
+        }
+        // Keyed by host + key: a settings change must not serve the old box.
+        $key = 'houndarr.widget.' . hash('xxh128', $this->baseUrl . "\0" . $this->apiKey);
 
+        return $this->cache->get($key, function (ItemInterface $item, bool &$save): ?array {
+            $item->expiresAfter((int) self::WIDGET_TTL);
+            $w = $this->fetchWidget();
+            // A transport failure / 5xx is never cached — the next poll retries.
+            // The 401 verdict IS cached: hammering a 401 trips Houndarr's
+            // per-IP 429 lockout.
+            $save = $w !== null;
+            return $w;
+        });
+    }
+
+    /** Legacy in-process memo (no shared pool wired). */
+    private function widgetMemo(): ?array
+    {
         $now = microtime(true);
         if ($this->widgetCache !== null && ($now - $this->widgetCacheAt) < self::WIDGET_TTL) {
             return $this->widgetCache;
         }
+        $w = $this->fetchWidget();
+        if ($w === null) {
+            return null;
+        }
+        $this->widgetCache   = $w;
+        $this->widgetCacheAt = $now;
+        return $w;
+    }
 
+    /** One upstream read, normalized; the 401 verdict as a payload; null = don't cache. */
+    private function fetchWidget(): ?array
+    {
         $resp = $this->request();
         if ($resp === null) {
             return null; // transport failure — don't cache, retry next poll
@@ -96,9 +133,7 @@ class HoundarrClient implements ResetInterface
         if ($resp['http'] === 401) {
             // Bad/revoked key. Cache the verdict for the full TTL: hammering a
             // 401 trips Houndarr's per-IP 429 lockout on every poll otherwise.
-            $this->widgetCache   = ['totals' => null, 'generatedAtEpoch' => null, 'error' => 'auth'];
-            $this->widgetCacheAt = $now;
-            return $this->widgetCache;
+            return ['totals' => null, 'generatedAtEpoch' => null, 'error' => 'auth'];
         }
         if ($resp['http'] < 200 || $resp['http'] >= 300) {
             $this->logger->warning('HoundarrClient widget non-2xx', ['http' => $resp['http']]);
@@ -111,9 +146,7 @@ class HoundarrClient implements ResetInterface
             return null;
         }
 
-        $this->widgetCache   = self::normalizeWidget($decoded);
-        $this->widgetCacheAt = $now;
-        return $this->widgetCache;
+        return self::normalizeWidget($decoded);
     }
 
     /** For HealthService::pingFor() — up only on a clean, key-accepted fetch. */

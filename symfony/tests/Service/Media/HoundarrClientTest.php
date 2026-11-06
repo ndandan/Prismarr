@@ -167,4 +167,62 @@ class HoundarrClientTest extends TestCase
         self::assertFalse($this->makeClient(self::CONFIGURED, null, $calls)->ping());
         self::assertFalse($this->makeClient([], ['http' => 200, 'body' => $ok], $calls)->ping());
     }
+
+    // ── MS-11 (review 2026-11-06): the memo must survive reset() ─────────────
+
+    /** @param array<string, string> $settings */
+    private function makeCachedClient(array $settings, ?array $response, int &$calls, \Symfony\Contracts\Cache\CacheInterface $cache): HoundarrClient
+    {
+        $config = $this->createMock(\App\Service\ConfigService::class);
+        $config->method('get')->willReturnCallback(fn(string $k) => $settings[$k] ?? null);
+
+        return new class($config, new \Psr\Log\NullLogger(), $cache, $response, $calls) extends HoundarrClient {
+            public function __construct($config, $logger, $cache, private readonly ?array $response, private int &$calls)
+            {
+                parent::__construct($config, $logger, $cache);
+            }
+            protected function request(): ?array
+            {
+                $this->calls++;
+                return $this->response;
+            }
+        };
+    }
+
+    public function testWidgetMemoLivesInTheSharedCacheAndSurvivesTheWorkerReset(): void
+    {
+        $calls = 0;
+        $cache = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
+        $body = json_encode(['schema' => 1, 'generated_at' => '2026-05-22T18:00:00Z',
+            'totals' => ['tracked' => 11, 'eligible' => 7, 'gated' => 2, 'unreleased' => 1, 'searches_7d' => 1]]);
+        $client = $this->makeCachedClient(self::CONFIGURED, ['http' => 200, 'body' => $body], $calls, $cache);
+
+        self::assertSame(7, $client->widget()['totals']['eligible']);
+        $client->reset(); // FrankenPHP worker mode: services_resetter between requests
+        self::assertSame(7, $client->widget()['totals']['eligible']);
+        self::assertSame(1, $calls, 'the 45 s window must hold across requests, not just inside one');
+    }
+
+    public function testAuthVerdictIsCachedInTheSharedCacheToo(): void
+    {
+        $calls = 0;
+        $cache = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
+        $client = $this->makeCachedClient(self::CONFIGURED, ['http' => 401, 'body' => ''], $calls, $cache);
+
+        self::assertSame('auth', $client->widget()['error']);
+        $client->reset();
+        self::assertSame('auth', $client->widget()['error']);
+        self::assertSame(1, $calls, 'a fresh 401 per poll trips Houndarr\'s per-IP lockout');
+    }
+
+    public function testTransportFailureIsNotCachedInTheSharedCache(): void
+    {
+        $calls = 0;
+        $cache = new \Symfony\Component\Cache\Adapter\ArrayAdapter();
+        $client = $this->makeCachedClient(self::CONFIGURED, null, $calls, $cache);
+
+        self::assertNull($client->widget());
+        self::assertNull($client->widget());
+        self::assertSame(2, $calls);
+    }
 }

@@ -28,7 +28,7 @@ final class SpeedtestChart
      *                latencyMin: ?int, latencyAvg: ?int, latencyMax: ?int,
      *                peakMbps: string, startLabel: string, endLabel: string}
      */
-    public static function build(?array $runs): ?array
+    public static function build(?array $runs, ?\DateTimeZone $tz = null): ?array
     {
         $rows = [];
         foreach ((array) ($runs ?? []) as $r) {
@@ -71,7 +71,7 @@ final class SpeedtestChart
             $points[] = [
                 'x'     => round(max(0.0, $x - $stepX / 2), 1),
                 'w'     => round($stepX, 1),
-                'label' => date('M j, H:i', $r['ts'])
+                'label' => self::label('M j, H:i', $r['ts'], $tz)
                     . ' — ↓ ' . self::mbps($r['down'])
                     . ' · ↑ ' . self::mbps($r['up'])
                     . ($r['latency'] !== null ? ' · ' . $r['latency'] . ' ms' : ''),
@@ -92,8 +92,8 @@ final class SpeedtestChart
             'latencyAvg'    => $latencies === [] ? null : (int) round(array_sum($latencies) / count($latencies)),
             'latencyMax'    => $latencies === [] ? null : max($latencies),
             'peakMbps'      => self::mbps($peak),
-            'startLabel'    => date('M j', $rows[0]['ts']),
-            'endLabel'      => date('M j', $rows[$n - 1]['ts']),
+            'startLabel'    => self::label('M j', $rows[0]['ts'], $tz),
+            'endLabel'      => self::label('M j', $rows[$n - 1]['ts'], $tz),
         ];
     }
 
@@ -102,5 +102,13 @@ final class SpeedtestChart
     {
         if ($v === null) return '—';
         return rtrim(rtrim(number_format($v, 1, '.', ''), '0'), '.') . ' Mbps';
+    }
+
+    /** FF-3 (review 2026-11-06): labels in the DISPLAY zone, not the process zone. */
+    private static function label(string $format, int|float $ts, ?\DateTimeZone $tz): string
+    {
+        return (new \DateTimeImmutable('@' . (int) $ts))
+            ->setTimezone($tz ?? new \DateTimeZone(date_default_timezone_get()))
+            ->format($format);
     }
 }

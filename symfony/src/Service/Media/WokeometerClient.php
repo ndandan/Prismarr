@@ -194,6 +194,12 @@ class WokeometerClient implements ResetInterface
                 return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'no usable rows in page', $creditsRemaining, $creditsCharged, $replayed);
             }
             $cursor = $json['next_cursor'] ?? null;
+            if ($cursor !== null && !is_string($cursor)) {
+                // FF-2 (review 2026-11-06): a non-string cursor is schema drift,
+                // not "end of phase" — ending the phase here would let a FULL
+                // run sweep the mirror of everything after this page.
+                return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'next_cursor is not a string', $creditsRemaining, $creditsCharged, $replayed);
+            }
 
             return new WokeometerPageResult(
                 outcome: WokeometerPageResult::OK,

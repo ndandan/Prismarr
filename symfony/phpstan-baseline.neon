@@ -66,11 +66,6 @@ parameters:
 			count: 1
 			path: src/Controller/CalendrierController.php
 
-		-
-			message: '#^Property App\\Controller\\CalendrierController\:\:\$config is never read, only written\.$#'
-			identifier: property.onlyWritten
-			count: 1
-			path: src/Controller/CalendrierController.php
 
 		-
 			message: '#^Method App\\Controller\\DashboardController\:\:arrWantedCounts\(\) should return list\<array\{type\: string, name\: string, wanted\: int\|null, cutoffUnmet\: int\|null\}\> but returns array\<mixed\>\.$#'
@@ -846,17 +841,7 @@ parameters:
 			count: 1
 			path: src/Service/Media/TautulliClient.php
 
-		-
-			message: '#^Parameter \#1 \$json of function json_decode expects string, string\|true given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Service/Media/TmdbClient.php
 
-		-
-			message: '#^Parameter \#2 \$options of function curl_setopt_array expects array\{10002\: non\-empty\-string, 19913\: bool, 13\: int, 78\: int, 99\: bool, 181\: int, 182\: int, 10023\: array\<int, string\>\}, array\{10002\: non\-falsy\-string, 19913\: true, 13\: 15, 78\: 8, 99\: 1, 181\: 3, 182\: 3, 10023\: array\{''Accept\: application…''\}\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Service/Media/TmdbClient.php
 
 		-
 			message: '#^Method App\\Service\\Media\\TorrentResolverService\:\:resolve\(\) should return array\{found\: bool, id\?\: int, title\?\: string, url\?\: string, error\?\: string, parsed\?\: array\} but returns array\.$#'

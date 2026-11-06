@@ -115,4 +115,18 @@ class NetworkUsageChartTest extends TestCase
             $this->assertSame($a[$k], $b[$k], "$k must not depend on the label format");
         }
     }
+
+    public function testLabelsFollowTheGivenTimezone(): void
+    {
+        // FF-3 (review 2026-11-06): labels used date() in the process zone,
+        // so the tooltips disagreed with the clock when display tz ≠ $TZ.
+        $rows = [['ts' => 0, 'downBytes' => 1.0, 'upBytes' => 1.0], ['ts' => 3600, 'downBytes' => 2.0, 'upBytes' => 1.0]];
+
+        $paris = NetworkUsageChart::build($rows, 'H:i', new \DateTimeZone('Europe/Paris'));
+        $utc   = NetworkUsageChart::build($rows, 'H:i', new \DateTimeZone('UTC'));
+
+        $this->assertSame('01:00', $paris['startLabel']);
+        $this->assertSame('00:00', $utc['startLabel']);
+        $this->assertStringStartsWith('01:00', (string) ($paris['points'][0]['label'] ?? $paris['startLabel']));
+    }
 }

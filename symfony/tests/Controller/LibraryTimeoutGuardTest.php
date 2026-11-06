@@ -36,6 +36,11 @@ class LibraryTimeoutGuardTest extends TestCase
             '/->getRawAllSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
             1,
         ];
+        yield 'TorrentResolverService movie sweep' => [
+            'Service/Media/TorrentResolverService.php',
+            '/->getRawMovies\(RadarrClient::LIBRARY_TIMEOUT\)/',
+            1, // AC-8 (review 2026-11-06): the Radarr branch still used the 8 s default
+        ];
         yield 'BazarrPosterResolver library calls' => [
             'Service/Media/BazarrPosterResolver.php',
             '/->getMovies\(RadarrClient::LIBRARY_TIMEOUT\)|->getSeries\(SonarrClient::LIBRARY_TIMEOUT\)/',
@@ -60,7 +65,7 @@ class LibraryTimeoutGuardTest extends TestCase
             // cache — perf(search): pre-normalize commit), plus the three
             // pre-existing safe call sites this same regex also covers:
             // filmsFilteredIds(), seriesFilteredIds() and filmsCollections().
-            7,
+            8, // AC-8 (review 2026-11-06): filteredIds/collections share cachedMovies()/cachedSeries(), each with a cached and a direct timed call,
         ];
     }
 

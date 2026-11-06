@@ -105,4 +105,12 @@ class PollerVisibilityGuardTest extends TestCase
         $teardown = (int) strrpos($block, 'return function ()');
         $this->assertStringContainsString("removeEventListener('visibilitychange'", substr($block, $teardown));
     }
+
+    public function testFilmsWarningsRefreshPausesWhileTheTabIsHidden(): void
+    {
+        // MT-8 (review 2026-11-06): three uncached Radarr calls per 10 s —
+        // not for a hidden tab (series already paused its warnings poll).
+        $src = $this->source('media/films.html.twig');
+        $this->assertMatchesRegularExpression('/function refreshWarnings\(\) \{\s*if \(document\.hidden\) return;/', $src);
+    }
 }

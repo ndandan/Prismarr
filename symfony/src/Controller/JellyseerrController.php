@@ -1056,11 +1056,15 @@ class JellyseerrController extends AbstractController
 
     private function enrichRequest(array $req): array
     {
-        $tmdb = $this->tmdbSummary(
-            $req['media']['tmdbId'] ?? null,
-            $req['type'] ?? $req['media']['mediaType'] ?? null,
-            'enrichRequest',
-        );
+        // MS-4 (review 2026-11-06): the same 6 h title cache the issues page
+        // uses — the request list re-did 20 sequential TMDb-via-Seerr
+        // lookups on every page / filter change.
+        $tmdbId     = (int) ($req['media']['tmdbId'] ?? 0);
+        $type       = (string) ($req['type'] ?? $req['media']['mediaType'] ?? '');
+        $serviceUrl = rtrim((string) ($this->config->get('jellyseerr_url') ?? ''), '/');
+        $tmdb = ($tmdbId > 0 && $type !== '')
+            ? $this->cachedIssueTitle($tmdbId, $type, $serviceUrl)
+            : null;
         if ($tmdb !== null) {
             $req['_tmdb'] = $tmdb;
         }

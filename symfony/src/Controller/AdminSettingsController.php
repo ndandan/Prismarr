@@ -520,7 +520,7 @@ class AdminSettingsController extends AbstractController
             $anyOk = false;
             foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
                 try {
-                    foreach ($radarr->withInstance($inst)->getMovies() as $m) {
+                    foreach ($this->libraryCache?->peekMovies($inst->getSlug()) ?? $radarr->withInstance($inst)->getMovies(RadarrClient::LIBRARY_TIMEOUT) as $m) {
                         $tmdbId = (int) ($m['tmdbId'] ?? 0);
                         if ($tmdbId > 0) {
                             $seenMovies[$tmdbId] = true;
@@ -544,7 +544,7 @@ class AdminSettingsController extends AbstractController
             $anyOk = false;
             foreach ($this->instances->getEnabled(ServiceInstance::TYPE_SONARR) as $inst) {
                 try {
-                    foreach ($sonarr->withInstance($inst)->getSeries() as $s) {
+                    foreach ($this->libraryCache?->peekSeries($inst->getSlug()) ?? $sonarr->withInstance($inst)->getSeries(SonarrClient::LIBRARY_TIMEOUT) as $s) {
                         $tvdbId = (int) ($s['tvdbId'] ?? 0);
                         $tmdbId = (int) ($s['tmdbId'] ?? 0);
                         if ($tvdbId > 0)        $seenSeries['tvdb_' . $tvdbId] = true;

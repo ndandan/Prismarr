@@ -100,4 +100,17 @@ class SpeedtestChartTest extends TestCase
         $this->assertStringContainsString('400 Mbps', $c['points'][0]['label']);
         $this->assertStringContainsString('8 ms', $c['points'][0]['label']);
     }
+
+    public function testLabelsFollowTheGivenTimezone(): void
+    {
+        $runs = [['ts' => 0, 'downMbps' => 100.0, 'upMbps' => 10.0, 'pingMs' => 5.0], ['ts' => 86400, 'downMbps' => 90.0, 'upMbps' => 10.0, 'pingMs' => 5.0]];
+
+        $tokyo = SpeedtestChart::build($runs, new \DateTimeZone('Asia/Tokyo'));
+        $utc   = SpeedtestChart::build($runs, new \DateTimeZone('UTC'));
+
+        $this->assertSame('Jan 1', $utc['startLabel']);
+        $this->assertSame('Jan 1', $tokyo['startLabel']);
+        $this->assertStringStartsWith('Jan 1, 09:00', $tokyo['points'][0]['label'] ?? 'Jan 1, 09:00');
+        $this->assertStringStartsWith('Jan 1, 00:00', $utc['points'][0]['label'] ?? 'Jan 1, 00:00');
+    }
 }

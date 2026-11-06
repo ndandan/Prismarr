@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Service\DisplayPreferencesService;
 use App\Dashboard\NetworkUsageChart;
 use App\Dashboard\SpeedtestChart;
 use App\Service\HealthService;
@@ -51,7 +52,18 @@ class UnifiController extends AbstractController
         private readonly UnifiSparkReader $spark,
         private readonly HealthService $health,
         private readonly LoggerInterface $logger,
+        // FF-3 (review 2026-11-06): chart labels follow the display zone.
+        private readonly ?DisplayPreferencesService $prefs = null,
     ) {}
+
+    private function displayTimezone(): \DateTimeZone
+    {
+        try {
+            return new \DateTimeZone($this->prefs?->getTimezone() ?? date_default_timezone_get());
+        } catch (\Throwable) {
+            return new \DateTimeZone(date_default_timezone_get());
+        }
+    }
 
     /**
      * Page shell only — deliberately touches no reader, so the page paints
@@ -144,7 +156,7 @@ class UnifiController extends AbstractController
         // template renders '' itself if the geometry comes back null (a single
         // bucket is nothing to draw).
         return $this->render('unifi/_spark.html.twig', [
-            'spark' => NetworkUsageChart::build($rows, 'H:i'),
+            'spark' => NetworkUsageChart::build($rows, 'H:i', $this->displayTimezone()),
         ]);
     }
 
@@ -217,8 +229,8 @@ class UnifiController extends AbstractController
             // days apart is the same weekday, so the axis read "Sat … Sat" and
             // all 24 points in a day shared one tooltip (live-verified). The date
             // disambiguates the axis; the hour makes hovering a spike informative.
-            'usageChart' => NetworkUsageChart::build($data['usage7d'] ?? null, 'D j H:i'),
-            'speedChart' => SpeedtestChart::build($data['speedtests'] ?? null),
+            'usageChart' => NetworkUsageChart::build($data['usage7d'] ?? null, 'D j H:i', $this->displayTimezone()),
+            'speedChart' => SpeedtestChart::build($data['speedtests'] ?? null, $this->displayTimezone()),
         ];
     }
 }
