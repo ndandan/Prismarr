@@ -64,7 +64,7 @@ class PollerVisibilityGuardTest extends TestCase
         $this->assertPausesOnHidden($block, 'films queue poll');
         $this->assertStringContainsString('clearInterval(queueRefreshTimer)', $block);
         // Becoming visible refreshes immediately instead of waiting a tick.
-        $this->assertMatchesRegularExpression('/document\.hidden[\s\S]*else[\s\S]*refreshQueue\(\);/', $block);
+        $this->assertMatchesRegularExpression('/if \(document\.hidden\)[\s\S]*else[\s\S]*refreshQueue\(\);/', $block);
     }
 
     public function testSeriesQueueAndMonitoredRefreshPauseWhileTheTabIsHidden(): void
@@ -74,7 +74,7 @@ class PollerVisibilityGuardTest extends TestCase
         $this->assertStringContainsString('/series/queue/refresh', $block, 'the RefreshMonitoredDownloads POST must sit in the same pausable block');
         $this->assertStringContainsString('clearInterval(queueTimer)', $block);
         $this->assertStringContainsString('clearInterval(monitoredTimer)', $block);
-        $this->assertMatchesRegularExpression('/document\.hidden[\s\S]*else[\s\S]*refreshQueue\(\);/', $block);
+        $this->assertMatchesRegularExpression('/if \(document\.hidden\)[\s\S]*else[\s\S]*refreshQueue\(\);/', $block);
     }
 
     public function testSeriesWarningsRefreshPausesWhileTheTabIsHidden(): void
@@ -82,7 +82,7 @@ class PollerVisibilityGuardTest extends TestCase
         $block = $this->lifecycleBlockContaining($this->source('media/series.html.twig'), 'setInterval(refreshSeriesWarnings, 10000)');
         $this->assertPausesOnHidden($block, 'series warnings poll');
         $this->assertStringContainsString('clearInterval(warningsTimer)', $block);
-        $this->assertMatchesRegularExpression('/document\.hidden[\s\S]*else[\s\S]*refreshSeriesWarnings\(\);/', $block);
+        $this->assertMatchesRegularExpression('/if \(document\.hidden\)[\s\S]*else[\s\S]*refreshSeriesWarnings\(\);/', $block);
     }
 
     public function testWokeometerPollDoesNotBurnItsCapWhileHidden(): void

@@ -633,32 +633,12 @@ parameters:
 		-
 			message: '#^Parameter \#1 \$json of function json_decode expects string, bool\|string given\.$#'
 			identifier: argument.type
-			count: 2
-			path: src/Service/Media/JellyseerrClient.php
-
-		-
-			message: '#^Parameter \#1 \$json of function json_decode expects string, string\|true given\.$#'
-			identifier: argument.type
 			count: 1
 			path: src/Service/Media/JellyseerrClient.php
 
-		-
-			message: '#^Parameter \#2 \$options of function curl_setopt_array expects array\{10002\: non\-empty\-string, 19913\: bool, 181\: int, 182\: int, 13\: int, 78\: int, 99\: bool, 10023\: array\<int, string\>\}, array\{10002\: string, 19913\: true, 181\: 3, 182\: 3, 13\: 8, 78\: 4, 99\: 1, 10023\: array\{non\-falsy\-string, ''Accept\: application…''\}\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Service/Media/JellyseerrClient.php
 
-		-
-			message: '#^Parameter \#2 \$options of function curl_setopt_array expects array\{19913\: bool, 181\: int, 182\: int, 13\: int, 78\: int, 99\: bool, 10036\: non\-empty\-string\|null, 10015\: array\|string, \.\.\.\}, array\{19913\: true, 181\: 3, 182\: 3, 13\: 8, 78\: 4, 99\: 1, 10036\: string, 10015\: non\-empty\-string\|false, \.\.\.\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Service/Media/JellyseerrClient.php
 
-		-
-			message: '#^Parameter \#2 \$options of function curl_setopt_array expects array\{19913\: bool, 181\: int, 182\: int, 13\: int, 78\: int, 99\: bool, 10036\: non\-empty\-string\|null, 10023\: array\<int, string\>\}, array\{19913\: true, 181\: 3, 182\: 3, 13\: 8, 78\: 4, 99\: 1, 10036\: ''DELETE'', 10023\: array\{non\-falsy\-string\}\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Service/Media/JellyseerrClient.php
+
 
 		-
 			message: '#^Parameter \#1 \$json of function json_decode expects string, string\|true given\.$#'
@@ -723,7 +703,7 @@ parameters:
 		-
 			message: '#^Parameter \#2 \$options of function curl_setopt_array expects array\{19913\: bool, 181\: int, 182\: int, 78\: int, 13\: int, 99\: bool, 47\: bool, 10015\: array\|string, \.\.\.\}, array\{19913\: true, 181\: 3, 182\: 3, 78\: 4, 13\: 8, 99\: 1, 47\: true, 10015\: string, \.\.\.\} given\.$#'
 			identifier: argument.type
-			count: 2
+			count: 1
 			path: src/Service/Media/QBittorrentClient.php
 
 		-

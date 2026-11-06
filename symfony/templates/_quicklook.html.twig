@@ -199,19 +199,25 @@
     // when one is given, else render the inline error. Shared by the delegated
     // [data-ql-trigger] handler and any caller via window.prismarrQl.openUrl
     // (e.g. the calendar opens events in place instead of ejecting to /medias).
+    var qlSeq = 0; // MT-9: a stale slow failure must not navigate away from the item opened since
     function qlOpenUrl(url, fallbackHref) {
       if (!url) { if (fallbackHref) window.location.href = fallbackHref; return; }
       qlOpen();
+      var seq = ++qlSeq;
       fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
         .then(function (r) { return r.ok ? r.text() : ''; })
         .then(function (html) {
+          if (seq !== qlSeq) return;
           var b = qlBody();
           if (!b) return;
           if ((html || '').trim()) { b.innerHTML = html; }
           else if (fallbackHref) { window.location.href = fallbackHref; }
           else { b.innerHTML = '<div class="ql-error"></div>'; }
         })
-        .catch(function () { if (fallbackHref) window.location.href = fallbackHref; });
+        .catch(function () {
+          if (seq !== qlSeq) return;
+          if (fallbackHref) window.location.href = fallbackHref;
+        });
     }
 
     if (!window._qlDelegated) {
