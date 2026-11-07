@@ -128,6 +128,23 @@ class DashboardController extends AbstractController implements ResetInterface
     }
 
     /**
+     * C1 (review 2026-11-06): set when EVERY Radarr/Sonarr instance failed to
+     * answer the calendar, so the widget can tell "nothing this week" from
+     * "could not ask". Only set on a cache miss; a cached calendar was, by
+     * construction, a successful one.
+     */
+    private bool $upcomingUnreachable = false;
+
+    /** C1: set when Seerr failed to answer the pending-requests call. */
+    private bool $requestsUnreachable = false;
+
+    /** Read through a method, like isPartial(): the flag is set inside the cached() closure. */
+    private function isUpcomingUnreachable(): bool
+    {
+        return $this->upcomingUnreachable;
+    }
+
+    /**
      * C2 (review 2026-11-06): the DISPLAY zone's calendar date at UTC
      * midnight — comparable with Radarr's `…T00:00:00Z` dates and Sonarr's
      * air dates. The process zone dropped today's releases as "past" for
@@ -359,7 +376,13 @@ class DashboardController extends AbstractController implements ResetInterface
             return new Response('');
         }
         set_time_limit(60);
+        $this->upcomingUnreachable = false;
         $upcoming = $this->upcomingReleases();
+        // C1: an outage is not an empty week — the dashboard JS turns a non-OK
+        // fragment into "This section failed to load" + Retry.
+        if ($upcoming === [] && $this->isUpcomingUnreachable()) {
+            return new Response('', Response::HTTP_BAD_GATEWAY);
+        }
 
         return $this->render('dashboard/_upcoming.html.twig', [
             'upcoming'      => $upcoming,
@@ -385,8 +408,14 @@ class DashboardController extends AbstractController implements ResetInterface
         // a Seerr blip hides the row instead of showing a misleading zero.
         $issueCounts = $this->safeFetch('jellyseerr.issue_count', fn() => $this->jellyseerr->getIssueCount());
 
+        $requests = $this->pendingRequests();
+        // C1: Seerr down is not "no pending requests" (see widgetUpcoming).
+        if ($this->requestsUnreachable) {
+            return new Response('', Response::HTTP_BAD_GATEWAY);
+        }
+
         return $this->render('dashboard/_requests.html.twig', [
-            'jellyseerr_requests'    => $this->pendingRequests(),
+            'jellyseerr_requests'    => $requests,
             'jellyseerr_open_issues' => is_array($issueCounts) && isset($issueCounts['open']) ? (int) $issueCounts['open'] : 0,
         ]);
     }
@@ -776,6 +805,8 @@ class DashboardController extends AbstractController implements ResetInterface
             . ($e['tvdbId'] ?? $e['seriesTitle'] ?? '?')
             . ':S' . ($e['season'] ?? 0) . 'E' . ($e['episode'] ?? 0);
         $seen = [];
+        $asked = 0;
+        $failed = 0;
 
         foreach ($this->instances->getEnabled(ServiceInstance::TYPE_RADARR) as $inst) {
             $bound  = $this->radarr->withInstance($inst);
@@ -783,8 +814,10 @@ class DashboardController extends AbstractController implements ResetInterface
                 'upcoming.radarr.' . $inst->getSlug(),
                 fn() => $bound->getCalendar(self::UPCOMING_DAYS, 0),
             );
+            ++$asked;
             if ($movies === null || $bound->getLastError() !== null) {
                 $this->partialResult = true; // DD-3: never cache half a calendar
+                ++$failed;
             }
             $movies ??= [];
             foreach ($movies as $m) {
@@ -812,8 +845,10 @@ class DashboardController extends AbstractController implements ResetInterface
                 'upcoming.sonarr.' . $inst->getSlug(),
                 fn() => $bound->getCalendar(self::UPCOMING_DAYS, 0),
             );
+            ++$asked;
             if ($episodes === null || $bound->getLastError() !== null) {
                 $this->partialResult = true; // DD-3
+                ++$failed;
             }
             $episodes ??= [];
             foreach ($episodes as $e) {
@@ -839,6 +874,7 @@ class DashboardController extends AbstractController implements ResetInterface
         }
 
         usort($items, fn($a, $b) => $a['date'] <=> $b['date']);
+        $this->upcomingUnreachable = $asked > 0 && $failed === $asked;
 
         return $items;
         });
@@ -1025,7 +1061,11 @@ class DashboardController extends AbstractController implements ResetInterface
         $data = $this->safeFetch(
             'jellyseerr.requests',
             fn() => $this->jellyseerr->getRequests(self::MAX_REQUESTS, 0, 'pending'),
-        ) ?? [];
+        );
+        // C1: getRequests() answers an empty envelope on failure and records
+        // the error; read it before the TMDb lookups below.
+        $this->requestsUnreachable = $data === null || $this->jellyseerr->getLastError() !== null;
+        $data ??= [];
 
         $results = $data['results'] ?? $data;
         $out = [];

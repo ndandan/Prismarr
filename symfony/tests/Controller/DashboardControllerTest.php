@@ -1020,6 +1020,95 @@ class DashboardControllerTest extends TestCase
         self::assertTrue($cache->hasItem('dash.upcoming'));
     }
 
+    // ── C1 (review 2026-11-06): an outage is not an empty widget ────────────
+
+    private function upcomingFlag(DashboardController $controller): bool
+    {
+        $m = new ReflectionMethod(DashboardController::class, 'upcomingReleases');
+        $m->setAccessible(true);
+        $m->invoke($controller);
+
+        return (bool) (new \ReflectionProperty(DashboardController::class, 'upcomingUnreachable'))->getValue($controller);
+    }
+
+    private function calendarClient(string $class, ?array $error): \PHPUnit\Framework\MockObject\MockObject
+    {
+        $client = $this->createMock($class);
+        $client->method('withInstance')->willReturn($client);
+        $client->method('getCalendar')->willReturn([]);
+        $client->method('getLastError')->willReturn($error);
+
+        return $client;
+    }
+
+    private const TIMED_OUT = ['code' => 0, 'method' => 'GET', 'path' => '/api/v3/calendar', 'message' => 'timed out'];
+
+    public function testUpcomingWidgetAnswers502WhenEveryLibraryFailed(): void
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('isConfigured')->willReturn(true);
+        $controller = $this->makeController(
+            health: $health,
+            radarr: $this->calendarClient(RadarrClient::class, self::TIMED_OUT),
+            cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter(),
+        );
+
+        self::assertSame(502, $controller->widgetUpcoming()->getStatusCode(), 'the dashboard shows "failed to load" + Retry, not "Nothing this week"');
+    }
+
+    public function testOneLibraryAnsweringIsNotAnOutage(): void
+    {
+        $radarrInst = $this->instance('radarr-1', 'Radarr');
+        $sonarrInst = new ServiceInstance(ServiceInstance::TYPE_SONARR, 'sonarr-1', 'Sonarr', 'http://s:8989', 'k');
+        $instances = $this->createMock(ServiceInstanceProvider::class);
+        $instances->method('getEnabled')->willReturnCallback(
+            fn(string $type): array => $type === ServiceInstance::TYPE_RADARR ? [$radarrInst] : [$sonarrInst]
+        );
+        $controller = $this->makeController(
+            radarr: $this->calendarClient(RadarrClient::class, null),
+            sonarr: $this->calendarClient(SonarrClient::class, self::TIMED_OUT),
+            instances: $instances,
+            cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter(),
+        );
+
+        self::assertFalse($this->upcomingFlag($controller));
+    }
+
+    public function testAnEmptyWeekFromAHealthyLibraryIsNotAnOutage(): void
+    {
+        $controller = $this->makeController(
+            radarr: $this->calendarClient(RadarrClient::class, null),
+            cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter(),
+        );
+
+        self::assertFalse($this->upcomingFlag($controller));
+    }
+
+    public function testRequestsWidgetAnswers502WhenSeerrFailed(): void
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('isConfigured')->willReturn(true);
+        $seerr = $this->createMock(JellyseerrClient::class);
+        $seerr->method('getRequests')->willReturn(['pageInfo' => [], 'results' => []]);
+        $seerr->method('getLastError')->willReturn(['code' => 0, 'method' => 'GET', 'path' => '/api/v1/request', 'message' => 'circuit open']);
+        $controller = $this->makeController(health: $health, jellyseerr: $seerr);
+
+        self::assertSame(502, $controller->widgetRequests()->getStatusCode(), 'Seerr down is not "No pending requests"');
+    }
+
+    public function testNoPendingRequestsIsNotAnOutage(): void
+    {
+        $seerr = $this->createMock(JellyseerrClient::class);
+        $seerr->method('getRequests')->willReturn(['pageInfo' => [], 'results' => []]);
+        $seerr->method('getLastError')->willReturn(null);
+        $controller = $this->makeController(jellyseerr: $seerr);
+
+        $m = new ReflectionMethod(DashboardController::class, 'pendingRequests');
+        $m->setAccessible(true);
+        self::assertSame([], $m->invoke($controller));
+        self::assertFalse((new \ReflectionProperty(DashboardController::class, 'requestsUnreachable'))->getValue($controller));
+    }
+
     // ── C2 / DD-4 (review 2026-11-06): "today" is the display zone's date ───
 
     public function testTodayIsDerivedFromTheDisplayTimezoneNotTheProcessZone(): void
