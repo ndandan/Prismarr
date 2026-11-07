@@ -12,4 +12,3 @@ import './stimulus_bootstrap.js';
  * linked directly from base.html.twig instead.
  */
 
-console.log('This log comes from assets/app.js - welcome to AssetMapper! 🎉');

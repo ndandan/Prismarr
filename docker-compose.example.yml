@@ -45,6 +45,11 @@ services:
       # itself. Setting it drops X-Frame-Options. (Issue #25.)
       # PRISMARR_FRAME_ANCESTORS: https://organizr.example.com
 
+      # Extra browser origins allowed to submit forms when a reverse proxy
+      # rewrites the Host header (logins / saves fail with "cross-site request
+      # blocked" in the log otherwise). Comma-separated hosts or origins.
+      # PRISMARR_TRUSTED_ORIGINS: prismarr.lan
+
       # Proxies whose X-Forwarded-* headers are believed. The default
       # ("127.0.0.1,REMOTE_ADDR") trusts whichever peer connects directly,
       # re-resolved per request, so a proxy / cloudflared on the Docker
