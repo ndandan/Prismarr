@@ -965,7 +965,25 @@ wording; this is the fork-vs-upstream view.
   `ApiClientErrorTrait::clientFailed()`; `App\Util\CalendarDay`;
   `TrustedProxiesSubscriber`; the `cache.swr` pool;
   `RadarrClient::manualImportFromQueueItem()`; `ServiceRouteGuardSubscriber::serviceIdForRoute()`.
-- **Tests (+232 over the pre-review 2,224; suite 2,456 / 9,606 assertions):** anonymous sweep of every route +
+- **Live check on `:beta` (2026-11-07, the image from `e44b32e`):** the
+  Deluge page refreshes on its own (four list fetches in ten seconds); a
+  single-movie Refresh & scan ran to "Refresh complete!" (the completed path
+  of the rewritten command banners; the stalled path has node-only evidence);
+  the language endpoint returns no pseudo-languages (proof the new build is
+  running); the Radarr queue was empty, so the multi-file Import stays
+  unchecked; two Bazarr manual subtitle downloads landed (Bazarr history) but
+  that movie's profile wants a forced track, so Bazarr's own status and the
+  badge rightly did not change — the two-pool unit test remains the evidence
+  for the per-item patch. One real bug: the series quick-look showed the UTC
+  day for an evening broadcast (Treasure Island, 03:00 UTC → "Nov 9" with
+  America/Chicago set; the dashboard calendar said Sunday the 8th). Twig's
+  `default` filter treats `false` as empty, so `d.floating|default(true)`
+  floated every chip; the final-review test checked the controller flag and
+  the guard checked the expression, nothing rendered the day. Fixed in
+  `d8673a8` with `(d.floating ?? true)`, a render test that pins the day in the
+  display zone, and a hygiene guard that refuses `|default(true)` in any
+  template.
+- **Tests (+234 over the pre-review 2,224; suite 2,458 / 9,609 assertions):** anonymous sweep of every route +
   form-login/throttle/logout (`AuthBoundaryTest`), the POST route table of the
   nine integration controllers anonymous/cross-site/same-origin
   (`WriteRouteTableTest`), wire-contract tests through the new seams, EN/FR

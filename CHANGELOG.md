@@ -38,6 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **qBittorrent completed count, seeds sort key, Transmission and Deluge tracker seed/leech counts.**
 - **The "service not configured" page renders** (it was an empty 503).
 - **Download-client pages say "unreachable" instead of showing an empty list** when the client is down.
+- **Quick-look "Next episode" and "Ended" chips show the air date in your display zone.** Sonarr reports air times as UTC instants; the chip showed the UTC calendar day, so an evening broadcast west of UTC read as the next day (the calendar beside it already had the right day).
 - **Services on internationalised hostnames work:** the URL check accepts them and their poster origin enters the Content-Security-Policy as punycode, the form browsers match (the raw name never matched, so posters were blocked).
 - **Dates follow the display time zone** on the dashboard, charts and the iCal feed: today's releases were dropped when the server's zone differed, and episode dates are now all-day events.
 - **Small things:** Sonarr v4 history event names on the series history, series queue sizes honour the byte-unit setting, the films backdrop no longer resets the page background, missing-films search progress parsed for "grabbed" too, settings "Clear" is undone by typing a new value, 13 English strings in the French catalogue translated, the Seerr delete confirmation no longer shows a raw key, `make lint` fails on a syntax error.
