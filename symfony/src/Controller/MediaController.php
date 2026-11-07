@@ -6,6 +6,7 @@ use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Entity\ServiceInstance;
 use App\Service\ConfigService;
 use App\Service\DisplayPreferencesService;
+use App\Service\Http\ConcurrentCurl;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\MovieLibraryFilter;
@@ -46,6 +47,8 @@ class MediaController extends AbstractController
      */
     private const SEARCH_INDEX_PARTIAL_TTL = 5;
 
+    private readonly ConcurrentCurl $concurrent;
+
     public function __construct(
         private readonly RadarrClient      $radarr,
         private readonly SonarrClient      $sonarr,
@@ -58,7 +61,10 @@ class MediaController extends AbstractController
         private readonly TranslatorInterface $translator,
         private readonly MediaLibraryCache $libraryCache,
         private readonly BazarrSubtitleIndex $bazarrIndex,
-    ) {}
+        ?ConcurrentCurl $concurrent = null,
+    ) {
+        $this->concurrent = $concurrent ?? new ConcurrentCurl();
+    }
 
     /**
      * Drop the cached library list for the currently-bound instance after a
@@ -686,12 +692,13 @@ class MediaController extends AbstractController
     /**
      * Review 2026-11-06 (H4): the file manager's language picker must use
      * THIS Radarr's language table (ids differ between Radarr and Sonarr,
-     * and the old literal list mapped 7 of 12 names to the wrong id).
+     * and the old literal list mapped 7 of 12 names to the wrong id). Pseudo
+     * entries (Any / Original / Unknown) are left out — see realLanguages().
      */
     #[Route('/films/languages', name: 'films_languages_json', methods: ['GET'])]
     public function filmsLanguagesJson(): JsonResponse
     {
-        return $this->json($this->radarr->getLanguages());
+        return $this->json(self::realLanguages($this->radarr->getLanguages()));
     }
 
     // ── Queue ─────────────────────────────────────────────────────────────────
@@ -1064,9 +1071,20 @@ class MediaController extends AbstractController
     }
 
     /**
+     * Sonarr accepts a SeriesSearch command for one series at a time; this
+     * many go out together per batch (one request's worth of curl handles
+     * on Sonarr's side, well under its default connection limit).
+     */
+    private const BULK_SEARCH_CONCURRENCY = 10;
+
+    /**
      * MT-10: Sonarr has no multi-series search command, so one SeriesSearch
-     * per id is issued HERE, sequentially (not as N concurrent browser
-     * POSTs), and a rejected command counts as failed, not "launched".
+     * per id is issued HERE (not as N concurrent browser POSTs), and a
+     * rejected command counts as failed, not "launched". Final review, minor
+     * #10: the commands overlap through ConcurrentCurl in bounded batches —
+     * 500 sequential POSTs took ≈ 50 s inside one request. A SeriesSearch is
+     * safe for the runner's serial fallback (a command sent twice is a
+     * search run twice, nothing more).
      */
     #[Route('/series/bulk/search', name: 'series_bulk_search', methods: ['POST'])]
     public function seriesBulkSearch(Request $request): JsonResponse
@@ -1075,13 +1093,23 @@ class MediaController extends AbstractController
         if ($ids === []) return $this->json(['ok' => false, 'error' => $this->translator->trans('media.api.no_series_selected')]);
         $cmdIds = [];
         $failed = 0;
-        foreach ($ids as $id) {
-            $result = $this->sonarr->sendCommand('SeriesSearch', ['seriesId' => $id]);
-            if ($result === null) {
-                $failed++;
-                continue;
+        foreach (array_chunk($ids, self::BULK_SEARCH_CONCURRENCY) as $chunk) {
+            $tasks = [];
+            foreach ($chunk as $id) {
+                // a non-numeric key: PHP would turn "12" into int 12
+                $tasks["series:$id"] = fn() => $this->sonarr->sendCommand('SeriesSearch', ['seriesId' => $id]);
             }
-            $cmdIds[] = (int) ($result['id'] ?? 0);
+            foreach ($this->concurrent->run($tasks) as $key => $outcome) {
+                if (isset($outcome['error'])) {
+                    $this->logger->warning('Media seriesBulkSearch command failed', ['task' => $key, 'exception' => $outcome['error']::class, 'message' => $outcome['error']->getMessage()]);
+                }
+                $result = $outcome['value'] ?? null;
+                if (!is_array($result)) {
+                    $failed++;
+                    continue;
+                }
+                $cmdIds[] = (int) ($result['id'] ?? 0);
+            }
         }
         if ($cmdIds === []) {
             return $this->jsonClientError('Sonarr', $this->sonarr, $this->translator->trans('media.api.network_error'), 502);
@@ -1109,6 +1137,21 @@ class MediaController extends AbstractController
         return $slug !== null
             ? $this->libraryCache->series($slug, fn() => $this->sonarr->getSeries(SonarrClient::LIBRARY_TIMEOUT))
             : $this->sonarr->getSeries(SonarrClient::LIBRARY_TIMEOUT);
+    }
+
+    /**
+     * Final review, minor #8: the *arr `/language` table also carries Any
+     * (-1), Original (-2) and Unknown (0) — profile settings, not something a
+     * file can be tagged with — so the file-manager pickers only list real
+     * languages. A file that already carries Unknown keeps it through the
+     * page's own-languages merge (H5).
+     *
+     * @param array<int, mixed> $languages
+     * @return list<array<string, mixed>>
+     */
+    private static function realLanguages(array $languages): array
+    {
+        return array_values(array_filter($languages, static fn($l) => is_array($l) && (int) ($l['id'] ?? 0) > 0));
     }
 
     /**
@@ -1905,7 +1948,7 @@ class MediaController extends AbstractController
     #[Route('/series/languages', name: 'series_languages_json', methods: ['GET'])]
     public function seriesLanguagesJson(): JsonResponse
     {
-        return $this->json($this->sonarr->getLanguages());
+        return $this->json(self::realLanguages($this->sonarr->getLanguages()));
     }
 
     #[Route('/series/file/{id}/reassign', name: 'series_file_reassign', methods: ['POST'], requirements: ['id' => '\d+'])]

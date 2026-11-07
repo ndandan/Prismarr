@@ -61,7 +61,8 @@ class BazarrSubtitleIndex implements ResetInterface
     public const KEY_BADGES = 'bazarr_subtitle_index.badges';
 
     /**
-     * A plain `cache.app` item (NOT an SWR envelope) journalling recent
+     * A plain item in the DATASET pool (`cache.swr`, next to the maps it
+     * patches; NOT an SWR envelope) journalling recent
      * per-id mutation patches, keyed "<kind>:<id>" so repeated mutations on
      * one item collapse to the newest. Read by applyPatchesNewerThan() so a
      * bulk refresh already in flight when a mutation lands can re-apply that
@@ -139,9 +140,14 @@ class BazarrSubtitleIndex implements ResetInterface
      * per-id repair path — and loadSingle() — the single-item quick-look
      * fallback behind movieStatusSingle()/movieLanguagesSingle(). The GRID
      * badge read path (movieStatus/movieLanguages/seriesStatus) never calls
-     * it directly; those go through $swr only. $cacheApp is used both for
-     * the patch journal (KEY_PATCHES) and — see requestRefreshOnce() — the
-     * cross-request overdue-log throttle and the breaker check.
+     * it directly; those go through $swr only. $cacheApp (cache.app) is used
+     * by requestRefreshOnce() only — the cross-request overdue-log throttle
+     * and the breaker check (breakers live there). The patch journal
+     * (KEY_PATCHES) and the envelope read in patchPooledMap() use the
+     * dataset pool ($swr->getPool(), cache.swr) since the final review of
+     * 2026-11-06 (minor #15): every settings save clears cache.app, which
+     * dropped a pending patch — and, since HC-1 moved the datasets, made
+     * patchPooledMap() miss the envelope and silently skip the in-place patch.
      */
     public function __construct(
         private readonly BazarrClient $client,
@@ -184,7 +190,7 @@ class BazarrSubtitleIndex implements ResetInterface
         }
         // A patch journalled from the OLD instance must not be re-applied by
         // the first bulk refresh against the new one.
-        $this->cacheApp->deleteItem(self::KEY_PATCHES);
+        $this->swr->getPool()->deleteItem(self::KEY_PATCHES);
     }
 
     /**
@@ -360,7 +366,7 @@ class BazarrSubtitleIndex implements ResetInterface
             return; // hard miss: the journal + the requested rebuild cover it
         }
 
-        $item = $this->cacheApp->getItem($key);
+        $item = $this->swr->getPool()->getItem($key);
         $env  = $item->isHit() ? $item->get() : null;
         if (!is_array($env) || !isset($env['fetchedAt'])) {
             // Fix round 1, MINOR 6: an envelope whose fetchedAt cannot be
@@ -403,7 +409,7 @@ class BazarrSubtitleIndex implements ResetInterface
      */
     private function journalPatch(string $kind, int $id, array $status, ?array $langs): void
     {
-        $item    = $this->cacheApp->getItem(self::KEY_PATCHES);
+        $item    = $this->swr->getPool()->getItem(self::KEY_PATCHES);
         $journal = $item->isHit() && is_array($item->get()) ? $item->get() : [];
 
         $now = time();
@@ -423,7 +429,7 @@ class BazarrSubtitleIndex implements ResetInterface
 
         $item->set($journal);
         $item->expiresAfter(self::PATCH_TTL);
-        $this->cacheApp->save($item);
+        $this->swr->getPool()->save($item);
     }
 
     /**
@@ -442,7 +448,7 @@ class BazarrSubtitleIndex implements ResetInterface
      */
     public function applyPatchesNewerThan(string $kind, int $fetchStartedAt, array $statusMap, array $langsMap): array
     {
-        $item    = $this->cacheApp->getItem(self::KEY_PATCHES);
+        $item    = $this->swr->getPool()->getItem(self::KEY_PATCHES);
         $journal = $item->isHit() && is_array($item->get()) ? $item->get() : [];
 
         foreach ($journal as $entry) {
@@ -452,7 +458,7 @@ class BazarrSubtitleIndex implements ResetInterface
             if ((int) ($entry['at'] ?? 0) < $fetchStartedAt) {
                 continue;
             }
-            // Fix round 1, MINOR 5: a malformed entry (a foreign cache.app
+            // Fix round 1, MINOR 5: a malformed entry (a foreign pool
             // write reusing this key, a future/older build's shape) must
             // never null out an otherwise-good map row — skip it entirely
             // rather than assign a missing/non-array 'status'.

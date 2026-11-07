@@ -4,6 +4,7 @@ namespace App\Tests\Controller;
 
 use App\Controller\MediaController;
 use App\Service\ConfigService;
+use App\Service\Http\ConcurrentCurl;
 use App\Service\Media\BazarrSubtitleIndex;
 use App\Service\Media\MediaLibraryCache;
 use App\Service\Media\ProwlarrClient;
@@ -27,7 +28,7 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[AllowMockObjectsWithoutExpectations]
 class MediaArrWritePathsTest extends TestCase
 {
-    private function controller(?RadarrClient $radarr = null, ?SonarrClient $sonarr = null, ?MediaLibraryCache $libraryCache = null): MediaController
+    private function controller(?RadarrClient $radarr = null, ?SonarrClient $sonarr = null, ?MediaLibraryCache $libraryCache = null, ?ConcurrentCurl $concurrent = null): MediaController
     {
         $translator = $this->createMock(TranslatorInterface::class);
         $translator->method('trans')->willReturnArgument(0);
@@ -44,6 +45,7 @@ class MediaArrWritePathsTest extends TestCase
             $translator,
             $libraryCache ?? $this->createMock(MediaLibraryCache::class),
             $this->createMock(BazarrSubtitleIndex::class),
+            $concurrent,
         );
         $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturn(false);
@@ -173,6 +175,42 @@ class MediaArrWritePathsTest extends TestCase
         $r = $this->controller(sonarr: $sonarr)->seriesLanguagesJson();
 
         $this->assertSame([['id' => 27, 'name' => 'Hindi']], json_decode((string) $r->getContent(), true));
+    }
+
+    // ── Final review, minor #8: pseudo-languages are not file languages ─────
+
+    public function testFilmsLanguagesJsonHidesRadarrPseudoLanguages(): void
+    {
+        // Radarr's /language table carries Any (-1), Original (-2) and
+        // Unknown (0) — profile settings, not something a file can be tagged
+        // with — and the picker offered them as tickable. A file that already
+        // carries Unknown keeps it through the H5 own-languages merge.
+        $radarr = $this->createMock(RadarrClient::class);
+        $radarr->method('getLanguages')->willReturn([
+            ['id' => -2, 'name' => 'Original'],
+            ['id' => -1, 'name' => 'Any'],
+            ['id' => 0, 'name' => 'Unknown'],
+            ['id' => 1, 'name' => 'English'],
+            ['id' => 8, 'name' => 'Japanese'],
+        ]);
+
+        $r = $this->controller(radarr: $radarr)->filmsLanguagesJson();
+
+        $this->assertSame([['id' => 1, 'name' => 'English'], ['id' => 8, 'name' => 'Japanese']], json_decode((string) $r->getContent(), true));
+    }
+
+    public function testSeriesLanguagesJsonHidesSonarrPseudoLanguages(): void
+    {
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('getLanguages')->willReturn([
+            ['id' => 0, 'name' => 'Unknown'],
+            ['id' => -2, 'name' => 'Original'],
+            ['id' => 27, 'name' => 'Hindi'],
+        ]);
+
+        $r = $this->controller(sonarr: $sonarr)->seriesLanguagesJson();
+
+        $this->assertSame([['id' => 27, 'name' => 'Hindi']], json_decode((string) $r->getContent(), true), 'a JSON list, not an object with gaps');
     }
 
     // ── H5: an empty language list must never be stored ─────────────────────
@@ -306,6 +344,52 @@ class MediaArrWritePathsTest extends TestCase
 
         $this->assertGreaterThanOrEqual(500, $r->getStatusCode());
         $this->assertFalse(json_decode((string) $r->getContent(), true)['ok']);
+    }
+
+    public function testSeriesBulkSearchOverlapsTheCommandsInBoundedBatches(): void
+    {
+        // Final review, minor #10: up to 500 SeriesSearch POSTs went out one
+        // after another inside a single request (≈ 50 s worst case). They now
+        // overlap through ConcurrentCurl, ten at a time, in id order.
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('sendCommand')->willReturnCallback(fn(string $name, array $body) => ['id' => 100 + $body['seriesId']]);
+        $runner = new class extends ConcurrentCurl {
+            /** @var list<list<string>> */
+            public array $batches = [];
+            public function run(array $tasks): array
+            {
+                $this->batches[] = array_map('strval', array_keys($tasks));
+                return parent::run($tasks);
+            }
+        };
+
+        $r = $this->controller(sonarr: $sonarr, concurrent: $runner)->seriesBulkSearch(self::post(['seriesIds' => range(1, 25)]));
+
+        $payload = json_decode((string) $r->getContent(), true);
+        $this->assertTrue($payload['ok']);
+        $this->assertSame(25, $payload['launched']);
+        $this->assertSame(0, $payload['failed']);
+        $this->assertSame(range(101, 125), $payload['cmdIds'], 'results keep the id order');
+        $this->assertSame([10, 10, 5], array_map('count', $runner->batches), 'bounded concurrent batches, not one request per id');
+        $this->assertSame(array_map(fn(int $i) => "series:$i", range(1, 25)), array_merge(...$runner->batches));
+    }
+
+    public function testSeriesBulkSearchCountsACommandThatThrewAsFailed(): void
+    {
+        $sonarr = $this->createMock(SonarrClient::class);
+        $sonarr->method('sendCommand')->willReturnCallback(function (string $name, array $body) {
+            if ($body['seriesId'] === 2) {
+                throw new \RuntimeException('boom');
+            }
+            return ['id' => 100 + $body['seriesId']];
+        });
+
+        $r = $this->controller(sonarr: $sonarr)->seriesBulkSearch(self::post(['seriesIds' => [1, 2, 3]]));
+
+        $payload = json_decode((string) $r->getContent(), true);
+        $this->assertSame(2, $payload['launched']);
+        $this->assertSame(1, $payload['failed']);
+        $this->assertSame([101, 103], $payload['cmdIds']);
     }
 
     public function testFilmQueueSurfacesAnOutageInsteadOfAnEmptyQueue(): void
