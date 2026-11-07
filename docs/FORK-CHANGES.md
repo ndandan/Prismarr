@@ -5,7 +5,7 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-11-07 (covers 2026-06-13 → 2026-11-07; the review-2026-11-06 remediation is on branch `fix/review-2026-11-06`, not yet on `main`).*
+*Last updated: 2026-11-07 (covers 2026-06-13 → 2026-11-07; the review-2026-11-06 remediation merged to `main` on 2026-11-07).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
@@ -927,7 +927,7 @@ of the Seerr pages; EN + FR.
 
 ---
 
-### Code-review remediation, review 2026-11-06 (2026-11-07) — branch `fix/review-2026-11-06`, pending the owner's `:beta` live check
+### Code-review remediation, review 2026-11-06 (2026-11-07) — branch `fix/review-2026-11-06`, live-checked on `:beta` and merged to `main` the same day
 
 The sixth review and the first whole-codebase pass (11 finder + 5 verifier
 subagents reading upstream Radarr/Sonarr/Prowlarr source for the API
