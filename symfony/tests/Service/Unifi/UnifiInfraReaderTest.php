@@ -5,6 +5,8 @@ namespace App\Tests\Service\Unifi;
 use App\Service\Unifi\UnifiInfraReader;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use App\Service\Unifi\UnifiReadCache;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
 class UnifiInfraReaderTest extends TestCase
 {
@@ -238,5 +240,40 @@ class UnifiInfraReaderTest extends TestCase
         $this->assertNull($r['devices'][0]['clients']);
         $this->assertNull($r['devices'][0]['cpuPercent']);
         $this->assertNull($r['radios']);                  // non-array radio table ignored
+    }
+
+    /**
+     * Review 2026-11-06 FF-1: the memo lives in cache.app, so neither the
+     * services_resetter (worker mode) nor a fresh service (the next request)
+     * makes the reader go back to the console inside its TTL.
+     */
+    public function testTheMemoSurvivesResetAndANewRequest(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiInfraReader($stub, new NullLogger(), $cache);
+
+        $this->assertNotNull($first->read());
+        $calls = count($stub->paths);
+        $first->reset();
+        $first->read();
+        (new UnifiInfraReader($stub, new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths));
+    }
+
+    public function testAnotherConsoleDoesNotShareTheMemo(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiInfraReader($stub, new NullLogger(), $cache);
+        $first->read();
+        $calls = count($stub->paths);
+
+        $stub = new StubUnifiFetcher($this->all());
+        $stub->identity = 'another-console';
+        (new UnifiInfraReader($stub, new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths), 'a different console must be fetched, not served from the memo');
     }
 }

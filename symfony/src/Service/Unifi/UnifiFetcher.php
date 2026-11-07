@@ -37,4 +37,11 @@ interface UnifiFetcher
      * per endpoint. Re-evaluated by every fetch(), memo answers included.
      */
     public function transportFailed(): bool;
+
+    /**
+     * A stable id of the console this fetcher talks to (URL + site + key),
+     * used to key the readers' shared cache so a settings change never serves
+     * the previous console's data. '' when UniFi is not configured.
+     */
+    public function cacheIdentity(): string;
 }

@@ -7,6 +7,8 @@ use App\Service\Unifi\UnifiMapReader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use App\Service\Unifi\UnifiReadCache;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
 /**
  * The reader is glue — fetch three payloads, hand them to the (separately
@@ -144,17 +146,6 @@ class UnifiMapReaderTest extends TestCase
         $this->assertSame(1, self::fetched($stub, '/stat/device'));
     }
 
-    public function testResetDropsTheCache(): void
-    {
-        [$reader, $stub] = $this->reader($this->all());
-
-        $reader->read();
-        $reader->reset();
-        $reader->read();
-
-        $this->assertSame(2, self::fetched($stub, '/stat/device'));
-    }
-
     public function testMissingStaStillDrawsInfrastructure(): void
     {
         [$reader] = $this->reader(['stat/health' => self::HEALTH, 'stat/device' => self::DEVICES, 'stat/sta' => null]);
@@ -260,5 +251,40 @@ class UnifiMapReaderTest extends TestCase
         // linkMbps would round it to 0.
         yield 'below one'               => ['0.4', null];
         yield 'overflows to infinity'   => ['1e999', null];
+    }
+
+    /**
+     * Review 2026-11-06 FF-1: the memo lives in cache.app, so neither the
+     * services_resetter (worker mode) nor a fresh service (the next request)
+     * makes the reader go back to the console inside its TTL.
+     */
+    public function testTheMemoSurvivesResetAndANewRequest(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiMapReader($stub, $this->createStub(ConfigService::class), new NullLogger(), $cache);
+
+        $this->assertNotNull($first->read());
+        $calls = count($stub->paths);
+        $first->reset();
+        $first->read();
+        (new UnifiMapReader($stub, $this->createStub(ConfigService::class), new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths));
+    }
+
+    public function testAnotherConsoleDoesNotShareTheMemo(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiMapReader($stub, $this->createStub(ConfigService::class), new NullLogger(), $cache);
+        $first->read();
+        $calls = count($stub->paths);
+
+        $stub = new StubUnifiFetcher($this->all());
+        $stub->identity = 'another-console';
+        (new UnifiMapReader($stub, $this->createStub(ConfigService::class), new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths), 'a different console must be fetched, not served from the memo');
     }
 }

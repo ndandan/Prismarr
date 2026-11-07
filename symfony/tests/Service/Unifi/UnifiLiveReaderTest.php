@@ -5,6 +5,8 @@ namespace App\Tests\Service\Unifi;
 use App\Service\Unifi\UnifiLiveReader;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use App\Service\Unifi\UnifiReadCache;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
 class UnifiLiveReaderTest extends TestCase
 {
@@ -272,5 +274,40 @@ class UnifiLiveReaderTest extends TestCase
         $this->assertSame('no-mac', $r['talkers'][0]['name']);
         $this->assertNull($r['wireless'][0]['avgSignalDbm']); // non-numeric signal → null, no crash
         $this->assertNull($r['reservations']);                // a reservation with no mac/ip is unusable
+    }
+
+    /**
+     * Review 2026-11-06 FF-1: the memo lives in cache.app, so neither the
+     * services_resetter (worker mode) nor a fresh service (the next request)
+     * makes the reader go back to the console inside its TTL.
+     */
+    public function testTheMemoSurvivesResetAndANewRequest(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiLiveReader($stub, new NullLogger(), $cache);
+
+        $this->assertNotNull($first->read());
+        $calls = count($stub->paths);
+        $first->reset();
+        $first->read();
+        (new UnifiLiveReader($stub, new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths));
+    }
+
+    public function testAnotherConsoleDoesNotShareTheMemo(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiLiveReader($stub, new NullLogger(), $cache);
+        $first->read();
+        $calls = count($stub->paths);
+
+        $stub = new StubUnifiFetcher($this->all());
+        $stub->identity = 'another-console';
+        (new UnifiLiveReader($stub, new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths), 'a different console must be fetched, not served from the memo');
     }
 }

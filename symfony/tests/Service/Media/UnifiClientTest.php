@@ -234,6 +234,20 @@ class UnifiClientTest extends TestCase
         $this->assertNotSame([], $otherSite->pathsRequested, 'another site must not get the first site\'s overview');
     }
 
+    /** The readers' shared-cache key (FF-1): one per console + site + key, '' when unconfigured. */
+    public function testCacheIdentityTracksConsoleSiteAndKey(): void
+    {
+        $base = $this->makeClient([])->cacheIdentity();
+
+        $this->assertNotSame('', $base);
+        $this->assertSame($base, $this->makeClient([])->cacheIdentity(), 'stable across instances (= requests)');
+        $this->assertNotSame($base, $this->makeClient([], ['unifi_site' => 'branch'])->cacheIdentity());
+        $this->assertNotSame($base, $this->makeClient([], ['unifi_url' => 'https://10.0.0.1'])->cacheIdentity());
+        $this->assertNotSame($base, $this->makeClient([], ['unifi_api_key' => 'rotated'])->cacheIdentity());
+        $this->assertSame('', $this->makeClient([], ['unifi_url' => null])->cacheIdentity());
+        $this->assertSame('', $this->makeClient([], ['unifi_api_key' => null])->cacheIdentity());
+    }
+
     public function testAllNullEndpointsMeansNullAndNoCache(): void
     {
         $client = $this->makeClient(['stat/health' => null, 'stat/report' => null, 'stat/device' => null]);

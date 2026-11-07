@@ -37,4 +37,12 @@ final class StubUnifiFetcher implements UnifiFetcher
     {
         return $this->failTransport;
     }
+
+    /** Tests point two stubs at "different consoles" by giving them different ids. */
+    public string $identity = 'stub-console';
+
+    public function cacheIdentity(): string
+    {
+        return $this->identity;
+    }
 }

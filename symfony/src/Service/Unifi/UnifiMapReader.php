@@ -44,26 +44,32 @@ final class UnifiMapReader implements ResetInterface
     /** Test seam — advances the reader's clock without sleeping. */
     public float $nowOffset = 0.0;
 
-    private ?array $cache = null;
-    private float $cacheAt = 0.0;
+    private readonly UnifiReadCache $cache;
 
     public function __construct(
         private readonly UnifiFetcher $unifi,
         private readonly ConfigService $config,
         private readonly LoggerInterface $logger,
-    ) {}
+        ?UnifiReadCache $cache = null,
+    ) {
+        $this->cache = $cache ?? new UnifiReadCache();
+    }
 
+    /**
+     * Nothing per-request to drop: the memo lives in cache.app (UnifiReadCache)
+     * precisely so the services_resetter cannot wipe it between polls. The plan
+     * speeds it reads are settings, and a settings save clears cache.app.
+     */
     public function reset(): void
     {
-        $this->cache   = null;
-        $this->cacheAt = 0.0;
     }
 
     public function read(): ?array
     {
         $now = microtime(true) + $this->nowOffset;
-        if ($this->cache !== null && ($now - $this->cacheAt) < self::TTL) {
-            return $this->cache;
+        $hit = $this->cache->get($this->unifi, 'map', self::TTL, $now);
+        if (is_array($hit)) {
+            return $hit;
         }
 
         $health = $this->unifi->fetch(self::PATH_HEALTH);
@@ -95,11 +101,11 @@ final class UnifiMapReader implements ResetInterface
             return null; // don't cache — retry next call
         }
 
-        $this->cache = $topology + [
+        $result = $topology + [
             'layout' => TopologyLayout::build($topology['nodes'], $topology['edges']),
         ];
-        $this->cacheAt = $now;
-        return $this->cache;
+        $this->cache->put($this->unifi, 'map', self::TTL, $now, $result);
+        return $result;
     }
 
     /**

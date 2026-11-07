@@ -5,6 +5,8 @@ namespace App\Tests\Service\Unifi;
 use App\Service\Unifi\UnifiHistoryReader;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use App\Service\Unifi\UnifiReadCache;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 
 class UnifiHistoryReaderTest extends TestCase
 {
@@ -115,5 +117,40 @@ class UnifiHistoryReaderTest extends TestCase
         $this->assertNull($r['speedtests'][0]['downMbps']);     // but null throughput STAYS null
         $this->assertNull($r['speedtests'][0]['upMbps']);
         $this->assertNull($r['speedtests'][0]['latencyMs']);
+    }
+
+    /**
+     * Review 2026-11-06 FF-1: the memo lives in cache.app, so neither the
+     * services_resetter (worker mode) nor a fresh service (the next request)
+     * makes the reader go back to the console inside its TTL.
+     */
+    public function testTheMemoSurvivesResetAndANewRequest(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiHistoryReader($stub, new NullLogger(), $cache);
+
+        $this->assertNotNull($first->read());
+        $calls = count($stub->paths);
+        $first->reset();
+        $first->read();
+        (new UnifiHistoryReader($stub, new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths));
+    }
+
+    public function testAnotherConsoleDoesNotShareTheMemo(): void
+    {
+        $cache = new UnifiReadCache(new ArrayAdapter());
+        $stub  = new StubUnifiFetcher($this->all());
+        $first = new UnifiHistoryReader($stub, new NullLogger(), $cache);
+        $first->read();
+        $calls = count($stub->paths);
+
+        $stub = new StubUnifiFetcher($this->all());
+        $stub->identity = 'another-console';
+        (new UnifiHistoryReader($stub, new NullLogger(), $cache))->read();
+
+        $this->assertSame($calls, count($stub->paths), 'a different console must be fetched, not served from the memo');
     }
 }

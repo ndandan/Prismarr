@@ -65,25 +65,30 @@ final class UnifiInfraReader implements ResetInterface
     /** networkconf carries WAN and VPN objects too; the VLAN panel wants LANs. */
     private const LAN_PURPOSES = ['corporate', 'guest', 'vlan-only'];
 
-    private ?array $cache = null;
-    private float $cacheAt = 0.0;
+    private readonly UnifiReadCache $cache;
 
     public function __construct(
         private readonly UnifiFetcher $unifi,
         private readonly LoggerInterface $logger,
-    ) {}
+        ?UnifiReadCache $cache = null,
+    ) {
+        $this->cache = $cache ?? new UnifiReadCache();
+    }
 
+    /**
+     * Nothing per-request to drop: the memo lives in cache.app (UnifiReadCache)
+     * precisely so the services_resetter cannot wipe it between polls.
+     */
     public function reset(): void
     {
-        $this->cache   = null;
-        $this->cacheAt = 0.0;
     }
 
     public function read(): ?array
     {
         $now = microtime(true);
-        if ($this->cache !== null && ($now - $this->cacheAt) < self::TTL) {
-            return $this->cache;
+        $hit = $this->cache->get($this->unifi, 'infra', self::TTL, $now);
+        if (is_array($hit)) {
+            return $hit;
         }
 
         $raw = $this->unifi->fetch(self::PATH_DEVICE);
@@ -106,7 +111,7 @@ final class UnifiInfraReader implements ResetInterface
             return null; // don't cache — retry next call
         }
 
-        $this->cache = [
+        $result = [
             'devices'   => $devices,
             'radios'    => $radios,
             'neighbors' => $neighbors,
@@ -120,8 +125,8 @@ final class UnifiInfraReader implements ResetInterface
                 'neighbors'  => $neighbors === null ? 0 : count($neighbors),
             ],
         ];
-        $this->cacheAt = $now;
-        return $this->cache;
+        $this->cache->put($this->unifi, 'infra', self::TTL, $now, $result);
+        return $result;
     }
 
     /** Same `kind` vocabulary as UnifiClient::mapDevices() — keep the two in sync. */

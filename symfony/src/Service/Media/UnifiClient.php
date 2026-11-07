@@ -197,6 +197,16 @@ class UnifiClient implements ResetInterface, UnifiFetcher
         return $this->transportDown;
     }
 
+    public function cacheIdentity(): string
+    {
+        $this->ensureConfig();
+        if ($this->baseUrl === null || $this->baseUrl === '' || $this->apiKey === '') {
+            return '';
+        }
+
+        return hash('xxh128', $this->baseUrl . "\0" . $this->site . "\0" . $this->apiKey);
+    }
+
     public function overview(): ?array
     {
         $this->ensureConfig();
@@ -207,7 +217,7 @@ class UnifiClient implements ResetInterface, UnifiFetcher
 
         // Keyed by console + site + key: a settings change must not serve the
         // old console's numbers.
-        $key = 'unifi.overview.' . hash('xxh128', $this->baseUrl . "\0" . $this->site . "\0" . $this->apiKey);
+        $key = 'unifi.overview.' . $this->cacheIdentity();
 
         return $this->cache->get($key, function (ItemInterface $item, bool &$save): ?array {
             $item->expiresAfter(self::OVERVIEW_TTL);

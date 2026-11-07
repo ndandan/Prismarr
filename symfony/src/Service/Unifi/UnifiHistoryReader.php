@@ -39,25 +39,30 @@ final class UnifiHistoryReader implements ResetInterface
     /** Clock seam — the report windows are testable with a fixed now. */
     public ?int $nowOverride = null;
 
-    private ?array $cache = null;
-    private float $cacheAt = 0.0;
+    private readonly UnifiReadCache $cache;
 
     public function __construct(
         private readonly UnifiFetcher $unifi,
         private readonly LoggerInterface $logger,
-    ) {}
+        ?UnifiReadCache $cache = null,
+    ) {
+        $this->cache = $cache ?? new UnifiReadCache();
+    }
 
+    /**
+     * Nothing per-request to drop: the memo lives in cache.app (UnifiReadCache)
+     * precisely so the services_resetter cannot wipe it between polls.
+     */
     public function reset(): void
     {
-        $this->cache   = null;
-        $this->cacheAt = 0.0;
     }
 
     public function read(): ?array
     {
         $now = microtime(true);
-        if ($this->cache !== null && ($now - $this->cacheAt) < self::TTL) {
-            return $this->cache;
+        $hit = $this->cache->get($this->unifi, 'history', self::TTL, $now);
+        if (is_array($hit)) {
+            return $hit;
         }
 
         $ts = $this->nowOverride ?? time();
@@ -86,9 +91,9 @@ final class UnifiHistoryReader implements ResetInterface
             return null; // fully unavailable — don't cache, retry next call
         }
 
-        $this->cache   = ['usage7d' => $usage, 'speedtests' => $speedtests];
-        $this->cacheAt = $now;
-        return $this->cache;
+        $result = ['usage7d' => $usage, 'speedtests' => $speedtests];
+        $this->cache->put($this->unifi, 'history', self::TTL, $now, $result);
+        return $result;
     }
 
     /** Hourly wan byte buckets; `time` is epoch MILLISECONDS. */

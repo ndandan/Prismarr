@@ -56,31 +56,30 @@ final class UnifiLiveReader implements ResetInterface
     /** Test seam — advances the reader's clock without sleeping. */
     public float $nowOffset = 0.0;
 
-    private ?array $cache = null;
-    private float $cacheAt = 0.0;
-
-    /** @var ?array{users: ?array, apNames: array<string, string>} */
-    private ?array $configCache = null;
-    private float $configCacheAt = 0.0;
+    private readonly UnifiReadCache $cache;
 
     public function __construct(
         private readonly UnifiFetcher $unifi,
         private readonly LoggerInterface $logger,
-    ) {}
+        ?UnifiReadCache $cache = null,
+    ) {
+        $this->cache = $cache ?? new UnifiReadCache();
+    }
 
+    /**
+     * Nothing per-request to drop: the memo lives in cache.app (UnifiReadCache)
+     * precisely so the services_resetter cannot wipe it between polls.
+     */
     public function reset(): void
     {
-        $this->cache         = null;
-        $this->cacheAt       = 0.0;
-        $this->configCache   = null;
-        $this->configCacheAt = 0.0;
     }
 
     public function read(): ?array
     {
         $now = microtime(true) + $this->nowOffset;
-        if ($this->cache !== null && ($now - $this->cacheAt) < self::TTL) {
-            return $this->cache;
+        $hit = $this->cache->get($this->unifi, 'live', self::TTL, $now);
+        if (is_array($hit)) {
+            return $hit;
         }
 
         $health = $this->mapHealth($this->unifi->fetch(self::PATH_HEALTH));
@@ -108,9 +107,8 @@ final class UnifiLiveReader implements ResetInterface
             return null; // don't cache — retry next call
         }
 
-        $this->cache   = $result;
-        $this->cacheAt = $now;
-        return $this->cache;
+        $this->cache->put($this->unifi, 'live', self::TTL, $now, $result);
+        return $result;
     }
 
     /**
@@ -120,8 +118,9 @@ final class UnifiLiveReader implements ResetInterface
      */
     private function config(float $now): array
     {
-        if ($this->configCache !== null && ($now - $this->configCacheAt) < self::CONFIG_TTL) {
-            return [$this->configCache['users'], $this->configCache['apNames']];
+        $hit = $this->cache->get($this->unifi, 'live.config', self::CONFIG_TTL, $now);
+        if (is_array($hit) && array_key_exists('users', $hit) && is_array($hit['apNames'] ?? null)) {
+            return [$hit['users'], $hit['apNames']];
         }
 
         $users = $this->unifi->fetch(self::PATH_USER);
@@ -139,8 +138,7 @@ final class UnifiLiveReader implements ResetInterface
             }
         }
 
-        $this->configCache   = ['users' => $users, 'apNames' => $apNames];
-        $this->configCacheAt = $now;
+        $this->cache->put($this->unifi, 'live.config', self::CONFIG_TTL, $now, ['users' => $users, 'apNames' => $apNames]);
         return [$users, $apNames];
     }
 
