@@ -467,7 +467,8 @@ The upstream contributor docs apply to this fork too:
 [CONTRIBUTING.md](CONTRIBUTING.md), [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md),
 [SECURITY.md](SECURITY.md) (no public issues for vulnerabilities).
 
-Before any commit: `make check` (PHP lint + Twig lint + full PHPUnit suite).
+Before any commit: `make check` (PHP lint + Twig lint + JavaScript behaviour
+tests + PHPStan + full PHPUnit suite).
 
 ---
 

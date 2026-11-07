@@ -1027,6 +1027,30 @@ wording; this is the fork-vs-upstream view.
   handling in the remaining widgets, the UniFi readers' TTL memos under worker
   mode, dashboard "outage vs empty" rendering, torrent add-URL validators.
 
+### JavaScript behaviour tests in `make check` (2026-11-07)
+
+PHPUnit executes no JavaScript, so the review's worst finding — the Deluge
+auto-refresh dead on a missing `refreshSeq` declaration — was invisible to
+CI and caught only by a reviewer. The 18 scratch node checks are now a
+committed suite, `symfony/tests/js/` (49 cases on Node's built-in
+`node:test`, no npm dependencies): `cmdState()` on the films, missing-films
+and series pages, and `refreshData()` on the Deluge, qBittorrent and
+Transmission pages.
+
+- **The tests read the templates, not a copy.** `support/template-script.mjs`
+  slices each helper out of the live Twig file (from a start marker to the
+  brace-matched end of the function) and runs it in a `node:vm` sandbox with
+  stubbed `fetch`. A renamed marker, or Twig syntax inside the slice, fails
+  the suite instead of skipping it. The templates are untouched: the helpers
+  went upstream inline (wave 6), and moving them into asset modules would
+  have made the fork diverge in those files.
+- **`make test-js`** runs the suite in a throwaway `node:22-alpine`
+  container (the host needs Docker only) and is part of `make check`, so CI
+  runs it with no workflow logic change.
+- **Proven red:** deleting `var refreshSeq = 0;` from the Deluge template
+  fails all 8 Deluge cases; dropping `'orphaned'` from the films terminal
+  states fails that page's terminal-state case.
+
 ## 4. Fork-only — declined upstream
 
 ### Unraid server widget (v1 2026-07-01, v2 2026-07-02)
