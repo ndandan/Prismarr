@@ -593,7 +593,7 @@
                 if (u.email) html += '<div class="text-secondary" style="font-size:.82rem;margin-top:.15rem;">' + u.email + '</div>';
                 html += '<div class="d-flex justify-content-center gap-2 mt-2">';
                 html += '<span class="badge bg-' + roleColor + '-lt text-' + roleColor + '" style="font-size:.72rem;">' + role + '</span>';
-                html += '<span class="text-secondary" style="font-size:.78rem;">' + tpl(_I18N.registeredOnTpl, {DATE: (u.createdAt ? u.createdAt.substring(0, 10) : '?')}) + '</span>';
+                html += '<span class="text-secondary" style="font-size:.78rem;">' + tpl(_I18N.registeredOnTpl, {DATE: (u.createdAt ? window._prismarrFmtDate(new Date(u.createdAt)) : '?')}) + '</span>';
                 html += '</div>';
                 html += '</div>';
 
@@ -687,8 +687,8 @@
                 html += '<tr><td class="text-secondary">' + _I18N.profileJellyfinNameRow + '</td><td>' + (u.jellyfinUsername || '—') + '</td></tr>';
                 html += '<tr><td class="text-secondary">' + _I18N.profileTypeRow + '</td><td>' + (u.userType === 3 ? 'Jellyfin' : (u.userType === 2 ? _I18N.infoLocal : _I18N.infoOther)) + '</td></tr>';
                 html += '<tr><td class="text-secondary">' + _I18N.profileJellyfinIdRow + '</td><td style="font-family:monospace;font-size:.72rem;">' + (u.jellyfinUserId || '—') + '</td></tr>';
-                html += '<tr><td class="text-secondary">' + _I18N.profileRegisteredRow + '</td><td>' + (u.createdAt ? u.createdAt.substring(0, 10) : '—') + '</td></tr>';
-                html += '<tr><td class="text-secondary">' + _I18N.profileLastModifiedRow + '</td><td>' + (u.updatedAt ? u.updatedAt.substring(0, 10) : '—') + '</td></tr>';
+                html += '<tr><td class="text-secondary">' + _I18N.profileRegisteredRow + '</td><td>' + (u.createdAt ? window._prismarrFmtDate(new Date(u.createdAt)) : '—') + '</td></tr>';
+                html += '<tr><td class="text-secondary">' + _I18N.profileLastModifiedRow + '</td><td>' + (u.updatedAt ? window._prismarrFmtDate(new Date(u.updatedAt)) : '—') + '</td></tr>';
                 html += '</table>';
                 html += '</div>';
 

@@ -2824,7 +2824,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
               var action = eventLabels[h.eventType] || h.eventType || '?';
               var color = eventColors[h.eventType] || 'secondary';
               var quality = (h.quality && h.quality.quality) ? h.quality.quality.name : '—';
-              var date = h.date ? h.date.substring(0, 10) : '—';
+              var date = h.date ? window._prismarrFmtDate(new Date(h.date)) : '—';
               html += '<tr><td class="fw-medium">' + epNum + '</td><td><span class="badge bg-' + color + '-lt">' + esc(action) + '</span></td><td class="text-muted text-truncate" style="max-width:250px;" title="' + esc(h.sourceTitle || '') + '">' + esc(h.sourceTitle || '—') + '</td><td><span class="badge bg-blue-lt">' + esc(quality) + '</span></td><td class="text-muted">' + date + '</td></tr>';
             });
             html += '</tbody></table></div>';
@@ -3319,7 +3319,7 @@ body.density-compact #modal-serie .modal-body .card-header { padding-top: .4rem 
         var action = eventLabels[h.eventType] || h.eventType || '?';
         var color = eventColors[h.eventType] || 'secondary';
         var quality = (h.quality && h.quality.quality) ? h.quality.quality.name : '—';
-        var date = h.date ? h.date.substring(0, 10) : '—';
+        var date = h.date ? window._prismarrFmtDate(new Date(h.date)) : '—';
         html += '<tr><td class="fw-medium">' + epLabel + '</td><td><span class="badge bg-' + color + '-lt">' + esc(action) + '</span></td><td class="text-muted text-truncate" style="max-width:250px;" title="' + esc(h.sourceTitle || '') + '">' + esc(h.sourceTitle || '—') + '</td><td><span class="badge bg-blue-lt">' + esc(quality) + '</span></td><td class="text-muted">' + date + '</td></tr>';
       });
       html += '</tbody></table></div>';

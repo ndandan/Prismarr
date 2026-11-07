@@ -92,4 +92,26 @@ class ReviewHygieneGuardTest extends TestCase
         }
         $this->assertSame([], $offenders, "`x|default(true)` turns a deliberate false into true — use `(x ?? true)`:\n" . implode("\n", $offenders));
     }
+
+    /**
+     * MT-11 (review 2026-11-06): `h.date.substring(0, 10)` on an ISO instant
+     * is the UTC day — an evening grab west of UTC reads as tomorrow. Client
+     * dates go through window._prismarrFmtDate(new Date(…)): the viewer's
+     * zone and the Display date-format preference.
+     */
+    public function testNoTemplateSlicesTheUtcDayOutOfATimestamp(): void
+    {
+        $offenders = [];
+        $it = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator(__DIR__ . '/../../templates', \FilesystemIterator::SKIP_DOTS));
+        foreach ($it as $file) {
+            if (!str_ends_with((string) $file, '.twig')) {
+                continue;
+            }
+            $src = (string) file_get_contents((string) $file);
+            if (preg_match_all('/[A-Za-z_]*(?:[Dd]ate|At)\b\s*\.\s*(?:substring|substr|slice)\(\s*0\s*,\s*10\s*\)/', $src, $m)) {
+                $offenders[] = basename((string) $file) . ': ' . implode(', ', $m[0]);
+            }
+        }
+        $this->assertSame([], $offenders, "a timestamp sliced to 10 chars is the UTC day — use window._prismarrFmtDate(new Date(x)):\n" . implode("\n", $offenders));
+    }
 }
