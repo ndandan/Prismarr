@@ -288,7 +288,7 @@
                             <span style="font-weight:500;">{{ user.displayName ?? user.jellyfinUsername ?? user.email ?? '?' }}</span>
                             <span class="text-muted">·</span>
                         {% endif %}
-                        <span class="text-secondary">{% if req.createdAt is defined and req.createdAt %}{{ req.createdAt|slice(0,10) }}{% endif %}</span>
+                        <span class="text-secondary">{% if req.createdAt is defined and req.createdAt %}{{ req.createdAt|prismarr_date }}{% endif %}</span>
                         {% set modifier = req.modifiedBy ?? null %}
                         {% if req.status != 1 and modifier is not null %}
                             <span class="text-muted">·</span>

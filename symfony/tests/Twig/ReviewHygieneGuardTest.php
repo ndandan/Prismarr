@@ -107,11 +107,19 @@ class ReviewHygieneGuardTest extends TestCase
             if (!str_ends_with((string) $file, '.twig')) {
                 continue;
             }
-            $src = (string) file_get_contents((string) $file);
-            if (preg_match_all('/[A-Za-z_]*(?:[Dd]ate|At)\b\s*\.\s*(?:substring|substr|slice)\(\s*0\s*,\s*10\s*\)/', $src, $m)) {
-                $offenders[] = basename((string) $file) . ': ' . implode(', ', $m[0]);
+            // JS `.substring(0, 10)` and Twig `|slice(0,10)` alike (live check on
+            // :beta: the Seerr pages' first render is Twig). A `data-*`
+            // attribute is a sort key the page JS compares as text, not a
+            // displayed date, so it may stay ISO.
+            foreach (preg_split('/\R/', (string) file_get_contents((string) $file)) ?: [] as $n => $line) {
+                if (preg_match('/\bdata-[a-z-]+="[^"]*(?:[Dd]ate|At)\s*\|\s*slice/', $line)) {
+                    continue;
+                }
+                if (preg_match_all('/[A-Za-z_]*(?:[Dd]ate|At)\b\s*(?:\.\s*(?:substring|substr|slice)\(|\|\s*slice\()\s*0\s*,\s*10\s*\)/', $line, $m)) {
+                    $offenders[] = basename((string) $file) . ':' . ($n + 1) . ': ' . implode(', ', $m[0]);
+                }
             }
         }
-        $this->assertSame([], $offenders, "a timestamp sliced to 10 chars is the UTC day — use window._prismarrFmtDate(new Date(x)):\n" . implode("\n", $offenders));
+        $this->assertSame([], $offenders, "a timestamp sliced to 10 chars is the UTC day — use `|prismarr_date` (Twig) or window._prismarrFmtDate(new Date(x)) (JS):\n" . implode("\n", $offenders));
     }
 }
