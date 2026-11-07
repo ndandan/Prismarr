@@ -4659,6 +4659,7 @@ usenet:
     add_no_url: 'Enter an NZB URL.'
     add_bad_url: 'That URL is not allowed.'
     add_no_file: 'Choose at least one NZB file.'
+    add_bad_file: 'Only .nzb or .nzb.gz files up to 20 MB can be added.'
 
 prowlarr:
   nav:

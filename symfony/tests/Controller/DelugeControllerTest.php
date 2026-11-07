@@ -5,9 +5,28 @@ namespace App\Tests\Controller;
 use App\Controller\DelugeController;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use App\Service\HostResolver;
 
 class DelugeControllerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // DC-10: the validators resolve hostnames through the shared guard.
+        // Answer like a real resolver for the metadata spellings, nothing else.
+        HostResolver::reset();
+        HostResolver::setResolver(static fn(string $host): array => match (strtolower($host)) {
+            '2852039166', '0xa9.0xfe.0xa9.0xfe', '169.254.169.254.nip.io' => ['169.254.169.254'],
+            default => [],
+        });
+    }
+
+    protected function tearDown(): void
+    {
+        HostResolver::reset();
+        parent::tearDown();
+    }
+
     private function invokeStatic(string $method, mixed ...$args): mixed
     {
         $m = (new \ReflectionClass(DelugeController::class))->getMethod($method);
@@ -46,6 +65,12 @@ class DelugeControllerTest extends TestCase
         yield 'gopher scheme'      => ['gopher://evil/x', false];
         yield 'aws metadata'       => ['http://169.254.169.254/latest/meta-data/', false];
         yield 'gcp metadata'       => ['http://metadata.google.internal/computeMetadata/', false];
+        // DC-10: other spellings of the metadata address the literal list missed.
+        yield 'decimal ipv4'       => ['http://2852039166/', false];
+        yield 'hex ipv4'           => ['http://0xa9.0xfe.0xa9.0xfe/', false];
+        yield 'ipv4-mapped ipv6'   => ['http://[::ffff:a9fe:a9fe]/', false];
+        yield 'trailing dot'       => ['http://169.254.169.254./', false];
+        yield 'dns name to it'     => ['http://169.254.169.254.nip.io/', false];
     }
 
     #[DataProvider('urlCases')]

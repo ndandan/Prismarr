@@ -4652,6 +4652,7 @@ usenet:
     add_no_url: 'Saisissez une URL de NZB.'
     add_bad_url: 'Cette URL n''est pas autorisée.'
     add_no_file: 'Choisissez au moins un fichier NZB.'
+    add_bad_file: 'Seuls les fichiers .nzb ou .nzb.gz de 20 Mo maximum peuvent être ajoutés.'
 
 prowlarr:
   nav:

@@ -5,9 +5,28 @@ namespace App\Tests\Controller;
 use App\Controller\TransmissionController;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use App\Service\HostResolver;
 
 class TransmissionControllerTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+        // DC-10: the validators resolve hostnames through the shared guard.
+        // Answer like a real resolver for the metadata spellings, nothing else.
+        HostResolver::reset();
+        HostResolver::setResolver(static fn(string $host): array => match (strtolower($host)) {
+            '2852039166', '0xa9.0xfe.0xa9.0xfe', '169.254.169.254.nip.io' => ['169.254.169.254'],
+            default => [],
+        });
+    }
+
+    protected function tearDown(): void
+    {
+        HostResolver::reset();
+        parent::tearDown();
+    }
+
     private function invokeStatic(string $method, array $args): mixed
     {
         $m = (new \ReflectionClass(TransmissionController::class))->getMethod($method);
@@ -68,6 +87,12 @@ class TransmissionControllerTest extends TestCase
         yield 'azure metadata blocked'     => ['http://metadata.azure.com/', 'forbidden_host'];
         yield 'metadata blocked case-insensitive' => ['http://METADATA.GOOGLE.INTERNAL/', 'forbidden_host'];
         yield 'blank lines ignored'        => ["\n\nhttps://example.com/a.torrent\n\n", null];
+        // DC-10: other spellings of the metadata address the literal list missed.
+        yield 'decimal ipv4 blocked'       => ['http://2852039166/', 'forbidden_host'];
+        yield 'hex ipv4 blocked'           => ['http://0xa9.0xfe.0xa9.0xfe/', 'forbidden_host'];
+        yield 'ipv4-mapped ipv6 blocked'   => ['http://[::ffff:a9fe:a9fe]/', 'forbidden_host'];
+        yield 'trailing dot blocked'       => ['http://169.254.169.254./', 'forbidden_host'];
+        yield 'dns name to it blocked'     => ['http://169.254.169.254.nip.io/', 'forbidden_host'];
     }
 
     #[DataProvider('urlValidationCases')]
