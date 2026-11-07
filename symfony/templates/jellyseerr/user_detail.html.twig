@@ -52,7 +52,7 @@
             <div style="min-width:0;">
                 <h3 style="margin:0;font-weight:700;font-size:1.1rem;">{{ userName }}</h3>
                 <div class="text-secondary" style="font-size:.78rem;">
-                    {{ 'jellyseerr.user_detail.member_since_tpl'|trans|replace({'__DATE__': user.createdAt is defined and user.createdAt ? user.createdAt|slice(0,10) : '?'}) }}
+                    {{ 'jellyseerr.user_detail.member_since_tpl'|trans|replace({'__DATE__': user.createdAt is defined and user.createdAt ? user.createdAt|prismarr_date : '?'}) }}
                     · {{ 'jellyseerr.user_detail.requests_count_tpl'|trans({count: user.requestCount ?? 0}) }}
                 </div>
             </div>
@@ -267,7 +267,7 @@
                             </tr>
                             <tr>
                                 <td class="text-secondary">{{ 'jellyseerr.user_detail.info_registered'|trans }}</td>
-                                <td>{{ user.createdAt is defined and user.createdAt ? user.createdAt|slice(0,10) : '?' }}</td>
+                                <td>{{ user.createdAt is defined and user.createdAt ? user.createdAt|prismarr_date : '?' }}</td>
                             </tr>
                             {% if user.jellyfinUsername is defined and user.jellyfinUsername %}
                             <tr>
@@ -470,8 +470,8 @@
 
                 <div class="text-secondary mt-3" style="font-size:.78rem;">
                     <strong>{{ 'jellyseerr.user_detail.account_type_label'|trans }}</strong> {{ user.userType is defined and user.userType == 3 ? 'Jellyfin' : (user.userType == 2 ? 'jellyseerr.user_detail.info_user_local'|trans : 'jellyseerr.user_detail.info_user_other'|trans) }}<br>
-                    <strong>{{ 'jellyseerr.user_detail.registered_label'|trans }}</strong> {{ user.createdAt is defined and user.createdAt ? user.createdAt|slice(0,10) : '?' }}<br>
-                    <strong>{{ 'jellyseerr.user_detail.last_modified_label'|trans }}</strong> {{ user.updatedAt is defined and user.updatedAt ? user.updatedAt|slice(0,10) : '?' }}
+                    <strong>{{ 'jellyseerr.user_detail.registered_label'|trans }}</strong> {{ user.createdAt is defined and user.createdAt ? user.createdAt|prismarr_date : '?' }}<br>
+                    <strong>{{ 'jellyseerr.user_detail.last_modified_label'|trans }}</strong> {{ user.updatedAt is defined and user.updatedAt ? user.updatedAt|prismarr_date : '?' }}
                 </div>
             </div>
         </div>
@@ -507,7 +507,7 @@
                             </div>
                             <div class="text-end" style="flex-shrink:0;">
                                 <span class="badge bg-{{ req._statusColor ?? 'secondary' }}-lt text-{{ req._statusColor ?? 'secondary' }}">{{ req._statusLabel ?? '?' }}</span>
-                                <div class="text-secondary" style="font-size:.68rem;margin-top:2px;">{% if req.createdAt is defined and req.createdAt %}{{ req.createdAt|slice(0,10) }}{% endif %}</div>
+                                <div class="text-secondary" style="font-size:.68rem;margin-top:2px;">{% if req.createdAt is defined and req.createdAt %}{{ req.createdAt|prismarr_date }}{% endif %}</div>
                             </div>
                         </div>
                     {% endfor %}

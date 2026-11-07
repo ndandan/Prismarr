@@ -107,7 +107,7 @@
                     </td>
                     <td>
                         <span class="text-secondary" style="font-size:.78rem;">
-                            {% if user.createdAt is defined and user.createdAt %}{{ user.createdAt|slice(0,10) }}{% endif %}
+                            {% if user.createdAt is defined and user.createdAt %}{{ user.createdAt|prismarr_date }}{% endif %}
                         </span>
                     </td>
                     <td>

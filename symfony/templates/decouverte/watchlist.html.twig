@@ -196,7 +196,7 @@
       </button>
       <div class="card-overlay">
         <div class="card-title" title="{{ item.title }}">{{ item.title }}</div>
-        <div class="card-sub">{{ item.year ?: '' }} · {{ 'watchlist_page.added_on'|trans({date: item.addedAt|slice(0, 10)}) }}</div>
+        <div class="card-sub">{{ item.year ?: '' }} · {{ 'watchlist_page.added_on'|trans({date: item.addedAt|prismarr_date}) }}</div>
       </div>
     </div>
     {% endfor %}
