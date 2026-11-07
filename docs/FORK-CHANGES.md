@@ -1026,6 +1026,34 @@ wording; this is the fork-vs-upstream view.
 - **Deferred (LOW, ledgered):** a token-authenticated iCal feed, UTC-day
   handling in the remaining widgets, the UniFi readers' TTL memos under worker
   mode, dashboard "outage vs empty" rendering, torrent add-URL validators.
+  All but the iCal feed were fixed on 2026-11-07 — see the next entry.
+
+### Review 2026-11-06 deferred batch (2026-11-07) — branch `fix/review-p2-deferred`
+
+Four of the five LOW items the remediation deferred, one commit each, every
+fix proven red on the old code first:
+
+- **UniFi reader memos (FF-1).** The Live, Infra, History and Map readers
+  kept their TTL memo on the instance, which the services_resetter (or a
+  fresh request) wiped, so each 10 s poll refetched the 300 s config
+  endpoints and the history reports. `UnifiReadCache` keeps it in
+  `cache.app`, keyed by `UnifiFetcher::cacheIdentity()` (console URL + site +
+  key, the key `overview()` already used). Freshness is decided by the
+  reader's clock, so the `nowOffset` tests still drive the TTLs. The Spark
+  reader stays per-request by design.
+- **Dashboard outage vs empty (C1 remnant).** `widgetUpcoming` answers 502
+  when every Radarr/Sonarr instance failed the calendar call and
+  `widgetRequests` when Seerr's pending-requests call failed; the dashboard
+  JS already shows "failed to load" + Retry for a non-OK fragment.
+- **UTC day in client-side dates (MT-11).** Seven `.substring(0, 10)` cuts
+  of an ISO timestamp (series history overlays, Seerr requests and user
+  profile) use `window._prismarrFmtDate(new Date(x))`; a hygiene guard
+  refuses the pattern in any template.
+- **Add-URL guard and NZB upload (DC-10).** The three torrent validators
+  also run `HealthService::urlBlockedReason()` (decimal/hex IPv4, IPv4-mapped
+  IPv6, trailing dot, DNS names to 169.254.169.254); Usenet add-file requires
+  a valid `.nzb`/`.gz` upload — an upload PHP refused used to crash it (500).
+- **Still deferred:** the token-authenticated iCal feed (new auth surface).
 
 ### JavaScript behaviour tests in `make check` (2026-11-07)
 
