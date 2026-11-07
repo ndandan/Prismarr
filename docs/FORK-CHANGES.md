@@ -1051,6 +1051,32 @@ Transmission pages.
   fails all 8 Deluge cases; dropping `'orphaned'` from the films terminal
   states fails that page's terminal-state case.
 
+### Migration upgrade test (2026-11-07)
+
+Every PHPUnit test builds its schema from the entities with `SchemaTool`,
+while every real install builds it by running the migrations
+(`init.sh` runs `doctrine:migrations:migrate` on each boot). Nothing proved
+the two agree, or that an older install's data survives an upgrade.
+`tests/Migration/MigrationUpgradeTest.php` runs the real migrations against
+its own SQLite file:
+
+- **Fresh install matches the mapping:** after all migrations, every entity
+  table has each mapped column with the same nullability and declared type,
+  every named index and unique constraint, and no NOT NULL column the ORM
+  does not know about. Column-level on purpose — on SQLite the comparator
+  reports table rebuilds for identical DDL, and the Messenger table is
+  created at runtime, so "schema diff is empty" can never pass.
+- **Upgrade from v1.0 keeps data:** seeds a v1.0.0 database (user,
+  watchlist, the four legacy Radarr/Sonarr settings), adds an avatar at the
+  v1.0.x schema, migrates to latest, and asserts the rows survive, the
+  legacy settings became `radarr-1` / `sonarr-1` instances (empty API key →
+  NULL) and only those four settings were deleted.
+- **Reboot runs nothing** at latest; a v1.0 install with an empty Radarr URL
+  gets no instance.
+- **Proven red:** an entity column with no migration ("column missing"), a
+  broken v1.1.0 slug ("instances differ") and a migrated column made NOT NULL
+  ("nullability differs") each fail it.
+
 ## 4. Fork-only — declined upstream
 
 ### Unraid server widget (v1 2026-07-01, v2 2026-07-02)
