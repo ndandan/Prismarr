@@ -622,7 +622,7 @@
                 }
                 html += '<div style="font-size:.82rem;">';
                 html += '<span style="font-weight:600;">' + esc(user.displayName || user.jellyfinUsername || user.email || '?') + '</span>';
-                html += '<span class="text-secondary"> · ' + (req.createdAt ? req.createdAt.substring(0, 10) : '?') + '</span>';
+                html += '<span class="text-secondary"> · ' + (req.createdAt ? window._prismarrFmtDate(new Date(req.createdAt)) : '?') + '</span>';
                 html += '</div>';
                 html += '</div>';
 
@@ -637,7 +637,7 @@
                     }
                     html += '<span class="text-secondary">' + statusLabel + ' ' + tpl({{ 'jellyseerr.common.by_user_tpl'|trans|json_encode|raw }}, {NAME: '<strong>' + modName + '</strong>'}) + '</span>';
                     if (req.updatedAt) {
-                        html += '<span class="text-secondary ms-auto">' + req.updatedAt.substring(0, 10) + '</span>';
+                        html += '<span class="text-secondary ms-auto">' + window._prismarrFmtDate(new Date(req.updatedAt)) + '</span>';
                     }
                     html += '</div>';
                 }
