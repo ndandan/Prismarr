@@ -1074,8 +1074,19 @@ its own SQLite file:
 - **Reboot runs nothing** at latest; a v1.0 install with an empty Radarr URL
   gets no instance.
 - **Proven red:** an entity column with no migration ("column missing"), a
-  broken v1.1.0 slug ("instances differ") and a migrated column made NOT NULL
-  ("nullability differs") each fail it.
+  broken v1.1.0 slug ("instances differ"), a migrated column made NOT NULL
+  ("nullability differs"), a plain index made UNIQUE, and a migration that
+  blanks setting values each fail it. The last two passed the first version
+  of the test (uniqueness was only checked one way; settings were compared
+  by name) and were closed in review.
+- **Fidelity:** every migration file is byte-identical to what each release
+  tag (v1.0.0 → v1.3.0) shipped, and `doctrine/migrations` has been 3.9.6
+  since v1.0.0, so replaying them reproduces a real install's schema and
+  `doctrine_migration_versions` table.
+- **Not covered:** booting a new image over an existing data volume
+  (`init.sh`, file ownership, env), column defaults, foreign keys (no entity
+  has an association yet), and data-transforming migrations added later —
+  each needs its own seeded case.
 
 ## 4. Fork-only — declined upstream
 
