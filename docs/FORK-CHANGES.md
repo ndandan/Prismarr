@@ -960,11 +960,12 @@ wording; this is the fork-vs-upstream view.
   memo wiped by `reset()`, Wokeometer cursor/watermark/auto-sync edge cases,
   the Seerr issues title cache, the UniFi chart labels in the display zone.
 - **New seams and helpers:** `exec()` cURL seam in Radarr, Sonarr, Prowlarr,
-  Jellyseerr, TMDb and qBittorrent (postAction) clients, mirroring Bazarr's;
+  Jellyseerr, TMDb and qBittorrent (postAction and the read path) clients,
+  mirroring Bazarr's;
   `ApiClientErrorTrait::clientFailed()`; `App\Util\CalendarDay`;
   `TrustedProxiesSubscriber`; the `cache.swr` pool;
   `RadarrClient::manualImportFromQueueItem()`; `ServiceRouteGuardSubscriber::serviceIdForRoute()`.
-- **Tests (+217 over the pre-review 2,224; suite 2,441 / 9,556 assertions):** anonymous sweep of every route +
+- **Tests (+232 over the pre-review 2,224; suite 2,456 / 9,606 assertions):** anonymous sweep of every route +
   form-login/throttle/logout (`AuthBoundaryTest`), the POST route table of the
   nine integration controllers anonymous/cross-site/same-origin
   (`WriteRouteTableTest`), wire-contract tests through the new seams, EN/FR
@@ -978,13 +979,32 @@ wording; this is the fork-vs-upstream view.
   missed indirect implementers, a poll cap relabelled as failure, an
   undocumented Seerr breaker change, a baseline count raised for new code,
   one unescaped banner) — all fixed with a failing test first before the
-  push; nine minors ledgered as deferred.
+  push; nine minors ledgered, then fixed the same day in a second pass
+  (`7fdecd5`, each with a failing test first): pseudo-languages (Any /
+  Original / Unknown) left out of the language pickers; the single-file
+  Sonarr update keeps the stored languages when none are sent; bulk series
+  search runs its commands ten at a time through `ConcurrentCurl`; the
+  qBittorrent read path goes through the `exec()` seam (a read-side contract
+  test closes TQ-3); the write-route table also reports a 500 on an empty
+  body (none found); a failed post-import queue re-read shows the row as
+  unconfirmed instead of a spinner that never ends; internationalised
+  hostnames are accepted as punycode by the URL guard and the CSP; the
+  Bazarr patch journal moved into the dataset pool. That last one uncovered
+  an HC-1 regression of this branch: `patchPooledMap()` read the SWR
+  envelope from `cache.app` after the datasets had moved to `cache.swr`, so
+  the per-item badge update after a subtitle action silently skipped
+  (self-healed at the next bulk refresh; never released) — fixed with a
+  two-pool test. The inline-JS helpers the guards grep for (`cmdState()` on
+  the three media pages, `refreshData()` on the three torrent pages) were
+  also executed under node with stubbed fetch/timers: 18 behaviour checks,
+  not committed (CI has no node).
 - **Traps recorded:** Symfony tracks subscriber *signatures*, not
   `getSubscribedEvents()` bodies — a changed listener priority needs
   `rm -rf var/cache/<env>` on a bind-mounted test container (the anonymous
   sweep caught the §2 fix not being live); an in-memory test cache pool
   cannot replace the filesystem pools because the test kernel reboots between
-  requests.
+  requests; PHPUnit 13 with `--filter 'A|B|C' tests` silently left 39 of 150
+  matching tests unrun — run test classes per file.
 - **Deferred (LOW, ledgered):** a token-authenticated iCal feed, UTC-day
   handling in the remaining widgets, the UniFi readers' TTL memos under worker
   mode, dashboard "outage vs empty" rendering, torrent add-URL validators.
