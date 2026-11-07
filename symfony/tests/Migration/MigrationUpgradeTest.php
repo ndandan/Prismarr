@@ -29,7 +29,13 @@ use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
  * The mapping check is column-level (existence, nullability, declared type,
  * named indexes) rather than "the schema diff is empty": on SQLite the
  * comparator reports table rebuilds for identical DDL, and the Messenger
- * transport table is created at runtime, not by a migration.
+ * transport table is created at runtime, not by a migration. Not checked:
+ * column defaults (the ORM writes every column on insert) and foreign keys
+ * (no entity has an association today; join-column existence is checked).
+ *
+ * Scope: migrations only. Booting a new image over an existing data volume
+ * (init.sh, file ownership, env) is not exercised. A future migration that
+ * transforms data needs its own seeded case here.
  */
 final class MigrationUpgradeTest extends KernelTestCase
 {
@@ -79,7 +85,10 @@ final class MigrationUpgradeTest extends KernelTestCase
 
     public function testUpgradeFromV10KeepsDataAndMovesLegacyInstances(): void
     {
-        // A v1.0.0 install: single Radarr/Sonarr kept in four settings rows.
+        // v1.0.0 shipped the baseline and avatar migrations (byte-identical to
+        // today's files, as is every migration at each release tag), with a
+        // single Radarr/Sonarr kept in four settings rows. Rows are written
+        // at the baseline, the avatar at the next step, then the upgrade.
         $this->migrateTo(self::V1_0_BASELINE);
         $this->db->insert('"user"', [
             'email' => 'owner@example.test',
@@ -107,20 +116,27 @@ final class MigrationUpgradeTest extends KernelTestCase
             $this->db->insert('setting', ['name' => $name, 'value' => $value, 'updated_at' => '2026-04-20 10:00:00']);
         }
 
-        // A v1.0.x install that has also uploaded an avatar.
+        // The full v1.0.x schema, with an uploaded avatar.
         $this->migrateTo(self::V1_0_AVATAR);
         $this->db->update('"user"', ['avatar_path' => 'avatars/owner.png'], ['email' => 'owner@example.test']);
 
         $this->migrateTo('latest');
 
-        $user = $this->db->fetchAssociative('SELECT email, display_name, avatar_path, roles FROM "user"');
-        $this->assertSame(
-            ['email' => 'owner@example.test', 'display_name' => 'Owner', 'avatar_path' => 'avatars/owner.png', 'roles' => '["ROLE_ADMIN"]'],
-            $user,
+        // Every value written before the upgrade survives it, not just the rows.
+        $this->assertEquals(
+            ['email' => 'owner@example.test', 'roles' => '["ROLE_ADMIN"]', 'password' => '$2y$13$hash',
+             'display_name' => 'Owner', 'created_at' => '2026-04-20 10:00:00', 'last_login_at' => null,
+             'avatar_path' => 'avatars/owner.png'],
+            $this->db->fetchAssociative(
+                'SELECT email, roles, password, display_name, created_at, last_login_at, avatar_path FROM "user"',
+            ),
         );
-        $this->assertSame(
-            ['title' => 'The Matrix', 'notes' => 'rewatch'],
-            $this->db->fetchAssociative('SELECT title, notes FROM media_watchlist WHERE tmdb_id = 603'),
+        $this->assertEquals(
+            ['tmdb_id' => 603, 'media_type' => 'movie', 'title' => 'The Matrix', 'poster_path' => null,
+             'vote' => 8.2, 'year' => 1999, 'added_at' => '2026-04-21 09:00:00', 'notes' => 'rewatch'],
+            $this->db->fetchAssociative(
+                'SELECT tmdb_id, media_type, title, poster_path, vote, year, added_at, notes FROM media_watchlist',
+            ),
         );
 
         // v1.1.0 moved the legacy settings into service_instance and deleted them.
@@ -135,9 +151,9 @@ final class MigrationUpgradeTest extends KernelTestCase
              'is_default' => 1, 'enabled' => 1, 'position' => 0, 'default_quality_profile_id' => null],
         ], $instances);
         $this->assertSame(
-            ['display_timezone'],
-            $this->db->fetchFirstColumn('SELECT name FROM setting ORDER BY name'),
-            'only the four legacy instance settings are removed',
+            ['display_timezone' => 'America/Chicago'],
+            $this->db->fetchAllKeyValue('SELECT name, value FROM setting ORDER BY name'),
+            'only the four legacy instance settings are removed; the others keep their values',
         );
 
         // The Wokeometer migration seeds its single state row.
@@ -268,7 +284,9 @@ final class MigrationUpgradeTest extends KernelTestCase
             if ($name !== null && strcasecmp($index->getName(), $name) !== 0) {
                 continue;
             }
-            if (array_map('strtolower', $index->getColumns()) === $columns && (!$unique || $index->isUnique())) {
+            // Uniqueness must match exactly: a plain index made UNIQUE by a
+            // migration rejects inserts the entity considers valid.
+            if (array_map('strtolower', $index->getColumns()) === $columns && $index->isUnique() === $unique) {
                 $this->addToAssertionCount(1);
 
                 return;
