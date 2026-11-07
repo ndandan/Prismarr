@@ -5,7 +5,7 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-11-04 (covers 2026-06-13 → 2026-11-04).*
+*Last updated: 2026-11-07 (covers 2026-06-13 → 2026-11-07; the review-2026-11-06 remediation is on branch `fix/review-2026-11-06`, not yet on `main`).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
@@ -926,6 +926,60 @@ hidden when nothing is open or Seerr doesn't answer. Admin-only like the rest
 of the Seerr pages; EN + FR.
 
 ---
+
+### Code-review remediation, review 2026-11-06 (2026-11-07) — branch `fix/review-2026-11-06`, pending the owner's `:beta` live check
+
+The sixth review and the first whole-codebase pass (11 finder + 5 verifier
+subagents reading upstream Radarr/Sonarr/Prowlarr source for the API
+contracts). 133 raw findings, 7 HIGH confirmed, everything in the report's
+section 8 order fixed on one branch, one commit per section. The CHANGELOG's
+`[Unreleased]` Security / Fixed / Performance entries carry the user-facing
+wording; this is the fork-vs-upstream view.
+
+- **Upstream-origin bugs fixed here (PR candidates, all in the CHANGELOG):**
+  Sonarr library import without `path`; collection monitor toggle wiping the
+  collection (PUT `{monitored}` only); Radarr queue Import handed a folder and
+  deleting the queue item regardless; the hardcoded language list with 7 wrong
+  ids (now `/api/v3/language` per instance) and the series "Save all" dirty
+  rows; no `moveFiles` on path edits; write helpers opening the breaker on a
+  slow-but-connected call; Turbo snapshot `dataset.init` markers killing the
+  search box and sidebar toggle after Back/Forward; the qBittorrent route guard
+  requiring a username (#10 proxies); `TRUSTED_PROXIES` resolved once per
+  FrankenPHP worker; settings import keeping secrets across a host change and
+  accepting any key; `parse_url` host concatenated into the CSP origin; the
+  route guard and instance binder running before the firewall; the remaining
+  innerHTML sinks; outage-as-empty on every download-client JSON route;
+  date-only values compared as UTC instants on the dashboard, charts and iCal;
+  the settings-save `cache.app->clear()` wiping every SWR dataset; Discover
+  fetching full libraries per request; TMDb without a breaker; Seerr
+  create-user, edit-modal server and logs cap; Prowlarr toggle without
+  `forceSave`; `make lint` never failing; the 13 English strings in the FR
+  catalogue the review listed by line.
+- **Fork-only fixes:** dashboard layout Save un-hiding sections, the Prowlarr
+  Enabled/Disabled filter (`.is-on` removed in 1064a50), the Houndarr widget
+  memo wiped by `reset()`, Wokeometer cursor/watermark/auto-sync edge cases,
+  the Seerr issues title cache, the UniFi chart labels in the display zone.
+- **New seams and helpers:** `exec()` cURL seam in Radarr, Sonarr, Prowlarr,
+  Jellyseerr, TMDb and qBittorrent (postAction) clients, mirroring Bazarr's;
+  `ApiClientErrorTrait::clientFailed()`; `App\Util\CalendarDay`;
+  `TrustedProxiesSubscriber`; the `cache.swr` pool;
+  `RadarrClient::manualImportFromQueueItem()`; `ServiceRouteGuardSubscriber::serviceIdForRoute()`.
+- **Tests (+212 over the pre-review 2,224; suite 2,436 / 9,497 assertions):** anonymous sweep of every route +
+  form-login/throttle/logout (`AuthBoundaryTest`), the POST route table of the
+  nine integration controllers anonymous/cross-site/same-origin
+  (`WriteRouteTableTest`), wire-contract tests through the new seams, EN/FR
+  catalogue parity + literal-key existence, a `ResetInterface` sweep over
+  every service, `failOnSkipped`/`failOnIncomplete`, a DNS stub and cache-pool
+  reset in `AbstractWebTestCase`, and guard tests for every JS-shape fix.
+- **Traps recorded:** Symfony tracks subscriber *signatures*, not
+  `getSubscribedEvents()` bodies — a changed listener priority needs
+  `rm -rf var/cache/<env>` on a bind-mounted test container (the anonymous
+  sweep caught the §2 fix not being live); an in-memory test cache pool
+  cannot replace the filesystem pools because the test kernel reboots between
+  requests.
+- **Deferred (LOW, ledgered):** a token-authenticated iCal feed, UTC-day
+  handling in the remaining widgets, the UniFi readers' TTL memos under worker
+  mode, dashboard "outage vs empty" rendering, torrent add-URL validators.
 
 ## 4. Fork-only — declined upstream
 
