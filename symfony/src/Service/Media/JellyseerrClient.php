@@ -629,12 +629,11 @@ class JellyseerrClient implements ResetInterface
             $this->logger->warning("JellyseerrClient GET {$path} → HTTP {$code} {$err}");
             $this->recordError('GET', $path, (int) $code, is_string($body) ? $body : '', $err);
             if ($err !== '' || (int) $code === 0) {
-                // A read timeout after a successful connect is "busy", not
-                // "down" (same rule as the *arr clients, issue #41).
                 $this->serviceUnavailable = true;
-                if (!$timedOutAfterConnect) {
-                    $this->health->markDown(self::SERVICE_KEY);
-                }
+                // Final review #5: unlike the *arr clients (issue #41, long library
+                // scans) Seerr has no legitimately slow call, so a connected-then-hung
+                // Seerr opens the breaker like a refused connection would.
+                $this->health->markDown(self::SERVICE_KEY);
             }
             return null;
         }
@@ -676,9 +675,10 @@ class JellyseerrClient implements ResetInterface
             $this->recordError('DELETE', $path, (int) $code, is_string($resp) ? $resp : '', $err);
             if ($err !== '' || (int) $code === 0) {
                 $this->serviceUnavailable = true;
-                if (!$timedOutAfterConnect) {
-                    $this->health->markDown(self::SERVICE_KEY);
-                }
+                // Final review #5: unlike the *arr clients (issue #41, long library
+                // scans) Seerr has no legitimately slow call, so a connected-then-hung
+                // Seerr opens the breaker like a refused connection would.
+                $this->health->markDown(self::SERVICE_KEY);
             }
             return false;
         }
@@ -720,9 +720,10 @@ class JellyseerrClient implements ResetInterface
             $this->recordError($method, $path, (int) $code, is_string($resp) ? $resp : '', $err);
             if ($err !== '' || (int) $code === 0) {
                 $this->serviceUnavailable = true;
-                if (!$timedOutAfterConnect) {
-                    $this->health->markDown(self::SERVICE_KEY);
-                }
+                // Final review #5: unlike the *arr clients (issue #41, long library
+                // scans) Seerr has no legitimately slow call, so a connected-then-hung
+                // Seerr opens the breaker like a refused connection would.
+                $this->health->markDown(self::SERVICE_KEY);
             }
             return null;
         }

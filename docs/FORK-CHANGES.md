@@ -964,13 +964,21 @@ wording; this is the fork-vs-upstream view.
   `ApiClientErrorTrait::clientFailed()`; `App\Util\CalendarDay`;
   `TrustedProxiesSubscriber`; the `cache.swr` pool;
   `RadarrClient::manualImportFromQueueItem()`; `ServiceRouteGuardSubscriber::serviceIdForRoute()`.
-- **Tests (+212 over the pre-review 2,224; suite 2,436 / 9,497 assertions):** anonymous sweep of every route +
+- **Tests (+217 over the pre-review 2,224; suite 2,441 / 9,556 assertions):** anonymous sweep of every route +
   form-login/throttle/logout (`AuthBoundaryTest`), the POST route table of the
   nine integration controllers anonymous/cross-site/same-origin
   (`WriteRouteTableTest`), wire-contract tests through the new seams, EN/FR
   catalogue parity + literal-key existence, a `ResetInterface` sweep over
   every service, `failOnSkipped`/`failOnIncomplete`, a DNS stub and cache-pool
   reset in `AbstractWebTestCase`, and guard tests for every JS-shape fix.
+- **Final whole-branch review (fresh reviewer, read-only):** one Critical
+  (the Deluge page stopped auto-refreshing after its first fetch — the
+  in-flight guard was ported without its sequence counter), six Important
+  (quick-look episode chips floated UTC instants, the ResetInterface sweep
+  missed indirect implementers, a poll cap relabelled as failure, an
+  undocumented Seerr breaker change, a baseline count raised for new code,
+  one unescaped banner) — all fixed with a failing test first before the
+  push; nine minors ledgered as deferred.
 - **Traps recorded:** Symfony tracks subscriber *signatures*, not
   `getSubscribedEvents()` bodies — a changed listener priority needs
   `rm -rf var/cache/<env>` on a bind-mounted test container (the anonymous

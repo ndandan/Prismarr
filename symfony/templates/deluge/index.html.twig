@@ -1155,6 +1155,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
     });
 
     var refreshCtrl = null;
+    var refreshSeq = 0;
     var refreshInFlight = false;
     function refreshData(force) {
         // DC-3 (review 2026-11-06): a timer tick while the previous fetch is
@@ -1166,6 +1167,9 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         if (refreshCtrl) refreshCtrl.abort();
         refreshCtrl = new AbortController();
         refreshInFlight = true;
+        // Sequence number: a periodic answer for the previous page must not
+        // apply after the click's answer (same pattern as qbittorrent/transmission).
+        var seq = ++refreshSeq;
         var q = new URLSearchParams({
             page: pagState.page,
             perPage: pagState.perPage,
@@ -1178,6 +1182,7 @@ body[data-bs-theme="dark"] .qbt-torrent-list[data-view="table"] .qbt-cell-progre
         fetch(BASE + '/api/torrents?' + q, { signal: refreshCtrl.signal, headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function(r) { return r.json(); })
         .then(function(data) {
+            if (seq !== refreshSeq) return; // a newer request has already been issued
             if (data.error) return;
             updateStats(data.stats);
             updateList(data.torrents);

@@ -31,7 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Prowlarr Enabled/Disabled filter** showed no rows; a failed toggle shows a toast and reverts the switch.
 - **Dashboard layout Save keeps earlier-hidden sections hidden.**
 - **Torrent pages render on a slow backend.** The 3 s tick no longer aborts an in-flight refresh, and the usenet page's visibility handling no longer sticks to the first page visited.
-- **Films page no longer marks a torrent "Downloaded" on a queue blip**; it re-checks the movie first. Command pollers stop on an unknown state and never reload another page.
+- **Films page no longer marks a torrent "Downloaded" on a queue blip**; it re-checks the movie first. Command pollers stop checking after a few minutes or after a Radarr/Sonarr blip with a neutral "still working on this" notice instead of reporting a failure, and never reload another page.
 - **Health "Retry" on an instance banner clears that instance's breaker**; the Seerr banner posts the right service id.
 - **Seerr: auto-generated passwords and usernames work when creating a local user; the request edit modal loads the right server's profiles; the logs page is capped.**
 - **Discover links open the right instance** and watchlist toggles send an explicit add or remove. Add-movie/series lookups ignore stale answers.

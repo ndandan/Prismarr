@@ -457,6 +457,11 @@ class TemplateEscapingGuardTest extends TestCase
             "/\\+\\s*msg\\s*\\+/",
             'Radarr command messages embed titles',
         ];
+        yield 'films missing: command message in the failure banner' => [
+            'media/films_missing.html.twig',
+            "/__ERROR__',\\s*msg\\s*\\|\\|/",
+            'the raw Radarr command message is handed to showBanner() as HTML (final review, Important #7)',
+        ];
         yield 'films missing: progress text from the command message' => [
             'media/films_missing.html.twig',
             "/progressText\\s*=\\s*msg;/",
