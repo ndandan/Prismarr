@@ -6,6 +6,7 @@ use App\Controller\SetupController;
 use App\Entity\ServiceInstance;
 use App\Entity\Setting;
 use App\Entity\User;
+use App\Service\HostResolver;
 use Doctrine\ORM\EntityManagerInterface;
 use Doctrine\ORM\Tools\SchemaTool;
 use Symfony\Bundle\FrameworkBundle\KernelBrowser;
@@ -34,11 +35,17 @@ abstract class AbstractWebTestCase extends WebTestCase
         // TQ-7 (review 2026-11-06): the filesystem pools outlive a kernel
         // reboot, so breaker states, SWR datasets and DNS memos from one web
         // test leaked into the next. Start every test from empty pools.
-        foreach (['cache.app', 'cache.swr'] as $pool) {
+        foreach (['cache.app', 'cache.swr', 'cache.rate_limiter'] as $pool) {
             if (static::getContainer()->has($pool)) {
                 static::getContainer()->get($pool)->clear();
             }
         }
+
+        // TQ-7: no live DNS from the SSRF guard inside web tests — an
+        // unresolvable host is "not blocked", which is what every seeded
+        // *.invalid instance expects.
+        HostResolver::reset();
+        HostResolver::setResolver(static fn(string $host): array => []);
 
         $em = $this->em();
         $this->resetSchema($em);
@@ -47,6 +54,19 @@ abstract class AbstractWebTestCase extends WebTestCase
         $this->seedDefaultInstances($em);
 
         $this->client->loginUser($this->admin);
+    }
+
+    protected function tearDown(): void
+    {
+        HostResolver::setResolver(null);
+        HostResolver::reset();
+        parent::tearDown();
+    }
+
+    /** Forget the harness login: the next requests are anonymous. */
+    protected function asAnonymous(): void
+    {
+        $this->client->getCookieJar()->clear();
     }
 
     /**
