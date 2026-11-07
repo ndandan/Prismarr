@@ -1055,6 +1055,19 @@ fix proven red on the old code first:
   a valid `.nzb`/`.gz` upload — an upload PHP refused used to crash it (500).
 - **Still deferred:** the token-authenticated iCal feed (new auth surface).
 
+### Seerr avatars for Plex users (2026-11-07) — branch `fix/seerr-avatar-urls`
+
+Found in the live check of the batch above. Seerr hands Plex-backed users an
+absolute plex.tv avatar, and the requests, users and user-profile pages glued
+the Seerr URL in front of every avatar (`http://seerr:5055https://plex.tv/…`),
+so those avatars came up blank — no photo and no placeholder. The issues
+page's rule now lives in `SeerrAvatarExtension::resolve()` (Twig
+`seerr_avatar()`), with an inline `seerrAvatar()` twin in the two pages that
+build avatars in JS: a Seerr path resolves against the Seerr URL, anything
+absolute is '' and shows the placeholder (CSP img-src allows the Seerr origin,
+not plex.tv). A hygiene guard refuses `service_url` concatenation in the Seerr
+templates; `tests/js/seerr-avatar.test.mjs` runs both JS copies.
+
 ### JavaScript behaviour tests in `make check` (2026-11-07)
 
 PHPUnit executes no JavaScript, so the review's worst finding — the Deluge

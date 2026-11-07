@@ -4,7 +4,7 @@
 {% block head_meta %}<meta name="turbo-visit-control" content="reload">{% endblock %}
 
 {% set userName = user.displayName ?? user.jellyfinUsername ?? user.email ?? '?' %}
-{% set userAvatar = user.avatar is defined and user.avatar ? service_url ~ user.avatar : null %}
+{% set userAvatar = seerr_avatar(user.avatar ?? null, service_url) %}
 {% set role = user._role ?? ('jellyseerr.user_detail.role_user'|trans) %}
 {% set roleAdmin = 'jellyseerr.user_detail.role_admin'|trans %}
 {% set roleManager = 'jellyseerr.user_detail.role_manager'|trans %}
@@ -43,7 +43,7 @@
     <div class="card mb-3" style="border:0;overflow:hidden;">
         <div style="padding:1.25rem 1.5rem;display:flex;align-items:center;gap:1rem;">
             {% if userAvatar %}
-                <span class="avatar avatar-lg" style="width:56px;height:56px;background-image:url('{{ userAvatar }}');flex-shrink:0;"></span>
+                <span class="avatar avatar-lg" style="width:56px;height:56px;background-image:url('{{ userAvatar|e('css') }}');flex-shrink:0;"></span>
             {% else %}
                 <span class="avatar avatar-lg" style="width:56px;height:56px;flex-shrink:0;">
                     <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 7a4 4 0 1 0 8 0a4 4 0 0 0 -8 0"/><path d="M6 21v-2a4 4 0 0 1 4 -4h4a4 4 0 0 1 4 4v2"/></svg>

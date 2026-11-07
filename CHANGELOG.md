@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Usenet "Add file" accepts only NZB uploads.** Any file type was passed to the downloader, and a file over the 20 MB upload limit made the request fail with a server error; both now get a clear message.
 
 ### Fixed
+- **Seerr avatars of Plex users show a placeholder instead of a broken image.** Seerr gives Plex users an absolute plex.tv avatar, and the requests, users and user pages put the Seerr address in front of it. Seerr-hosted avatars still load; plex.tv ones (blocked by the image policy) show the placeholder, as on the issues page.
 - **Sonarr "Library import" imports into the existing folder.** The import form never sent the folder path, so Sonarr created a new series folder next to the existing one.
 - **Collection monitoring no longer wipes the collection.** Toggling a Radarr collection's monitor flag sent only `{monitored}`, which Radarr stored as an empty collection (quality profile, root folder and tags reset). The toggle now reads, merges and writes the whole collection.
 - **Radarr queue "Import" imports the files.** The manual import was handed the download folder instead of its files, Radarr failed per file, and the queue entry was deleted anyway. It now uses Radarr's import preview for that download, imports the files it reports, re-reads the queue and removes the entry only once Radarr reports it imported.

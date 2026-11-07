@@ -94,6 +94,24 @@ class ReviewHygieneGuardTest extends TestCase
     }
 
     /**
+     * Live check on :beta (2026-11-07): Plex users' avatars are absolute
+     * plex.tv URLs, and the Seerr pages prefixed the Seerr URL onto them.
+     * Avatars go through seerr_avatar() (Twig) or seerrAvatar() (page JS),
+     * which resolve Seerr paths and drop absolute URLs.
+     */
+    public function testSeerrPagesNeverConcatenateTheServiceUrlOntoAnAvatar(): void
+    {
+        $offenders = [];
+        foreach (glob(self::ROOT . 'templates/jellyseerr/*.twig') ?: [] as $file) {
+            $src = (string) file_get_contents($file);
+            if (preg_match_all("/\\{\\{\\s*service_url\\s*\\}\\}(?:'\\s*\\+|\\{\\{)|service_url\\s*~/", $src, $m)) {
+                $offenders[] = basename($file) . ': ' . implode(', ', $m[0]);
+            }
+        }
+        $this->assertSame([], $offenders, "use seerr_avatar(x, service_url) / seerrAvatar(x):\n" . implode("\n", $offenders));
+    }
+
+    /**
      * MT-11 (review 2026-11-06): `h.date.substring(0, 10)` on an ISO instant
      * is the UTC day — an evening grab west of UTC reads as tomorrow. Client
      * dates go through window._prismarrFmtDate(new Date(…)): the viewer's

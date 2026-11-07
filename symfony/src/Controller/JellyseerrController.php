@@ -5,6 +5,7 @@ namespace App\Controller;
 use App\Controller\Concerns\ApiClientErrorTrait;
 use App\Service\ConfigService;
 use App\Service\Media\JellyseerrClient;
+use App\Twig\SeerrAvatarExtension;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -249,10 +250,7 @@ class JellyseerrController extends AbstractController
         // Only Seerr-hosted avatars (/avatarproxy/...): img-src whitelists the
         // Seerr origin but not plex.tv/gravatar, so an absolute avatar URL
         // would be CSP-blocked. Those fall back to the initial-letter avatar.
-        $avatar = (string) ($reporter['avatar'] ?? '');
-        $avatar = ($avatar !== '' && $serviceUrl !== '' && !preg_match('#^[a-z][a-z0-9+.-]*:|^//#i', $avatar))
-            ? $serviceUrl . '/' . ltrim($avatar, '/')
-            : '';
+        $avatar = SeerrAvatarExtension::resolve(is_string($reporter['avatar'] ?? null) ? $reporter['avatar'] : null, $serviceUrl);
 
         $id = (int) ($issue['id'] ?? 0);
 
