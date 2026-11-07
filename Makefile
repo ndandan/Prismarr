@@ -45,6 +45,12 @@ init:
 test:
 	docker exec -e APP_ENV=test prismarr vendor/bin/phpunit
 
+# Behaviour tests for inline page JS (symfony/tests/js). They slice the
+# helpers out of the Twig templates and run them under node:test — no npm
+# dependencies. Runs in a throwaway Node container so the host needs Docker only.
+test-js:
+	docker run --rm -v "$(shell pwd)/symfony:/app" -w /app node:22-alpine sh -c 'node --test tests/js/*.test.mjs'
+
 # Lint all PHP sources (syntax errors only — fast)
 lint:
 	docker exec prismarr sh -c 'rc=0; for f in $$(find src tests migrations -name "*.php"); do out=$$(php -l "$$f" 2>&1) || { echo "$$out"; rc=1; }; done; [ $$rc -eq 0 ] && echo "PHP syntax OK"; exit $$rc'
@@ -60,7 +66,7 @@ lint-container:
 
 # Full pre-commit check — run this before every `git commit`.
 # Required by CONTRIBUTING.md Definition of Done.
-check: lint lint-twig test
+check: lint lint-twig test-js test
 	@echo ""
 	@echo "✓ make check passed — ready to commit"
 

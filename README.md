@@ -401,7 +401,8 @@ before submitting a PR.
 - **Security vulnerability**: [SECURITY.md](SECURITY.md) - please **do not** open a public issue, contact by email
 - **Changelog**: [CHANGELOG.md](CHANGELOG.md)
 
-Before any commit: `make check` (PHP lint + Twig lint + full PHPUnit suite).
+Before any commit: `make check` (PHP lint + Twig lint + JavaScript behaviour
+tests + full PHPUnit suite).
 
 ---
 
