@@ -15,6 +15,7 @@ use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use App\Service\HealthService;
 
 #[IsGranted('ROLE_ADMIN')]
 #[Route('/qbittorrent', name: 'app_qbittorrent_')]
@@ -511,6 +512,15 @@ class QBittorrentController extends AbstractController
                 if ($host === $blocked) {
                     return $this->translator->trans('qbittorrent.upload.forbidden_host');
                 }
+            }
+            // DC-10 (review 2026-11-06): the literal list above misses other
+            // spellings of the metadata address (decimal or hex IPv4, an
+            // IPv4-mapped IPv6 literal, a trailing dot, a DNS name pointing at
+            // it). The shared guard the Usenet add box uses resolves the host
+            // and catches them; LAN addresses stay allowed.
+            $reason = HealthService::urlBlockedReason($url);
+            if ($reason !== null) {
+                return $this->translator->trans($reason === 'link-local' ? 'qbittorrent.upload.forbidden_host' : 'qbittorrent.upload.invalid_url');
             }
         }
 

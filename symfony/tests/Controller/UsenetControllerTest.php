@@ -12,6 +12,7 @@ use App\Tests\AbstractWebTestCase;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\MockObject\MockObject;
 use Symfony\Contracts\Cache\CacheInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * #20 — a configured-but-unreachable Usenet client must show an explicit
@@ -437,6 +438,63 @@ class UsenetControllerTest extends AbstractWebTestCase
         static::getContainer()->set(SabnzbdClient::class, $mock);
 
         return $mock;
+    }
+
+    // ── DC-10 (review 2026-11-06): the NZB upload is validated ─────────────
+
+    private function upload(string $name, string $content, ?int $sparseBytes = null): void
+    {
+        $path = tempnam(sys_get_temp_dir(), 'nzb');
+        file_put_contents($path, $content);
+        if ($sparseBytes !== null) {
+            $h = fopen($path, 'r+');
+            ftruncate($h, $sparseBytes); // sparse: no real 50 MB write
+            fclose($h);
+        }
+        $file = new UploadedFile($path, $name, null, null, true);
+        $this->client->request('POST', '/usenet/sabnzbd/add-file', ['category' => 'movies'], ['files' => [$file]], [
+            'HTTP_X_REQUESTED_WITH' => 'XMLHttpRequest',
+        ]);
+    }
+
+    public function testAddFileRejectsANonNzbUpload(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->never())->method('addNzbFromFiles');
+
+        $this->upload('payload.php', '<?php echo 1;');
+
+        $this->assertSame(400, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(['ok' => false, 'error' => $this->badFileMessage()], $this->jsonResponse());
+    }
+
+    /** Over upload_max_filesize: PHP refuses it and the path is empty — this was a 500. */
+    public function testAddFileRejectsAnUploadPhpRefused(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->never())->method('addNzbFromFiles');
+
+        $this->upload('huge.nzb', '<nzb/>', UploadedFile::getMaxFilesize() + 1);
+
+        $this->assertSame(400, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(['ok' => false, 'error' => $this->badFileMessage()], $this->jsonResponse());
+    }
+
+    private function badFileMessage(): string
+    {
+        return static::getContainer()->get('translator')->trans('usenet.api.add_bad_file');
+    }
+
+    public function testAddFileForwardsAValidNzb(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->once())->method('addNzbFromFiles')
+            ->with([['content' => '<nzb/>', 'name' => 'movie.nzb']], 'movies')
+            ->willReturn(true);
+
+        $this->upload('movie.nzb', '<nzb/>');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
     }
 
     private function post(string $path, string $json = '{}'): void

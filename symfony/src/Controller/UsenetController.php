@@ -17,6 +17,7 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 use Symfony\Contracts\Cache\CacheInterface;
 use Symfony\Contracts\Cache\ItemInterface;
 use Symfony\Contracts\Translation\TranslatorInterface;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 
 /**
  * Usenet downloads page — one route family per client (sabnzbd | nzbget),
@@ -33,6 +34,9 @@ use Symfony\Contracts\Translation\TranslatorInterface;
 #[Route('/usenet/{client}', name: 'app_usenet_', requirements: ['client' => 'sabnzbd|nzbget'])]
 class UsenetController extends AbstractController
 {
+    /** DC-10: what the add-file picker accepts (accept=".nzb,.gz"). */
+    private const NZB_EXTENSIONS = ['nzb', 'gz'];
+
     /** Rows in the downloads page's "Recent history" preview (#47). */
     private const RECENT_HISTORY_LIMIT = 15;
 
@@ -358,12 +362,22 @@ class UsenetController extends AbstractController
         $uploaded = $request->files->get('files');
         $list = is_array($uploaded) ? $uploaded : ($uploaded !== null ? [$uploaded] : []);
 
+        // DC-10 (review 2026-11-06): the upload was forwarded unchecked. An
+        // upload PHP refused (over upload_max_filesize, 20 MB in the image)
+        // has an empty path and crashed file_get_contents() into a 500; any
+        // file type was passed on. Now: a valid upload with an extension the
+        // page's file picker offers, and a sanitised name.
         $payload = [];
         foreach ($list as $file) {
-            if ($file === null) continue;
+            if (!$file instanceof UploadedFile) continue;
+            $ext = strtolower($file->getClientOriginalExtension());
+            if (!$file->isValid() || !in_array($ext, self::NZB_EXTENSIONS, true)) {
+                return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_bad_file')], 400);
+            }
             $content = @file_get_contents($file->getPathname());
-            if ($content === false) continue;
-            $payload[] = ['content' => $content, 'name' => $file->getClientOriginalName()];
+            if ($content === false || $content === '') continue;
+            $name = basename(str_replace("\0", '', $file->getClientOriginalName()));
+            $payload[] = ['content' => $content, 'name' => $name !== '' ? $name : 'upload.nzb'];
         }
         if ($payload === []) {
             return $this->json(['ok' => false, 'error' => $this->translator->trans('usenet.api.add_no_file')], 400);

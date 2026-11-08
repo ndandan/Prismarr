@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 class DelugeControllerTest extends TestCase
 {
+
     private function invokeStatic(string $method, mixed ...$args): mixed
     {
         $m = (new \ReflectionClass(DelugeController::class))->getMethod($method);
@@ -46,6 +47,11 @@ class DelugeControllerTest extends TestCase
         yield 'gopher scheme'      => ['gopher://evil/x', false];
         yield 'aws metadata'       => ['http://169.254.169.254/latest/meta-data/', false];
         yield 'gcp metadata'       => ['http://metadata.google.internal/computeMetadata/', false];
+        // DC-10: other spellings of the metadata address the literal list missed.
+        yield 'decimal ipv4'       => ['http://2852039166/', false];
+        yield 'hex ipv4'           => ['http://0xa9.0xfe.0xa9.0xfe/', false];
+        yield 'ipv4-mapped ipv6'   => ['http://[::ffff:a9fe:a9fe]/', false];
+        yield 'trailing dot'       => ['http://169.254.169.254./', false];
     }
 
     #[DataProvider('urlCases')]
