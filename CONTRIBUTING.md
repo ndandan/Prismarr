@@ -122,7 +122,8 @@ make check
 ```
 
 Runs PHP lint + Twig lint + the JavaScript behaviour tests (`make test-js`,
-`symfony/tests/js/`, in a throwaway Node container) + full PHPUnit suite. If it fails, do not commit. Fix first.
+`symfony/tests/js/`, in a throwaway Node container) + full PHPUnit suite.
+If it fails, do not commit. Fix first.
 
 A GitHub Actions CI workflow runs `make check` on every PR and blocks merging
 if it fails (`.github/workflows/ci.yml`) - the same contract, enforced.

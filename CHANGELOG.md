@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Dates follow the display time zone** on the dashboard, charts and the iCal feed: today's releases were dropped when the server's zone differed, and episode dates are now all-day events.
 - **Small things:** Sonarr v4 history event names on the series history, series queue sizes honour the byte-unit setting, the films backdrop no longer resets the page background, missing-films search progress parsed for "grabbed" too, settings "Clear" is undone by typing a new value, 13 English strings in the French catalogue translated, the Seerr delete confirmation no longer shows a raw key, `make lint` fails on a syntax error.
 
+### Changed
+- **`make check` runs the inline-JavaScript behaviour tests.** PHPUnit executes no JavaScript, so the page scripts' pollers had no test. `make test-js` slices the real functions out of the Twig templates and runs them under `node:test` in a throwaway `node:22-alpine` container (no npm dependencies): the *arr command-poll classifier on the films, missing-films and series pages, and the torrent refresh guard on the Deluge, qBittorrent and Transmission pages. A renamed helper or Twig syntax inside a sliced function fails the suite instead of skipping it.
+- **Migration upgrade test.** PHPUnit builds its schema from the entity mapping, so the migrations that `init.sh` runs on every boot were never executed by the suite. `MigrationUpgradeTest` runs them on a temporary SQLite file: a fresh install must match the mapping (columns, nullability, types, indexes, unique constraints, join columns), a reboot at the latest version runs nothing, and an upgrade from a v1.0 database keeps its user, watchlist and settings and turns the legacy Radarr/Sonarr settings into instances.
+
 ### Performance
 - **Dedicated cache pool for stale-while-revalidate datasets** (Bazarr, library, search vocabulary, app version): saving settings cleared the whole app cache and threw them all away.
 - **Discover and About read the shared library cache** instead of fetching the full Radarr/Sonarr libraries on every request.

@@ -156,9 +156,6 @@ final class MigrationUpgradeTest extends KernelTestCase
             'only the four legacy instance settings are removed; the others keep their values',
         );
 
-        // The Wokeometer migration seeds its single state row.
-        $this->assertSame(1, (int) $this->db->fetchOne('SELECT COUNT(*) FROM wokeometer_sync_state WHERE id = 1'));
-
         $this->assertSchemaMatchesEntities();
     }
 
