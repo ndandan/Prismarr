@@ -285,8 +285,10 @@
                     <div class="d-flex align-items-center gap-2 flex-wrap" style="font-size:.82rem;">
                         {% if user %}
                             {% set userAvatar = seerr_avatar(user.avatar ?? null, service_url) %}
-                            <span class="avatar avatar-xs" style="width:26px;height:26px;{% if userAvatar %}background-image:url('{{ userAvatar|e('css') }}'){% endif %}"></span>
-                            <span style="font-weight:500;">{{ user.displayName ?? user.jellyfinUsername ?? user.email ?? '?' }}</span>
+                            {% set userName = user.displayName ?? user.jellyfinUsername ?? user.email ?? '?' %}
+                            {# No loadable avatar (none, or a CSP-blocked plex.tv one): the initial, as on the issues page. #}
+                            <span class="avatar avatar-xs" style="width:26px;height:26px;{% if userAvatar %}background-image:url('{{ userAvatar|e('css') }}'){% endif %}">{% if not userAvatar %}{{ userName|first|upper }}{% endif %}</span>
+                            <span style="font-weight:500;">{{ userName }}</span>
                             <span class="text-muted">·</span>
                         {% endif %}
                         <span class="text-secondary">{% if req.createdAt is defined and req.createdAt %}{{ req.createdAt|prismarr_date }}{% endif %}</span>

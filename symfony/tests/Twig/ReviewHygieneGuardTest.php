@@ -109,6 +109,10 @@ class ReviewHygieneGuardTest extends TestCase
             }
         }
         $this->assertSame([], $offenders, "use seerr_avatar(x, service_url) / seerrAvatar(x):\n" . implode("\n", $offenders));
+
+        // Live check: the request cards had no placeholder at all, so a Plex
+        // requester's avatar was an empty square.
+        $this->assertStringContainsString('{% if not userAvatar %}{{ userName|first|upper }}{% endif %}', self::src('templates/jellyseerr/index.html.twig'));
     }
 
     /**
