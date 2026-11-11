@@ -355,6 +355,7 @@ dashboard:
     viewers: Current viewers
     mbps: Mbps
     unknown_title: Unknown
+    ends_at: 'Ends at {time}'
     empty: No active Plex streams
     summary:
       direct_play: '{count} Direct Play'

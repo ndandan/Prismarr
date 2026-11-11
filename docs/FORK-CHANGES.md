@@ -1129,6 +1129,21 @@ its own SQLite file:
   has an association yet), and data-transforming migrations added later —
   each needs its own seeded case.
 
+### "Ends at" on live Plex session cards (2026-11-10)
+
+From a review of Tautulli 2.19.0/2.19.1 against Prismarr's Tautulli calls (no
+breakage found: Prismarr sends the API key as `?apikey=` to `/api/v2`, which
+the new header and no-password rules leave alone, and the image proxy only
+ever receives `/library/metadata/…` paths). Tautulli renamed its activity
+cards' ETA to "Ends At"; Prismarr's cards had only a progress bar. The shared
+session card (dashboard widget, Plex Activity page, Tracearr page) now shows
+"Ends at 21:42" in the display time zone and clock format. Tautulli sessions
+compute it as `stream_duration − view_offset` (falling back to `duration`),
+Tracearr sessions as `durationMs − progressMs`; live TV and sessions without a
+position show nothing. The card re-renders on each poll, so a paused stream's
+time moves forward the way Tautulli's does. Tests pin the normalizers and the
+rendered card. Emby sessions use a separate card and are unchanged.
+
 ## 4. Fork-only — declined upstream
 
 ### Unraid server widget (v1 2026-07-01, v2 2026-07-02)

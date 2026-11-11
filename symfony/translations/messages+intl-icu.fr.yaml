@@ -354,6 +354,7 @@ dashboard:
     viewers: Spectateurs actuels
     mbps: Mbps
     unknown_title: Inconnu
+    ends_at: 'Fin à {time}'
     empty: Aucun flux Plex en cours
     summary:
       direct_play: '{count} en lecture directe'
