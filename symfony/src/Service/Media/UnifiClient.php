@@ -5,6 +5,7 @@ namespace App\Service\Media;
 use App\Service\Http\ConcurrentCurl;
 use App\Service\ConfigService;
 use App\Service\Unifi\UnifiFetcher;
+use App\Service\Unifi\WanActivity;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Contracts\Cache\CacheInterface;
@@ -43,6 +44,11 @@ class UnifiClient implements ResetInterface, UnifiFetcher
     public const PATH_HEALTH = '/stat/health';
     private const PATH_REPORT = '/stat/report/hourly.site';
     private const PATH_DEVICE = '/stat/device';
+    /**
+     * Network 11.x fallback for PATH_REPORT, which answers ok-but-empty there
+     * (see WanActivity). 24 h comes in 5-minute buckets, rolled up to hours.
+     */
+    private const PATH_V2_USAGE_24H = '/aggregated-dashboard?historySeconds=86400&widgets=wan_activity';
 
     /**
      * Widget polls every 30s; TTL keeps a paint + poll (and a second open tab)
@@ -158,6 +164,23 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             return $this->request($path, $body);
         }
 
+        return $this->memoisedGet($path, fn(): ?array => $this->request($path));
+    }
+
+    /** UnifiFetcher — a v2 GET, sharing fetch()'s memo under a 'v2:' key. */
+    public function fetchV2(string $path): ?array
+    {
+        return $this->memoisedGet('v2:' . $path, fn(): ?array => $this->requestV2($path));
+    }
+
+    /**
+     * The GET memo behind fetch() and fetchV2(): a success is reused for
+     * FETCH_MEMO_TTL, and so is a transport failure (see $downMemo).
+     *
+     * @param callable(): ?array $call one console call; sets transportDown
+     */
+    private function memoisedGet(string $path, callable $call): ?array
+    {
         $now = $this->memoClock();
         $hit = $this->fetchMemo[$path] ?? null;
         if ($hit !== null && ($now - $hit['at']) < self::FETCH_MEMO_TTL) {
@@ -174,7 +197,7 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             return null;
         }
 
-        $data = $this->request($path); // sets transportDown for this call
+        $data = $call(); // sets transportDown for this call
         // Stamped after the call (either memo): a slow console must not hand
         // back an entry that is already stale.
         if ($data === null) {
@@ -244,6 +267,11 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             'start' => ($ts - 86400) * 1000,
             'end'   => $ts * 1000,
         ]));
+        // Network 11.x: the classic report is ok-but-empty -> read the v2
+        // dashboard instead. Not after a transport failure: same dead console.
+        if ($usage === null && !$this->transportDown) {
+            $usage = WanActivity::usage($this->requestV2(self::PATH_V2_USAGE_24H), 3600);
+        }
         $devices = $this->mapDevices($this->request(self::PATH_DEVICE));
 
         if ($health === null && $usage === null && $devices === null) {
@@ -404,6 +432,8 @@ class UnifiClient implements ResetInterface, UnifiFetcher
      * it a POST (the report endpoint). Returns the envelope's `data` list on
      * success ({meta:{rc:'ok'}, data:[…]}), or null on transport error /
      * non-200 / error envelope. Protected so tests can substitute payloads.
+     *
+     * @phpstan-impure network I/O; sets transportDown per call
      */
     protected function request(string $path, ?array $jsonBody = null): ?array
     {
@@ -415,7 +445,54 @@ class UnifiClient implements ResetInterface, UnifiFetcher
         // it clears the flag before its first call and checks it after, and
         // this reset runs at the start of that same call.
         $this->transportDown = false;
-        $url = rtrim($this->baseUrl, '/') . '/proxy/network/api/s/' . rawurlencode($this->site) . $path;
+        $body = $this->send('/proxy/network/api/s/' . rawurlencode($this->site) . $path, $path, $jsonBody);
+        if ($body === null) return null;
+
+        $decoded = json_decode($body, true);
+        // Anything but the ok-envelope (error rc, HTML login page after a
+        // firmware change, …) → treat as endpoint-missing, never throw.
+        if (!is_array($decoded) || ($decoded['meta']['rc'] ?? null) !== 'ok' || !is_array($decoded['data'] ?? null)) {
+            $this->logger->warning('UnifiClient request returned no data', ['path' => $path, 'body' => substr($body, 0, 300)]);
+            return null;
+        }
+        return $decoded['data'];
+    }
+
+    /**
+     * One GET to the v2 API (Network 11.x history lives there — see
+     * WanActivity). No ok-envelope on v2: the decoded body is the answer.
+     * Returns null on transport error / non-200 / non-JSON; transportDown
+     * semantics as request(). Protected so tests can substitute payloads.
+     *
+     * @return ?array<mixed>
+     * @phpstan-impure network I/O; sets transportDown per call
+     */
+    protected function requestV2(string $path): ?array
+    {
+        $this->ensureConfig();
+        if (!$this->enabled || $this->baseUrl === null || $this->baseUrl === '' || $this->apiKey === '') {
+            return null;
+        }
+        $this->transportDown = false;
+        $body = $this->send('/proxy/network/v2/api/site/' . rawurlencode($this->site) . $path, 'v2' . $path, null);
+        if ($body === null) return null;
+
+        $decoded = json_decode($body, true);
+        if (!is_array($decoded)) {
+            $this->logger->warning('UnifiClient v2 request returned no JSON', ['path' => $path, 'body' => substr($body, 0, 300)]);
+            return null;
+        }
+        return $decoded;
+    }
+
+    /**
+     * The one cURL call behind request() and requestV2(). Returns the raw
+     * body on HTTP 200, else null — raising transportDown when the console
+     * itself was unreachable (connect/DNS/timeout) rather than erroring.
+     */
+    private function send(string $consolePath, string $path, ?array $jsonBody): ?string
+    {
+        $url = rtrim((string) $this->baseUrl, '/') . $consolePath; // $path: for the log only
 
         $ch = curl_init($url);
         if ($ch === false) return null;
@@ -444,14 +521,7 @@ class UnifiClient implements ResetInterface, UnifiFetcher
             $this->logger->warning('UnifiClient request failed', ['path' => $path, 'code' => $code, 'errno' => $errno]);
             return null;
         }
-        $decoded = json_decode((string) $body, true);
-        // Anything but the ok-envelope (error rc, HTML login page after a
-        // firmware change, …) → treat as endpoint-missing, never throw.
-        if (!is_array($decoded) || ($decoded['meta']['rc'] ?? null) !== 'ok' || !is_array($decoded['data'] ?? null)) {
-            $this->logger->warning('UnifiClient request returned no data', ['path' => $path, 'body' => substr((string) $body, 0, 300)]);
-            return null;
-        }
-        return $decoded['data'];
+        return (string) $body;
     }
 
     /** Base cURL options, TLS verification driven by unifi_skip_tls_verify. */

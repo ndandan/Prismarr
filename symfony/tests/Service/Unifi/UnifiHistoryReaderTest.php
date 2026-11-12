@@ -119,6 +119,65 @@ class UnifiHistoryReaderTest extends TestCase
         $this->assertNull($r['speedtests'][0]['latencyMs']);
     }
 
+    /** Network 11.x: the classic reports answer ok with ZERO rows (new statistics engine). */
+    private const V2_DASHBOARD = [
+        'wan_activity' => ['total_activity' => ['history' => [
+            ['timestamp' => 1751734800000, 'avg_rx_rate_bps' => 0, 'avg_tx_rate_bps' => 0, 'client_count' => 0],
+            ['timestamp' => 1751738400000, 'avg_rx_rate_bps' => 1000.0, 'avg_tx_rate_bps' => 100.0, 'client_count' => 40],
+            ['timestamp' => 1751742000000, 'avg_rx_rate_bps' => 2000.0, 'avg_tx_rate_bps' => 200.0, 'client_count' => 41],
+        ]]],
+        'speed_test' => ['data' => [
+            ['time' => 1751742000000, 'download_mbps' => 1631, 'upload_mbps' => 1974, 'latency_ms' => 1],
+        ]],
+    ];
+
+    public function testEmptyClassicReportsFallBackToTheV2Dashboard(): void
+    {
+        [$reader, $stub] = $this->reader([
+            'hourly.site' => [], 'archive.speedtest' => [], 'aggregated-dashboard' => self::V2_DASHBOARD,
+        ]);
+        $reader->nowOverride = 1751800000;
+        $r = $reader->read();
+
+        $this->assertSame(
+            [['ts' => 1751738400, 'downBytes' => 1000.0 * 3600, 'upBytes' => 100.0 * 3600],
+             ['ts' => 1751742000, 'downBytes' => 2000.0 * 3600, 'upBytes' => 200.0 * 3600]],
+            $r['usage7d'],
+        );
+        $this->assertSame(1631.0, $r['speedtests'][0]['downMbps']);
+        // One narrowed call (28 KB instead of 187 KB on the probed console).
+        $this->assertSame(['/aggregated-dashboard?historySeconds=604800&widgets=wan_activity,speed_test'], $stub->v2Paths);
+    }
+
+    public function testWorkingClassicReportsNeverTouchV2(): void
+    {
+        [$reader, $stub] = $this->reader($this->all() + ['aggregated-dashboard' => self::V2_DASHBOARD]);
+        $r = $reader->read();
+
+        $this->assertSame(1.0e9, $r['usage7d'][0]['downBytes']); // classic data, unchanged
+        $this->assertSame([], $stub->v2Paths);
+    }
+
+    public function testOnlyTheMissingSeriesIsTakenFromV2(): void
+    {
+        [$reader] = $this->reader([
+            'hourly.site' => self::REPORT, 'archive.speedtest' => [], 'aggregated-dashboard' => self::V2_DASHBOARD,
+        ]);
+        $reader->nowOverride = 1751800000;
+        $r = $reader->read();
+
+        $this->assertSame(1.0e9, $r['usage7d'][0]['downBytes']); // classic kept
+        $this->assertSame(1974.0, $r['speedtests'][0]['upMbps']); // v2 filled the gap
+    }
+
+    public function testDeadConsoleDoesNotTryV2(): void
+    {
+        [$reader, $stub] = $this->reader([], fail: true);
+        $reader->read();
+
+        $this->assertSame([], $stub->v2Paths);
+    }
+
     /**
      * Review 2026-11-06 FF-1: the memo lives in cache.app, so neither the
      * services_resetter (worker mode) nor a fresh service (the next request)

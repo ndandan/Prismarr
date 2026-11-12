@@ -33,6 +33,20 @@ final class StubUnifiFetcher implements UnifiFetcher
         return null;
     }
 
+    /** @var list<string> every v2 path asked for, in order (kept apart from $paths) */
+    public array $v2Paths = [];
+
+    /** Same needle map as fetch(): a v2 payload is keyed by e.g. 'aggregated-dashboard'. */
+    public function fetchV2(string $path): ?array
+    {
+        $this->v2Paths[] = $path;
+        if ($this->failTransport) return null;
+        foreach ($this->responses as $needle => $payload) {
+            if (str_contains($path, $needle)) return $payload;
+        }
+        return null;
+    }
+
     public function transportFailed(): bool
     {
         return $this->failTransport;

@@ -23,11 +23,20 @@ use Symfony\Contracts\Service\ResetInterface;
  *
  * FIELD MAP verified against the live console in plan Task 0 — see
  * docs/superpowers/plans/2026-07-24-unifi-probe-output.md.
+ *
+ * Network 11.x returns zero rows from both classic reports; the series then
+ * come from the v2 aggregated-dashboard via WanActivity (where the 30-day
+ * speedtest "archive" shrinks to the latest run — all v2 exposes).
  */
 final class UnifiHistoryReader implements ResetInterface
 {
     private const PATH_REPORT    = '/stat/report/hourly.site';
     private const PATH_SPEEDTEST = '/stat/report/archive.speedtest';
+    /**
+     * Network 11.x fallback for both: the classic reports answer ok-but-empty
+     * there (see WanActivity). One narrowed call covers both series.
+     */
+    private const PATH_V2 = '/aggregated-dashboard?historySeconds=604800&widgets=wan_activity,speed_test';
 
     /** Matches the history region's data-dash-poll cadence (300 s). */
     private const TTL = 300.0;
@@ -85,6 +94,16 @@ final class UnifiHistoryReader implements ResetInterface
             'start' => ($ts - 30 * 86400) * 1000,
             'end'   => $ts * 1000,
         ]));
+
+        // Network 11.x: fill whichever series the classic reports left empty
+        // from the v2 dashboard. Older consoles never get here with data
+        // present, so their behaviour is unchanged. Not after a transport
+        // failure: the console is gone, don't wait out another timeout.
+        if (($usage === null || $speedtests === null) && !$this->unifi->transportFailed()) {
+            $dashboard  = $this->unifi->fetchV2(self::PATH_V2);
+            $usage    ??= WanActivity::usage($dashboard);
+            $speedtests ??= WanActivity::speedtests($dashboard, $ts - 30 * 86400);
+        }
 
         if ($usage === null && $speedtests === null) {
             $this->logger->warning('UnifiHistoryReader: both report queries returned no data');
