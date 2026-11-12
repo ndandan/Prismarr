@@ -35,11 +35,14 @@ final class StubUnifiFetcher implements UnifiFetcher
 
     /** @var list<string> every v2 path asked for, in order (kept apart from $paths) */
     public array $v2Paths = [];
+    /** @var list<?array> every v2 body sent, index-aligned with $v2Paths */
+    public array $v2Bodies = [];
 
     /** Same needle map as fetch(): a v2 payload is keyed by e.g. 'aggregated-dashboard'. */
-    public function fetchV2(string $path): ?array
+    public function fetchV2(string $path, ?array $body = null): ?array
     {
-        $this->v2Paths[] = $path;
+        $this->v2Paths[]  = $path;
+        $this->v2Bodies[] = $body;
         if ($this->failTransport) return null;
         foreach ($this->responses as $needle => $payload) {
             if (str_contains($path, $needle)) return $payload;
