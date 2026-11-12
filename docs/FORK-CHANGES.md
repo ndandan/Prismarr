@@ -1144,6 +1144,32 @@ position show nothing. The card re-renders on each poll, so a paused stream's
 time moves forward the way Tautulli's does. Tests pin the normalizers and the
 rendered card. Emby sessions use a separate card and are unchanged.
 
+### UniFi history on Network 11.x (2026-11-12) — branch `fix/unifi-11-stats-engine`
+
+UniFi Network 11.0 replaced its statistics engine and cleared history. On a
+live 11.0.99 console every classic `stat/report` query (`hourly.site`,
+`5minutes.site`, `daily.site`, `hourly.gw`, `archive.speedtest`,
+`5minutes.user`) answers `rc: ok` with **zero rows**, so the `/unifi` 7-day
+traffic and speedtest panels and the dashboard widget's 24 h graph went blank.
+The data moved to the v2 API: `GET …/v2/api/site/<site>/aggregated-dashboard?historySeconds=N`,
+narrowed with `&widgets=wan_activity[,speed_test]` (28 KB / 83 ms instead of
+187 KB / 536 ms for 7 days; the un-narrowed 24 h payload is 598 KB / 2.6 s).
+`UnifiFetcher::fetchV2()` adds the v2 GET (no ok-envelope there, same memo
+and transport-failure semantics), and the pure `WanActivity` mapper turns
+`wan_activity.total_activity.history` into the existing `{ts, downBytes,
+upBytes}` series. Probe facts it encodes: `avg_*_rate_bps` is bytes/s despite
+the name (points × bucket length summed exactly to the summary's `rx_bytes`);
+7 d is hourly and 24 h is 5-minute (rolled up to hours for the widget);
+buckets with no sample (before the migration, the one in progress) are
+trimmed from the ends. Both `UnifiHistoryReader` and `UnifiClient::overview()`
+still ask the classic report first and fall back only when it comes back
+empty, so pre-11 consoles are unchanged. The speedtest panel shrinks to the
+latest run, which is all v2 exposes (`speed_test.data` is one run per WAN).
+Marking `request()`/`transportFailed()` `@phpstan-impure` also retired one
+baseline entry. **Not covered:** the topology map's per-client sparkline
+(`5minutes.user`) stays empty on 11.x; `v2/…/clients/history?macs=` answers
+but its shape is unprobed.
+
 ## 4. Fork-only — declined upstream
 
 ### Unraid server widget (v1 2026-07-01, v2 2026-07-02)

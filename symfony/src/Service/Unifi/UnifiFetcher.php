@@ -30,11 +30,26 @@ interface UnifiFetcher
     public function fetch(string $path, ?array $body = null): ?array;
 
     /**
+     * At most one GET to the v2 API (<url>/proxy/network/v2/api/site/<site>$path,
+     * query string included in $path). The v2 API has no ok-envelope: returns
+     * the decoded JSON body as-is, or null on transport error / non-200 /
+     * non-JSON — never throws. Memoised exactly like a classic GET, and sets
+     * transportFailed() the same way.
+     *
+     * Network 11.x moved history to v2 (see WanActivity).
+     *
+     * @return ?array<mixed>
+     */
+    public function fetchV2(string $path): ?array;
+
+    /**
      * True when the MOST RECENT fetch() failed at the transport layer
      * (connect refused, DNS failure, timeout) rather than returning an HTTP
      * or application-level error. Readers use this to skip their remaining
      * calls against a dead console instead of burning one connect timeout
      * per endpoint. Re-evaluated by every fetch(), memo answers included.
+     *
+     * @phpstan-impure its answer changes with every fetch()/fetchV2()
      */
     public function transportFailed(): bool;
 

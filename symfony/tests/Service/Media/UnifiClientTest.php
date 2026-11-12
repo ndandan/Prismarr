@@ -56,6 +56,22 @@ class UnifiClientTest extends TestCase
                 }
                 return null;
             }
+            public array $v2PathsRequested = [];
+            protected function requestV2(string $path): ?array
+            {
+                $this->v2PathsRequested[] = $path;
+                $this->transportDown = false;
+                if ($this->failTransport) {
+                    $this->transportDown = true;
+                    return null;
+                }
+                foreach ($this->responses as $needle => $payload) {
+                    if (str_contains($path, $needle)) {
+                        return $payload;
+                    }
+                }
+                return null;
+            }
             protected function now(): int { return $this->nowOverride ?? parent::now(); }
             protected function memoClock(): float { return $this->monotonic ?? parent::memoClock(); }
             public function forceTransportDown(): void { $this->transportDown = true; }
@@ -151,6 +167,62 @@ class UnifiClientTest extends TestCase
         $this->assertSame(1.0e9, $o['usage24h'][0]['downBytes']); // rx = download
         $this->assertSame(5.0e7, $o['usage24h'][0]['upBytes']);
         $this->assertSame(1751742000, $o['usage24h'][1]['ts']);
+    }
+
+    public function testEmptyClassicReportFallsBackToV2RolledUpToHours(): void
+    {
+        // Network 11.x: hourly.site answers ok with zero rows; the v2
+        // dashboard's 24h window comes in 5-minute buckets.
+        $rows = [];
+        for ($i = 0; $i < 12; $i++) {
+            $rows[] = ['timestamp' => 1751738400000 + $i * 300000, 'avg_rx_rate_bps' => 10.0,
+                       'avg_tx_rate_bps' => 1.0, 'client_count' => 30];
+        }
+        $rows[] = ['timestamp' => 1751742000000, 'avg_rx_rate_bps' => 20.0, 'avg_tx_rate_bps' => 2.0, 'client_count' => 30];
+        $rows[] = ['timestamp' => 1751742300000, 'avg_rx_rate_bps' => 20.0, 'avg_tx_rate_bps' => 2.0, 'client_count' => 30];
+        $client = $this->makeClient([
+            'stat/health'          => self::HEALTH_DATA,
+            'stat/report'          => [],
+            'stat/device'          => self::DEVICE_DATA,
+            'aggregated-dashboard' => ['wan_activity' => ['total_activity' => ['history' => $rows]]],
+        ]);
+
+        $o = $client->overview();
+
+        $this->assertSame(
+            [['ts' => 1751738400, 'downBytes' => 12 * 10.0 * 300, 'upBytes' => 12 * 1.0 * 300],
+             ['ts' => 1751742000, 'downBytes' => 2 * 20.0 * 300, 'upBytes' => 2 * 2.0 * 300]],
+            $o['usage24h'],
+        );
+        $this->assertSame(['/aggregated-dashboard?historySeconds=86400&widgets=wan_activity'], $client->v2PathsRequested);
+    }
+
+    public function testWorkingClassicReportNeverTouchesV2(): void
+    {
+        $client = $this->makeClient($this->allEndpoints());
+        $client->overview();
+
+        $this->assertSame([], $client->v2PathsRequested);
+    }
+
+    public function testFetchV2DelegatesAndMemoisesLikeAGet(): void
+    {
+        $client = $this->makeClient(['aggregated-dashboard' => ['wan_activity' => []]]);
+
+        $this->assertSame(['wan_activity' => []], $client->fetchV2('/aggregated-dashboard?x=1'));
+        $this->assertSame(['wan_activity' => []], $client->fetchV2('/aggregated-dashboard?x=1'));
+        $this->assertCount(1, $client->v2PathsRequested);
+        // A classic GET to the same path string is a different call.
+        $client->fetch('/aggregated-dashboard?x=1');
+        $this->assertCount(1, $client->pathsRequested);
+    }
+
+    public function testFetchV2TransportFailureIsReported(): void
+    {
+        $client = $this->makeClient([], failTransport: true);
+
+        $this->assertNull($client->fetchV2('/aggregated-dashboard'));
+        $this->assertTrue($client->transportFailed());
     }
 
     public function testReportRequestUses24hMsWindow(): void
