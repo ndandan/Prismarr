@@ -57,9 +57,11 @@ class UnifiClientTest extends TestCase
                 return null;
             }
             public array $v2PathsRequested = [];
-            protected function requestV2(string $path): ?array
+            public array $v2BodiesSent = [];
+            protected function requestV2(string $path, ?array $jsonBody = null): ?array
             {
                 $this->v2PathsRequested[] = $path;
+                $this->v2BodiesSent[]     = $jsonBody;
                 $this->transportDown = false;
                 if ($this->failTransport) {
                     $this->transportDown = true;
@@ -215,6 +217,17 @@ class UnifiClientTest extends TestCase
         // A classic GET to the same path string is a different call.
         $client->fetch('/aggregated-dashboard?x=1');
         $this->assertCount(1, $client->pathsRequested);
+    }
+
+    public function testFetchV2PostIsSentAndNeverMemoised(): void
+    {
+        $client = $this->makeClient(['app-traffic-rate' => [['timestamp' => 1]]]);
+
+        $client->fetchV2('/app-traffic-rate?start=1&end=2', ['client_macs' => ['a']]);
+        $client->fetchV2('/app-traffic-rate?start=1&end=2', ['client_macs' => ['a']]);
+
+        $this->assertCount(2, $client->v2PathsRequested);
+        $this->assertSame(['client_macs' => ['a']], $client->v2BodiesSent[0]);
     }
 
     public function testFetchV2TransportFailureIsReported(): void

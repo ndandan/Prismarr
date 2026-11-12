@@ -55,6 +55,69 @@ class UnifiSparkReaderTest extends TestCase
         $this->assertSame(4.0e6, $r[1]['upBytes']);
     }
 
+    /**
+     * Network 11.x: 5minutes.user answers ok with zero rows. Points from
+     * v2 app-traffic-rate as a live 11.0.99 console returned them
+     * (2026-11-12 probe): rates in BYTES/s from the CLIENT's side — tx is
+     * what it sent (a camera's big number) — over `interval_seconds`
+     * (300, or less for the bucket in progress).
+     */
+    private function v2Points(): array
+    {
+        return [
+            ['timestamp' => 1751799600000, 'interval_seconds' => 182, 'rx_byte-r' => 7166,
+             'tx_byte-r' => 292614, 'total_bytes' => 54560153, 'top_app' => ['application' => 172]],
+            ['timestamp' => 1751799300000, 'interval_seconds' => 300, 'rx_byte-r' => 8195,
+             'tx_byte-r' => 346003, 'total_bytes' => 106259607],
+        ];
+    }
+
+    public function testEmptyClassicReportFallsBackToV2AppTrafficRate(): void
+    {
+        [$reader, $stub] = $this->reader(['5minutes.user' => [], 'app-traffic-rate' => $this->v2Points()]);
+        $r = $reader->read(self::ID);
+
+        $this->assertSame(
+            [['ts' => 1751799300, 'downBytes' => 8195.0 * 300, 'upBytes' => 346003.0 * 300],
+             ['ts' => 1751799600, 'downBytes' => 7166.0 * 182, 'upBytes' => 292614.0 * 182]],
+            $r,
+        );
+        // start/end are epoch MILLISECONDS (seconds return nothing); the MAC
+        // goes in the body, with colons.
+        $this->assertSame(
+            ['/app-traffic-rate?start=' . (self::NOW - 3600) * 1000 . '&end=' . self::NOW * 1000 . '&includeUnidentified=true'],
+            $stub->v2Paths,
+        );
+        $this->assertSame([['client_macs' => ['aa:bb:cc:dd:ee:ff']]], $stub->v2Bodies);
+    }
+
+    public function testV2BucketWithoutIntervalAssumesFiveMinutes(): void
+    {
+        [$reader] = $this->reader(['5minutes.user' => [], 'app-traffic-rate' => [
+            ['timestamp' => 1751799300000, 'rx_byte-r' => 10, 'tx_byte-r' => 20],
+            'junk',
+            ['timestamp' => 'nope', 'rx_byte-r' => 1],
+        ]]);
+
+        $this->assertSame([['ts' => 1751799300, 'downBytes' => 3000.0, 'upBytes' => 6000.0]], $reader->read(self::ID));
+    }
+
+    public function testWorkingClassicReportNeverTouchesV2(): void
+    {
+        [$reader, $stub] = $this->reader(['5minutes.user' => $this->rows(), 'app-traffic-rate' => $this->v2Points()]);
+        $reader->read(self::ID);
+
+        $this->assertSame([], $stub->v2Paths);
+    }
+
+    public function testDeadConsoleDoesNotTryV2(): void
+    {
+        [$reader, $stub] = $this->reader([], fail: true);
+
+        $this->assertNull($reader->read(self::ID));
+        $this->assertSame([], $stub->v2Paths);
+    }
+
     public function testRejectsMalformedId(): void
     {
         [$reader, $stub] = $this->reader(['5minutes.user' => $this->rows()]);

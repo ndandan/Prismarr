@@ -1166,9 +1166,20 @@ still ask the classic report first and fall back only when it comes back
 empty, so pre-11 consoles are unchanged. The speedtest panel shrinks to the
 latest run, which is all v2 exposes (`speed_test.data` is one run per WAN).
 Marking `request()`/`transportFailed()` `@phpstan-impure` also retired one
-baseline entry. **Not covered:** the topology map's per-client sparkline
-(`5minutes.user`) stays empty on 11.x; `v2/…/clients/history?macs=` answers
-but its shape is unprobed.
+baseline entry.
+
+**Topology sparkline follow-up (2026-11-12, branch `fix/unifi-11-client-spark`).**
+`5minutes.user` is empty on 11.x too. `v2/…/clients/history` turned out to be
+a fixed list of recently-offline clients (it ignores `macs` and
+`historySeconds`); the source 11.0.99's own web app uses was found in its JS
+bundle: `POST v2/…/app-traffic-rate?start=<ms>&end=<ms>&includeUnidentified=true`
+with body `{client_macs: [mac]}` (seconds return an empty list). It returns
+5-minute points with `rx_byte-r` / `tx_byte-r` in bytes/s over
+`interval_seconds` ((rx + tx) × interval matched `total_bytes` exactly), and its
+direction is the client's own (tx is what the client sent), the opposite of
+`5minutes.user`'s AP-side naming. `UnifiSparkReader` falls back to it when the
+classic report is empty; `fetchV2()` gained an optional POST body (never
+memoised, like `fetch()`).
 
 ## 4. Fork-only — declined upstream
 

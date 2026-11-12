@@ -167,9 +167,13 @@ class UnifiClient implements ResetInterface, UnifiFetcher
         return $this->memoisedGet($path, fn(): ?array => $this->request($path));
     }
 
-    /** UnifiFetcher — a v2 GET, sharing fetch()'s memo under a 'v2:' key. */
-    public function fetchV2(string $path): ?array
+    /** UnifiFetcher — a v2 call; a GET shares fetch()'s memo under a 'v2:' key, a POST is never memoised. */
+    public function fetchV2(string $path, ?array $body = null): ?array
     {
+        if ($body !== null) {
+            return $this->requestV2($path, $body);
+        }
+
         return $this->memoisedGet('v2:' . $path, fn(): ?array => $this->requestV2($path));
     }
 
@@ -459,22 +463,23 @@ class UnifiClient implements ResetInterface, UnifiFetcher
     }
 
     /**
-     * One GET to the v2 API (Network 11.x history lives there — see
-     * WanActivity). No ok-envelope on v2: the decoded body is the answer.
+     * One call to the v2 API (Network 11.x history lives there — see
+     * WanActivity). GET by default; $jsonBody makes it a POST query. No
+     * ok-envelope on v2: the decoded body is the answer.
      * Returns null on transport error / non-200 / non-JSON; transportDown
      * semantics as request(). Protected so tests can substitute payloads.
      *
      * @return ?array<mixed>
      * @phpstan-impure network I/O; sets transportDown per call
      */
-    protected function requestV2(string $path): ?array
+    protected function requestV2(string $path, ?array $jsonBody = null): ?array
     {
         $this->ensureConfig();
         if (!$this->enabled || $this->baseUrl === null || $this->baseUrl === '' || $this->apiKey === '') {
             return null;
         }
         $this->transportDown = false;
-        $body = $this->send('/proxy/network/v2/api/site/' . rawurlencode($this->site) . $path, 'v2' . $path, null);
+        $body = $this->send('/proxy/network/v2/api/site/' . rawurlencode($this->site) . $path, 'v2' . $path, $jsonBody);
         if ($body === null) return null;
 
         $decoded = json_decode($body, true);

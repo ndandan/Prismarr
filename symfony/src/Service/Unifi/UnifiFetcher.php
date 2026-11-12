@@ -30,17 +30,21 @@ interface UnifiFetcher
     public function fetch(string $path, ?array $body = null): ?array;
 
     /**
-     * At most one GET to the v2 API (<url>/proxy/network/v2/api/site/<site>$path,
+     * At most one call to the v2 API (<url>/proxy/network/v2/api/site/<site>$path,
      * query string included in $path). The v2 API has no ok-envelope: returns
      * the decoded JSON body as-is, or null on transport error / non-200 /
-     * non-JSON — never throws. Memoised exactly like a classic GET, and sets
-     * transportFailed() the same way.
+     * non-JSON — never throws. Sets transportFailed() like fetch().
      *
-     * Network 11.x moved history to v2 (see WanActivity).
+     * Same read-only contract as fetch(): $body turns it into a POST, which
+     * some v2 queries (app-traffic-rate) require; a GET is memoised exactly
+     * like a classic GET, a POST never.
      *
+     * Network 11.x moved history to v2 (see WanActivity, UnifiSparkReader).
+     *
+     * @param  ?array $body when non-null, sent as a JSON POST body
      * @return ?array<mixed>
      */
-    public function fetchV2(string $path): ?array;
+    public function fetchV2(string $path, ?array $body = null): ?array;
 
     /**
      * True when the MOST RECENT fetch() failed at the transport layer
