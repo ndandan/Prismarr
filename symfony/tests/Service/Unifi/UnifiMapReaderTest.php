@@ -140,10 +140,22 @@ class UnifiMapReaderTest extends TestCase
         [$reader, $stub] = $this->reader($this->all());
 
         $reader->read();
-        $reader->nowOffset += 9;
+        $reader->nowOffset += 7;
         $reader->read();
 
         $this->assertSame(1, self::fetched($stub, '/stat/device'));
+    }
+
+    /** Review 2026-11-21 M3: the TTL sits under the 10 s poll, see UnifiLiveReaderTest. */
+    public function testAPollArrivingSlightlyEarlyStillReadsTheConsole(): void
+    {
+        [$reader, $stub] = $this->reader($this->all());
+
+        $reader->read();
+        $reader->nowOffset += 9.9;
+        $reader->read();
+
+        $this->assertSame(2, self::fetched($stub, '/stat/device'));
     }
 
     public function testMissingStaStillDrawsInfrastructure(): void

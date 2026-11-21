@@ -97,6 +97,18 @@ class UnifiHistoryReaderTest extends TestCase
         $this->assertCount(2, $stub->paths); // not 4
     }
 
+    /** Review 2026-11-21 M3: the TTL sits under the 300 s poll, see UnifiLiveReaderTest. */
+    public function testAPollArrivingSlightlyEarlyStillReadsTheConsole(): void
+    {
+        [$reader, $stub] = $this->reader($this->all());
+
+        $reader->read();
+        $reader->nowOffset = 299.0;
+        $reader->read();
+
+        $this->assertCount(4, $stub->paths);
+    }
+
     public function testGarbageRowsSkippedNotFatal(): void
     {
         [$reader] = $this->reader([

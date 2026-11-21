@@ -557,6 +557,42 @@ class BazarrClientTest extends TestCase
         $this->assertArrayNotHasKey('path', $fields);
     }
 
+    /**
+     * Review 2026-11-21 M1: Bazarr 1.5 runs sync and translate inside the
+     * PATCH request and answers when they finish. On the 8 s default budget a
+     * feature-length sync timed out and opened the breaker for every other
+     * Bazarr call while the sync was still running.
+     */
+    public function testSubtitleActionUsesTheProviderBudget(): void
+    {
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '');
+
+        $client->subtitleAction('sync', 'movie', 5, 'en', '/movies/X/x.en.srt', null, false, false);
+
+        $this->assertSame(BazarrClient::PROVIDER_TIMEOUT, $calls[0][CURLOPT_TIMEOUT]);
+    }
+
+    public function testASubtitleActionThatTimesOutDoesNotTripTheBreaker(): void
+    {
+        $health = new ServiceHealthCache(new ArrayAdapter());
+        $client = $this->fakeClient($health, false, 0, 'Operation timed out after 45000 milliseconds with 0 bytes received', timedOutAfterConnect: true);
+
+        $this->assertFalse($client->subtitleAction('sync', 'movie', 5, 'en', '/movies/X/x.en.srt', null, false, false));
+        $this->assertFalse($health->isDown(BazarrClient::SERVICE));
+        // The caller can tell "Bazarr is still working on it" from a refusal.
+        $this->assertTrue($client->lastErrorTimedOut());
+    }
+
+    public function testARefusalIsNotReportedAsATimeout(): void
+    {
+        $client = $this->fakeClient(new ServiceHealthCache(new ArrayAdapter()), 'nope', 409);
+
+        $client->subtitleAction('sync', 'movie', 5, 'en', '/movies/X/x.en.srt', null, false, false);
+
+        $this->assertFalse($client->lastErrorTimedOut());
+    }
+
     public function testSubtitleActionKeepsBazarrsStatusForTheCaller(): void
     {
         $client = $this->fakeClient(new ServiceHealthCache(new ArrayAdapter()), 'Image based embedded subtitles cannot be extracted', 415);

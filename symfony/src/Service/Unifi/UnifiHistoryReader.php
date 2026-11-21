@@ -38,8 +38,11 @@ final class UnifiHistoryReader implements ResetInterface
      */
     private const PATH_V2 = '/aggregated-dashboard?historySeconds=604800&widgets=wan_activity,speed_test';
 
-    /** Matches the history region's data-dash-poll cadence (300 s). */
-    private const TTL = 300.0;
+    /** Under the history region's 300 s data-dash-poll cadence (see UnifiLiveReader::TTL). */
+    private const TTL = 280.0;
+
+    /** Test seam — advances the cache clock without sleeping. */
+    public float $nowOffset = 0.0;
 
     private const FIELD_LATENCY = 'latency';
     /** Multiplier from the API's throughput unit to Mbps. 1.0 if already Mbps. */
@@ -68,7 +71,7 @@ final class UnifiHistoryReader implements ResetInterface
 
     public function read(): ?array
     {
-        $now = microtime(true);
+        $now = microtime(true) + $this->nowOffset;
         $hit = $this->cache->get($this->unifi, 'history', self::TTL, $now);
         if (is_array($hit)) {
             return $hit;

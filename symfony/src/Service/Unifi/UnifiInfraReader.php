@@ -47,8 +47,11 @@ final class UnifiInfraReader implements ResetInterface
     private const ROGUEAP_HOURS = 24;
     private const PATH_NETWORKS = '/rest/networkconf';
 
-    /** Matches the infra region's data-dash-poll cadence (60 s). */
-    private const TTL = 60.0;
+    /** Under the infra region's 60 s data-dash-poll cadence (see UnifiLiveReader::TTL). */
+    private const TTL = 50.0;
+
+    /** Test seam — advances the reader's clock without sleeping. */
+    public float $nowOffset = 0.0;
 
     /**
      * Gateway-only array of {name, type, value}; `general_temperature` does not
@@ -85,7 +88,7 @@ final class UnifiInfraReader implements ResetInterface
 
     public function read(): ?array
     {
-        $now = microtime(true);
+        $now = microtime(true) + $this->nowOffset;
         $hit = $this->cache->get($this->unifi, 'infra', self::TTL, $now);
         if (is_array($hit)) {
             return $hit;

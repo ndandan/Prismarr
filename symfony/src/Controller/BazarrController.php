@@ -568,6 +568,7 @@ class BazarrController extends AbstractController
     #[Route('/api/subtitle-action', name: 'api_subtitle_action', methods: ['POST'])]
     public function apiSubtitleAction(Request $request): JsonResponse
     {
+        set_time_limit(self::PROVIDER_TIME_LIMIT);
         $in = $request->request;
         $str = static fn(string $k): string => is_scalar($in->all()[$k] ?? null) ? trim((string) $in->all()[$k]) : '';
         $flag = static fn(string $k): bool => in_array($str($k), ['1', 'true', 'True'], true);
@@ -594,6 +595,13 @@ class BazarrController extends AbstractController
 
         if ($this->bazarr->subtitleAction($action, $type, $id, $language, $path, $subtitlesId, $flag('forced'), $flag('hi'))) {
             return $this->json(['ok' => true]);
+        }
+
+        // Bazarr 1.5 answers only when the work is done. Out of budget after
+        // connecting = it is still running there, not a failure: saying so
+        // (and keeping the button off) avoids a second sync of the same file.
+        if ($this->bazarr->lastErrorTimedOut()) {
+            return $this->json(['ok' => false, 'reason' => 'still_running'], 504);
         }
 
         $reason = match ((int) ($this->bazarr->getLastError()['code'] ?? 0)) {

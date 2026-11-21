@@ -45,8 +45,12 @@ final class UnifiLiveReader implements ResetInterface
     private const PATH_USER         = '/rest/user';
     private const PATH_DEVICE_BASIC = '/stat/device-basic';
 
-    /** Matches the live region's data-dash-poll cadence (10 s). */
-    private const TTL = 10.0;
+    /**
+     * Under the live region's 10 s data-dash-poll cadence, not equal to it: a
+     * poll that reaches the reader a few ms sooner than the one before it must
+     * still read the console, or the panels move every 20 s (review 2026-11-21).
+     */
+    private const TTL = 8.0;
     /** Reservations and AP names are config: they change monthly, not per-second. */
     private const CONFIG_TTL = 300.0;
 
@@ -128,8 +132,9 @@ final class UnifiLiveReader implements ResetInterface
         // AP names: device names live in the 60s infra group, but the wireless
         // panel is here in the 10s group. device-basic is a name-only payload,
         // so resolving MAC => name costs far less than a full stat/device.
+        $devices = $this->unifi->fetch(self::PATH_DEVICE_BASIC);
         $apNames = [];
-        foreach ((array) ($this->unifi->fetch(self::PATH_DEVICE_BASIC) ?? []) as $d) {
+        foreach ($devices ?? [] as $d) {
             if (!is_array($d)) continue;
             $mac  = self::str($d['mac'] ?? null);
             $name = self::str($d['name'] ?? null);
@@ -138,7 +143,12 @@ final class UnifiLiveReader implements ResetInterface
             }
         }
 
-        $this->cache->put($this->unifi, 'live.config', self::CONFIG_TTL, $now, ['users' => $users, 'apNames' => $apNames]);
+        // Only a complete answer is worth 300 s. A failed call here used to be
+        // kept for the whole config TTL once the memo outlived the request
+        // (review 2026-11-21): ask again on the next live refresh instead.
+        if ($users !== null && $devices !== null) {
+            $this->cache->put($this->unifi, 'live.config', self::CONFIG_TTL, $now, ['users' => $users, 'apNames' => $apNames]);
+        }
         return [$users, $apNames];
     }
 

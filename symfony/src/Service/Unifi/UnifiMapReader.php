@@ -38,8 +38,8 @@ final class UnifiMapReader implements ResetInterface
     private const PATH_DEVICE = '/stat/device';
     private const PATH_STA    = '/stat/sta';
 
-    /** Matches the map region's data-dash-poll cadence (10 s). */
-    private const TTL = 10.0;
+    /** Under the map region's 10 s data-dash-poll cadence (see UnifiLiveReader::TTL). */
+    private const TTL = 8.0;
 
     /** Test seam — advances the reader's clock without sleeping. */
     public float $nowOffset = 0.0;

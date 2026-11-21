@@ -1263,6 +1263,30 @@ empty (render tests now pin the SVG); and a popover anchored to a badge near
 the right edge must flip leftwards (the Bazarr health list measures itself on
 open).
 
+### Review 2026-11-21: the five MEDIUM findings — branch `fix/review-2026-11-21`
+
+A review of the 39 commits since the 2026-11-06 pass (report in
+`docs/superpowers/reviews/2026-11-21-code-review.md`, gitignored) found no
+HIGH and five MEDIUM defects, all in the batches above or the 2026-11-07
+deferred batch. Each has a regression test that failed first.
+
+- **Bazarr subtitle actions** (`BazarrClient::subtitleAction`). Bazarr 1.5
+  runs sync and translate inside the PATCH request (checked in its v1.5.2
+  source). The call now has the provider budget (45 s), so a timeout after
+  connecting no longer opens the breaker; `lastErrorTimedOut()` lets the
+  route answer `reason: still_running` (504), and the modal shows a warning
+  and leaves the button disabled so a second click cannot start the same
+  sync twice.
+- **UniFi config memo** (`UnifiLiveReader::config`). Since the reader memos
+  moved to `cache.app`, a failed `/rest/user` or `/stat/device-basic` was kept
+  for the 300 s config TTL. Only a complete answer is stored now.
+- **UniFi reader TTLs.** Each TTL equalled its poll cadence, so a poll that
+  arrived a few ms early was served the previous poll's data. TTLs are now
+  8 / 50 / 280 s against polls of 10 / 60 / 300 s.
+- **Seerr blocklist page.** A failed blocklist call (the client returns an
+  empty list) now shows the service banner via `clientFailed()`, and a page
+  past the end redirects to the last page, as the issues page does.
+
 ## 4. Fork-only — declined upstream
 
 ### Unraid server widget (v1 2026-07-01, v2 2026-07-02)

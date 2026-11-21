@@ -213,5 +213,52 @@ class JellyseerrBlocklistRenderTest extends WebTestCase
 
         $this->assertResponseIsSuccessful();
         $this->assertSelectorNotExists('[data-blocklist-remove]');
+        $this->assertSelectorNotExists('[data-blocklist-empty]');
+        $this->assertSelectorExists('.alert-danger[data-reason="unreachable"]');
+    }
+
+    /**
+     * Review 2026-11-21 M4: Seerr answered /settings/about, then the blocklist
+     * call itself failed (a version without the route, a 500, a timeout). The
+     * client turns that into an empty list, which rendered as "Nothing is
+     * blocklisted".
+     */
+    public function testAFailedBlocklistFetchShowsTheBannerNotTheEmptyState(): void
+    {
+        $this->boot(function (JellyseerrClient&MockObject $seerr): void {
+            $seerr->method('getAbout')->willReturn(['version' => '2.0.0']);
+            $seerr->method('getBlocklist')->willReturn(['pageInfo' => [], 'results' => []]);
+            $seerr->method('getLastError')->willReturn(['code' => 404, 'method' => 'GET', 'path' => '/api/v1/blocklist', 'message' => 'unexpected HTTP status']);
+        });
+
+        $this->client->request('GET', '/jellyseerr/blocklist');
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSelectorNotExists('[data-blocklist-empty]');
+        $this->assertSelectorExists('.alert-danger[data-reason="unreachable"]');
+    }
+
+    /**
+     * Review 2026-11-21 M5: removing the only row of the last page reloads
+     * that page, which no longer exists — an empty state with no pager.
+     */
+    public function testAPagePastTheEndRedirectsToTheLastPage(): void
+    {
+        $this->boot(function (JellyseerrClient&MockObject $seerr): void {
+            $seerr->method('getAbout')->willReturn(['version' => '3.5.2']);
+            $seerr->method('getBlocklist')->willReturn([
+                'pageInfo' => ['pages' => 1, 'pageSize' => 25, 'results' => 25, 'page' => 2],
+                'results'  => [],
+            ]);
+        });
+
+        $this->client->request('GET', '/jellyseerr/blocklist?filter=manual&q=alien&page=2');
+
+        $this->assertResponseRedirects();
+        $location = (string) $this->client->getResponse()->headers->get('Location');
+        $this->assertStringContainsString('/jellyseerr/blocklist', $location);
+        $this->assertStringContainsString('page=1', $location);
+        $this->assertStringContainsString('filter=manual', $location);
+        $this->assertStringContainsString('q=alien', $location);
     }
 }

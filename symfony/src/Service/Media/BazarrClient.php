@@ -53,6 +53,7 @@ class BazarrClient implements ResetInterface
 
     /** @var array{code:int, method:string, path:string, message:string}|null */
     private ?array $lastError = null;
+    private bool $lastErrorTimedOut = false;
 
     public function __construct(
         private readonly ConfigService $config,
@@ -73,6 +74,16 @@ class BazarrClient implements ResetInterface
     public function getLastError(): ?array
     {
         return $this->lastError;
+    }
+
+    /**
+     * True when the last call failed because it connected and then ran out of
+     * time: Bazarr was reached and may still be doing the work (a long sync on
+     * Bazarr 1.5), which is not the same as a refusal or an outage.
+     */
+    public function lastErrorTimedOut(): bool
+    {
+        return $this->lastError !== null && $this->lastErrorTimedOut;
     }
 
     private function ensureConfig(): void
@@ -374,7 +385,11 @@ class BazarrClient implements ResetInterface
      * (external file, needs $path), 'translate' (to $language, from an
      * external $path or an embedded track's $subtitlesId) or 'extract' (an
      * embedded track by $subtitlesId, Bazarr 1.6+). $id is the Radarr movie id
-     * or the Sonarr episode id. Bazarr queues the work and answers 204; on a
+     * or the Sonarr episode id. Bazarr 1.6 queues the work and answers 204 at
+     * once; 1.5 does it inside the request and answers when it is done, so the
+     * call gets the provider budget. A sync that outlasts it means Bazarr is
+     * busy, not down: the breaker stays closed and lastErrorTimedOut() is true.
+     * On a
      * refusal getLastError()['code'] carries its status (415 image-based,
      * 409 file error, 500 path mapping, 502 translation failed).
      */
@@ -398,7 +413,7 @@ class BazarrClient implements ResetInterface
             $body['subtitles_id'] = (string) $subtitlesId;
         }
 
-        return $this->request('PATCH', '/subtitles', [], $body) !== null;
+        return $this->request('PATCH', '/subtitles', [], $body, timeout: self::PROVIDER_TIMEOUT) !== null;
     }
 
     public function searchMissingSeries(int $sonarrSeriesId): bool
@@ -470,6 +485,7 @@ class BazarrClient implements ResetInterface
             // rendering can enter this branch dozens of times per page during
             // a down window, and the failure that opened the breaker was
             // already logged once by recordError().
+            $this->lastErrorTimedOut = false;
             $this->lastError = [
                 'code'    => 0,
                 'method'  => $method,
@@ -525,7 +541,7 @@ class BazarrClient implements ResetInterface
         // long-budget call that connected and then ran out of time means
         // Bazarr is busy, not down (see the $timeout docblock above).
         if ($rawBody === false || $err !== '' || $code === 0) {
-            $this->recordError($code, $err !== '' ? $err : 'connection failed', $method, $path);
+            $this->recordError($code, $err !== '' ? $err : 'connection failed', $method, $path, $timedOutAfterConnect);
             if ($timeout <= self::DEFAULT_TIMEOUT || !$timedOutAfterConnect) {
                 $this->health?->markDown(self::SERVICE);
             }
@@ -590,8 +606,10 @@ class BazarrClient implements ResetInterface
         return [$body, $code, $err, $timedOutAfterConnect];
     }
 
-    private function recordError(int $code, string $message, string $method, string $path): void
+    /** @param bool $timedOut the call connected, then ran out of time: Bazarr may still be working on it */
+    private function recordError(int $code, string $message, string $method, string $path, bool $timedOut = false): void
     {
+        $this->lastErrorTimedOut = $timedOut;
         $this->lastError = [
             'code'    => $code,
             'method'  => $method,

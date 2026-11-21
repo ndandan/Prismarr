@@ -78,7 +78,8 @@
       image_based:      {{ 'bazarr.actions.error_image_based'|trans|json_encode|raw }},
       file_error:       {{ 'bazarr.actions.error_file'|trans|json_encode|raw }},
       path_mapping:     {{ 'bazarr.actions.error_path_mapping'|trans|json_encode|raw }},
-      translate_failed: {{ 'bazarr.actions.error_translate_failed'|trans|json_encode|raw }}
+      translate_failed: {{ 'bazarr.actions.error_translate_failed'|trans|json_encode|raw }},
+      still_running:    {{ 'bazarr.actions.still_running'|trans|json_encode|raw }}
     }
   };
 
@@ -188,6 +189,12 @@
         if (d && d.ok === true) {
           btn.innerHTML = '&#10003; ' + window.escHtml(I18N[action]);
           if (window._prismarrToast) window._prismarrToast(I18N.queued, 'success');
+          return;
+        }
+        if (d && d.reason === 'still_running') {
+          // Bazarr is still working on it: the button stays off so a second
+          // click cannot start the same sync again.
+          if (window._prismarrToast) window._prismarrToast(I18N.reasons.still_running, 'warning');
           return;
         }
         btn.disabled = false;

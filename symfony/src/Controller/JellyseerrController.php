@@ -253,7 +253,22 @@ class JellyseerrController extends AbstractController
             } else {
                 $data = $this->jellyseerr->getBlocklist($take, ($page - 1) * $take, $q, $filter === 'tags' ? 'blocklistedTags' : $filter);
                 $pageInfo = is_array($data['pageInfo'] ?? null) ? $data['pageInfo'] : [];
-                foreach (is_array($data['results'] ?? null) ? $data['results'] : [] as $row) {
+                $results  = is_array($data['results'] ?? null) ? $data['results'] : [];
+                // The client turns a failed call into an empty list: Seerr
+                // answered /settings/about but not this one (a version with no
+                // blocklist route, a 500, a timeout). That is an outage, not
+                // "nothing is blocklisted" (review 2026-11-21).
+                if ($results === [] && $this->clientFailed($this->jellyseerr)) {
+                    $error = true;
+                }
+                // Past the end (the last row of the last page was just removed,
+                // a stale link): go to the last page instead of an empty state
+                // with no pager. Same guard as the issues page.
+                $pages = (int) ($pageInfo['pages'] ?? 0);
+                if (!$error && $pages >= 1 && $page > $pages && $results === []) {
+                    return $this->redirectToRoute('jellyseerr_blocklist', ['filter' => $filter, 'q' => $q !== '' ? $q : null, 'page' => $pages]);
+                }
+                foreach ($results as $row) {
                     if (!is_array($row) || (int) ($row['tmdbId'] ?? 0) <= 0) {
                         continue;
                     }

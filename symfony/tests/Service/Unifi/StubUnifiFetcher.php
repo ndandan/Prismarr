@@ -22,6 +22,12 @@ final class StubUnifiFetcher implements UnifiFetcher
         private bool $failTransport = false,
     ) {}
 
+    /** Change one endpoint's answer mid-test (an endpoint that fails, then recovers). */
+    public function set(string $needle, ?array $payload): void
+    {
+        $this->responses[$needle] = $payload;
+    }
+
     public function fetch(string $path, ?array $body = null): ?array
     {
         $this->paths[]  = $path;

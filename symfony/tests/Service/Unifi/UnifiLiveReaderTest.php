@@ -209,7 +209,51 @@ class UnifiLiveReaderTest extends TestCase
                                           'rest/user' => null, 'stat/device-basic' => null]);
         $this->assertNull($reader->read());
         $reader->read();
-        $this->assertGreaterThan(4, count($stub->paths)); // retried
+        $this->assertCount(8, $stub->paths); // all four endpoints retried, config included
+    }
+
+    /**
+     * Review 2026-11-21 M2: since the memo moved to cache.app, one failed
+     * /rest/user answer was kept for the 300 s config TTL — reservations
+     * stayed "unavailable" long after the console had recovered.
+     */
+    public function testAFailedReservationsFetchIsNotCachedForTheConfigTtl(): void
+    {
+        [$reader, $stub] = $this->reader(['rest/user' => null] + $this->all());
+        $this->assertNull($reader->read()['reservations']);
+
+        $stub->set('rest/user', self::USERS);
+        $reader->nowOffset = 15.0; // the next live refresh, well inside the 300s config TTL
+
+        $this->assertSame(3, $reader->read()['reservations']['total']);
+    }
+
+    public function testAFailedApNameFetchIsNotCachedForTheConfigTtl(): void
+    {
+        [$reader, $stub] = $this->reader(['stat/device-basic' => null] + $this->all());
+        $reader->read();
+
+        $stub->set('stat/device-basic', self::DEVICE_BASIC);
+        $reader->nowOffset = 15.0;
+        $reader->read();
+
+        $this->assertSame(2, count(array_filter($stub->paths, static fn(string $p): bool => str_contains($p, 'stat/device-basic'))));
+    }
+
+    /**
+     * Review 2026-11-21 M3: the page polls every 10 s. With a 10 s TTL a poll
+     * that reached the reader a few ms sooner than the one before it was
+     * served that poll's data, so the "live" panels moved every 20 s.
+     */
+    public function testAPollArrivingSlightlyEarlyStillReadsTheConsole(): void
+    {
+        [$reader, $stub] = $this->reader($this->all());
+
+        $reader->read();
+        $reader->nowOffset = 9.9;
+        $reader->read();
+
+        $this->assertSame(2, count(array_filter($stub->paths, static fn(string $p): bool => str_contains($p, 'stat/health'))));
     }
 
     public function testLiveEndpointsRefreshButConfigEndpointsAreCachedLonger(): void

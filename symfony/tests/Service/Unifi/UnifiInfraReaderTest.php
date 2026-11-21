@@ -225,6 +225,18 @@ class UnifiInfraReaderTest extends TestCase
         $this->assertCount(3, $stub->paths); // not 6
     }
 
+    /** Review 2026-11-21 M3: the TTL sits under the 60 s poll, see UnifiLiveReaderTest. */
+    public function testAPollArrivingSlightlyEarlyStillReadsTheConsole(): void
+    {
+        [$reader, $stub] = $this->reader($this->all());
+
+        $reader->read();
+        $reader->nowOffset = 59.5;
+        $reader->read();
+
+        $this->assertCount(6, $stub->paths);
+    }
+
     public function testGarbageRowsSkippedNotFatal(): void
     {
         [$reader] = $this->reader(['stat/device' => [

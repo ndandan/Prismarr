@@ -222,6 +222,26 @@ class BazarrSubtitleActionTest extends TestCase
         self::assertSame(['ok' => false, 'reason' => $reason], self::json($r));
     }
 
+    /**
+     * Review 2026-11-21 M1: Bazarr 1.5 answers only when the sync is done. A
+     * sync that outlasts the budget is still running there — calling it a
+     * failure invites a second click, and a second sync of the same file.
+     */
+    public function testAnActionThatOutlastsTheBudgetIsReportedAsStillRunning(): void
+    {
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('subtitleAction')->willReturn(false);
+        $client->method('getLastError')->willReturn(['code' => 0, 'method' => 'PATCH', 'path' => '/subtitles', 'message' => 'Operation timed out']);
+        $client->method('lastErrorTimedOut')->willReturn(true);
+
+        $r = $this->controller($client)->apiSubtitleAction(self::post([
+            'action' => 'sync', 'type' => 'movie', 'id' => '5', 'language' => 'en', 'path' => '/x.srt',
+        ]));
+
+        self::assertSame(504, $r->getStatusCode());
+        self::assertSame(['ok' => false, 'reason' => 'still_running'], self::json($r));
+    }
+
     public function testAnUnreachableBazarrFallsBackToTheClientError(): void
     {
         $client = $this->createMock(BazarrClient::class);
