@@ -169,6 +169,7 @@ class BazarrFrameRenderTest extends WebTestCase
         $this->assertStringContainsString('id="bazarr-view"', $html, 'the shell always contains the frame');
         $this->assertStringContainsString('ZzyxReadyMovie', $html, 'the requested view\'s content is inline on a direct hit — no double fetch');
         $this->assertSame(1, substr_count($html, 'id="bazarr-jobs-chip"'), 'the jobs chip sits in the nav, once');
+        $this->assertSame(1, substr_count($html, 'id="bazarr-health-chip"'), 'the health badge sits in the nav, once');
     }
 
     public function testAFrameRequestRendersOnlyTheFrame(): void
@@ -192,6 +193,7 @@ class BazarrFrameRenderTest extends WebTestCase
         );
         $this->assertStringContainsString('ZzyxReadyMovie', $html);
         $this->assertStringNotContainsString('bazarr-jobs-chip', $html, 'the chip lives outside the frame, so a tab swap never re-runs its poller');
+        $this->assertStringNotContainsString('bazarr-health-chip', $html, 'the health badge lives outside the frame too');
     }
 
     public function testBothShapesVaryOnTheTurboFrameHeader(): void

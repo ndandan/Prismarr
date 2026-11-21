@@ -586,4 +586,22 @@ class BazarrClientTest extends TestCase
 
         $this->assertNull($client->getJobs());
     }
+
+    public function testGetHealthListsBazarrsIssues(): void
+    {
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '{"data":[{"object":"/movies","issue":"Not accessible"},{"object":"Default","issue":""},"junk",{"issue":"No languages profile"}]}');
+
+        $this->assertSame([
+            ['object' => '/movies', 'issue' => 'Not accessible'],
+            ['object' => '', 'issue' => 'No languages profile'],
+        ], $client->getHealth());
+        $this->assertStringEndsWith('/api/system/health', $calls[0][CURLOPT_URL]);
+    }
+
+    public function testGetHealthIsNullWhenBazarrIsUnreachableOrUnconfigured(): void
+    {
+        $this->assertNull($this->fakeClient(new ServiceHealthCache(new ArrayAdapter()), false, 0, 'connection refused')->getHealth());
+        $this->assertNull($this->client([])->getHealth());
+    }
 }

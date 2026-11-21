@@ -337,6 +337,39 @@ class BazarrClient implements ResetInterface
     }
 
     /**
+     * Bazarr's own health issues (GET /api/system/health): inaccessible
+     * Sonarr/Radarr root folders, language profiles with duplicate ids, no
+     * language profile at all… Each row is {object, issue}; rows without an
+     * issue text are dropped. Null when Bazarr is unconfigured or unreachable.
+     *
+     * @return list<array{object: string, issue: string}>|null
+     */
+    public function getHealth(): ?array
+    {
+        if (!$this->ready()) {
+            return null;
+        }
+        $r = $this->request('GET', '/system/health');
+        if ($r === null) {
+            return null;
+        }
+
+        $out = [];
+        foreach (is_array($r['data'] ?? null) ? $r['data'] : [] as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $issue = trim(is_scalar($row['issue'] ?? null) ? (string) $row['issue'] : '');
+            if ($issue === '') {
+                continue;
+            }
+            $out[] = ['object' => trim(is_scalar($row['object'] ?? null) ? (string) $row['object'] : ''), 'issue' => $issue];
+        }
+
+        return $out;
+    }
+
+    /**
      * Run one subtitle tool through Bazarr's PATCH /api/subtitles: 'sync'
      * (external file, needs $path), 'translate' (to $language, from an
      * external $path or an embedded track's $subtitlesId) or 'extract' (an

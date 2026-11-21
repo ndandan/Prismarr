@@ -5956,6 +5956,10 @@ bazarr:
     error_file: Bazarr couldn't process that subtitle file. Check Bazarr's logs.
     error_path_mapping: Bazarr can't find that file. Check its path mappings.
     error_translate_failed: The translation failed. Check Bazarr's logs.
+  health:
+    title: Bazarr health
+    issue_one: "1 issue"
+    issues_tpl: "__N__ issues"
   jobs:
     running_tpl: "__N__ running"
     pending_tpl: "__N__ queued"

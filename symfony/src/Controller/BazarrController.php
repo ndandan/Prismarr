@@ -548,6 +548,18 @@ class BazarrController extends AbstractController
     }
 
     /**
+     * Bazarr's health issues for the badge in the Bazarr nav (batch 3).
+     * `ok:false` hides the badge when Bazarr can't be read.
+     */
+    #[Route('/api/health', name: 'api_health', methods: ['GET'])]
+    public function apiHealth(): JsonResponse
+    {
+        $issues = $this->bazarr->getHealth();
+
+        return $this->json(['ok' => $issues !== null, 'issues' => $issues ?? []]);
+    }
+
+    /**
      * Sync / Translate / Extract one subtitle through Bazarr (queued as a job
      * on Bazarr's side). Same same-origin convention as the download routes.
      * Bazarr's refusals come back as a `reason` the modal translates; a
