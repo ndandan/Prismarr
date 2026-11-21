@@ -1,0 +1,61 @@
+{# Bazarr jobs chip (batch 2): running / queued Bazarr 1.6 jobs next to the
+   Bazarr nav, polled from /bazarr/api/jobs every 5 s while the tab is
+   visible. Hidden while the queue is idle; polling stops for good on a
+   Bazarr without a job queue (< 1.6). Included from bazarr/_nav.html.twig,
+   which sits outside the bazarr-view frame, so it survives tab swaps. #}
+<span id="bazarr-jobs-chip" class="badge bg-azure-lt d-none" role="status" aria-live="polite"></span>
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var I18N = {
+    running_tpl: {{ 'bazarr.jobs.running_tpl'|trans|json_encode|raw }},
+    pending_tpl: {{ 'bazarr.jobs.pending_tpl'|trans|json_encode|raw }},
+    title:       {{ 'bazarr.jobs.title'|trans|json_encode|raw }}
+  };
+
+  /* ── Bazarr jobs chip ──
+     null hides the chip; otherwise {text, title}. */
+  function bzJobsChip(d, i18n) {
+    if (!d || !d.supported) return null;
+    var parts = [];
+    if (d.running > 0) parts.push(i18n.running_tpl.replace('__N__', d.running));
+    if (d.pending > 0) parts.push(i18n.pending_tpl.replace('__N__', d.pending));
+    if (!parts.length) return null;
+    if (d.running > 0 && typeof d.progress === 'number') parts.push(d.progress + '%');
+    return { text: parts.join(' · '), title: i18n.title + (d.message ? ': ' + d.message : '') };
+  }
+
+  if (window._prismarrBazarrJobsTimer) { clearInterval(window._prismarrBazarrJobsTimer); window._prismarrBazarrJobsTimer = null; }
+  var el = document.getElementById('bazarr-jobs-chip');
+  if (!el) return;
+
+  function stop() {
+    if (window._prismarrBazarrJobsTimer) { clearInterval(window._prismarrBazarrJobsTimer); window._prismarrBazarrJobsTimer = null; }
+  }
+
+  function tick() {
+    if (!document.body.contains(el)) { stop(); return; }
+    if (document.hidden) return;
+    fetch((window.BASE_PATH || '') + '/bazarr/api/jobs', { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (d && d.supported === false) stop();
+        var c = bzJobsChip(d, I18N);
+        if (!c) { el.classList.add('d-none'); return; }
+        el.textContent = c.text;
+        el.title = c.title;
+        el.classList.remove('d-none');
+      })
+      .catch(function () {});
+  }
+
+  if (!window._prismarrBazarrJobsCleanupBound) {
+    window._prismarrBazarrJobsCleanupBound = true;
+    document.addEventListener('turbo:before-render', function () {
+      if (window._prismarrBazarrJobsTimer) { clearInterval(window._prismarrBazarrJobsTimer); window._prismarrBazarrJobsTimer = null; }
+    });
+  }
+
+  tick();
+  window._prismarrBazarrJobsTimer = setInterval(tick, 5000);
+})();
+</script>

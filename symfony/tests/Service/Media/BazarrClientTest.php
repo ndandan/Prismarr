@@ -569,4 +569,21 @@ class BazarrClientTest extends TestCase
     {
         $this->assertFalse($this->client([])->subtitleAction('sync', 'movie', 5, 'en', '/x.srt', null, false, false));
     }
+
+    public function testGetJobsReturnsBazarrsJobQueue(): void
+    {
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '{"data":[{"job_id":1,"job_name":"Sync","status":"running"}]}');
+
+        $this->assertSame([['job_id' => 1, 'job_name' => 'Sync', 'status' => 'running']], $client->getJobs());
+        $this->assertStringEndsWith('/api/system/jobs', $calls[0][CURLOPT_URL]);
+    }
+
+    public function testGetJobsIsNullOnABazarrWithoutAJobQueue(): void
+    {
+        // Bazarr < 1.6 has no /api/system/jobs.
+        $client = $this->fakeClient(new ServiceHealthCache(new ArrayAdapter()), 'Not Found', 404);
+
+        $this->assertNull($client->getJobs());
+    }
 }

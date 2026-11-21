@@ -506,6 +506,48 @@ class BazarrController extends AbstractController
     }
 
     /**
+     * Summary of Bazarr 1.6's job queue for the jobs chip: running and
+     * pending counts plus the first running job's name, progress message and
+     * percentage. `supported:false` hides the chip (Bazarr < 1.6, or the queue
+     * couldn't be read).
+     */
+    #[Route('/api/jobs', name: 'api_jobs', methods: ['GET'])]
+    public function apiJobs(): JsonResponse
+    {
+        $out  = ['ok' => true, 'supported' => false, 'running' => 0, 'pending' => 0, 'message' => null, 'progress' => null];
+        $jobs = $this->bazarr->getJobs();
+        if ($jobs === null) {
+            return $this->json($out);
+        }
+        $out['supported'] = true;
+
+        foreach ($jobs as $job) {
+            $status = $job['status'] ?? null;
+            if ($status === 'pending') {
+                $out['pending']++;
+                continue;
+            }
+            if ($status !== 'running') {
+                continue;
+            }
+            $out['running']++;
+            if ($out['running'] > 1) {
+                continue;
+            }
+            $name    = trim((string) ($job['job_name'] ?? ''));
+            $detail  = trim((string) ($job['progress_message'] ?? ''));
+            $message = implode(': ', array_filter([$name, $detail], fn(string $p) => $p !== ''));
+            $out['message'] = $message !== '' ? $message : null;
+            $max = (int) ($job['progress_max'] ?? 0);
+            if (!empty($job['is_progress']) && $max > 0) {
+                $out['progress'] = (int) max(0, min(100, round(100 * (int) ($job['progress_value'] ?? 0) / $max)));
+            }
+        }
+
+        return $this->json($out);
+    }
+
+    /**
      * Sync / Translate / Extract one subtitle through Bazarr (queued as a job
      * on Bazarr's side). Same same-origin convention as the download routes.
      * Bazarr's refusals come back as a `reason` the modal translates; a

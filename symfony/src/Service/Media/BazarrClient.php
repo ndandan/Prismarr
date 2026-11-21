@@ -317,6 +317,26 @@ class BazarrClient implements ResetInterface
     }
 
     /**
+     * Bazarr 1.6's job queue (pending / running / failed / completed jobs,
+     * with progress for the long ones). Null when unconfigured, unreachable,
+     * or on a Bazarr older than 1.6 (no such endpoint: 404).
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public function getJobs(): ?array
+    {
+        if (!$this->ready()) {
+            return null;
+        }
+        $r = $this->request('GET', '/system/jobs');
+        if ($r === null) {
+            return null;
+        }
+
+        return array_values(array_filter(is_array($r['data'] ?? null) ? $r['data'] : [], 'is_array'));
+    }
+
+    /**
      * Run one subtitle tool through Bazarr's PATCH /api/subtitles: 'sync'
      * (external file, needs $path), 'translate' (to $language, from an
      * external $path or an embedded track's $subtitlesId) or 'extract' (an

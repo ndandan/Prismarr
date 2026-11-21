@@ -168,6 +168,7 @@ class BazarrFrameRenderTest extends WebTestCase
         $this->assertStringContainsString('navbar-vertical', $html, 'the full shape ships the sidebar/topbar chrome');
         $this->assertStringContainsString('id="bazarr-view"', $html, 'the shell always contains the frame');
         $this->assertStringContainsString('ZzyxReadyMovie', $html, 'the requested view\'s content is inline on a direct hit — no double fetch');
+        $this->assertSame(1, substr_count($html, 'id="bazarr-jobs-chip"'), 'the jobs chip sits in the nav, once');
     }
 
     public function testAFrameRequestRendersOnlyTheFrame(): void
@@ -190,6 +191,7 @@ class BazarrFrameRenderTest extends WebTestCase
             'Turbo matches the replacement by finding the frame element IN the response — a bare inner fragment leaves the frame empty',
         );
         $this->assertStringContainsString('ZzyxReadyMovie', $html);
+        $this->assertStringNotContainsString('bazarr-jobs-chip', $html, 'the chip lives outside the frame, so a tab swap never re-runs its poller');
     }
 
     public function testBothShapesVaryOnTheTurboFrameHeader(): void

@@ -27,6 +27,7 @@
   _route == 'app_bazarr_history' ? 'history' : (_route == 'app_bazarr_series_detail' ? 'series' : 'wanted')
 ) %}
 <div class="d-flex gap-2 align-items-center flex-wrap">
+  {% include 'bazarr/_jobs_chip.html.twig' %}
   {% for tab in _tabs %}
     <a href="{{ path(tab.route) }}"
        {% if tab.frame %}data-turbo-frame="bazarr-view" data-turbo-action="advance"{% endif %}
