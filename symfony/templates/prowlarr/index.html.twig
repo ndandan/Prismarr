@@ -12,6 +12,8 @@
 .pw-health-error { background:rgba(239,68,68,.08); border-left:3px solid #ef4444; }
 .pw-app-card { display:flex; align-items:center; gap:.75rem; padding:.6rem .85rem; background:var(--tblr-bg-surface); border:1px solid var(--tblr-border-color); border-radius:.5rem; }
 .pw-search-results { max-height:500px; overflow-y:auto; }
+.pw-search-picker { width:auto; max-width:13rem; flex:0 1 auto; }
+.pw-search-q { flex:1 1 12rem; min-width:10rem; }
 .pw-result-row { font-size:.8rem; }
 .pw-result-row td { padding:.35rem .5rem !important; }
 /* The ADDED column is the least-read one; below ~1550px viewport the full
@@ -229,8 +231,15 @@
             <h3 class="card-title">{{ 'prowlarr.index.search_card_title'|trans }}</h3>
         </div>
         <div class="card-body">
-            <div class="d-flex gap-2 mb-3">
-                <input type="text" id="pw-search-input" class="form-control" placeholder="{{ 'prowlarr.index.search_placeholder'|trans }}" autocomplete="off">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+                <select id="pw-search-indexer" class="form-select pw-search-picker" aria-label="{{ 'prowlarr.index.search_indexer_label'|trans }}">
+                    <option value="">{{ 'prowlarr.index.search_all_indexers'|trans }}</option>
+                    {% for i in search_indexers %}<option value="{{ i.id }}">{{ i.name }}</option>{% endfor %}
+                </select>
+                <select id="pw-search-category" class="form-select pw-search-picker" aria-label="{{ 'prowlarr.index.search_category_label'|trans }}">
+                    <option value="">{{ 'prowlarr.index.search_all_categories'|trans }}</option>
+                </select>
+                <input type="text" id="pw-search-input" class="form-control pw-search-q" placeholder="{{ 'prowlarr.index.search_placeholder'|trans }}" autocomplete="off">
                 <button id="pw-search-btn" class="btn btn-primary flex-shrink-0">{{ 'prowlarr.index.search_btn'|trans }}</button>
             </div>
             <div id="pw-search-loading" style="display:none;" class="text-center py-2"><div class="spinner-border spinner-border-sm text-secondary"></div> <span class="small text-secondary">{{ 'prowlarr.index.searching'|trans }}</span></div>
@@ -404,6 +413,7 @@
         syncDone: {{ 'prowlarr.index.sync_done'|trans|json_encode|raw }},
         syncFailed: {{ 'prowlarr.index.sync_failed'|trans|json_encode|raw }},
         searchNoResults: {{ 'prowlarr.index.search_no_results'|trans|json_encode|raw }},
+        searchAllCategories: {{ 'prowlarr.index.search_all_categories'|trans|json_encode|raw }},
         searchResultsCountOne: {{ 'prowlarr.index.search_results_count_tpl'|trans({count: 1})|json_encode|raw }},
         searchResultsCountOther: {{ 'prowlarr.index.search_results_count_tpl'|trans({count: 2})|json_encode|raw }},
         ageDaysTpl: {{ 'prowlarr.index.age_days_tpl'|trans|json_encode|raw }},
@@ -806,6 +816,53 @@
     });
 
     // ── Recherche Prowlarr ──
+    var PW_SEARCH_INDEXERS = {{ search_indexers|json_encode|raw }};
+    /* ── Prowlarr search pickers (batch 2) ──
+       Category options: Prowlarr's standard tree when searching every
+       indexer, else the chosen indexer's own tree (custom ids >= 100000
+       included). Sub-categories carry depth 1 for indenting. */
+    function pwSearchCategoryOptions(indexer, defaults) {
+        var tree = indexer ? (indexer.categories || []) : (defaults || []);
+        var out = [];
+        function valid(c) { return c && typeof c.id === 'number' && c.id > 0; }
+        tree.forEach(function (c) {
+            if (!valid(c)) return;
+            out.push({ id: c.id, name: String(c.name || c.id), depth: 0 });
+            (c.subCategories || []).forEach(function (sc) {
+                if (valid(sc)) out.push({ id: sc.id, name: String(sc.name || sc.id), depth: 1 });
+            });
+        });
+        return out;
+    }
+    function pwSearchQueryString(q, indexerId, catId) {
+        var qs = 'q=' + encodeURIComponent(q);
+        if (indexerId) qs += '&indexerId=' + encodeURIComponent(indexerId);
+        if (catId) qs += '&categories=' + encodeURIComponent(catId);
+        return qs;
+    }
+    var pwIndexerSel = document.getElementById('pw-search-indexer');
+    var pwCategorySel = document.getElementById('pw-search-category');
+    var pwDefaultCats = [];
+    function pwFillCategories() {
+        if (!pwCategorySel) return;
+        var id = parseInt(pwIndexerSel && pwIndexerSel.value, 10) || 0;
+        var indexer = null;
+        PW_SEARCH_INDEXERS.forEach(function (i) { if (i.id === id) indexer = i; });
+        var keep = pwCategorySel.value;
+        var h = '<option value="">' + esc(_I18N.searchAllCategories) + '</option>';
+        var found = false;
+        pwSearchCategoryOptions(indexer, pwDefaultCats).forEach(function (o) {
+            if (String(o.id) === keep) found = true;
+            h += '<option value="' + o.id + '">' + (o.depth ? String.fromCharCode(160, 160, 160) : '') + esc(o.name) + '</option>';
+        });
+        pwCategorySel.innerHTML = h;
+        pwCategorySel.value = found ? keep : '';
+    }
+    if (pwIndexerSel) pwIndexerSel.addEventListener('change', pwFillCategories);
+    fetch(BASE + '/prowlarr/indexer/categories')
+        .then(function (r) { return r.ok ? r.json() : []; })
+        .then(function (cats) { pwDefaultCats = Array.isArray(cats) ? cats : []; pwFillCategories(); })
+        .catch(function () {});
     var searchInput = document.getElementById('pw-search-input');
     var searchBtn = document.getElementById('pw-search-btn');
     var searchLoading = document.getElementById('pw-search-loading');
@@ -815,7 +872,7 @@
         var q = searchInput.value.trim();
         if (q.length < 2) return;
         searchLoading.style.display = ''; searchResults.innerHTML = ''; searchBtn.disabled = true;
-        fetch(BASE + '/prowlarr/search?q=' + encodeURIComponent(q))
+        fetch(BASE + '/prowlarr/search?' + pwSearchQueryString(q, pwIndexerSel ? pwIndexerSel.value : '', pwCategorySel ? pwCategorySel.value : ''))
             .then(function (r) { return r.json(); })
             .then(function (items) {
                 searchLoading.style.display = 'none'; searchBtn.disabled = false;

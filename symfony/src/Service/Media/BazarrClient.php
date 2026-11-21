@@ -316,6 +316,58 @@ class BazarrClient implements ResetInterface
         return $this->request('PATCH', '/movies', [], ['radarrid' => $radarrId, 'action' => 'search-missing']) !== null;
     }
 
+    /**
+     * Bazarr 1.6's job queue (pending / running / failed / completed jobs,
+     * with progress for the long ones). Null when unconfigured, unreachable,
+     * or on a Bazarr older than 1.6 (no such endpoint: 404).
+     *
+     * @return list<array<string, mixed>>|null
+     */
+    public function getJobs(): ?array
+    {
+        if (!$this->ready()) {
+            return null;
+        }
+        $r = $this->request('GET', '/system/jobs');
+        if ($r === null) {
+            return null;
+        }
+
+        return array_values(array_filter(is_array($r['data'] ?? null) ? $r['data'] : [], 'is_array'));
+    }
+
+    /**
+     * Run one subtitle tool through Bazarr's PATCH /api/subtitles: 'sync'
+     * (external file, needs $path), 'translate' (to $language, from an
+     * external $path or an embedded track's $subtitlesId) or 'extract' (an
+     * embedded track by $subtitlesId, Bazarr 1.6+). $id is the Radarr movie id
+     * or the Sonarr episode id. Bazarr queues the work and answers 204; on a
+     * refusal getLastError()['code'] carries its status (415 image-based,
+     * 409 file error, 500 path mapping, 502 translation failed).
+     */
+    public function subtitleAction(string $action, string $mediaType, int $id, string $language, ?string $path, ?int $subtitlesId, bool $forced, bool $hi): bool
+    {
+        if (!$this->ready()) {
+            return false;
+        }
+        $body = [
+            'action'   => $action,
+            'language' => $language,
+            'type'     => $mediaType,
+            'id'       => (string) $id,
+            'forced'   => $forced ? 'True' : 'False',
+            'hi'       => $hi ? 'True' : 'False',
+        ];
+        if ($path !== null && $path !== '') {
+            $body['path'] = $path;
+        }
+        if ($subtitlesId !== null && $subtitlesId > 0) {
+            $body['subtitles_id'] = (string) $subtitlesId;
+        }
+
+        return $this->request('PATCH', '/subtitles', [], $body) !== null;
+    }
+
     public function searchMissingSeries(int $sonarrSeriesId): bool
     {
         if (!$this->ready()) {

@@ -1,0 +1,153 @@
+{% extends 'base.html.twig' %}
+{% import '_icons.html.twig' as ico %}
+{# Seerr blocklist (batch 2). Titles hidden from Seerr discovery/requests,
+   blocked by hand or by a tag rule. Rendered by
+   JellyseerrController::blocklist; Remove posts to blocklistRemove(). #}
+{% block title %}Seerr · {{ 'jellyseerr.blocklist.title'|trans }}{% endblock %}
+{% block page_title %}<svg width="24" height="24" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg"><path d="M256 48C141.1 48 48 141.1 48 256s93.1 208 208 208 208-93.1 208-208S370.9 48 256 48zm0 368c-88.4 0-160-71.6-160-160S167.6 96 256 96s160 71.6 160 160-71.6 160-160 160z" fill="#a259ff"/><circle cx="256" cy="256" r="80" fill="#a259ff"/><path d="M256 176c-44.2 0-80 35.8-80 80s35.8 80 80 80 80-35.8 80-80-35.8-80-80-80zm0 120c-22.1 0-40-17.9-40-40s17.9-40 40-40 40 17.9 40 40-17.9 40-40 40z" fill="#c084fc" opacity=".6"/></svg> {{ 'jellyseerr.blocklist.title'|trans }}{% endblock %}
+
+{% block stylesheets %}
+<style>
+.js-type-badge { font-size:.72rem; padding:1px 6px; border-radius:3px; font-weight:700; text-transform:uppercase; letter-spacing:.3px; }
+.js-type-movie { background:rgba(239,68,68,.12); color:#ef4444; }
+.js-type-tv { background:rgba(56,189,248,.12); color:#38bdf8; }
+.js-bl-title { font-weight:600; color:inherit; }
+.js-bl-title:hover { color:#a259ff; text-decoration:none; }
+.js-pagination a { padding:4px 10px; border-radius:4px; text-decoration:none; font-size:.8rem; border:1px solid var(--tblr-border-color); color:var(--tblr-body-color); }
+.js-pagination a:hover { border-color:#a259ff; color:#a259ff; }
+.js-pagination a.active { background:#a259ff; color:#fff; border-color:#a259ff; }
+</style>
+{% endblock %}
+
+{% block body %}
+{% if not error %}
+<div class="container-xl py-2">
+    <div class="d-flex align-items-center justify-content-end">
+        {% include 'jellyseerr/_nav.html.twig' %}
+    </div>
+    <div class="mt-2 d-flex align-items-center gap-2 flex-wrap w-100">
+        {% for f in ['all', 'manual', 'tags'] %}
+            <a href="{{ path('jellyseerr_blocklist', {filter: f, q: q ?: null}) }}"
+               class="btn btn-sm {{ filter == f ? 'btn-primary' : 'btn-ghost-primary' }}">{{ ('jellyseerr.blocklist.filter_' ~ f)|trans }}</a>
+        {% endfor %}
+        <form method="get" action="{{ path('jellyseerr_blocklist') }}" class="ms-auto d-flex gap-2" role="search">
+            <input type="hidden" name="filter" value="{{ filter }}">
+            <input type="search" name="q" value="{{ q }}" maxlength="100" class="form-control form-control-sm" style="max-width:220px"
+                   placeholder="{{ 'jellyseerr.blocklist.search_placeholder'|trans }}" aria-label="{{ 'jellyseerr.blocklist.search_placeholder'|trans }}">
+            <button type="submit" class="btn btn-sm btn-secondary">{{ 'jellyseerr.blocklist.search_btn'|trans }}</button>
+        </form>
+    </div>
+</div>
+{% endif %}
+
+<div class="page-body">
+<div class="container-xl">
+
+{% if error %}
+  {% include 'error/_service_banner.html.twig' with {
+    service: 'Seerr',
+    configured_url: service_url,
+    reason: 'unreachable'
+  } %}
+{% elseif entries is empty %}
+    <div class="card" data-blocklist-empty>
+        <div class="card-body text-center py-5">
+            <div class="text-secondary" style="opacity:.4;">{{ ico.icon('check', '', 48) }}</div>
+            <div class="text-secondary mt-2">{{ (q != '' ? 'jellyseerr.blocklist.empty_search' : 'jellyseerr.blocklist.empty')|trans }}</div>
+        </div>
+    </div>
+{% else %}
+    <div class="card">
+        <div class="table-responsive">
+            <table class="table table-vcenter card-table">
+                <thead>
+                    <tr>
+                        <th>{{ 'jellyseerr.blocklist.col_title'|trans }}</th>
+                        <th>{{ 'jellyseerr.blocklist.col_type'|trans }}</th>
+                        <th>{{ 'jellyseerr.blocklist.col_by'|trans }}</th>
+                        <th>{{ 'jellyseerr.blocklist.col_date'|trans }}</th>
+                        <th class="w-1"></th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for e in entries %}
+                    {% set title = e.title ?? 'jellyseerr.blocklist.unknown_title'|trans({id: e.tmdbId}) %}
+                    <tr>
+                        <td>
+                            <a href="{{ path('tmdb_index') }}?detail={{ e.type }}/{{ e.tmdbId }}" class="js-bl-title"
+                               data-ql-trigger data-ql-source="tmdb" data-ql-type="{{ e.type }}" data-ql-id="{{ e.tmdbId }}">{{ title }}</a>
+                            {% if e.tags %}
+                                <div class="text-secondary small">{{ 'jellyseerr.blocklist.tags_rule'|trans({tags: e.tags}) }}</div>
+                            {% endif %}
+                        </td>
+                        <td><span class="js-type-badge js-type-{{ e.type }}">{{ ('jellyseerr.blocklist.type_' ~ e.type)|trans }}</span></td>
+                        <td class="text-secondary">{{ e.user ?? 'jellyseerr.blocklist.unknown_user'|trans }}</td>
+                        <td class="text-secondary">{{ e.createdAt ? e.createdAt|prismarr_date : '—' }}</td>
+                        <td>
+                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                    data-blocklist-remove="{{ e.tmdbId }}" data-media-type="{{ e.type }}"
+                                    data-remove-url="{{ path('jellyseerr_blocklist_remove', {tmdbId: e.tmdbId}) }}"
+                                    data-confirm="{{ 'jellyseerr.blocklist.remove_confirm'|trans|replace({'__TITLE__': title}) }}">{{ 'jellyseerr.blocklist.remove'|trans }}</button>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    {% set totalPages = pageInfo.pages ?? 1 %}
+    {% if totalPages > 1 %}
+    <div class="d-flex justify-content-center gap-1 mt-3 mb-2 js-pagination">
+        {% if page > 1 %}
+            <a href="{{ path('jellyseerr_blocklist', {filter: filter, q: q ?: null, page: page - 1}) }}">←</a>
+        {% endif %}
+        {% for p in max(1, page - 3)..min(totalPages, page + 3) %}
+            <a href="{{ path('jellyseerr_blocklist', {filter: filter, q: q ?: null, page: p}) }}" class="{{ p == page ? 'active' }}">{{ p }}</a>
+        {% endfor %}
+        {% if page < totalPages %}
+            <a href="{{ path('jellyseerr_blocklist', {filter: filter, q: q ?: null, page: page + 1}) }}">→</a>
+        {% endif %}
+    </div>
+    {% endif %}
+{% endif %}
+</div>
+</div>
+{% endblock %}
+
+{% block javascripts %}
+{{ parent() }}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  if (window._prismarrSeerrBlocklistBound) return;
+  window._prismarrSeerrBlocklistBound = true;
+  var I18N = {
+    ok:    {{ 'jellyseerr.blocklist.remove_ok'|trans|json_encode|raw }},
+    error: {{ 'jellyseerr.blocklist.remove_error'|trans|json_encode|raw }}
+  };
+  function toast(msg, type) { if (window._prismarrToast) window._prismarrToast(msg, type); }
+  document.addEventListener('click', function (e) {
+    var btn = e.target.closest ? e.target.closest('[data-blocklist-remove]') : null;
+    if (!btn || btn.disabled) return;
+    if (!window.confirm(btn.getAttribute('data-confirm') || '')) return;
+    btn.disabled = true;
+    fetch(btn.getAttribute('data-remove-url'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify({ mediaType: btn.getAttribute('data-media-type') })
+    })
+      .then(function (r) { return r.json().catch(function () { return { ok: false }; }); })
+      .then(function (d) {
+        if (d && d.ok) {
+          toast(I18N.ok, 'success');
+          if (window.Turbo) { window.Turbo.visit(window.location.href, { action: 'replace' }); } else { window.location.reload(); }
+        } else {
+          btn.disabled = false;
+          toast((d && d.error) || I18N.error, 'danger');
+        }
+      })
+      .catch(function () { btn.disabled = false; toast(I18N.error, 'danger'); });
+  });
+})();
+</script>
+{% endblock %}

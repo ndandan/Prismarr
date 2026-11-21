@@ -4782,6 +4782,10 @@ prowlarr:
     search_btn: Search
     searching: 'Searching…'
     search_no_results: No results
+    search_all_indexers: All indexers
+    search_all_categories: All categories
+    search_indexer_label: Indexer
+    search_category_label: Category
     search_results_count_tpl: '{count, plural, one {# result} other {# results}}'
     search_col_title: Title
     search_col_indexer: Indexer
@@ -5122,6 +5126,7 @@ jellyseerr:
   nav:
     requests: Requests
     issues: Issues
+    blocklist: Blocklist
     users: Users
     tasks_cache: Tasks & Cache
     settings: Settings
@@ -5243,6 +5248,30 @@ jellyseerr:
     none_resolved: No resolved issues.
     none: No issues reported.
     reported_by: Reported by
+  blocklist:
+    title: Blocklist
+    search_placeholder: Search titles
+    search_btn: Search
+    filter_all: All
+    filter_manual: Manual
+    filter_tags: From tags
+    col_title: Title
+    col_type: Type
+    col_by: Blocked by
+    col_date: Date
+    col_tags: Tags
+    type_movie: Movie
+    type_tv: TV
+    tags_rule: 'Tag rule: {tags}'
+    unknown_title: 'TMDb #{id}'
+    unknown_user: Unknown
+    remove: Remove
+    remove_confirm: 'Remove "__TITLE__" from the blocklist? Seerr also forgets its media record, so this can''t be undone.'
+    remove_ok: Removed from the blocklist
+    remove_error: Could not remove it from the blocklist
+    invalid_type: Unknown media type
+    empty: Nothing is blocklisted.
+    empty_search: No blocklisted title matches.
   user_detail:
     page_title_tpl: '__NAME__ — Seerr'
     member_since_tpl: 'Member since __DATE__'
@@ -5915,6 +5944,22 @@ bazarr:
     complete: Subtitles complete
     subs: Subs
     pending: Subtitle status is still loading from Bazarr
+  actions:
+    current_title: Current subtitles
+    embedded: Embedded
+    sync: Sync
+    translate: Translate
+    extract: Extract
+    translate_to: Translate to
+    queued: Queued in Bazarr
+    error_image_based: Image-based subtitles can't be extracted or translated.
+    error_file: Bazarr couldn't process that subtitle file. Check Bazarr's logs.
+    error_path_mapping: Bazarr can't find that file. Check its path mappings.
+    error_translate_failed: The translation failed. Check Bazarr's logs.
+  jobs:
+    running_tpl: "__N__ running"
+    pending_tpl: "__N__ queued"
+    title: Bazarr jobs
   chips:
     hi_title: Hearing-impaired subtitles
     forced_title: Forced subtitles

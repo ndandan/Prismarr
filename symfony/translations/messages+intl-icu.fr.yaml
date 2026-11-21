@@ -4775,6 +4775,10 @@ prowlarr:
     search_btn: Rechercher
     searching: 'Recherche en cours…'
     search_no_results: Aucun résultat
+    search_all_indexers: Tous les indexeurs
+    search_all_categories: Toutes les catégories
+    search_indexer_label: Indexeur
+    search_category_label: Catégorie
     search_results_count_tpl: '{count, plural, one {# résultat} other {# résultats}}'
     search_col_title: Titre
     search_col_indexer: Indexeur
@@ -5115,6 +5119,7 @@ jellyseerr:
   nav:
     requests: Requêtes
     issues: Signalements
+    blocklist: Liste noire
     users: Utilisateurs
     tasks_cache: Tâches & Cache
     settings: Paramètres
@@ -5236,6 +5241,30 @@ jellyseerr:
     none_resolved: Aucun signalement résolu.
     none: Aucun signalement.
     reported_by: Signalé par
+  blocklist:
+    title: Liste noire
+    search_placeholder: Rechercher un titre
+    search_btn: Rechercher
+    filter_all: Tout
+    filter_manual: Manuel
+    filter_tags: Par tags
+    col_title: Titre
+    col_type: Type
+    col_by: Bloqué par
+    col_date: Date
+    col_tags: Tags
+    type_movie: Film
+    type_tv: Série
+    tags_rule: 'Règle de tags : {tags}'
+    unknown_title: 'TMDb n° {id}'
+    unknown_user: Inconnu
+    remove: Retirer
+    remove_confirm: 'Retirer « __TITLE__ » de la liste noire ? Seerr oublie aussi sa fiche média, ce qui est irréversible.'
+    remove_ok: Retiré de la liste noire
+    remove_error: Impossible de le retirer de la liste noire
+    invalid_type: Type de média inconnu
+    empty: Rien dans la liste noire.
+    empty_search: Aucun titre de la liste noire ne correspond.
   user_detail:
     page_title_tpl: '__NAME__ — Seerr'
     member_since_tpl: 'Membre depuis le __DATE__'
@@ -5908,6 +5937,22 @@ bazarr:
     complete: Sous-titres complets
     subs: Sous-titres
     pending: Statut des sous-titres en cours de chargement depuis Bazarr
+  actions:
+    current_title: Sous-titres actuels
+    embedded: Intégré
+    sync: Synchroniser
+    translate: Traduire
+    extract: Extraire
+    translate_to: Traduire en
+    queued: Ajouté à la file de Bazarr
+    error_image_based: Les sous-titres en image ne peuvent être ni extraits ni traduits.
+    error_file: Bazarr n'a pas pu traiter ce fichier de sous-titres. Consultez ses journaux.
+    error_path_mapping: Bazarr ne trouve pas ce fichier. Vérifiez ses correspondances de chemins.
+    error_translate_failed: La traduction a échoué. Consultez les journaux de Bazarr.
+  jobs:
+    running_tpl: "__N__ en cours"
+    pending_tpl: "__N__ en attente"
+    title: Tâches Bazarr
   chips:
     hi_title: Sous-titres pour malentendants
     forced_title: Sous-titres forcés

@@ -23,6 +23,13 @@
     {{ 'jellyseerr.nav.issues'|trans }}
   </a>
 
+  <a href="{{ path('jellyseerr_blocklist') }}"
+     class="btn btn-sm {{ _route == 'jellyseerr_blocklist' ? 'btn-primary' : 'btn-ghost-primary' }}"
+     title="{{ 'jellyseerr.nav.blocklist'|trans }}"
+     style="{{ _route == 'jellyseerr_blocklist' ? 'background:#a259ff;border-color:#a259ff;' : '' }}">
+    {{ 'jellyseerr.nav.blocklist'|trans }}
+  </a>
+
   <a href="{{ path('jellyseerr_users') }}"
      class="btn btn-sm {{ _isUsers ? 'btn-secondary' : 'btn-ghost-secondary' }}"
      title="{{ 'jellyseerr.nav.users'|trans }}">

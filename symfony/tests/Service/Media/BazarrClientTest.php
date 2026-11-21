@@ -359,7 +359,8 @@ class BazarrClientTest extends TestCase
 
             protected function exec(\CurlHandle $ch, array $opts): array
             {
-                $this->calls[] = $opts;
+                // request() hands the URL to curl_init(), not to the options.
+                $this->calls[] = $opts + [CURLOPT_URL => (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL)];
                 curl_close($ch);
 
                 return [$this->response, 200, '', false];
@@ -524,5 +525,65 @@ class BazarrClientTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         $this->client($this->configured())->getHistoryPage('series', 0, 50);
+    }
+
+    public function testSubtitleActionSyncSendsThePathAndFlags(): void
+    {
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '');
+
+        $this->assertTrue($client->subtitleAction('sync', 'movie', 5, 'en', '/movies/X/x.en.srt', null, false, true));
+
+        $this->assertSame('PATCH', $calls[0][CURLOPT_CUSTOMREQUEST]);
+        $this->assertStringEndsWith('/api/subtitles', $calls[0][CURLOPT_URL]);
+        $this->assertSame([
+            'action' => 'sync', 'language' => 'en', 'type' => 'movie', 'id' => '5',
+            'forced' => 'False', 'hi' => 'True', 'path' => '/movies/X/x.en.srt',
+        ], self::postedFields($calls[0]));
+    }
+
+    public function testSubtitleActionOnAnEmbeddedTrackSendsTheSubtitlesId(): void
+    {
+        // Bazarr 1.6 extract (and translate of an embedded track) is keyed by
+        // the subtitles database id; there is no file path yet.
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '');
+
+        $client->subtitleAction('extract', 'episode', 70, 'fr', null, 12, true, false);
+
+        $fields = self::postedFields($calls[0]);
+        $this->assertSame('12', $fields['subtitles_id']);
+        $this->assertSame('True', $fields['forced']);
+        $this->assertArrayNotHasKey('path', $fields);
+    }
+
+    public function testSubtitleActionKeepsBazarrsStatusForTheCaller(): void
+    {
+        $client = $this->fakeClient(new ServiceHealthCache(new ArrayAdapter()), 'Image based embedded subtitles cannot be extracted', 415);
+
+        $this->assertFalse($client->subtitleAction('extract', 'movie', 5, 'en', null, 3, false, false));
+        $this->assertSame(415, $client->getLastError()['code']);
+    }
+
+    public function testSubtitleActionIsFalseWhenUnconfigured(): void
+    {
+        $this->assertFalse($this->client([])->subtitleAction('sync', 'movie', 5, 'en', '/x.srt', null, false, false));
+    }
+
+    public function testGetJobsReturnsBazarrsJobQueue(): void
+    {
+        $calls = [];
+        $client = $this->optsCapturingClient($calls, '{"data":[{"job_id":1,"job_name":"Sync","status":"running"}]}');
+
+        $this->assertSame([['job_id' => 1, 'job_name' => 'Sync', 'status' => 'running']], $client->getJobs());
+        $this->assertStringEndsWith('/api/system/jobs', $calls[0][CURLOPT_URL]);
+    }
+
+    public function testGetJobsIsNullOnABazarrWithoutAJobQueue(): void
+    {
+        // Bazarr < 1.6 has no /api/system/jobs.
+        $client = $this->fakeClient(new ServiceHealthCache(new ArrayAdapter()), 'Not Found', 404);
+
+        $this->assertNull($client->getJobs());
     }
 }

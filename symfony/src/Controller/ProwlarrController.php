@@ -60,7 +60,16 @@ class ProwlarrController extends AbstractController
             $error = true;
         }
 
+        // Search pickers: enabled indexers with their own category trees.
+        $searchIndexers = [];
+        foreach ($indexers as $i) {
+            if (!empty($i['enabled'])) {
+                $searchIndexers[] = ['id' => (int) $i['id'], 'name' => (string) $i['name'], 'categories' => $i['capabilities']['categories'] ?? []];
+            }
+        }
+
         return $this->render('prowlarr/index.html.twig', [
+            'search_indexers' => $searchIndexers,
             'indexers'   => $indexers,
             'status'     => $status,
             'stats'      => $stats,
@@ -142,7 +151,15 @@ class ProwlarrController extends AbstractController
         $query = $request->query->get('q', '');
         $indexerId = $request->query->getInt('indexerId') ?: null;
         if (strlen($query) < 2) return $this->json([]);
-        $results = $this->prowlarr->search($query, $indexerId);
+        // Comma list of category ids; anything but a positive integer is dropped.
+        $categories = [];
+        foreach (explode(',', (string) $request->query->get('categories', '')) as $c) {
+            $c = trim($c);
+            if (ctype_digit($c) && (int) $c > 0) {
+                $categories[] = (int) $c;
+            }
+        }
+        $results = $this->prowlarr->search($query, $indexerId, 'search', 100, $categories);
         return $this->json($results);
     }
 
