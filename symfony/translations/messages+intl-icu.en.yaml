@@ -5122,6 +5122,7 @@ jellyseerr:
   nav:
     requests: Requests
     issues: Issues
+    blocklist: Blocklist
     users: Users
     tasks_cache: Tasks & Cache
     settings: Settings
@@ -5243,6 +5244,30 @@ jellyseerr:
     none_resolved: No resolved issues.
     none: No issues reported.
     reported_by: Reported by
+  blocklist:
+    title: Blocklist
+    search_placeholder: Search titles
+    search_btn: Search
+    filter_all: All
+    filter_manual: Manual
+    filter_tags: From tags
+    col_title: Title
+    col_type: Type
+    col_by: Blocked by
+    col_date: Date
+    col_tags: Tags
+    type_movie: Movie
+    type_tv: TV
+    tags_rule: 'Tag rule: {tags}'
+    unknown_title: 'TMDb #{id}'
+    unknown_user: Unknown
+    remove: Remove
+    remove_confirm: 'Remove "__TITLE__" from the blocklist? Seerr also forgets its media record, so this can''t be undone.'
+    remove_ok: Removed from the blocklist
+    remove_error: Could not remove it from the blocklist
+    invalid_type: Unknown media type
+    empty: Nothing is blocklisted.
+    empty_search: No blocklisted title matches.
   user_detail:
     page_title_tpl: '__NAME__ — Seerr'
     member_since_tpl: 'Member since __DATE__'

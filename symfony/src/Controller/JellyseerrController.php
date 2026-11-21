@@ -26,6 +26,8 @@ class JellyseerrController extends AbstractController
 
     private const VALID_FILTERS = ['all', 'pending', 'approved', 'processing', 'available', 'partial', 'unavailable', 'failed'];
     private const ISSUE_FILTERS = ['open', 'resolved', 'all'];
+    /** 'tags' maps to Seerr's own `blocklistedTags` filter value. */
+    private const BLOCKLIST_FILTERS = ['all', 'manual', 'tags'];
     /** Keeps ($page - 1) * take an int: a huge ?page= overflowed into a float → TypeError. */
     private const ISSUE_MAX_PAGE = 10000;
     /** Issue-card titles: they barely change, and each one is a Seerr round trip. */
@@ -221,6 +223,83 @@ class JellyseerrController extends AbstractController
             'error'       => $error,
             'service_url' => $serviceUrl,
         ]);
+    }
+
+    /**
+     * Seerr's blocklist: titles hidden from discovery and requests, either by
+     * hand or by a tag rule. Search, filter and pages go to Seerr; Remove
+     * posts to blocklistRemove().
+     */
+    #[Route('/blocklist', name: 'blocklist')]
+    public function blocklist(Request $request): Response
+    {
+        $filter = $request->query->get('filter', 'all');
+        if (!in_array($filter, self::BLOCKLIST_FILTERS, true)) {
+            $filter = 'all';
+        }
+        $q    = trim((string) $request->query->get('q', ''));
+        $q    = mb_substr($q, 0, 100);
+        $page = min(self::ISSUE_MAX_PAGE, max(1, $request->query->getInt('page', 1)));
+        $take = 25;
+
+        $error    = false;
+        $entries  = [];
+        $pageInfo = [];
+        $serviceUrl = rtrim((string) $this->config->get('jellyseerr_url'), '/');
+
+        try {
+            if ($this->jellyseerr->getAbout() === null) {
+                $error = true;
+            } else {
+                $data = $this->jellyseerr->getBlocklist($take, ($page - 1) * $take, $q, $filter === 'tags' ? 'blocklistedTags' : $filter);
+                $pageInfo = is_array($data['pageInfo'] ?? null) ? $data['pageInfo'] : [];
+                foreach (is_array($data['results'] ?? null) ? $data['results'] : [] as $row) {
+                    if (!is_array($row) || (int) ($row['tmdbId'] ?? 0) <= 0) {
+                        continue;
+                    }
+                    $user = is_array($row['user'] ?? null) ? $row['user'] : [];
+                    $tags = is_string($row['blocklistedTags'] ?? null) && trim($row['blocklistedTags']) !== '' ? $row['blocklistedTags'] : null;
+                    $entries[] = [
+                        'tmdbId'    => (int) $row['tmdbId'],
+                        'type'      => ($row['mediaType'] ?? 'movie') === 'tv' ? 'tv' : 'movie',
+                        'title'     => is_string($row['title'] ?? null) && $row['title'] !== '' ? $row['title'] : null,
+                        'user'      => $user['displayName'] ?? $user['username'] ?? $user['jellyfinUsername'] ?? $user['plexUsername'] ?? $user['email'] ?? null,
+                        'createdAt' => $row['createdAt'] ?? null,
+                        'tags'      => $tags,
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {
+            $this->logger->warning('Jellyseerr blocklist failed', ['exception' => $e::class, 'message' => $e->getMessage()]);
+            $error = true;
+        }
+
+        return $this->render('jellyseerr/blocklist.html.twig', [
+            'entries'     => $entries,
+            'pageInfo'    => $pageInfo,
+            'filter'      => $filter,
+            'q'           => $q,
+            'page'        => $page,
+            'error'       => $error,
+            'service_url' => $serviceUrl,
+        ]);
+    }
+
+    #[Route('/blocklist/{tmdbId}/remove', name: 'blocklist_remove', methods: ['POST'], requirements: ['tmdbId' => '\d+'])]
+    public function blocklistRemove(int $tmdbId, Request $request): JsonResponse
+    {
+        try {
+            $mediaType = $request->toArray()['mediaType'] ?? null;
+        } catch (\Throwable) {
+            $mediaType = null;
+        }
+        if ($mediaType !== 'movie' && $mediaType !== 'tv') {
+            return $this->json(['ok' => false, 'error' => $this->translator->trans('jellyseerr.blocklist.invalid_type')], 400);
+        }
+        if (!$this->jellyseerr->removeFromBlocklist($tmdbId, $mediaType)) {
+            return $this->jsonClientError('Jellyseerr', $this->jellyseerr, $this->translator->trans('jellyseerr.blocklist.remove_error'));
+        }
+        return $this->json(['ok' => true]);
     }
 
     /**

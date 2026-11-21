@@ -331,9 +331,36 @@ class JellyseerrClient implements ResetInterface
 
     // ── Blocklist ────────────────────────────────────────────────────────────
 
-    public function getBlocklist(int $take = 20, int $skip = 0): array
+    /**
+     * One page of Seerr's blocklist, newest first. $search matches titles
+     * (SQL LIKE on Seerr's side); $filter 'manual' = blocked by hand,
+     * 'blocklistedTags' = blocked by a tag rule; anything else = all.
+     *
+     * @return array{pageInfo: array<string, mixed>, results: list<array<string, mixed>>}|array<string, mixed>
+     */
+    public function getBlocklist(int $take = 25, int $skip = 0, string $search = '', string $filter = 'all'): array
     {
-        return $this->get('/api/v1/blocklist', ['take' => $take, 'skip' => $skip]) ?? ['pageInfo' => [], 'results' => []];
+        $params = ['take' => $take, 'skip' => $skip];
+        if ($search !== '') {
+            $params['search'] = $search;
+        }
+        if ($filter === 'manual' || $filter === 'blocklistedTags') {
+            $params['filter'] = $filter;
+        }
+        return $this->get('/api/v1/blocklist', $params) ?? ['pageInfo' => [], 'results' => []];
+    }
+
+    /**
+     * Unblock a title. Seerr needs the media type alongside the TMDb id (a
+     * movie and a show can share one) and answers 400 without it. Like
+     * Seerr's own button, this also drops Seerr's media record for it.
+     */
+    public function removeFromBlocklist(int $tmdbId, string $mediaType): bool
+    {
+        if ($tmdbId <= 0 || ($mediaType !== 'movie' && $mediaType !== 'tv')) {
+            return false;
+        }
+        return $this->delete("/api/v1/blocklist/{$tmdbId}", ['mediaType' => $mediaType]);
     }
 
     // ── Status & Info ────────────────────────────────────────────────────────

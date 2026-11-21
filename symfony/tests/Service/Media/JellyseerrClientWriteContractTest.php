@@ -34,6 +34,7 @@ class JellyseerrClientWriteContractTest extends TestCase
             ->onlyMethods(['exec'])
             ->getMock();
         $client->method('exec')->willReturnCallback(function (\CurlHandle $ch, array $opts) use (&$responses): array {
+            $opts[CURLOPT_URL] ??= (string) curl_getinfo($ch, CURLINFO_EFFECTIVE_URL);
             $this->calls[] = $opts;
             curl_close($ch);
             $next = array_shift($responses);
@@ -113,5 +114,47 @@ class JellyseerrClientWriteContractTest extends TestCase
         $client = $this->client([[false, 0, 'Failed to connect', false]], $health);
         $client->getJellyfinUsers();
         $this->assertTrue($health->isDown('jellyseerr'));
+    }
+
+    /** GET requests hand the URL to curl_init(), not to the option array. */
+    private function urlOf(int $i): string
+    {
+        return (string) ($this->calls[$i][CURLOPT_URL] ?? '');
+    }
+
+    public function testGetBlocklistSendsSearchAndFilter(): void
+    {
+        $client = $this->client([['{"pageInfo":{"pages":1},"results":[]}', 200, '', false]]);
+
+        $client->getBlocklist(25, 50, 'alien', 'manual');
+
+        $this->assertStringEndsWith('/api/v1/blocklist?take=25&skip=50&search=alien&filter=manual', $this->urlOf(0));
+    }
+
+    public function testGetBlocklistOmitsTheDefaultSearchAndFilter(): void
+    {
+        $client = $this->client([['{"pageInfo":{"pages":1},"results":[]}', 200, '', false]]);
+
+        $client->getBlocklist(25, 0, '', 'all');
+
+        $this->assertStringEndsWith('/api/v1/blocklist?take=25&skip=0', $this->urlOf(0));
+    }
+
+    public function testRemoveFromBlocklistSendsTheMediaTypeSeerrRequires(): void
+    {
+        // Seerr answers 400 "Invalid or missing mediaType" without it.
+        $client = $this->client([['', 204, '', false]]);
+
+        $this->assertTrue($client->removeFromBlocklist(603, 'movie'));
+        $this->assertSame('DELETE', $this->calls[0][CURLOPT_CUSTOMREQUEST]);
+        $this->assertStringEndsWith('/api/v1/blocklist/603?mediaType=movie', $this->urlOf(0));
+    }
+
+    public function testRemoveFromBlocklistRejectsAnUnknownMediaType(): void
+    {
+        $client = $this->client([]);
+
+        $this->assertFalse($client->removeFromBlocklist(603, 'person'));
+        $this->assertCount(0, $this->calls);
     }
 }

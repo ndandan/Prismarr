@@ -5115,6 +5115,7 @@ jellyseerr:
   nav:
     requests: Requêtes
     issues: Signalements
+    blocklist: Liste noire
     users: Utilisateurs
     tasks_cache: Tâches & Cache
     settings: Paramètres
@@ -5236,6 +5237,30 @@ jellyseerr:
     none_resolved: Aucun signalement résolu.
     none: Aucun signalement.
     reported_by: Signalé par
+  blocklist:
+    title: Liste noire
+    search_placeholder: Rechercher un titre
+    search_btn: Rechercher
+    filter_all: Tout
+    filter_manual: Manuel
+    filter_tags: Par tags
+    col_title: Titre
+    col_type: Type
+    col_by: Bloqué par
+    col_date: Date
+    col_tags: Tags
+    type_movie: Film
+    type_tv: Série
+    tags_rule: 'Règle de tags : {tags}'
+    unknown_title: 'TMDb n° {id}'
+    unknown_user: Inconnu
+    remove: Retirer
+    remove_confirm: 'Retirer « __TITLE__ » de la liste noire ? Seerr oublie aussi sa fiche média, ce qui est irréversible.'
+    remove_ok: Retiré de la liste noire
+    remove_error: Impossible de le retirer de la liste noire
+    invalid_type: Type de média inconnu
+    empty: Rien dans la liste noire.
+    empty_search: Aucun titre de la liste noire ne correspond.
   user_detail:
     page_title_tpl: '__NAME__ — Seerr'
     member_since_tpl: 'Membre depuis le __DATE__'
