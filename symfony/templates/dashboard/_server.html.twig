@@ -9,6 +9,13 @@
   {% set m = ((s - h * 3600) / 60)|round(0, 'floor') %}
   {% if h > 0 %}{{ h }}h {{ m }}m{% else %}{{ m }}m{% endif %}
 {% endapply %}{% endmacro %}
+{# Same rendering as the UniFi WAN tile (_network.html.twig): bytes/s in, bit/s out. #}
+{% macro rate(bps) %}{% apply spaceless %}
+  {% set bits = bps * 8 %}
+  {% if bits >= 1000000000 %}{{ (bits / 1000000000)|round(2) }} Gbit/s
+  {% elseif bits >= 1000000 %}{{ (bits / 1000000)|round(1) }} Mbit/s
+  {% else %}{{ (bits / 1000)|round }} kbit/s{% endif %}
+{% endapply %}{% endmacro %}
 {% if server is null %}
   <div class="text-center text-secondary py-3">{{ 'dashboard.server.unreachable'|trans }}</div>
 {% else %}
@@ -121,6 +128,19 @@
       <div class="server-tile-sub">
         {% if server.ups.load is not null %}{{ 'dashboard.server.load'|trans }} {{ server.ups.load|round }}%{% endif %}
         {% if server.ups.runtime is not null %} · {{ server.ups.runtime }} min{% endif %}
+      </div>
+    </div>
+  {% endif %}
+
+  {% if (server.network ?? null) is not null %}
+    <div class="server-tile server-net">
+      <div class="server-tile-head">
+        <span class="server-tile-label">{{ 'dashboard.server.network'|trans }}</span>
+        <span class="server-tile-sub">{{ server.network.interface }}</span>
+      </div>
+      <div class="server-net-rates">
+        <div><span class="server-net-arrow is-down" aria-label="{{ 'dashboard.server.net_down'|trans }}">↓</span> {{ _self.rate(server.network.rx) }}</div>
+        <div><span class="server-net-arrow is-up" aria-label="{{ 'dashboard.server.net_up'|trans }}">↑</span> {{ _self.rate(server.network.tx) }}</div>
       </div>
     </div>
   {% endif %}

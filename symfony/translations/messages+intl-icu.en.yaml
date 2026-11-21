@@ -421,6 +421,9 @@ dashboard:
     last_check: Last check
     updates: '{count, plural, one {# update} other {# updates}}'
     update_available: Update available
+    network: Network
+    net_down: Download
+    net_up: Upload
   network:
     title: Network
     settings_cta: Settings

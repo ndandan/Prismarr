@@ -420,6 +420,9 @@ dashboard:
     last_check: Dernier contrôle
     updates: '{count, plural, one {# mise à jour} other {# mises à jour}}'
     update_available: Mise à jour disponible
+    network: Réseau
+    net_down: Réception
+    net_up: Envoi
   network:
     title: Réseau
     settings_cta: Paramètres

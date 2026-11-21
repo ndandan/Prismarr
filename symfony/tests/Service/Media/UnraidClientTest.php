@@ -342,6 +342,51 @@ class UnraidClientTest extends TestCase
         self::assertStringNotContainsString('isUpdateAvailable', $dockerQueries[1]);
     }
 
+    /** @param list<string> $names */
+    private static function networkData(array $names): array
+    {
+        return ['metrics' => ['network' => array_map(
+            static fn(string $n, int $i) => ['name' => $n, 'operstate' => 'up', 'rxSec' => 1000.0 * ($i + 1), 'txSec' => 50.5 * ($i + 1)],
+            $names, array_keys($names),
+        )]];
+    }
+
+    public function testNetworkPrefersTheBridgeAndSkipsVirtualInterfaces(): void
+    {
+        // Live shape from a 7.4.1 box: br0 carries the LAN, the rest is
+        // loopback, Docker, WireGuard, Tailscale and per-container veths.
+        $client = $this->makeClient(['network {' => self::networkData(
+            ['lo', 'docker0', 'br-a72818a2ebcf', 'vethe2890ee', 'wg1', 'tailscale1', 'br0'],
+        )]);
+
+        self::assertSame(['interface' => 'br0', 'rx' => 7000.0, 'tx' => 353.5], $client->overview()['network']);
+    }
+
+    public function testNetworkFallsBackToTheFirstPhysicalInterface(): void
+    {
+        $client = $this->makeClient(['network {' => self::networkData(['lo', 'virbr0', 'enp3s0', 'eth1'])]);
+
+        self::assertSame('enp3s0', $client->overview()['network']['interface']);
+    }
+
+    public function testBondIsPreferredOverEthWhenThereIsNoBridge(): void
+    {
+        $client = $this->makeClient(['network {' => self::networkData(['eth0', 'bond0', 'lo'])]);
+
+        self::assertSame('bond0', $client->overview()['network']['interface']);
+    }
+
+    public function testNoNetworkTileOnAnOlderApiOrWithOnlyVirtualInterfaces(): void
+    {
+        $older = $this->makeClient(['docker {' => self::DOCKER_DATA]);
+        $o = $older->overview();
+        self::assertNull($o['network']);
+        self::assertNotNull($o['docker'], 'the rest of the widget is unaffected');
+
+        $virtual = $this->makeClient(['network {' => self::networkData(['lo', 'docker0', 'veth1'])]);
+        self::assertNull($virtual->overview()['network']);
+    }
+
     public function testNoLegacyRetryWhenTheTransportIsDown(): void
     {
         // The box went away between the array query and the docker query:
