@@ -418,6 +418,8 @@ dashboard:
     eta: Fin estimée
     errors: erreurs
     last_check: Dernier contrôle
+    updates: '{count, plural, one {# mise à jour} other {# mises à jour}}'
+    update_available: Mise à jour disponible
   network:
     title: Réseau
     settings_cta: Paramètres

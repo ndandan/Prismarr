@@ -152,11 +152,13 @@
     <div class="server-tile server-tile--wide">
       <div class="server-tile-head">
         <span class="server-tile-label">{{ 'dashboard.server.docker'|trans }}</span>
-        <span class="server-tile-sub">{{ server.docker.running }}/{{ server.docker.total }} {{ 'dashboard.server.running'|trans }}</span>
+        {% set docker_updates = server.docker.updates ?? 0 %}
+        <span class="server-tile-sub">{{ server.docker.running }}/{{ server.docker.total }} {{ 'dashboard.server.running'|trans }}{% if docker_updates > 0 %} · <span class="server-update-count">{{ 'dashboard.server.updates'|trans({count: docker_updates}) }}</span>{% endif %}</span>
       </div>
       <div class="server-chips">
         {% for c in server.docker.containers|default([]) %}
-          <span class="{{ c.running ? 'server-chip-ok' : 'server-chip-muted' }}">{{ c.name }}</span>
+          {% set has_update = c.update ?? false %}
+          <span class="{{ c.running ? 'server-chip-ok' : 'server-chip-muted' }}{% if has_update %} server-chip-update{% endif %}"{% if has_update %} title="{{ 'dashboard.server.update_available'|trans }}"{% endif %}>{% if has_update %}<span class="server-update-mark" aria-hidden="true">↑</span>{% endif %}{{ c.name }}</span>
         {% endfor %}
       </div>
     </div>

@@ -292,14 +292,82 @@ class UnraidClientTest extends TestCase
 
         // Full list, case-insensitive alphabetical, running flag per container.
         self::assertSame([
-            ['name' => 'old-app', 'running' => false],
-            ['name' => 'plex',    'running' => true],
-            ['name' => 'radarr',  'running' => true],
+            ['name' => 'old-app', 'running' => false, 'update' => false],
+            ['name' => 'plex',    'running' => true,  'update' => false],
+            ['name' => 'radarr',  'running' => true,  'update' => false],
         ], $docker['containers']);
         // Legacy keys untouched.
         self::assertSame(2, $docker['running']);
         self::assertSame(3, $docker['total']);
         self::assertSame(['old-app'], $docker['stopped']);
+    }
+
+    public function testUpdateFlagsAndCountFromIsUpdateAvailable(): void
+    {
+        $client = $this->makeClient(['docker {' => ['docker' => ['containers' => [
+            ['names' => ['/plex'],    'state' => 'RUNNING', 'isUpdateAvailable' => true],
+            ['names' => ['/radarr'],  'state' => 'RUNNING', 'isUpdateAvailable' => false],
+            ['names' => ['/old-app'], 'state' => 'EXITED',  'isUpdateAvailable' => true],
+            // unraid-api 4.35.0 answered null for every container (undef bug).
+            ['names' => ['/sonarr'],  'state' => 'RUNNING', 'isUpdateAvailable' => null],
+        ]]]]);
+        $docker = $client->overview()['docker'];
+
+        $dockerQueries = array_values(array_filter($client->queriesSent, fn(string $q) => str_contains($q, 'docker {')));
+        self::assertCount(1, $dockerQueries, 'no fallback when the field is answered');
+        self::assertStringContainsString('isUpdateAvailable', $dockerQueries[0]);
+        self::assertSame(2, $docker['updates']);
+        self::assertSame(
+            ['old-app' => true, 'plex' => true, 'radarr' => false, 'sonarr' => false],
+            array_column($docker['containers'], 'update', 'name'),
+        );
+    }
+
+    public function testOlderApiFallsBackToTheLegacyDockerQuery(): void
+    {
+        // An unraid-api without the field rejects the whole query ({errors},
+        // data null → gql() null). The tile must render exactly as before.
+        $client = $this->makeClient([
+            'isUpdateAvailable' => null,
+            'docker {'          => self::DOCKER_DATA,
+        ]);
+        $docker = $client->overview()['docker'];
+
+        self::assertNotNull($docker, 'the Docker tile must not disappear on an older API');
+        self::assertSame(3, $docker['total']);
+        self::assertSame(0, $docker['updates']);
+        self::assertSame([false, false, false], array_column($docker['containers'], 'update'));
+        $dockerQueries = array_values(array_filter($client->queriesSent, fn(string $q) => str_contains($q, 'docker {')));
+        self::assertCount(2, $dockerQueries);
+        self::assertStringNotContainsString('isUpdateAvailable', $dockerQueries[1]);
+    }
+
+    public function testNoLegacyRetryWhenTheTransportIsDown(): void
+    {
+        // The box went away between the array query and the docker query:
+        // a fallback would only burn another connect timeout.
+        $config = $this->createMock(ConfigService::class);
+        $config->method('get')->willReturnCallback(fn(string $k) => [
+            'unraid_url'     => 'https://tower.local',
+            'unraid_api_key' => 'k3y',
+        ][$k] ?? null);
+
+        $client = new class($config, $this->createMock(LoggerInterface::class)) extends UnraidClient {
+            public int $dockerCalls = 0;
+            protected function gql(string $query): ?array
+            {
+                if (str_contains($query, 'docker {')) {
+                    $this->dockerCalls++;
+                    $this->transportDown = true;
+                    return null;
+                }
+                return str_contains($query, 'array {') ? ['array' => ['state' => 'STARTED']] : null;
+            }
+        };
+
+        $o = $client->overview();
+        self::assertNull($o['docker']);
+        self::assertSame(1, $client->dockerCalls, 'no legacy retry on a transport failure');
     }
 
     public function testParityRunningCheckComputesProgressElapsedAndEta(): void

@@ -34,7 +34,8 @@ use Symfony\Contracts\Service\ResetInterface;
  *    'system' => ['uptime' => ?string (raw ISO), 'uptimeEpoch' => ?int, 'cpuBrand' => ?string,
  *                 'cores' => ?int, 'threads' => ?int,
  *                 'cpuPercent' => ?float, 'memPercent' => ?float, 'memTotal' => ?float, 'memUsed' => ?float],
- *    'docker' => ['running' => int, 'total' => int, 'stopped' => list<string>, 'containers' => list<['name' => string, 'running' => bool]>],
+ *    'docker' => ['running' => int, 'total' => int, 'stopped' => list<string>, 'updates' => int,
+ *                 'containers' => list<['name' => string, 'running' => bool, 'update' => bool]>],
  *    'ups'    => ?['name' => ?string, 'battery' => ?int, 'runtime' => ?int (minutes), 'load' => ?float],
  *    'parity' => ?['running' => bool, 'progress' => ?float (0–100, 1dp), 'elapsed' => ?int (sec),
  *                  'etaSeconds' => ?int, 'errors' => ?int,
@@ -56,7 +57,9 @@ class UnraidClient implements ResetInterface
     private const QUERY_ARRAY   = 'query { array { state capacity { kilobytes { free used total } } disks { name temp status fsSize fsFree fsUsed } parities { name temp status size } caches { name temp fsSize fsFree fsUsed } } }';
     private const QUERY_INFO    = 'query { info { os { uptime } cpu { brand cores threads } } }';
     private const QUERY_METRICS = 'query { metrics { cpu { percentTotal } memory { percentTotal total used } } }';
-    private const QUERY_DOCKER  = 'query { docker { containers { names state } } }';
+    private const QUERY_DOCKER  = 'query { docker { containers { names state isUpdateAvailable } } }';
+    /** An unraid-api without isUpdateAvailable rejects the whole query above (data null). */
+    private const QUERY_DOCKER_LEGACY = 'query { docker { containers { names state } } }';
     private const QUERY_UPS     = 'query { upsDevices { name battery { chargeLevel estimatedRuntime } power { loadPercentage } } }';
     private const QUERY_PARITY_STATUS  = 'query { vars { mdResyncPos mdResyncSize mdResyncDt mdResyncDb sbSynced sbSynced2 sbSyncErrs sbSyncExit } }';
     private const QUERY_PARITY_HISTORY = 'query { parityHistory { date duration errors status } }';
@@ -153,7 +156,13 @@ class UnraidClient implements ResetInterface
             return null; // don't cache — retry next call
         }
         $system = $this->mapSystem($this->gql(self::QUERY_INFO), $this->gql(self::QUERY_METRICS));
-        $docker = $this->mapDocker($this->gql(self::QUERY_DOCKER));
+        $dockerData = $this->gql(self::QUERY_DOCKER);
+        if ($dockerData === null && !$this->transportDown) {
+            // Older API (unknown field) or a key without Docker scope: retry
+            // the pre-update-badge query so the tile never disappears.
+            $dockerData = $this->gql(self::QUERY_DOCKER_LEGACY);
+        }
+        $docker = $this->mapDocker($dockerData);
         $ups    = $this->mapUps($this->gql(self::QUERY_UPS));
         $paritySizes = array_filter(array_column($array['parities'] ?? [], 'size'));
         $parity = $this->mapParity(
@@ -234,6 +243,7 @@ class UnraidClient implements ResetInterface
         if (!is_array($raw)) return null;
 
         $running    = 0;
+        $updates    = 0;
         $stopped    = [];
         $containers = [];
         foreach ($raw as $c) {
@@ -245,13 +255,19 @@ class UnraidClient implements ResetInterface
             } elseif ($name !== '') {
                 $stopped[] = $name;
             }
+            // Unraid's own update-check result; null (unraid-api 4.35.0 bug) or
+            // absent (legacy query) = no update.
+            $hasUpdate = ($c['isUpdateAvailable'] ?? null) === true;
+            if ($hasUpdate) {
+                $updates++;
+            }
             if ($name !== '') {
-                $containers[] = ['name' => $name, 'running' => $isRunning];
+                $containers[] = ['name' => $name, 'running' => $isRunning, 'update' => $hasUpdate];
             }
         }
         usort($containers, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
 
-        return ['running' => $running, 'total' => count($raw), 'stopped' => $stopped, 'containers' => $containers];
+        return ['running' => $running, 'total' => count($raw), 'stopped' => $stopped, 'updates' => $updates, 'containers' => $containers];
     }
 
     private function mapUps(?array $data): ?array
@@ -365,6 +381,8 @@ class UnraidClient implements ResetInterface
      * Execute one GraphQL query document. Returns the decoded `data` object,
      * or null on transport error / non-200 / GraphQL errors without data.
      * Protected so tests can substitute canned payloads.
+     *
+     * @phpstan-impure sets $transportDown on a connect/DNS/timeout failure
      */
     protected function gql(string $query): ?array
     {
