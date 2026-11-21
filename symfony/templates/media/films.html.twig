@@ -2148,6 +2148,35 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     }
   }
 
+  /* ── Radarr 7 per-track media info ──
+     mediaInfo.audioStreams / subtitleStreams (null on Radarr ≤ 6, which keeps
+     the flat audioCodec / subtitles lines). Languages are ISO 639-2 codes. */
+  function filmTrackLang(code) {
+    if (!code || code === 'und') return null;
+    try {
+      var name = new Intl.DisplayNames([document.documentElement.lang || 'en'], { type: 'language' }).of(code);
+      if (name && name !== code) return name;
+    } catch (e) { /* unknown code */ }
+    return String(code).toUpperCase();
+  }
+
+  function filmAudioTracksHtml(tracks) {
+    if (!tracks || !tracks.length) return null;
+    return tracks.map(function(t) {
+      var parts = [filmTrackLang(t.language), t.codec, t.channels != null ? String(t.channels) : null];
+      return window.escHtml(parts.filter(function(p) { return p; }).join(' '));
+    }).join(' · ');
+  }
+
+  function filmSubtitleTracksHtml(tracks) {
+    if (!tracks || !tracks.length) return null;
+    return tracks.map(function(t) {
+      var hi = t.hearingImpaired ? '<sup title="' + window.escHtml(FILM_I18N.subtitle_hi_title) + '">HI</sup>' : '';
+      var forced = t.forced ? '<sup title="' + window.escHtml(FILM_I18N.subtitle_forced_title) + '">F</sup>' : '';
+      return '<span class="badge bg-secondary-lt me-1">' + window.escHtml(filmTrackLang(t.language) || '—') + forced + hi + '</span>';
+    }).join('');
+  }
+
   /* ── Right column ── */
   function populateRightCol(m) {
     // Synopsis
@@ -2176,9 +2205,13 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
       if (mf.quality) items.push([FILM_I18N.tech_quality, '<span class="badge bg-blue-lt">' + esc(mf.quality) + '</span>']);
       if (mi.videoCodec) items.push([FILM_I18N.tech_video, esc(mi.videoCodec) + (mi.resolution ? ' · ' + esc(mi.resolution) : '') + (mi.videoFps ? ' · ' + parseFloat(mi.videoFps).toFixed(0) + 'fps' : '')]);
       if (mi.videoDynamicRange) items.push([FILM_I18N.tech_hdr, esc(mi.videoDynamicRange) + (mi.videoBitDepth ? ' · ' + mi.videoBitDepth + 'bits' : '')]);
-      if (mi.audioCodec) items.push([FILM_I18N.tech_audio, esc(mi.audioCodec) + (mi.audioChannels ? ' · ' + mi.audioChannels + 'ch' : '')]);
+      var audioHtml = filmAudioTracksHtml(mi.audioStreams);
+      if (audioHtml) items.push([FILM_I18N.tech_audio, audioHtml]);
+      else if (mi.audioCodec) items.push([FILM_I18N.tech_audio, esc(mi.audioCodec) + (mi.audioChannels ? ' · ' + mi.audioChannels + 'ch' : '')]);
       if (mf.languages && mf.languages.length) items.push([FILM_I18N.tech_languages, mf.languages.map(function(l) { return '<span class="badge bg-cyan-lt me-1">' + esc(l) + '</span>'; }).join('')]);
-      if (mi.subtitles) items.push([FILM_I18N.tech_subtitles, '<span class="text-muted">' + esc(mi.subtitles) + '</span>']);
+      var subsHtml = filmSubtitleTracksHtml(mi.subtitleStreams);
+      if (subsHtml) items.push([FILM_I18N.tech_subtitles, subsHtml]);
+      else if (mi.subtitles) items.push([FILM_I18N.tech_subtitles, '<span class="text-muted">' + esc(mi.subtitles) + '</span>']);
       if (mf.size) items.push([FILM_I18N.tech_size, formatSize(mf.size)]);
       if (mf.releaseGroup) items.push([FILM_I18N.tech_group, esc(mf.releaseGroup)]);
       // Custom formats
