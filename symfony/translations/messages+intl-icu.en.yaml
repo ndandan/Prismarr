@@ -1811,6 +1811,7 @@ media:
       video: Video
       audio: Audio
       subtitles: Subtitles
+      tracks_more_tpl: '+__N__ more'
       save: Save
       saving: "Saving..."
       delete_file_btn: Delete file

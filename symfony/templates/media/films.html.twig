@@ -11,6 +11,11 @@
 
 {% block stylesheets %}
 <style>
+/* Radarr 7 per-track lists in the film detail's technical card. */
+.film-track { line-height: 1.45; }
+.film-track-more > summary { cursor: pointer; font-size: .72rem; color: var(--tblr-primary); list-style: none; margin-top: .15rem; }
+.film-track-more > summary::-webkit-details-marker { display: none; }
+.film-track-more[open] > summary { margin-bottom: .2rem; }
 .media-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -1340,6 +1345,7 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     tech_audio: {{ 'media.films.detail.audio'|trans|json_encode|raw }},
     tech_languages: {{ 'media.films.detail.languages'|trans|json_encode|raw }},
     tech_subtitles: {{ 'media.films.detail.subtitles'|trans|json_encode|raw }},
+    tracks_more_tpl: {{ 'media.films.detail.tracks_more_tpl'|trans|json_encode|raw }},
     tech_size: {{ 'media.films.table.size'|trans|json_encode|raw }},
     tech_group: {{ 'media.films.detail.release_group'|trans|json_encode|raw }},
     tech_formats: {{ 'media.films.detail.formats_col'|trans|json_encode|raw }},
@@ -2160,21 +2166,43 @@ body.density-compact #modal-film .film-action-btn { font-size: .78rem; padding: 
     return String(code).toUpperCase();
   }
 
+  // Remuxes carry 10+ audio / 20+ subtitle tracks: show `limit` items and
+  // fold the rest into a native <details> (no JS, Turbo-safe). Never folds a
+  // single item into "+1 more".
+  function filmFold(items, limit) {
+    if (items.length <= limit + 1) return items.join('');
+    var rest = items.slice(limit);
+    return items.slice(0, limit).join('') +
+      '<details class="film-track-more"><summary>' +
+      window.escHtml(FILM_I18N.tracks_more_tpl.replace('__N__', rest.length)) +
+      '</summary>' + rest.join('') + '</details>';
+  }
+
   function filmAudioTracksHtml(tracks) {
     if (!tracks || !tracks.length) return null;
-    return tracks.map(function(t) {
+    return filmFold(tracks.map(function(t) {
       var parts = [filmTrackLang(t.language), t.codec, t.channels != null ? String(t.channels) : null];
-      return window.escHtml(parts.filter(function(p) { return p; }).join(' '));
-    }).join(' · ');
+      return '<div class="film-track">' + window.escHtml(parts.filter(function(p) { return p; }).join(' ')) + '</div>';
+    }), 3);
   }
 
   function filmSubtitleTracksHtml(tracks) {
     if (!tracks || !tracks.length) return null;
-    return tracks.map(function(t) {
+    // Same language + flags twice (e.g. a second Chinese track) = one chip "×2".
+    var groups = [], byKey = {};
+    tracks.forEach(function(t) {
+      var key = (t.language || '') + '|' + (t.forced ? 1 : 0) + '|' + (t.hearingImpaired ? 1 : 0);
+      if (byKey[key]) { byKey[key].n++; return; }
+      byKey[key] = { t: t, n: 1 };
+      groups.push(byKey[key]);
+    });
+    return filmFold(groups.map(function(g) {
+      var t = g.t;
       var hi = t.hearingImpaired ? '<sup title="' + window.escHtml(FILM_I18N.subtitle_hi_title) + '">HI</sup>' : '';
       var forced = t.forced ? '<sup title="' + window.escHtml(FILM_I18N.subtitle_forced_title) + '">F</sup>' : '';
-      return '<span class="badge bg-secondary-lt me-1">' + window.escHtml(filmTrackLang(t.language) || '—') + forced + hi + '</span>';
-    }).join('');
+      var count = g.n > 1 ? ' ×' + g.n : '';
+      return '<span class="badge bg-secondary-lt me-1 mb-1">' + window.escHtml(filmTrackLang(t.language) || '—') + forced + hi + count + '</span>';
+    }), 8);
   }
 
   /* ── Right column ── */

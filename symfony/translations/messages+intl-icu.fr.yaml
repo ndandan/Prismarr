@@ -1805,6 +1805,7 @@ media:
       video: Vidéo
       audio: Audio
       subtitles: Sous-titres
+      tracks_more_tpl: '+__N__ de plus'
       save: Sauvegarder
       saving: "Sauvegarde..."
       delete_file_btn: Supprimer fichier
