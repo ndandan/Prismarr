@@ -5193,6 +5193,7 @@ jellyseerr:
     stat_processing: En cours
     stat_approved: Approuvées
     stat_declined: Refusées
+    stat_completed: Terminées
     stat_movies_count_tpl: '__N__ films'
     stat_tv_count_tpl: '__N__ séries'
     none_with_filter: Aucune requête avec ce filtre

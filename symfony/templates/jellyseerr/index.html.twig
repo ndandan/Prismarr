@@ -162,37 +162,47 @@
 
 {# ── Stats cards ── #}
 <div class="row g-3 mb-3">
-    <div class="col-6 col-lg-2">
+    <div class="col-6 col-md-4 col-lg">
         <div class="card card-sm"><div class="card-body text-center">
             <div class="js-stat" style="color:#a259ff;">{{ counts.total ?? 0 }}</div>
             <div class="text-secondary small">{{ 'jellyseerr.index.stat_total'|trans }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-2">
+    <div class="col-6 col-md-4 col-lg">
         <div class="card card-sm"><div class="card-body text-center">
             <div class="js-stat" style="color:{{ (counts.pending ?? 0) > 0 ? '#f59e0b' : 'var(--tblr-text-secondary)' }};">{{ counts.pending ?? 0 }}</div>
             <div class="text-secondary small">{{ 'jellyseerr.index.stat_pending'|trans }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-2">
+    <div class="col-6 col-md-4 col-lg">
         <div class="card card-sm"><div class="card-body text-center">
             <div class="js-stat" style="color:#a855f7;">{{ counts.processing ?? 0 }}</div>
             <div class="text-secondary small">{{ 'jellyseerr.index.stat_processing'|trans }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-2">
+    <div class="col-6 col-md-4 col-lg">
         <div class="card card-sm"><div class="card-body text-center">
             <div class="js-stat" style="color:#38bdf8;">{{ counts.approved ?? 0 }}</div>
             <div class="text-secondary small">{{ 'jellyseerr.index.stat_approved'|trans }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-2">
+    <div class="col-6 col-md-4 col-lg">
         <div class="card card-sm"><div class="card-body text-center">
             <div class="js-stat" style="color:{{ (counts.declined ?? 0) > 0 ? '#ef4444' : 'var(--tblr-text-secondary)' }};">{{ counts.declined ?? 0 }}</div>
             <div class="text-secondary small">{{ 'jellyseerr.index.stat_declined'|trans }}</div>
         </div></div>
     </div>
-    <div class="col-6 col-lg-2">
+    {# Seerr v3 counts requests it marked completed (media arrived; some may
+       have been deleted since, so this isn't the Available filter's total). #}
+    {% if counts.completed is defined %}
+    <div class="col-6 col-md-4 col-lg" data-seerr-stat="completed">
+        <div class="card card-sm"><div class="card-body text-center">
+            <div class="js-stat" style="color:#16a34a;">{{ counts.completed }}</div>
+            <div class="text-secondary small">{{ 'jellyseerr.index.stat_completed'|trans }}</div>
+        </div></div>
+    </div>
+    {% endif %}
+    <div class="col-6 col-md-4 col-lg">
         <div class="card card-sm"><div class="card-body text-center">
             <div class="js-stat" style="color:#22c55e;">{{ (counts.movie ?? 0) + (counts.tv ?? 0) - (counts.pending ?? 0) - (counts.declined ?? 0) }}</div>
             <div class="text-secondary small">
