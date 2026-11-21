@@ -421,6 +421,9 @@ dashboard:
     last_check: Last check
     updates: '{count, plural, one {# update} other {# updates}}'
     update_available: Update available
+    network: Network
+    net_down: Download
+    net_up: Upload
   network:
     title: Network
     settings_cta: Settings
@@ -1808,6 +1811,7 @@ media:
       video: Video
       audio: Audio
       subtitles: Subtitles
+      tracks_more_tpl: '+__N__ more'
       save: Save
       saving: "Saving..."
       delete_file_btn: Delete file
@@ -4599,6 +4603,10 @@ usenet:
     page_of: 'Page {current} / {total}'
     recent_title: 'Recent history'
     view_all: 'View all ({count})'
+    retry: Retry
+    retry_title: 'Download the missing parts again'
+    retry_ok: 'Sent back to the queue.'
+    retry_error: 'The downloader refused the retry.'
   empty: 'The queue is empty.'
   toolbar:
     pause_all: Pause all

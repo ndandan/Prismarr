@@ -1671,9 +1671,50 @@ class RadarrClient implements ResetInterface
                     'audioBitrate'      => $mf['mediaInfo']['audioBitrate'] ?? null,
                     'audioChannels'     => $mf['mediaInfo']['audioChannels'] ?? null,
                     'subtitles'         => $mf['mediaInfo']['subtitles'] ?? null,
+                    // Radarr 7: one entry per track (the flat fields above are
+                    // obsolete there); null on Radarr ≤ 6.
+                    'audioStreams'      => self::audioStreams($mf['mediaInfo']['audioStreams'] ?? null),
+                    'subtitleStreams'   => self::subtitleStreams($mf['mediaInfo']['subtitleStreams'] ?? null),
                 ] : null,
             ] : null,
         ];
+    }
+
+    /**
+     * @return list<array{language: ?string, codec: ?string, channels: int|float|null, title: ?string}>|null
+     */
+    private static function audioStreams(mixed $raw): ?array
+    {
+        if (!is_array($raw)) return null;
+        $out = [];
+        foreach ($raw as $s) {
+            if (!is_array($s)) continue;
+            $out[] = [
+                'language' => isset($s['language']) ? (string) $s['language'] : null,
+                'codec'    => isset($s['codec']) ? (string) $s['codec'] : null,
+                'channels' => isset($s['channels']) && is_numeric($s['channels']) ? $s['channels'] + 0 : null,
+                'title'    => isset($s['title']) ? (string) $s['title'] : null,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * @return list<array{language: ?string, forced: bool, hearingImpaired: bool}>|null
+     */
+    private static function subtitleStreams(mixed $raw): ?array
+    {
+        if (!is_array($raw)) return null;
+        $out = [];
+        foreach ($raw as $s) {
+            if (!is_array($s)) continue;
+            $out[] = [
+                'language'        => isset($s['language']) ? (string) $s['language'] : null,
+                'forced'          => ($s['forced'] ?? null) === true,
+                'hearingImpaired' => ($s['hearingImpaired'] ?? null) === true,
+            ];
+        }
+        return $out;
     }
 
     private function imageUrl(array $m, string $coverType): ?string

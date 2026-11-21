@@ -328,6 +328,12 @@ class UsenetController extends AbstractController
         return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->deleteItem($id, true));
     }
 
+    #[Route('/history/{id}/retry', name: 'history_retry', methods: ['POST'], requirements: ['id' => '[A-Za-z0-9_.\-]+'])]
+    public function retryItem(string $client, string $id): JsonResponse
+    {
+        return $this->runAction($client, static fn(UsenetClientInterface $c) => $c->retryItem($id));
+    }
+
     #[Route('/speed-limit', name: 'speed_limit', methods: ['POST'])]
     public function speedLimit(string $client, Request $request): JsonResponse
     {

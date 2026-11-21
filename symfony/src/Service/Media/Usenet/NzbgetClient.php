@@ -192,6 +192,12 @@ class NzbgetClient implements UsenetClientInterface
         return $this->editQueue($deleteFiles ? 'GroupFinalDelete' : 'GroupDelete', $id);
     }
 
+    public function retryItem(string $id): bool
+    {
+        // Re-downloads only the failed articles of a history entry.
+        return $this->editQueue('HistoryRetryFailed', $id);
+    }
+
     public function setSpeedLimitBytes(int $bytesPerSec): bool
     {
         // NZBGet's rate() takes KB/s; 0 = unlimited.
@@ -335,7 +341,7 @@ class NzbgetClient implements UsenetClientInterface
      *
      * @param array<int, mixed> $params
      */
-    private function rpc(string $method, array $params = []): mixed
+    protected function rpc(string $method, array $params = []): mixed
     {
         if ($this->isBrokenOrDown()) return null;
         $this->lastError = null;

@@ -1,0 +1,38 @@
+{# Retry button on failed Usenet history rows (_history_rows.html.twig),
+   shared by the history page and the downloads page's recent-history preview.
+   One delegated document listener for the whole app lifetime (guarded, so a
+   Turbo visit back to either page never stacks a second one). #}
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  if (window._prismarrUsenetRetryBound) return;
+  window._prismarrUsenetRetryBound = true;
+
+  function toast(msg, type) { if (window._prismarrToast) window._prismarrToast(msg, type); }
+
+  document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('[data-usenet-retry]') : null;
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    fetch(btn.getAttribute('data-retry-url'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: '{}'
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (j) { return r.ok && j && j.ok; });
+    }).then(function (ok) {
+      if (!ok) {
+        btn.disabled = false;
+        toast(btn.getAttribute('data-error-msg'), 'danger');
+        return;
+      }
+      toast(btn.getAttribute('data-ok-msg'), 'success');
+      // The job left the history: reload so the row moves to the queue.
+      if (window.Turbo && window.Turbo.visit) window.Turbo.visit(window.location.href, { action: 'replace' });
+      else window.location.reload();
+    }).catch(function () {
+      btn.disabled = false;
+      toast(btn.getAttribute('data-error-msg'), 'danger');
+    });
+  });
+})();
+</script>

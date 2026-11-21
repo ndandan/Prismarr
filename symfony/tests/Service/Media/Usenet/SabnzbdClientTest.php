@@ -191,4 +191,23 @@ class SabnzbdClientTest extends TestCase
     {
         self::assertSame('sabnzbd', $this->makeClient()->getKind());
     }
+
+    public function testRetryItemAsksSabnzbdToRetryTheHistoryJob(): void
+    {
+        // SABnzbd 5.1+ re-fetches only the missing articles on mode=retry.
+        $cfg = $this->createMock(ConfigService::class);
+        $cfg->method('get')->willReturn('http://localhost');
+        $client = new class($cfg, new NullLogger(), $this->createMock(ServiceHealthCache::class)) extends SabnzbdClient {
+            /** @var list<array<string, string>> */
+            public array $sent = [];
+            protected function call(array $params): array
+            {
+                $this->sent[] = $params;
+                return ['status' => true];
+            }
+        };
+
+        self::assertTrue($client->retryItem('SABnzbd_nzo_abc'));
+        self::assertSame([['mode' => 'retry', 'value' => 'SABnzbd_nzo_abc']], $client->sent);
+    }
 }

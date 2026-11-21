@@ -46,6 +46,9 @@ interface UsenetClientInterface extends ResetInterface
 
     public function deleteItem(string $id, bool $deleteFiles = false): bool;
 
+    /** Sends a failed HISTORY entry back to the queue, re-fetching only the missing articles. */
+    public function retryItem(string $id): bool;
+
     /** @param int $bytesPerSec 0 = unlimited. */
     public function setSpeedLimitBytes(int $bytesPerSec): bool;
 

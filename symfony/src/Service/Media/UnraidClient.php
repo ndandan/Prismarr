@@ -37,6 +37,7 @@ use Symfony\Contracts\Service\ResetInterface;
  *    'docker' => ['running' => int, 'total' => int, 'stopped' => list<string>, 'updates' => int,
  *                 'containers' => list<['name' => string, 'running' => bool, 'update' => bool]>],
  *    'ups'    => ?['name' => ?string, 'battery' => ?int, 'runtime' => ?int (minutes), 'load' => ?float],
+ *    'network' => ?['interface' => string, 'rx' => float, 'tx' => float] (bytes/s),
  *    'parity' => ?['running' => bool, 'progress' => ?float (0–100, 1dp), 'elapsed' => ?int (sec),
  *                  'etaSeconds' => ?int, 'errors' => ?int,
  *                  'last' => ?['dateEpoch' => ?int, 'duration' => ?int (sec), 'errors' => ?int, 'status' => ?string]],
@@ -58,6 +59,15 @@ class UnraidClient implements ResetInterface
     private const QUERY_INFO    = 'query { info { os { uptime } cpu { brand cores threads } } }';
     private const QUERY_METRICS = 'query { metrics { cpu { percentTotal } memory { percentTotal total used } } }';
     private const QUERY_DOCKER  = 'query { docker { containers { names state isUpdateAvailable } } }';
+    /**
+     * Separate group so an unraid-api without network metrics (< 4.35) only
+     * loses this tile. rxSec / txSec are bytes per second averaged since the
+     * API's previous read (by anyone), so a 30 s poll shows a 30 s average.
+     */
+    private const QUERY_NETWORK = 'query { metrics { network { name rxSec txSec } } }';
+    /** Main-interface preference; otherwise the first non-virtual one. */
+    private const NETWORK_PREFERRED = ['br0', 'bond0', 'eth0'];
+    private const NETWORK_VIRTUAL = '/^(lo|veth|docker|br-|virbr|vnet|wg|tailscale|tun|tap|shim|vhost)/';
     /** An unraid-api without isUpdateAvailable rejects the whole query above (data null). */
     private const QUERY_DOCKER_LEGACY = 'query { docker { containers { names state } } }';
     private const QUERY_UPS     = 'query { upsDevices { name battery { chargeLevel estimatedRuntime } power { loadPercentage } } }';
@@ -164,6 +174,7 @@ class UnraidClient implements ResetInterface
         }
         $docker = $this->mapDocker($dockerData);
         $ups    = $this->mapUps($this->gql(self::QUERY_UPS));
+        $network = $this->mapNetwork($this->gql(self::QUERY_NETWORK));
         $paritySizes = array_filter(array_column($array['parities'] ?? [], 'size'));
         $parity = $this->mapParity(
             $this->gql(self::QUERY_PARITY_STATUS),
@@ -171,11 +182,11 @@ class UnraidClient implements ResetInterface
             $paritySizes !== [] ? (float) max($paritySizes) : null,
         );
 
-        if ($array === null && $system === null && $docker === null && $ups === null && $parity === null) {
+        if ($array === null && $system === null && $docker === null && $ups === null && $parity === null && $network === null) {
             return null; // fully unreachable — don't cache, retry next call
         }
 
-        return ['array' => $array, 'system' => $system, 'docker' => $docker, 'ups' => $ups, 'parity' => $parity];
+        return ['array' => $array, 'system' => $system, 'docker' => $docker, 'ups' => $ups, 'parity' => $parity, 'network' => $network];
     }
 
     private function mapArray(?array $data): ?array
@@ -268,6 +279,35 @@ class UnraidClient implements ResetInterface
         usort($containers, static fn(array $a, array $b): int => strcasecmp($a['name'], $b['name']));
 
         return ['running' => $running, 'total' => count($raw), 'stopped' => $stopped, 'updates' => $updates, 'containers' => $containers];
+    }
+
+    /** @return array{interface: string, rx: float, tx: float}|null */
+    private function mapNetwork(?array $data): ?array
+    {
+        $raw = $data['metrics']['network'] ?? null;
+        if (!is_array($raw)) return null;
+
+        $byName = [];
+        foreach ($raw as $n) {
+            if (!is_array($n) || !isset($n['name']) || !is_string($n['name'])) continue;
+            $byName[$n['name']] ??= $n;
+        }
+        $pick = null;
+        foreach (self::NETWORK_PREFERRED as $name) {
+            if (isset($byName[$name])) { $pick = $byName[$name]; break; }
+        }
+        if ($pick === null) {
+            foreach ($byName as $name => $n) {
+                if (preg_match(self::NETWORK_VIRTUAL, (string) $name) !== 1) { $pick = $n; break; }
+            }
+        }
+        if ($pick === null) return null;
+
+        return [
+            'interface' => (string) $pick['name'],
+            'rx'        => (float) ($pick['rxSec'] ?? 0),
+            'tx'        => (float) ($pick['txSec'] ?? 0),
+        ];
     }
 
     private function mapUps(?array $data): ?array
