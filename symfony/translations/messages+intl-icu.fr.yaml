@@ -704,6 +704,7 @@ tracearr:
     concurrent: Flux simultanés
     history: Historique
     users: Utilisateurs
+    violations: Violations ouvertes
   now_playing:
     empty: Aucune lecture en cours.
   stats:
@@ -726,6 +727,19 @@ tracearr:
       last_seen: Vu pour la dernière fois
       plays: Lectures
       trust: Score de confiance
+    violations: '{count, plural, one {# violation} other {# violations}}'
+  violations:
+    empty: Aucune violation ouverte.
+    col:
+      severity: Gravité
+      rule: Règle
+      user: Utilisateur
+      server: Serveur
+      when: Quand
+    severity:
+      low: Faible
+      warning: Avertissement
+      high: Élevée
 profile:
   title: Mon profil
   identity:

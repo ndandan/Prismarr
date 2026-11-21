@@ -1,0 +1,31 @@
+{# Open (unacknowledged) Tracearr violations, newest first (batch 3).
+   `violations` = TracearrClient::normalizeViolations() rows. #}
+{% set _sev = {high: 'bg-danger-lt', warning: 'bg-warning-lt', low: 'bg-secondary-lt'} %}
+{% if violations is empty %}
+  <div class="text-center text-secondary py-4" data-tracearr-violations-empty>{{ 'tracearr.violations.empty'|trans }}</div>
+{% else %}
+<div class="table-responsive">
+  <table class="table table-vcenter card-table">
+    <thead>
+      <tr>
+        <th>{{ 'tracearr.violations.col.severity'|trans }}</th>
+        <th>{{ 'tracearr.violations.col.rule'|trans }}</th>
+        <th>{{ 'tracearr.violations.col.user'|trans }}</th>
+        <th>{{ 'tracearr.violations.col.server'|trans }}</th>
+        <th>{{ 'tracearr.violations.col.when'|trans }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for v in violations %}
+      <tr data-tracearr-violation="{{ v.severity }}">
+        <td><span class="badge {{ _sev[v.severity] ?? 'bg-warning-lt' }}">{{ ('tracearr.violations.severity.' ~ v.severity)|trans }}</span></td>
+        <td class="text-truncate">{{ v.rule ?? '—' }}</td>
+        <td class="text-truncate">{{ v.user ?? '—' }}</td>
+        <td class="text-truncate text-secondary">{{ v.server ?? '—' }}</td>
+        <td class="text-secondary">{{ v.at > 0 ? (v.at|relative_date) : '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}

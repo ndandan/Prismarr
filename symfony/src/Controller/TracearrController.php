@@ -125,6 +125,25 @@ class TracearrController extends AbstractController
     }
 
     /**
+     * GET /tracearr/api/violations — open violations fragment (batch 3).
+     * Empty body when Tracearr has no v2 API or can't be read: the page then
+     * hides the card.
+     */
+    #[Route('/api/violations', name: 'api_violations', methods: ['GET'])]
+    public function apiViolations(): Response
+    {
+        try {
+            $violations = $this->tracearr->getViolations();
+        } catch (\Throwable) {
+            $violations = null;
+        }
+        if ($violations === null) {
+            return new Response('');
+        }
+        return $this->render('tracearr/_violations.html.twig', ['violations' => $violations]);
+    }
+
+    /**
      * GET /tracearr/api/image?server={uuid}&img=/library/metadata/1/thumb/2 —
      * streams a poster fetched server-side through Tracearr's image proxy.
      * Both params are allow-listed in TracearrClient::fetchImage (SSRF guard);

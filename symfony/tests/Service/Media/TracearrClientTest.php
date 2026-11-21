@@ -356,9 +356,48 @@ class TracearrClientTest extends TestCase
         ]]]);
 
         self::assertSame(
-            [['displayName' => 'Carol', 'serverName' => 'Plex', 'lastSeen' => 0, 'plays' => 42, 'trustScore' => 87]],
+            [['displayName' => 'Carol', 'serverName' => 'Plex', 'lastSeen' => 0, 'plays' => 42, 'trustScore' => 87, 'violations' => 0]],
             $rows,
         );
+    }
+
+    public function testUsersCarryTheirViolationCount(): void
+    {
+        $rows = TracearrClient::normalizeUsers(['data' => [['displayName' => 'Dan', 'totalViolations' => 3], ['displayName' => 'Eve', 'totalViolations' => 'x']]]);
+
+        self::assertSame(3, $rows[0]['violations']);
+        self::assertSame(0, $rows[1]['violations']);
+    }
+
+    public function testNormalizesV2Violations(): void
+    {
+        $rows = TracearrClient::normalizeViolations(['data' => [[
+            'id'              => '0b9f1c2e-1111-4222-8333-944455556666',
+            'severity'        => 'high',
+            'created_at'      => '2026-11-20T21:15:00.000Z',
+            'acknowledged_at' => null,
+            'session_id'      => 'sess',
+            'rule'            => ['id' => 'r', 'name' => 'Concurrent streams'],
+            'server'          => ['id' => 's', 'name' => 'Plex', 'type' => 'plex'],
+            'user'            => ['id' => 'u', 'server_user_id' => 'su', 'username' => 'Carol', 'thumb_url' => '/t', 'avatar_url' => '/a'],
+            'data'            => ['streams' => 4],
+        ]], 'meta' => ['nextCursor' => null, 'pageSize' => 10]]);
+
+        self::assertSame([[
+            'severity' => 'high',
+            'rule'     => 'Concurrent streams',
+            'user'     => 'Carol',
+            'server'   => 'Plex',
+            'at'       => strtotime('2026-11-20T21:15:00.000Z'),
+        ]], $rows);
+    }
+
+    public function testNormalizeViolationsToleratesGarbage(): void
+    {
+        $rows = TracearrClient::normalizeViolations(['data' => ['junk', ['severity' => 'apocalyptic', 'rule' => 'x', 'user' => null, 'created_at' => 'not a date']]]);
+
+        self::assertSame([['severity' => 'warning', 'rule' => null, 'user' => null, 'server' => null, 'at' => 0]], $rows);
+        self::assertSame([], TracearrClient::normalizeViolations([]));
     }
 
     /** @return iterable<string, array{string, bool}> */
@@ -407,6 +446,7 @@ class TracearrClientTest extends TestCase
         self::assertSame(['rows' => [], 'nextCursor' => null], $client->getHistory());
         self::assertNull($client->showTmdbId('167641fe-e2b2-4946-bc80-9453d81b9d76'));
         self::assertSame([], $client->getUsers());
+        self::assertNull($client->getViolations());
         self::assertSame(0, $client->getStats()['plays30d']);
         self::assertSame(['categories' => [], 'series' => []], $client->getActivityCharts('month')['plays']);
         self::assertNull($client->fetchImage(self::SERVER, '/library/metadata/1/thumb/2'));

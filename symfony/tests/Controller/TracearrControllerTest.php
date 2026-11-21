@@ -58,6 +58,11 @@ class TracearrControllerTest extends AbstractWebTestCase
         self::assertResponseIsSuccessful();
         self::assertStringContainsString('No user activity', (string) $this->client->getResponse()->getContent());
 
+        // Unconfigured (like a Tracearr without the v2 API): nothing, so the page hides the card.
+        $this->client->request('GET', '/tracearr/api/violations');
+        self::assertResponseIsSuccessful();
+        self::assertSame('', trim((string) $this->client->getResponse()->getContent()));
+
         foreach (['/tracearr/api/history', '/tracearr/api/history?cursor=p2', '/tracearr/api/history?cursor=a%26b%3Dc'] as $url) {
             $this->client->request('GET', $url);
             self::assertResponseIsSuccessful();
