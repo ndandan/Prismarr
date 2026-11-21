@@ -40,3 +40,19 @@ describe('bzHealthChip', () => {
     assert.equal(chip(null), null);
   });
 });
+
+describe('bzHealthOpensLeft', () => {
+  // Live 2026-11-21: on desktop the badge sits near the right edge and the
+  // list ran off-screen; on a phone the nav wraps and the badge is at the left.
+  const opensLeft = (rect, vw) => runSlice('bazarr/_health_chip.html.twig', '/* ── Bazarr health chip', 'bzHealthOpensLeft', {
+    window: { escHtml: esc },
+  }).bzHealthOpensLeft(rect, vw);
+
+  it('opens leftwards when the list would run off the right edge', () => {
+    assert.equal(opensLeft({ left: 596, right: 1012 }, 945), true);
+  });
+
+  it('keeps opening rightwards when it fits', () => {
+    assert.equal(opensLeft({ left: 26, right: 364 }, 375), false);
+  });
+});

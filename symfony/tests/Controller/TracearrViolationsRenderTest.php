@@ -95,5 +95,7 @@ class TracearrViolationsRenderTest extends AbstractWebTestCase
         self::assertResponseIsSuccessful();
         self::assertSelectorCount(1, '[data-tracearr-user-violations]');
         self::assertSelectorTextContains('[data-tracearr-user-violations]', '3');
+        // The app ships inline SVG icons, not the Tabler icon font.
+        self::assertSelectorExists('[data-tracearr-user-violations] svg');
     }
 }
