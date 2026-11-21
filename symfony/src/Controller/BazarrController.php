@@ -438,6 +438,124 @@ class BazarrController extends AbstractController
     }
 
     /**
+     * One item's current subtitles (external files and embedded tracks, with
+     * the path / database id the subtitle tools need) plus its missing
+     * languages, for the subtitle modal's "Current subtitles" section.
+     * Fail-closed like the language endpoints above: a bare Radarr/Sonarr id
+     * is ambiguous across two enabled instances, and an absent item, a missing
+     * series id or an unreachable Bazarr all answer `tracked:false`.
+     * Pre-1.6 Bazarr has no subtitle `id`, so `id` is null (no Extract).
+     */
+    #[Route('/api/files/{kind}/{id}', name: 'api_files', methods: ['GET'], requirements: ['kind' => 'movie|episode', 'id' => '\d+'])]
+    public function apiFiles(string $kind, int $id, Request $request): JsonResponse
+    {
+        $untracked = ['ok' => true, 'tracked' => false, 'subtitles' => [], 'missing' => []];
+        if (!$this->instances->hasExactlyOneEnabled($kind === 'movie' ? ServiceInstance::TYPE_RADARR : ServiceInstance::TYPE_SONARR)) {
+            return $this->json($untracked);
+        }
+
+        $item = null;
+        if ($kind === 'movie') {
+            $item = $this->bazarr->getMovies([$id])[0] ?? null;
+        } else {
+            $seriesId = $request->query->getInt('seriesId');
+            if ($seriesId <= 0) {
+                return $this->json($untracked);
+            }
+            foreach ($this->bazarr->getEpisodes($seriesId) as $episode) {
+                if ((int) ($episode['sonarrEpisodeId'] ?? 0) === $id) {
+                    $item = $episode;
+                    break;
+                }
+            }
+        }
+        if (!is_array($item)) {
+            return $this->json($untracked);
+        }
+
+        $subtitles = [];
+        foreach (is_array($item['subtitles'] ?? null) ? $item['subtitles'] : [] as $s) {
+            if (!is_array($s) || !is_string($s['code2'] ?? null) || $s['code2'] === '') {
+                continue;
+            }
+            $path = is_string($s['path'] ?? null) && $s['path'] !== '' ? $s['path'] : null;
+            $subtitles[] = [
+                'name'     => (string) ($s['name'] ?? $s['code2']),
+                'code2'    => $s['code2'],
+                'path'     => $path,
+                'forced'   => (bool) ($s['forced'] ?? false),
+                'hi'       => (bool) ($s['hi'] ?? false),
+                'id'       => is_numeric($s['id'] ?? null) ? (int) $s['id'] : null,
+                'embedded' => $path === null,
+            ];
+        }
+        $missing = [];
+        foreach (is_array($item['missing_subtitles'] ?? null) ? $item['missing_subtitles'] : [] as $m) {
+            if (!is_array($m) || !is_string($m['code2'] ?? null) || $m['code2'] === '') {
+                continue;
+            }
+            $missing[] = [
+                'name'   => (string) ($m['name'] ?? $m['code2']),
+                'code2'  => $m['code2'],
+                'forced' => (bool) ($m['forced'] ?? false),
+                'hi'     => (bool) ($m['hi'] ?? false),
+            ];
+        }
+
+        return $this->json(['ok' => true, 'tracked' => true, 'subtitles' => $subtitles, 'missing' => $missing]);
+    }
+
+    /**
+     * Sync / Translate / Extract one subtitle through Bazarr (queued as a job
+     * on Bazarr's side). Same same-origin convention as the download routes.
+     * Bazarr's refusals come back as a `reason` the modal translates; a
+     * transport failure falls back to the generic client error.
+     */
+    #[Route('/api/subtitle-action', name: 'api_subtitle_action', methods: ['POST'])]
+    public function apiSubtitleAction(Request $request): JsonResponse
+    {
+        $in = $request->request;
+        $str = static fn(string $k): string => is_scalar($in->all()[$k] ?? null) ? trim((string) $in->all()[$k]) : '';
+        $flag = static fn(string $k): bool => in_array($str($k), ['1', 'true', 'True'], true);
+
+        $action      = $str('action');
+        $type        = $str('type');
+        $id          = ctype_digit($str('id')) ? (int) $str('id') : 0;
+        $language    = $str('language');
+        $path        = $str('path') !== '' ? $str('path') : null;
+        $subtitlesId = ctype_digit($str('subtitles_id')) && (int) $str('subtitles_id') > 0 ? (int) $str('subtitles_id') : null;
+
+        $valid = in_array($action, ['sync', 'translate', 'extract'], true)
+            && in_array($type, ['movie', 'episode'], true)
+            && $id > 0
+            && preg_match('/^[A-Za-z]{2,3}([-_][A-Za-z]{2,4})?$/', $language) === 1
+            && match ($action) {
+                'sync'      => $path !== null,
+                'extract'   => $subtitlesId !== null,
+                'translate' => $path !== null || $subtitlesId !== null,
+            };
+        if (!$valid) {
+            return $this->json(['ok' => false, 'error' => 'invalid request'], 400);
+        }
+
+        if ($this->bazarr->subtitleAction($action, $type, $id, $language, $path, $subtitlesId, $flag('forced'), $flag('hi'))) {
+            return $this->json(['ok' => true]);
+        }
+
+        $reason = match ((int) ($this->bazarr->getLastError()['code'] ?? 0)) {
+            415     => 'image_based',
+            409     => 'file_error',
+            500     => 'path_mapping',
+            502     => 'translate_failed',
+            default => null,
+        };
+
+        return $reason !== null
+            ? $this->json(['ok' => false, 'reason' => $reason], 502)
+            : $this->jsonClientError('Bazarr', $this->bazarr);
+    }
+
+    /**
      * Download a specific subtitle result for a movie. No CSRF token —
      * follows the Deluge convention (#[IsGranted] + same-origin fetch only).
      *

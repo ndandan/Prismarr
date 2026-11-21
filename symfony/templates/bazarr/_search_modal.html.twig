@@ -29,6 +29,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
       </div>
       <div class="modal-body">
+        <div id="bazarr-current-subs" class="mb-3 d-none"></div>
         <div id="bazarr-search-status" class="d-none"></div>
         <div class="table-responsive">
           <table class="table table-vcenter card-table">
@@ -63,8 +64,131 @@
     success:     {{ 'bazarr.modal.success'|trans|json_encode|raw }},
     error:       {{ 'bazarr.modal.error'|trans|json_encode|raw }},
     download:    {{ 'bazarr.modal.download'|trans|json_encode|raw }},
-    autoStarted: {{ 'bazarr.auto.started'|trans|json_encode|raw }}
+    autoStarted: {{ 'bazarr.auto.started'|trans|json_encode|raw }},
+    current_title: {{ 'bazarr.actions.current_title'|trans|json_encode|raw }},
+    embedded:      {{ 'bazarr.actions.embedded'|trans|json_encode|raw }},
+    sync:          {{ 'bazarr.actions.sync'|trans|json_encode|raw }},
+    translate:     {{ 'bazarr.actions.translate'|trans|json_encode|raw }},
+    extract:       {{ 'bazarr.actions.extract'|trans|json_encode|raw }},
+    translate_to:  {{ 'bazarr.actions.translate_to'|trans|json_encode|raw }},
+    queued:        {{ 'bazarr.actions.queued'|trans|json_encode|raw }},
+    hi_title:      {{ 'bazarr.chips.hi_title'|trans|json_encode|raw }},
+    forced_title:  {{ 'bazarr.chips.forced_title'|trans|json_encode|raw }},
+    reasons: {
+      image_based:      {{ 'bazarr.actions.error_image_based'|trans|json_encode|raw }},
+      file_error:       {{ 'bazarr.actions.error_file'|trans|json_encode|raw }},
+      path_mapping:     {{ 'bazarr.actions.error_path_mapping'|trans|json_encode|raw }},
+      translate_failed: {{ 'bazarr.actions.error_translate_failed'|trans|json_encode|raw }}
+    }
   };
+
+  /* ── Bazarr current subtitles (batch 2) ──
+     Tools per subtitle: Sync needs an external file, Extract an embedded
+     track with Bazarr 1.6's database id, Translate a source (file or
+     embedded id) plus at least one missing language to translate into. */
+  function bzActionsFor(sub, missing) {
+    var out = [];
+    if (!sub) return out;
+    if (sub.path) out.push('sync');
+    if ((sub.path || sub.id) && missing && missing.length) out.push('translate');
+    if (sub.embedded && sub.id) out.push('extract');
+    return out;
+  }
+
+  function bzCurrentSubsHtml(data) {
+    if (!data || !data.tracked || !data.subtitles || !data.subtitles.length) return '';
+    var esc = window.escHtml;
+    var missing = data.missing || [];
+    var h = '<div class="small fw-semibold text-secondary mb-1">' + esc(I18N.current_title) + '</div>';
+    data.subtitles.forEach(function (sub, i) {
+      var marks = (sub.forced ? '<sup title="' + esc(I18N.forced_title) + '">F</sup>' : '')
+        + (sub.hi ? '<sup title="' + esc(I18N.hi_title) + '">HI</sup>' : '');
+      var where = sub.path
+        ? '<span class="text-secondary small text-truncate bz-sub-file" style="max-width:260px;" title="' + esc(sub.path) + '">' + esc(String(sub.path).split(/[\\/]/).pop()) + '</span>'
+        : '<span class="badge bg-secondary-lt">' + esc(I18N.embedded) + '</span>';
+      var tools = '';
+      bzActionsFor(sub, missing).forEach(function (a) {
+        if (a === 'translate') {
+          tools += '<select class="form-select form-select-sm w-auto" data-bz-translate-target="' + i + '" aria-label="' + esc(I18N.translate_to) + '">'
+            + missing.map(function (m, j) { return '<option value="' + j + '">' + esc(m.name) + '</option>'; }).join('')
+            + '</select>';
+        }
+        tools += '<button type="button" class="btn btn-sm btn-outline-secondary" data-bz-sub-action="' + a + '" data-idx="' + i + '">' + esc(I18N[a]) + '</button>';
+      });
+      h += '<div class="d-flex align-items-center gap-2 flex-wrap py-1 border-bottom" data-bz-sub="' + i + '">'
+        + '<span class="badge bg-green-lt">' + esc(sub.name) + marks + '</span>' + where
+        + (tools ? '<span class="ms-auto d-flex align-items-center gap-1">' + tools + '</span>' : '')
+        + '</div>';
+    });
+    return h;
+  }
+
+  function currentSubsEl() { return document.getElementById('bazarr-current-subs'); }
+
+  function loadCurrentSubs(kind, id, seriesId, token) {
+    var box = currentSubsEl();
+    if (!box) return;
+    box.className = 'mb-3 d-none';
+    box.innerHTML = '';
+    box._bzData = null;
+    var url = (window.BASE_PATH || '') + '/bazarr/api/files/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id)
+      + (seriesId ? '?seriesId=' + encodeURIComponent(seriesId) : '');
+    fetch(url, { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (token !== searchToken) return;
+        var html = bzCurrentSubsHtml(data);
+        if (!html) return;
+        box._bzData = data;
+        box.setAttribute('data-kind', kind);
+        box.setAttribute('data-item-id', String(id));
+        box.innerHTML = html;
+        box.className = 'mb-3';
+      })
+      .catch(function () {});
+  }
+
+  function doSubAction(btn) {
+    var box = currentSubsEl();
+    var data = box && box._bzData;
+    var idx = parseInt(btn.getAttribute('data-idx'), 10);
+    var action = btn.getAttribute('data-bz-sub-action');
+    var sub = data && data.subtitles[idx];
+    if (!sub) return;
+    var params = { action: action, type: box.getAttribute('data-kind'), id: box.getAttribute('data-item-id'),
+      language: sub.code2, forced: sub.forced ? '1' : '0', hi: sub.hi ? '1' : '0' };
+    if (action === 'translate') {
+      var sel = box.querySelector('[data-bz-translate-target="' + idx + '"]');
+      var target = sel && data.missing[parseInt(sel.value, 10)];
+      if (!target) return;
+      params.language = target.code2;
+      params.forced = target.forced ? '1' : '0';
+      params.hi = target.hi ? '1' : '0';
+    }
+    if (sub.path && action !== 'extract') { params.path = sub.path; } else if (sub.id) { params.subtitles_id = String(sub.id); }
+    btn.disabled = true;
+    fetch((window.BASE_PATH || '') + '/bazarr/api/subtitle-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'X-Requested-With': 'fetch' },
+      credentials: 'same-origin',
+      body: new URLSearchParams(params).toString()
+    })
+      .then(function (r) { return r.json().catch(function () { return null; }); })
+      .then(function (d) {
+        if (d && d.ok === true) {
+          btn.innerHTML = '&#10003; ' + window.escHtml(I18N[action]);
+          if (window._prismarrToast) window._prismarrToast(I18N.queued, 'success');
+          return;
+        }
+        btn.disabled = false;
+        var msg = (d && d.reason && I18N.reasons[d.reason]) || (d && d.error) || I18N.error;
+        if (window._prismarrToast) window._prismarrToast(msg, 'danger');
+      })
+      .catch(function () {
+        btn.disabled = false;
+        if (window._prismarrToast) window._prismarrToast(I18N.error, 'danger');
+      });
+  }
 
   function modalEl()   { return document.getElementById('bazarr-search-modal'); }
   function triggerEl() { return document.querySelector('[data-bazarr-search-trigger]'); }
@@ -141,6 +265,7 @@
     if (tbody) { tbody.innerHTML = ''; tbody._bazarrRows = null; }
     setStatus(I18N.searching, false);
     trigger.click();
+    loadCurrentSubs(kind, id, seriesId, token);
 
     fetch((window.BASE_PATH || '') + '/bazarr/api/search/' + encodeURIComponent(kind) + '/' + encodeURIComponent(id), {
       headers: { 'X-Requested-With': 'fetch' },
@@ -344,6 +469,14 @@
       e.stopImmediatePropagation();
       if (autoBtn.disabled) return;
       doAutoSearch(autoKind, autoId, autoBtn);
+      return;
+    }
+
+    var subActionBtn = target.closest('[data-bz-sub-action]');
+    if (subActionBtn) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (!subActionBtn.disabled) doSubAction(subActionBtn);
       return;
     }
 
