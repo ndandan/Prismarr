@@ -638,12 +638,6 @@ parameters:
 			path: src/Service/Media/QBittorrentClient.php
 
 		-
-			message: '#^Parameter \#2 \$options of function curl_setopt_array expects array\{19913\: bool, 181\: int, 182\: int, 78\: int, 13\: int, 99\: bool, 47\: bool, 10015\: array\|string, \.\.\.\}, array\{19913\: true, 181\: 3, 182\: 3, 78\: 3, 13\: 15, 99\: 1, 47\: true, 10015\: array\<non\-falsy\-string, CURLFile\|string\>, \.\.\.\} given\.$#'
-			identifier: argument.type
-			count: 1
-			path: src/Service/Media/QBittorrentClient.php
-
-		-
 			message: '#^Parameter \#2 \$options of function curl_setopt_array expects array\{19913\: bool, 181\: int, 182\: int, 78\: int, 13\: int, 99\: bool, 47\: bool, 10015\: array\|string, \.\.\.\}, array\{19913\: true, 181\: 3, 182\: 3, 78\: 4, 13\: 8, 99\: 1, 47\: true, 10015\: string, \.\.\.\} given\.$#'
 			identifier: argument.type
 			count: 1
