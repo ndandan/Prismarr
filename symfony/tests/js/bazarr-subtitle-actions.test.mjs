@@ -22,6 +22,7 @@ function load() {
 const ext = { name: 'English', code2: 'en', path: '/movies/X/x.en.srt', forced: false, hi: false, id: 3, embedded: false };
 const emb = { name: 'French', code2: 'fr', path: null, forced: false, hi: true, id: 4, embedded: true };
 const missing = [{ name: 'German', code2: 'de', forced: false, hi: false }];
+const missingWithOwn = [{ name: 'English', code2: 'en', forced: true, hi: false }, ...missing];
 
 describe('bzActionsFor', () => {
   it('offers Sync and Translate on an external file', () => {
@@ -36,13 +37,27 @@ describe('bzActionsFor', () => {
     assert.deepEqual(Array.from(load().bzActionsFor({ ...emb, id: null }, missing)), []);
   });
 
+  it("never offers translating into the subtitle's own language", () => {
+    // Live 2026-11-21: an English (HI) file with "English forced" missing
+    // offered English -> English.
+    const enForced = [{ name: 'English', code2: 'en', forced: true, hi: false }];
+    assert.deepEqual(Array.from(load().bzActionsFor(ext, enForced)), ['sync']);
+    assert.deepEqual(Array.from(load().bzActionsFor(ext, [...enForced, ...missing])), ['sync', 'translate']);
+  });
+
   it('drops Translate when no language is missing', () => {
     assert.deepEqual(Array.from(load().bzActionsFor(ext, [])), ['sync']);
   });
 });
 
 describe('bzCurrentSubsHtml', () => {
-  it('renders one row per subtitle with its tools and the file name', () => {
+  it('lists only other languages as translation targets', () => {
+    const html = load().bzCurrentSubsHtml({ tracked: true, subtitles: [ext], missing: missingWithOwn });
+    assert.match(html, /<option value="1">German<\/option>/, 'option values index the full missing list');
+    assert.doesNotMatch(html, /<option[^>]*>English/, 'English subtitles are not translated into English');
+  });
+
+  it('renders every subtitle row with its tools and the file name', () => {
     const html = load().bzCurrentSubsHtml({ tracked: true, subtitles: [ext, emb], missing });
     assert.equal((html.match(/data-bz-sub="/g) || []).length, 2);
     assert.match(html, /x\.en\.srt/);

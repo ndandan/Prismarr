@@ -85,12 +85,20 @@
   /* ── Bazarr current subtitles (batch 2) ──
      Tools per subtitle: Sync needs an external file, Extract an embedded
      track with Bazarr 1.6's database id, Translate a source (file or
-     embedded id) plus at least one missing language to translate into. */
+     embedded id) plus at least one missing language to translate into.
+     A missing variant of the subtitle's own language (English forced
+     next to an English HI file) is not a translation target. */
+  function bzTranslateTargets(sub, missing) {
+    var out = [];
+    (missing || []).forEach(function (m, j) { if (m && m.code2 !== sub.code2) out.push({ j: j, m: m }); });
+    return out;
+  }
+
   function bzActionsFor(sub, missing) {
     var out = [];
     if (!sub) return out;
     if (sub.path) out.push('sync');
-    if ((sub.path || sub.id) && missing && missing.length) out.push('translate');
+    if ((sub.path || sub.id) && bzTranslateTargets(sub, missing).length) out.push('translate');
     if (sub.embedded && sub.id) out.push('extract');
     return out;
   }
@@ -110,7 +118,9 @@
       bzActionsFor(sub, missing).forEach(function (a) {
         if (a === 'translate') {
           tools += '<select class="form-select form-select-sm w-auto" data-bz-translate-target="' + i + '" aria-label="' + esc(I18N.translate_to) + '">'
-            + missing.map(function (m, j) { return '<option value="' + j + '">' + esc(m.name) + '</option>'; }).join('')
+            + bzTranslateTargets(sub, missing).map(function (t) {
+              return '<option value="' + t.j + '">' + esc(t.m.name) + (t.m.forced ? ' (F)' : '') + (t.m.hi ? ' (HI)' : '') + '</option>';
+            }).join('')
             + '</select>';
         }
         tools += '<button type="button" class="btn btn-sm btn-outline-secondary" data-bz-sub-action="' + a + '" data-idx="' + i + '">' + esc(I18N[a]) + '</button>';
