@@ -7,6 +7,11 @@
 {% include 'usenet/_history_styles.html.twig' %}
 {% endblock %}
 
+{% block javascripts %}
+{{ parent() }}
+{% include 'usenet/_history_retry_script.html.twig' %}
+{% endblock %}
+
 {% block body %}
 <div class="d-flex align-items-center mb-3">
   <a href="{{ path('app_usenet_index', {client: client}) }}" class="btn btn-sm btn-outline-secondary">

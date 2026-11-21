@@ -159,4 +159,21 @@ class NzbgetClientTest extends TestCase
     {
         self::assertSame('nzbget', $this->makeClient()->getKind());
     }
+
+    public function testRetryItemRetriesTheFailedArticlesOfAHistoryEntry(): void
+    {
+        $cfg = $this->createMock(ConfigService::class);
+        $client = new class($cfg, new NullLogger(), $this->createMock(ServiceHealthCache::class)) extends NzbgetClient {
+            /** @var list<array{0: string, 1: array<int, mixed>}> */
+            public array $sent = [];
+            protected function rpc(string $method, array $params = []): mixed
+            {
+                $this->sent[] = [$method, $params];
+                return true;
+            }
+        };
+
+        self::assertTrue($client->retryItem('42'));
+        self::assertSame([['editqueue', ['HistoryRetryFailed', 0, '', [42]]]], $client->sent);
+    }
 }

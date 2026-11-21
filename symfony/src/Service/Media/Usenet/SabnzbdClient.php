@@ -191,6 +191,12 @@ class SabnzbdClient implements UsenetClientInterface
         ]);
     }
 
+    public function retryItem(string $id): bool
+    {
+        // History job → queue; SABnzbd 5.1+ re-fetches only the missing articles.
+        return $this->action(['mode' => 'retry', 'value' => $id]);
+    }
+
     public function setSpeedLimitBytes(int $bytesPerSec): bool
     {
         // SABnzbd takes the limit in KB/s with a `K` suffix; 0 = unlimited.

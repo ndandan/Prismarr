@@ -25,6 +25,14 @@
       <div class="uh-meta">{{ item.sizeBytes|prismarr_bytes }}{% if fail %} · <span class="uh-fail">{{ fail }}</span>{% endif %}</div>
     </div>
     <div class="uh-side">
+      {% if item.status == 'failed' and item.id != '' %}
+        <button type="button" class="btn btn-sm btn-outline-secondary uh-retry"
+                data-usenet-retry="{{ item.id }}"
+                data-retry-url="{{ path('app_usenet_history_retry', {client: client, id: item.id}) }}"
+                data-ok-msg="{{ 'usenet.history.retry_ok'|trans }}"
+                data-error-msg="{{ 'usenet.history.retry_error'|trans }}"
+                title="{{ 'usenet.history.retry_title'|trans }}">{{ 'usenet.history.retry'|trans }}</button>
+      {% endif %}
       <span class="uh-pill">{{ ('usenet.status.' ~ item.status)|trans }}</span>
       {# Downloaders don't always stamp a finish time (older SABnzbd, NZBGet
          URL/DUP stubs) — keep the column aligned with an em dash. #}

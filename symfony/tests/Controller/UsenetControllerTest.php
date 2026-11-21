@@ -326,6 +326,18 @@ class UsenetControllerTest extends AbstractWebTestCase
         $this->assertSame(200, $this->client->getResponse()->getStatusCode());
     }
 
+    public function testRetryHistoryItemCallsTheClient(): void
+    {
+        $sab = $this->configureSabnzbd();
+        $sab->expects($this->once())->method('retryItem')
+            ->with('SABnzbd_nzo_abc')->willReturn(true);
+
+        $this->post('/usenet/sabnzbd/history/SABnzbd_nzo_abc/retry');
+
+        $this->assertSame(200, $this->client->getResponse()->getStatusCode());
+        $this->assertSame(['ok' => true], $this->jsonResponse());
+    }
+
     public function testSpeedLimitConvertsMbpsToBytes(): void
     {
         $sab = $this->configureSabnzbd();
