@@ -5,13 +5,13 @@ upstream project ([Shoshuo/Prismarr](https://github.com/Shoshuo/Prismarr)).
 Everything below is merged to `main` and published to
 `ghcr.io/ndandan/prismarr:latest`.
 
-*Last updated: 2026-11-07 (covers 2026-06-13 → 2026-11-07; the review-2026-11-06 remediation merged to `main` on 2026-11-07).*
+*Last updated: 2026-11-21 (covers 2026-06-13 → 2026-11-21; the release-sweep batches merged to `main` on 2026-11-21).*
 
 **How the fork works:** upstream is merged in regularly, upstream-origin code
 is left untouched even when fork changes obsolete it (so the fork stays
 mergeable both ways), and everything general-purpose is offered back as an
 upstream PR. Every change lands through the same quality gate as upstream —
-PHP lint, Twig lint and the full PHPUnit suite (~2,040 tests) green in CI, plus
+PHP lint, Twig lint, the JS behaviour tests and the full PHPUnit suite (~2,630 tests) green in CI, plus
 a live test on a real Unraid deployment — before an image is published.
 Since 2026-07-31 that gate also includes PHPStan at level 7.
 
@@ -1181,6 +1181,88 @@ direction is the client's own (tx is what the client sent), the opposite of
 classic report is empty; `fetchV2()` gained an optional POST body (never
 memoised, like `fetch()`).
 
+### Upstream release sweep: two latent bugs (2026-11-20) — branch `fix/qbit-stopped-seerr-sync`, upstream PR [#143](https://github.com/Shoshuo/Prismarr/pull/143) open
+
+A sweep of every integration's recent releases (Radarr 7, Sonarr 4/5 beta,
+Prowlarr 3, Bazarr 1.6, qBittorrent 5.3, Seerr 3.5, Tracearr 3.2, Unraid 7.4
+and others) found nothing Prismarr calls broken, but turned up three bugs that
+predate the updates:
+
+- **qBittorrent "add paused" was ignored on 5.x.** qBittorrent 5.0 renamed the
+  `/torrents/add` field `paused` to `stopped` and 5.x reads only `stopped`
+  (`torrentscontroller.cpp`, release-5.3.0). Both add paths now send both
+  fields. The multipart `.torrent` upload moved onto the `exec()` test seam,
+  which dropped one PHPStan baseline entry.
+- **`.torrent` uploads reported failure on qBittorrent 5.2+.** WebAPI 2.14
+  answers a JSON summary (`{"added_torrent_ids":[…],"failure_count":0}`)
+  instead of `Ok.`, and the client treated any body containing "fail" as a
+  refusal. Only a body starting with `Fails.` (≤ 5.1) is one now. Found by a
+  live check against a throwaway qBittorrent 5.3.0 container.
+- **Seerr's Jellyfin library sync never scanned.** `POST
+  /settings/jellyfin/sync` only starts the scanner when the body carries
+  `start`; Prismarr sent an empty body and got a status reply. It now sends
+  `{"start": true}` (verified from Seerr's source; the owner runs no Jellyfin).
+
+### Integration upgrades from the release sweep (2026-11-21) — batches 1–3
+
+Built in three batch branches, each live-checked on `:beta` before merging
+(`e71adf2`, `f2fd116`, `c82aee3`).
+
+- **Radarr 7 track lists** (film detail, technical card). Radarr 7 reports
+  every track (`audioStreams[]` / `subtitleStreams[]`) and marks the flat
+  `audioCodec` / `subtitles` fields obsolete. Audio tracks list one per line
+  ("English AC3 5.1"), subtitle tracks as language chips with the F / HI
+  markers the Bazarr chips use, duplicates merged ("Chinese ×2"); past 3 audio
+  or 8 subtitle entries the rest fold into a native `<details>` "+N more".
+  ISO 639-2 codes are named with `Intl.DisplayNames`; Radarr 6 keeps the old
+  single lines.
+- **Usenet Retry.** Failed rows on the Usenet history page and the downloads
+  page's history preview get a Retry button (`POST
+  /usenet/{client}/history/{id}/retry`): SABnzbd `mode=retry`, NZBGet
+  `HistoryRetryFailed`.
+- **Seerr blocklist page** (`/jellyseerr/blocklist`): title search, All /
+  Manual / From-tags filter, 25 per page and a confirmed Remove. Seerr rejects
+  `DELETE /blocklist/{tmdbId}` without `?mediaType=`, and removing also drops
+  Seerr's media record.
+- **Prowlarr search pickers.** Indexer and category pickers on the search box;
+  the category list is Prowlarr's standard tree, or the chosen indexer's own
+  tree including custom ids ≥ 100000. Categories go out as repeated
+  `categories=` keys.
+- **Bazarr subtitle tools.** The subtitle modal lists the item's external files
+  and embedded tracks with the tools Bazarr can run on each: Sync (external
+  file), Translate into one of the item's other missing languages, Extract
+  (embedded track; Bazarr 1.6 exposes its id). They go through `PATCH
+  /api/subtitles` and run as Bazarr jobs; Bazarr's refusals (image-based track,
+  file error, path mapping, translation failure) come back as specific
+  messages. The live check caught Translate offering English → English for an
+  English subtitle with "English forced" missing; targets now exclude the
+  subtitle's own language.
+- **Bazarr jobs chip.** "1 running · 2 queued · 40%" next to the Bazarr nav
+  from Bazarr 1.6's `/api/system/jobs`, polled every 5 s while visible, hidden
+  when idle, stopped for good on Bazarr < 1.6.
+- **Bazarr health badge.** Bazarr's own health issues (`/api/system/health`:
+  inaccessible root folders, broken language profiles, no profile) as a
+  "⚠ N issues" badge in the Bazarr nav that opens the list. Read once per
+  page, hidden when healthy. Prismarr's dashboard health chip stays ping-only
+  for every service; Radarr/Sonarr/Prowlarr issues also live on their own pages.
+- **Seerr "Completed" card** from Seerr v3's `/request/count`, shown only when
+  Seerr reports it. It is kept off the Available filter on purpose: the count
+  includes requests whose media was deleted since, so it would not match that
+  list.
+- **Tracearr open violations.** An "Open violations" card on the Tracearr page
+  with the 10 newest unacknowledged violations from the v2 public API
+  (`/violations`): severity, rule, user, server, time; hidden on a Tracearr
+  without v2. The Users list shows each user's violation count from v1's
+  `totalViolations`. Display names needed no change: v1 `/users` already sends
+  the identity name as `displayName`. Tracearr is not configured on the test
+  deployment, so this one is covered by tests only.
+
+Two template traps surfaced along the way: the app ships inline-SVG icons
+(`_icons.html.twig`), not the Tabler icon font, so `<i class="ti …">` renders
+empty (render tests now pin the SVG); and a popover anchored to a badge near
+the right edge must flip leftwards (the Bazarr health list measures itself on
+open).
+
 ## 4. Fork-only — declined upstream
 
 ### Unraid server widget (v1 2026-07-01, v2 2026-07-02)
@@ -1218,6 +1300,14 @@ sat on the service object and was cleared after every request, so it never
 hit), fails open, and fail-fasts the remaining
 groups when the host itself is unreachable (~15 s → ~3 s first paint after an
 outage).
+
+**Container updates and network throughput (2026-11-21).** Each Docker chip
+shows an up-arrow when Unraid's own update check (`isUpdateAvailable`) has an
+image update waiting, with "· N updates" in the tile header, so it always
+matches Unraid's Docker tab; an unraid-api without the field falls back to the
+previous query. A network tile shows the main interface's download/upload
+rates from `metrics.network` (bytes/s averaged since the API's previous read
+by any client; br0 → bond0 → eth0 → first physical interface).
 
 **Unified health chips** (shipped with v2): `HealthService::chips()` is now
 the single chip-list builder — brand colours, latency, five-state dots,
@@ -1270,8 +1360,9 @@ Gluetun `X-API-Key` fix.
 ## Verification
 
 - Full gate green in CI on `main`: PHP lint, Twig lint, PHPStan level 7
-  (baseline shrink-only, added 2026-07-31) and the PHPUnit suite (2,067 tests /
-  ~7,700 assertions as of 2026-10-21). GHCR `:latest` rebuilds automatically on
+  (baseline shrink-only, added 2026-07-31), the JS behaviour tests (88, added
+  2026-11-07) and the PHPUnit suite (2,628 tests / ~10,500 assertions as of
+  2026-11-21). GHCR `:latest` rebuilds automatically on
   every push to `main`; CI runs independently, so tests are verified green
   *before* pushing.
 - Every feature above was live-verified on a real Unraid deployment (usually
