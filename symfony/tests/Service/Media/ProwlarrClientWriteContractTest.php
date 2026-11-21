@@ -88,4 +88,25 @@ class ProwlarrClientWriteContractTest extends TestCase
 
         $this->assertTrue($health->isDown('prowlarr'));
     }
+
+    public function testSearchSendsRepeatedCategoriesAndTheIndexer(): void
+    {
+        // Prowlarr binds List<int> from repeated keys (categories=2000&categories=...);
+        // PHP's categories[0]= form would be ignored. Custom indexer
+        // categories (ids >= 100000) must survive; duplicates are dropped.
+        $client = $this->client([['[]', 200, '', false]]);
+
+        $client->search('dune', 5, 'search', 100, [2000, 100023, 2000]);
+
+        $this->assertStringEndsWith('/api/v1/search?query=dune&type=search&limit=100&indexerIds=5&categories=2000&categories=100023', $this->calls[0][CURLOPT_URL]);
+    }
+
+    public function testSearchWithoutCategoriesKeepsTheOldQuery(): void
+    {
+        $client = $this->client([['[]', 200, '', false]]);
+
+        $client->search('dune');
+
+        $this->assertStringEndsWith('/api/v1/search?query=dune&type=search&limit=100', $this->calls[0][CURLOPT_URL]);
+    }
 }

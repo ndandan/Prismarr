@@ -205,11 +205,19 @@ class ProwlarrClient implements ResetInterface
 
     // ── Search ────────────────────────────────────────────────────────────────
 
-    public function search(string $query, ?int $indexerId = null, string $type = 'search', int $limit = 100): array
+    /**
+     * @param list<int> $categories Newznab category ids (standard or the
+     *        indexer's own >= 100000). Prowlarr binds the list from REPEATED
+     *        `categories=` keys, which http_build_query() can't express, so
+     *        they are appended by hand (ints only).
+     */
+    public function search(string $query, ?int $indexerId = null, string $type = 'search', int $limit = 100, array $categories = []): array
     {
         $params = ['query' => $query, 'type' => $type, 'limit' => $limit];
         if ($indexerId !== null) $params['indexerIds'] = $indexerId;
-        $data = $this->get('/api/v1/search', $params);
+        $cats = array_values(array_unique(array_filter(array_map('intval', $categories), fn(int $c) => $c > 0)));
+        $raw  = implode('&', array_map(fn(int $c) => 'categories=' . $c, $cats));
+        $data = $this->get('/api/v1/search', $params, $raw);
         if ($data === null) return [];
 
         return array_map(fn($r) => [
@@ -621,7 +629,8 @@ class ProwlarrClient implements ResetInterface
 
     // ── HTTP ──────────────────────────────────────────────────────────────────
 
-    private function get(string $path, array $params = []): ?array
+    /** @param string $rawQuery Pre-encoded extra query fragment (repeated keys). */
+    private function get(string $path, array $params = [], string $rawQuery = ''): ?array
     {
         if ($this->health->isDown(self::SERVICE_KEY)) {
             $this->serviceUnavailable = true;
@@ -633,8 +642,9 @@ class ProwlarrClient implements ResetInterface
         $this->lastError = null;
         $this->ensureConfig();
         $url = rtrim($this->baseUrl, '/') . $path;
-        if ($params) {
-            $url .= '?' . http_build_query($params);
+        $qs  = implode('&', array_filter([$params ? http_build_query($params) : '', $rawQuery], fn(string $p) => $p !== ''));
+        if ($qs !== '') {
+            $url .= '?' . $qs;
         }
 
         $ch = curl_init($url);

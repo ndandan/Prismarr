@@ -4782,6 +4782,10 @@ prowlarr:
     search_btn: Search
     searching: 'Searching…'
     search_no_results: No results
+    search_all_indexers: All indexers
+    search_all_categories: All categories
+    search_indexer_label: Indexer
+    search_category_label: Category
     search_results_count_tpl: '{count, plural, one {# result} other {# results}}'
     search_col_title: Title
     search_col_indexer: Indexer

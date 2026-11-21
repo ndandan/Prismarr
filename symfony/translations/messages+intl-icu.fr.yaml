@@ -4775,6 +4775,10 @@ prowlarr:
     search_btn: Rechercher
     searching: 'Recherche en cours…'
     search_no_results: Aucun résultat
+    search_all_indexers: Tous les indexeurs
+    search_all_categories: Toutes les catégories
+    search_indexer_label: Indexeur
+    search_category_label: Catégorie
     search_results_count_tpl: '{count, plural, one {# résultat} other {# résultats}}'
     search_col_title: Titre
     search_col_indexer: Indexeur
