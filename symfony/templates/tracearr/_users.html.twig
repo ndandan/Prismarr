@@ -1,4 +1,5 @@
 {# Per-user overview. `users` = TracearrClient::normalizeUsers() rows. #}
+{% import '_icons.html.twig' as ico %}
 {% if users is empty %}
   <div class="text-center text-secondary py-4">{{ 'tracearr.users.empty'|trans }}</div>
 {% else %}
@@ -16,7 +17,9 @@
     <tbody>
       {% for u in users %}
       <tr>
-        <td class="text-truncate">{{ u.displayName ?? '—' }}</td>
+        <td class="text-truncate">{{ u.displayName ?? '—' }}{% if (u.violations ?? 0) > 0 %}
+          <span class="badge bg-danger-lt ms-1" data-tracearr-user-violations title="{{ 'tracearr.users.violations'|trans({count: u.violations}) }}"><span class="me-1" aria-hidden="true">{{ ico.icon('alert-triangle', '', 12) }}</span>{{ u.violations }}</span>
+        {% endif %}</td>
         <td class="text-truncate text-secondary">{{ u.serverName ?? '—' }}</td>
         <td class="text-secondary">{{ u.lastSeen > 0 ? (u.lastSeen|relative_date) : '—' }}</td>
         <td class="text-end">{{ u.plays }}</td>

@@ -308,6 +308,26 @@ class TracearrClient implements ResetInterface
     }
 
     /**
+     * The newest open (unacknowledged) violations from the v2 public API
+     * (GET /api/v2/public/violations, Tracearr 2.x+). Null when this Tracearr
+     * has no v2 API, is unconfigured or can't be read: the page then hides
+     * the panel instead of showing an error.
+     *
+     * @return list<array{severity: string, rule: ?string, user: ?string, server: ?string, at: int}>|null
+     */
+    public function getViolations(int $limit = 10): ?array
+    {
+        if (!$this->isUsable()) {
+            return null;
+        }
+        $resp = $this->requestV2('/violations', ['pageSize' => (string) max(1, min(100, $limit)), 'acknowledged' => 'false']);
+        if (!is_array($resp) || $resp['ok'] !== true) {
+            return null;
+        }
+        return self::normalizeViolations($resp['data']);
+    }
+
+    /**
      * Fetch a poster through Tracearr's image proxy (GET /api/v1/images/proxy),
      * which resolves the media-server path against the pinned server origin.
      * Both inputs are allow-listed first so this can't be used as an open relay.
@@ -685,6 +705,36 @@ class TracearrClient implements ResetInterface
                 'lastSeen'    => $seen,
                 'plays'       => (int) ($r['sessionCount'] ?? 0),
                 'trustScore'  => isset($r['trustScore']) && is_numeric($r['trustScore']) ? (int) $r['trustScore'] : null,
+                'violations'  => isset($r['totalViolations']) && is_numeric($r['totalViolations']) ? (int) $r['totalViolations'] : 0,
+            ];
+        }
+        return $out;
+    }
+
+    /**
+     * Violation rows from a GET v2 /violations payload: severity (low |
+     * warning | high; anything else reads as warning), rule name, the
+     * person's name, server name and creation time. Ids, avatars and the
+     * rule's raw data are never output.
+     *
+     * @param array<string, mixed> $data
+     * @return list<array{severity: string, rule: ?string, user: ?string, server: ?string, at: int}>
+     */
+    public static function normalizeViolations(array $data): array
+    {
+        $out = [];
+        foreach (self::rows($data['data'] ?? null) as $r) {
+            $severity = self::str($r['severity'] ?? null);
+            $rule     = is_array($r['rule'] ?? null) ? $r['rule'] : [];
+            $user     = is_array($r['user'] ?? null) ? $r['user'] : [];
+            $server   = is_array($r['server'] ?? null) ? $r['server'] : [];
+            $at       = self::str($r['created_at'] ?? null);
+            $out[] = [
+                'severity' => in_array($severity, ['low', 'warning', 'high'], true) ? $severity : 'warning',
+                'rule'     => self::str($rule['name'] ?? null),
+                'user'     => self::str($user['username'] ?? null),
+                'server'   => self::str($server['name'] ?? null),
+                'at'       => $at !== null ? (int) (strtotime($at) ?: 0) : 0,
             ];
         }
         return $out;

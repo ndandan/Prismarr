@@ -1,0 +1,75 @@
+{# Bazarr health badge (batch 3): Bazarr's own health issues (inaccessible
+   root folders, broken language profiles…) as a "⚠ N issues" badge next to
+   the Bazarr nav, read once per page from /bazarr/api/health. A native
+   <details> opens the list; on open it flips leftwards if it would run off
+   the right edge. Hidden while
+   Bazarr is healthy or can't be read. Included from bazarr/_nav.html.twig,
+   outside the bazarr-view frame. #}
+{% import '_icons.html.twig' as ico %}
+<details id="bazarr-health-chip" class="bz-health d-none">
+  <summary class="badge bg-warning-lt text-warning" title="{{ 'bazarr.health.title'|trans }}"><span class="me-1" aria-hidden="true">{{ ico.icon('alert-triangle', '', 12) }}</span><span data-bz-health-text></span></summary>
+  <div class="bz-health-panel card card-sm shadow-sm">
+    <div class="card-body p-2">
+      <div class="small fw-bold mb-1">{{ 'bazarr.health.title'|trans }}</div>
+      <ul class="list-unstyled small mb-0" data-bz-health-list></ul>
+    </div>
+  </div>
+</details>
+<style nonce="{{ csp_nonce() }}">
+.bz-health { position: relative; }
+.bz-health > summary { cursor: pointer; list-style: none; }
+.bz-health > summary::-webkit-details-marker { display: none; }
+.bz-health-panel { position: absolute; z-index: 1050; top: calc(100% + .35rem); left: 0; width: min(26rem, 90vw); }
+.bz-health-panel li + li { margin-top: .35rem; }
+</style>
+<script nonce="{{ csp_nonce() }}">
+(function () {
+  var I18N = {
+    issue_one:  {{ 'bazarr.health.issue_one'|trans|json_encode|raw }},
+    issues_tpl: {{ 'bazarr.health.issues_tpl'|trans|json_encode|raw }}
+  };
+
+  /* ── Bazarr health chip ──
+     null hides the badge; otherwise {text, html} (html = escaped <li> rows). */
+  function bzHealthChip(d, i18n) {
+    if (!d || !d.ok || !d.issues || !d.issues.length) return null;
+    var esc = window.escHtml;
+    var n = d.issues.length;
+    var html = '';
+    d.issues.forEach(function (i) {
+      html += '<li>' + (i.object ? '<strong>' + esc(i.object) + '</strong> ' : '') + esc(i.issue) + '</li>';
+    });
+    return { text: n === 1 ? i18n.issue_one : i18n.issues_tpl.replace('__N__', n), html: html };
+  }
+
+  /* The list opens rightwards from the badge; open it leftwards instead when
+     that would run off the right edge (desktop: the badge sits near the
+     right; phone: the nav wraps and the badge is at the left). */
+  function bzHealthOpensLeft(rect, viewportWidth) {
+    return rect.right > viewportWidth - 8;
+  }
+
+  var el = document.getElementById('bazarr-health-chip');
+  if (!el) return;
+  el.addEventListener('toggle', function () {
+    var panel = el.querySelector('.bz-health-panel');
+    if (!el.open || !panel) return;
+    panel.style.removeProperty('left');
+    panel.style.removeProperty('right');
+    if (bzHealthOpensLeft(panel.getBoundingClientRect(), document.documentElement.clientWidth)) {
+      panel.style.setProperty('left', 'auto');
+      panel.style.setProperty('right', '0');
+    }
+  });
+  fetch((window.BASE_PATH || '') + '/bazarr/api/health', { headers: { 'X-Requested-With': 'fetch' }, credentials: 'same-origin' })
+    .then(function (r) { return r.ok ? r.json() : null; })
+    .then(function (d) {
+      var c = bzHealthChip(d, I18N);
+      if (!c || !document.body.contains(el)) return;
+      el.querySelector('[data-bz-health-text]').textContent = c.text;
+      el.querySelector('[data-bz-health-list]').innerHTML = c.html;
+      el.classList.remove('d-none');
+    })
+    .catch(function () {});
+})();
+</script>

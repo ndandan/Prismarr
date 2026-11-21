@@ -710,6 +710,7 @@ tracearr:
     concurrent: Concurrent streams
     history: History
     users: Users
+    violations: Open violations
   now_playing:
     empty: Nothing is playing right now.
   stats:
@@ -732,6 +733,19 @@ tracearr:
       last_seen: Last seen
       plays: Plays
       trust: Trust score
+    violations: '{count, plural, one {# violation} other {# violations}}'
+  violations:
+    empty: No open violations.
+    col:
+      severity: Severity
+      rule: Rule
+      user: User
+      server: Server
+      when: When
+    severity:
+      low: Low
+      warning: Warning
+      high: High
 profile:
   title: My profile
   identity:
@@ -5200,6 +5214,7 @@ jellyseerr:
     stat_processing: Processing
     stat_approved: Approved
     stat_declined: Declined
+    stat_completed: Completed
     stat_movies_count_tpl: '__N__ movies'
     stat_tv_count_tpl: '__N__ TV shows'
     none_with_filter: No request with this filter
@@ -5956,6 +5971,10 @@ bazarr:
     error_file: Bazarr couldn't process that subtitle file. Check Bazarr's logs.
     error_path_mapping: Bazarr can't find that file. Check its path mappings.
     error_translate_failed: The translation failed. Check Bazarr's logs.
+  health:
+    title: Bazarr health
+    issue_one: "1 issue"
+    issues_tpl: "__N__ issues"
   jobs:
     running_tpl: "__N__ running"
     pending_tpl: "__N__ queued"

@@ -704,6 +704,7 @@ tracearr:
     concurrent: Flux simultanés
     history: Historique
     users: Utilisateurs
+    violations: Violations ouvertes
   now_playing:
     empty: Aucune lecture en cours.
   stats:
@@ -726,6 +727,19 @@ tracearr:
       last_seen: Vu pour la dernière fois
       plays: Lectures
       trust: Score de confiance
+    violations: '{count, plural, one {# violation} other {# violations}}'
+  violations:
+    empty: Aucune violation ouverte.
+    col:
+      severity: Gravité
+      rule: Règle
+      user: Utilisateur
+      server: Serveur
+      when: Quand
+    severity:
+      low: Faible
+      warning: Avertissement
+      high: Élevée
 profile:
   title: Mon profil
   identity:
@@ -5193,6 +5207,7 @@ jellyseerr:
     stat_processing: En cours
     stat_approved: Approuvées
     stat_declined: Refusées
+    stat_completed: Terminées
     stat_movies_count_tpl: '__N__ films'
     stat_tv_count_tpl: '__N__ séries'
     none_with_filter: Aucune requête avec ce filtre
@@ -5949,6 +5964,10 @@ bazarr:
     error_file: Bazarr n'a pas pu traiter ce fichier de sous-titres. Consultez ses journaux.
     error_path_mapping: Bazarr ne trouve pas ce fichier. Vérifiez ses correspondances de chemins.
     error_translate_failed: La traduction a échoué. Consultez les journaux de Bazarr.
+  health:
+    title: Santé de Bazarr
+    issue_one: "1 problème"
+    issues_tpl: "__N__ problèmes"
   jobs:
     running_tpl: "__N__ en cours"
     pending_tpl: "__N__ en attente"

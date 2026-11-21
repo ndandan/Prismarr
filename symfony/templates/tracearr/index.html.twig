@@ -121,6 +121,14 @@
       </div>
     </div>
 
+    {# 7b. Open violations (Tracearr v2 API; hidden when unsupported) #}
+    <div class="card mb-3" data-tracearr-violations-card>
+      <div class="card-header"><h3 class="card-title">{{ 'tracearr.section.violations'|trans }}</h3></div>
+      <div class="card-body p-0" data-tracearr-violations>
+        <div class="text-center text-secondary py-4"><span class="spinner-border"></span></div>
+      </div>
+    </div>
+
     {# 8. Users overview #}
     <div class="card mb-3">
       <div class="card-header"><h3 class="card-title">{{ 'tracearr.section.users'|trans }}</h3></div>
@@ -143,6 +151,7 @@
     stats:   '{{ path('app_tracearr_api_stats') }}',
     charts:  '{{ path('app_tracearr_api_charts') }}',
     history: '{{ path('app_tracearr_api_history') }}',
+    violations: '{{ path('app_tracearr_api_violations') }}',
     users:   '{{ path('app_tracearr_api_users') }}'
   };
   var period = 'month';
@@ -298,6 +307,10 @@
   refreshCharts();
   loadHistory(false);
   loadFragment(URLS.users, frag('[data-tracearr-users]'));
+  loadFragment(URLS.violations, frag('[data-tracearr-violations]')).then(function (html) {
+    var card = frag('[data-tracearr-violations-card]');
+    if (card && !String(html).trim()) card.classList.add('d-none');
+  });
 
   // Now-playing poll (singleton across Turbo re-exec).
   if (window._tracearrNowTimer) clearInterval(window._tracearrNowTimer);
