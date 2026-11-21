@@ -419,6 +419,8 @@ dashboard:
     eta: ETA
     errors: errors
     last_check: Last check
+    updates: '{count, plural, one {# update} other {# updates}}'
+    update_available: Update available
   network:
     title: Network
     settings_cta: Settings

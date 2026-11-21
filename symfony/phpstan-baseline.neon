@@ -810,12 +810,6 @@ parameters:
 			path: src/Service/Media/TransmissionClient.php
 
 		-
-			message: '#^If condition is always false\.$#'
-			identifier: if.alwaysFalse
-			count: 1
-			path: src/Service/Media/UnraidClient.php
-
-		-
 			message: '#^Offset ''content'' on array\{content\: string, name\: string\} in isset\(\) always exists and is not nullable\.$#'
 			identifier: isset.offset
 			count: 1
