@@ -1287,6 +1287,40 @@ deferred batch. Each has a regression test that failed first.
   empty list) now shows the service banner via `clientFailed()`, and a page
   past the end redirects to the last page, as the issues page does.
 
+### Review 2026-11-21: the LOW findings — branch `fix/wokeometer-503-and-review-lows`
+
+Twelve of the sixteen LOW findings, plus the test gaps in the same areas.
+Each has a regression test that failed first.
+
+- **qBittorrent add** (L7-L9): non-string `urls` / `category` / `savepath`
+  count as absent (was a TypeError); the two French literals go through the
+  translator (`qbittorrent.upload.missing_url`); the URL guard splits on
+  newlines only, as qBittorrent does.
+- **Bazarr** (L2-L5): `apiSubtitleAction` refreshes the movie or series
+  (the modal now sends `seriesid`) and the badge counts on success; the
+  modal's toast never shows the raw `error`; reasons map 404 → `not_found`
+  and 500 / 501 → `path_mapping`, and the dead 502 `translate_failed` is
+  gone; `apiJobs` answers `supported: null` (keep polling) when Bazarr is
+  unreachable and remembers a 404 for an hour in `cache.app`. The PATCH
+  parameters moved into `bzActionParams()` with node:test coverage. The
+  modal deliberately does NOT reload its list after a success: Bazarr 1.6
+  queues the job and answers at once, so a reload re-enabled the button
+  before the file existed (`d3fae2c`, guarded by a JS test).
+- **Seerr blocklist** (L15, L19): tag-rule rows show a note instead of
+  Remove, and their keywords as "TMDb keywords 12, 48"; a 404 from Seerr's
+  DELETE (row removed, no media record) is a success. New tests for a failed
+  Remove and for pager links keeping `q` / `filter`.
+- **L1**: `PW_SEARCH_INDEXERS` uses `json_encode(JSON_HEX_TAG)`, tested by
+  rendering the Prowlarr page with a hostile indexer name.
+- **L6**: `widgetHero` passes `upcoming_unreachable`; the hero shows "—".
+- **L17**: `ProwlarrController::MAX_SEARCH_CATEGORIES` = 50.
+- **Plex "Ends at"**: a render test in Asia/Kathmandu with a 12 h clock
+  (fails on a revert to raw `|date('H:i')`, checked).
+
+Left as watch items: L10 (pre-flight URL guard limits, cloud hosts only),
+L11 (UniFi hourly dip, cosmetic), L12 (needs a real one-point payload), L13
+(Tracearr `pageSize`, unverified), L18 (speculative).
+
 ### Wokeometer: oversized pages (2026-11-21)
 
 Wokeometer's developer docs now cap responses at 512 KB: a larger page is a

@@ -817,7 +817,8 @@
 
     // ── Recherche Prowlarr ──
     {# JSON_HEX_TAG: indexer / category names come from Prowlarr, and a raw
-       "<!--<script" would break this script (review 2026-11-21 L1). #}
+       HTML comment opener followed by a script tag in one would break this
+       script (review 2026-11-21 L1). #}
     var PW_SEARCH_INDEXERS = {{ search_indexers|json_encode(constant('JSON_HEX_TAG'))|raw }};
     /* ── Prowlarr search pickers (batch 2) ──
        Category options: Prowlarr's standard tree when searching every
