@@ -78,7 +78,7 @@
       image_based:      {{ 'bazarr.actions.error_image_based'|trans|json_encode|raw }},
       file_error:       {{ 'bazarr.actions.error_file'|trans|json_encode|raw }},
       path_mapping:     {{ 'bazarr.actions.error_path_mapping'|trans|json_encode|raw }},
-      translate_failed: {{ 'bazarr.actions.error_translate_failed'|trans|json_encode|raw }},
+      not_found:        {{ 'bazarr.actions.error_not_found'|trans|json_encode|raw }},
       still_running:    {{ 'bazarr.actions.still_running'|trans|json_encode|raw }}
     }
   };
@@ -134,6 +134,32 @@
     return h;
   }
 
+  /* The PATCH parameters for one tool. A translation goes INTO the chosen
+     missing language (its own forced / HI flags), from the source file or
+     embedded track. Episodes carry their series id so the server can
+     refresh that series. Null when a translation has no target. */
+  function bzActionParams(action, sub, data, kind, itemId, seriesId, targetIndex) {
+    var params = { action: action, type: kind, id: itemId,
+      language: sub.code2, forced: sub.forced ? '1' : '0', hi: sub.hi ? '1' : '0' };
+    if (action === 'translate') {
+      var target = data && data.missing ? data.missing[targetIndex] : null;
+      if (!target) return null;
+      params.language = target.code2;
+      params.forced = target.forced ? '1' : '0';
+      params.hi = target.hi ? '1' : '0';
+    }
+    if (sub.path && action !== 'extract') { params.path = sub.path; } else if (sub.id) { params.subtitles_id = String(sub.id); }
+    if (kind === 'episode' && seriesId) { params.seriesid = String(seriesId); }
+    return params;
+  }
+
+  /* Toast text for a refused action: a translated reason, else the generic
+     error. Never the server's raw (English) `error` field. */
+  function bzSubActionToast(d, i18n) {
+    var reasons = i18n.reasons || {};
+    return (d && d.reason && Object.prototype.hasOwnProperty.call(reasons, d.reason)) ? reasons[d.reason] : i18n.error;
+  }
+
   function currentSubsEl() { return document.getElementById('bazarr-current-subs'); }
 
   function loadCurrentSubs(kind, id, seriesId, token) {
@@ -153,6 +179,7 @@
         box._bzData = data;
         box.setAttribute('data-kind', kind);
         box.setAttribute('data-item-id', String(id));
+        box.setAttribute('data-series-id', seriesId ? String(seriesId) : '');
         box.innerHTML = html;
         box.className = 'mb-3';
       })
@@ -166,17 +193,12 @@
     var action = btn.getAttribute('data-bz-sub-action');
     var sub = data && data.subtitles[idx];
     if (!sub) return;
-    var params = { action: action, type: box.getAttribute('data-kind'), id: box.getAttribute('data-item-id'),
-      language: sub.code2, forced: sub.forced ? '1' : '0', hi: sub.hi ? '1' : '0' };
-    if (action === 'translate') {
-      var sel = box.querySelector('[data-bz-translate-target="' + idx + '"]');
-      var target = sel && data.missing[parseInt(sel.value, 10)];
-      if (!target) return;
-      params.language = target.code2;
-      params.forced = target.forced ? '1' : '0';
-      params.hi = target.hi ? '1' : '0';
-    }
-    if (sub.path && action !== 'extract') { params.path = sub.path; } else if (sub.id) { params.subtitles_id = String(sub.id); }
+    var kind = box.getAttribute('data-kind');
+    var itemId = box.getAttribute('data-item-id');
+    var seriesId = box.getAttribute('data-series-id') || '';
+    var sel = box.querySelector('[data-bz-translate-target="' + idx + '"]');
+    var params = bzActionParams(action, sub, data, kind, itemId, seriesId, sel ? parseInt(sel.value, 10) : -1);
+    if (!params) return;
     btn.disabled = true;
     fetch((window.BASE_PATH || '') + '/bazarr/api/subtitle-action', {
       method: 'POST',
@@ -189,6 +211,10 @@
         if (d && d.ok === true) {
           btn.innerHTML = '&#10003; ' + window.escHtml(I18N[action]);
           if (window._prismarrToast) window._prismarrToast(I18N.queued, 'success');
+          // A translation or extraction adds a file (and fills a missing
+          // language): reload the list so it shows. A sync changes nothing
+          // listed, so its tick stays.
+          if (action !== 'sync') loadCurrentSubs(kind, itemId, seriesId, searchToken);
           return;
         }
         if (d && d.reason === 'still_running') {
@@ -198,8 +224,7 @@
           return;
         }
         btn.disabled = false;
-        var msg = (d && d.reason && I18N.reasons[d.reason]) || (d && d.error) || I18N.error;
-        if (window._prismarrToast) window._prismarrToast(msg, 'danger');
+        if (window._prismarrToast) window._prismarrToast(bzSubActionToast(d, I18N), 'danger');
       })
       .catch(function () {
         btn.disabled = false;

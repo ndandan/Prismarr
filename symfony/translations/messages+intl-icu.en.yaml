@@ -5973,7 +5973,7 @@ bazarr:
     error_image_based: Image-based subtitles can't be extracted or translated.
     error_file: Bazarr couldn't process that subtitle file. Check Bazarr's logs.
     error_path_mapping: Bazarr can't find that file. Check its path mappings.
-    error_translate_failed: The translation failed. Check Bazarr's logs.
+    error_not_found: Bazarr doesn't know this item yet. Let it sync with Radarr or Sonarr, then try again.
     still_running: Still running in Bazarr. It is taking longer than Prismarr waits, so check Bazarr before trying again.
   health:
     title: Bazarr health

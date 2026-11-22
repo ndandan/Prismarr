@@ -29,7 +29,7 @@ use Symfony\Component\HttpFoundation\Request;
 #[AllowMockObjectsWithoutExpectations]
 class BazarrSubtitleActionTest extends TestCase
 {
-    private function controller(BazarrClient $client, bool $oneInstance = true): BazarrController
+    private function controller(BazarrClient $client, bool $oneInstance = true, ?BazarrSubtitleIndex $index = null): BazarrController
     {
         $instances = $this->createMock(ServiceInstanceProvider::class);
         $instances->method('hasExactlyOneEnabled')->willReturn($oneInstance);
@@ -38,7 +38,7 @@ class BazarrSubtitleActionTest extends TestCase
             $client,
             $this->createMock(ConfigService::class),
             new NullLogger(),
-            $this->createMock(BazarrSubtitleIndex::class),
+            $index ?? $this->createMock(BazarrSubtitleIndex::class),
             $instances,
             $this->createMock(BazarrPosterResolver::class),
         );
@@ -204,7 +204,82 @@ class BazarrSubtitleActionTest extends TestCase
         yield 'image-based track'  => [415, 'image_based'];
         yield 'file error'         => [409, 'file_error'];
         yield 'path mapping'       => [500, 'path_mapping'];
-        yield 'translation failed' => [502, 'translate_failed'];
+        // L4 (review 2026-11-21), from Bazarr's source: 404 = it has no such
+        // movie / episode, 501 = the file path is missing.
+        yield 'unknown item'       => [404, 'not_found'];
+        yield 'path missing'       => [501, 'path_mapping'];
+    }
+
+    /** L4: Bazarr never returns 502 (documented, not in its code): no dead reason for it. */
+    public function testA502IsAPlainClientError(): void
+    {
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('subtitleAction')->willReturn(false);
+        $client->method('getLastError')->willReturn(['code' => 502, 'method' => 'PATCH', 'path' => '/subtitles', 'message' => 'unexpected HTTP status']);
+
+        $r = $this->controller($client)->apiSubtitleAction(self::post([
+            'action' => 'sync', 'type' => 'movie', 'id' => '5', 'language' => 'en', 'path' => '/x.srt',
+        ]));
+
+        self::assertArrayNotHasKey('reason', self::json($r));
+    }
+
+    // -- L2 (review 2026-11-21): refresh the index after a successful action --
+
+    public function testASuccessfulMovieActionRefreshesThatMovieAndTheBadges(): void
+    {
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('subtitleAction')->willReturn(true);
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $index->expects($this->once())->method('refreshItem')->with('movie', 5);
+        $index->expects($this->once())->method('requestRefresh')->with(BazarrSubtitleIndex::KEY_BADGES);
+
+        $this->controller($client, index: $index)->apiSubtitleAction(self::post([
+            'action' => 'sync', 'type' => 'movie', 'id' => '5', 'language' => 'en', 'path' => '/x.srt',
+        ]));
+    }
+
+    public function testASuccessfulEpisodeActionRefreshesItsSeries(): void
+    {
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('subtitleAction')->willReturn(true);
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $index->expects($this->once())->method('refreshItem')->with('series', 7);
+        $index->expects($this->once())->method('requestRefresh')->with(BazarrSubtitleIndex::KEY_BADGES);
+
+        $this->controller($client, index: $index)->apiSubtitleAction(self::post([
+            'action' => 'translate', 'type' => 'episode', 'id' => '70', 'seriesid' => '7', 'language' => 'de', 'path' => '/tv/e70.en.srt',
+        ]));
+    }
+
+    public function testAnEpisodeActionWithoutItsSeriesQueuesTheSeriesRebuild(): void
+    {
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('subtitleAction')->willReturn(true);
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $index->expects($this->never())->method('refreshItem');
+        $refreshed = [];
+        $index->method('requestRefresh')->willReturnCallback(function (string $key) use (&$refreshed): void { $refreshed[] = $key; });
+
+        $this->controller($client, index: $index)->apiSubtitleAction(self::post([
+            'action' => 'sync', 'type' => 'episode', 'id' => '70', 'language' => 'en', 'path' => '/tv/e70.en.srt',
+        ]));
+
+        self::assertSame([BazarrSubtitleIndex::KEY_SERIES, BazarrSubtitleIndex::KEY_BADGES], $refreshed);
+    }
+
+    public function testAFailedActionRefreshesNothing(): void
+    {
+        $client = $this->createMock(BazarrClient::class);
+        $client->method('subtitleAction')->willReturn(false);
+        $client->method('getLastError')->willReturn(['code' => 409, 'method' => 'PATCH', 'path' => '/subtitles', 'message' => 'x']);
+        $index = $this->createMock(BazarrSubtitleIndex::class);
+        $index->expects($this->never())->method('refreshItem');
+        $index->expects($this->never())->method('requestRefresh');
+
+        $this->controller($client, index: $index)->apiSubtitleAction(self::post([
+            'action' => 'sync', 'type' => 'movie', 'id' => '5', 'language' => 'en', 'path' => '/x.srt',
+        ]));
     }
 
     #[DataProvider('refusals')]

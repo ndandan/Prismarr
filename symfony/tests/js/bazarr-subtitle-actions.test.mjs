@@ -82,3 +82,63 @@ describe('bzCurrentSubsHtml', () => {
     assert.equal(f(null), '');
   });
 });
+
+// The PATCH parameters each tool sends, and the toast on a refusal
+// (review 2026-11-21: doSubAction was untested; L3 raw English toast).
+function loadAction() {
+  return runSlice('bazarr/_search_modal.html.twig', '/* ── Bazarr current subtitles', 'bzSubActionToast', {
+    window: { escHtml: (s) => String(s) },
+    I18N,
+  });
+}
+
+const data = { tracked: true, subtitles: [ext, emb], missing };
+
+describe('bzActionParams', () => {
+  it('translates INTO the chosen missing language, not from the source one', () => {
+    const p = loadAction().bzActionParams('translate', ext, data, 'movie', '5', null, 0);
+    assert.equal(p.language, 'de');
+    assert.equal(p.forced, '0');
+    assert.equal(p.hi, '0');
+    assert.equal(p.path, '/movies/X/x.en.srt', 'the source file');
+  });
+
+  it('carries the target variant flags on a translation', () => {
+    const p = loadAction().bzActionParams('translate', ext, { ...data, missing: [{ name: 'German', code2: 'de', forced: true, hi: false }] }, 'movie', '5', null, 0);
+    assert.equal(p.forced, '1');
+  });
+
+  it('syncs an external file by path with its own language and flags', () => {
+    const p = loadAction().bzActionParams('sync', { ...ext, hi: true }, data, 'movie', '5', null, null);
+    assert.deepEqual({ ...p }, { action: 'sync', type: 'movie', id: '5', language: 'en', forced: '0', hi: '1', path: '/movies/X/x.en.srt' });
+  });
+
+  it('extracts an embedded track by its database id', () => {
+    const p = loadAction().bzActionParams('extract', emb, data, 'movie', '5', null, null);
+    assert.equal(p.subtitles_id, '4');
+    assert.equal(p.path, undefined);
+  });
+
+  it('sends the series id with an episode so the server can refresh that series', () => {
+    assert.equal(loadAction().bzActionParams('sync', ext, data, 'episode', '70', '7', null).seriesid, '7');
+    assert.equal(loadAction().bzActionParams('sync', ext, data, 'movie', '5', '7', null).seriesid, undefined);
+  });
+
+  it('refuses a translation without a target', () => {
+    assert.equal(loadAction().bzActionParams('translate', ext, { ...data, missing: [] }, 'movie', '5', null, 0), null);
+  });
+});
+
+describe('bzSubActionToast', () => {
+  const i18n = { error: 'Erreur', reasons: { file_error: 'Fichier illisible' } };
+
+  it('uses the translated reason', () => {
+    assert.equal(loadAction().bzSubActionToast({ ok: false, reason: 'file_error' }, i18n), 'Fichier illisible');
+  });
+
+  it('never shows the raw English error text', () => {
+    assert.equal(loadAction().bzSubActionToast({ ok: false, error: 'invalid request' }, i18n), 'Erreur');
+    assert.equal(loadAction().bzSubActionToast({ ok: false, reason: 'unknown' }, i18n), 'Erreur');
+    assert.equal(loadAction().bzSubActionToast(null, i18n), 'Erreur');
+  });
+});

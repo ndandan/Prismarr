@@ -45,6 +45,10 @@ class BazarrController extends AbstractController
     /** Coalescing marker for apiRefresh()'s inline rebuild — see that method's docblock. */
     private const INLINE_REFRESH_MARKER = 'bazarr_subtitle_index.inline_refresh';
 
+    /** cache.app flag: this Bazarr has no job queue (404 on /system/jobs, Bazarr < 1.6). */
+    private const JOBS_UNSUPPORTED_KEY = 'bazarr.jobs_unsupported';
+    private const JOBS_UNSUPPORTED_TTL = 3600;
+
     /**
      * Seconds. Must outlive apiRefresh()'s worst-case inline run (two
      * library-budget lists + two badges calls, plus a margin for processing)
@@ -512,11 +516,30 @@ class BazarrController extends AbstractController
      * couldn't be read).
      */
     #[Route('/api/jobs', name: 'api_jobs', methods: ['GET'])]
-    public function apiJobs(): JsonResponse
+    public function apiJobs(CacheItemPoolInterface $cacheApp): JsonResponse
     {
-        $out  = ['ok' => true, 'supported' => false, 'running' => 0, 'pending' => 0, 'message' => null, 'progress' => null];
+        $out = ['ok' => true, 'supported' => false, 'running' => 0, 'pending' => 0, 'message' => null, 'progress' => null];
+
+        // Review 2026-11-21 L5: a Bazarr without the queue answers 404, and
+        // every 404 logs a warning. Remember it for an hour instead of asking
+        // on every Bazarr page view (a settings save clears cache.app).
+        $noQueue = $cacheApp->getItem(self::JOBS_UNSUPPORTED_KEY);
+        if ($noQueue->isHit()) {
+            return $this->json($out);
+        }
+
         $jobs = $this->bazarr->getJobs();
         if ($jobs === null) {
+            if ((int) ($this->bazarr->getLastError()['code'] ?? 0) === 404) {
+                $cacheApp->save($noQueue->set(true)->expiresAfter(self::JOBS_UNSUPPORTED_TTL));
+
+                return $this->json($out);
+            }
+            // Unreachable or failing is not "no queue": hide the chip for now
+            // (supported unknown) and let it poll again.
+            $out['ok']        = false;
+            $out['supported'] = null;
+
             return $this->json($out);
         }
         $out['supported'] = true;
@@ -594,6 +617,17 @@ class BazarrController extends AbstractController
         }
 
         if ($this->bazarr->subtitleAction($action, $type, $id, $language, $path, $subtitlesId, $flag('forced'), $flag('hi'))) {
+            // Review 2026-11-21 L2: a new or synced file can change the item's
+            // missing languages, so refresh it like the download routes do.
+            if ($type === 'movie') {
+                $this->bazarrIndex->refreshItem('movie', $id);
+            } elseif (ctype_digit($str('seriesid')) && (int) $str('seriesid') > 0) {
+                $this->bazarrIndex->refreshItem('series', (int) $str('seriesid'));
+            } else {
+                $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_SERIES);
+            }
+            $this->bazarrIndex->requestRefresh(BazarrSubtitleIndex::KEY_BADGES);
+
             return $this->json(['ok' => true]);
         }
 
@@ -604,12 +638,15 @@ class BazarrController extends AbstractController
             return $this->json(['ok' => false, 'reason' => 'still_running'], 504);
         }
 
+        // Review 2026-11-21 L4, from Bazarr's source: 404 = no such movie or
+        // episode in Bazarr, 500 / 501 = the subtitle / media file path is
+        // missing. Bazarr never returns the 502 its docs list.
         $reason = match ((int) ($this->bazarr->getLastError()['code'] ?? 0)) {
-            415     => 'image_based',
-            409     => 'file_error',
-            500     => 'path_mapping',
-            502     => 'translate_failed',
-            default => null,
+            415      => 'image_based',
+            409      => 'file_error',
+            404      => 'not_found',
+            500, 501 => 'path_mapping',
+            default  => null,
         };
 
         return $reason !== null

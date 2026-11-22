@@ -5966,7 +5966,7 @@ bazarr:
     error_image_based: Les sous-titres en image ne peuvent être ni extraits ni traduits.
     error_file: Bazarr n'a pas pu traiter ce fichier de sous-titres. Consultez ses journaux.
     error_path_mapping: Bazarr ne trouve pas ce fichier. Vérifiez ses correspondances de chemins.
-    error_translate_failed: La traduction a échoué. Consultez les journaux de Bazarr.
+    error_not_found: Bazarr ne connaît pas encore cet élément. Laissez-le se synchroniser avec Radarr ou Sonarr, puis réessayez.
     still_running: Toujours en cours dans Bazarr. Le traitement dépasse le délai d'attente de Prismarr, vérifiez dans Bazarr avant de réessayer.
   health:
     title: Santé de Bazarr

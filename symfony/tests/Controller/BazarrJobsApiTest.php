@@ -11,6 +11,7 @@ use App\Service\ServiceInstanceProvider;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
 use PHPUnit\Framework\TestCase;
 use Psr\Log\NullLogger;
+use Symfony\Component\Cache\Adapter\ArrayAdapter;
 use Symfony\Component\DependencyInjection\Container;
 
 /**
@@ -23,10 +24,11 @@ use Symfony\Component\DependencyInjection\Container;
 class BazarrJobsApiTest extends TestCase
 {
     /** @param list<array<string, mixed>>|null $jobs */
-    private function summary(?array $jobs): array
+    private function summary(?array $jobs, int $errorCode = 404, ?ArrayAdapter $cache = null): array
     {
         $client = $this->createMock(BazarrClient::class);
         $client->expects($this->once())->method('getJobs')->willReturn($jobs);
+        $client->method('getLastError')->willReturn($jobs === null ? ['code' => $errorCode, 'method' => 'GET', 'path' => '/system/jobs', 'message' => 'x'] : null);
 
         $controller = new BazarrController(
             $client,
@@ -38,7 +40,7 @@ class BazarrJobsApiTest extends TestCase
         );
         $controller->setContainer(new Container());
 
-        return json_decode((string) $controller->apiJobs()->getContent(), true);
+        return json_decode((string) $controller->apiJobs($cache ?? new ArrayAdapter())->getContent(), true);
     }
 
     public function testSummarisesRunningAndPendingJobsWithProgress(): void
@@ -62,6 +64,36 @@ class BazarrJobsApiTest extends TestCase
         $data = $this->summary([['job_id' => 4, 'job_name' => 'Old', 'status' => 'completed']]);
 
         self::assertSame(['ok' => true, 'supported' => true, 'running' => 0, 'pending' => 0, 'message' => null, 'progress' => null], $data);
+    }
+
+    /** L5 (review 2026-11-21): unreachable is not "no queue", so the chip keeps polling. */
+    public function testAnUnreachableBazarrIsNotReportedAsUnsupported(): void
+    {
+        $data = $this->summary(null, 0);
+        self::assertFalse($data['ok']);
+        self::assertNull($data['supported'], 'unknown: the chip hides but keeps polling');
+    }
+
+    /** L5: a Bazarr without the queue is asked once an hour, not on every page view (each 404 logs a warning). */
+    public function testANoQueueAnswerIsRememberedForAnHour(): void
+    {
+        $cache = new ArrayAdapter();
+        self::assertFalse($this->summary(null, 404, $cache)['supported']);
+
+        $client = $this->createMock(BazarrClient::class);
+        $client->expects($this->never())->method('getJobs');
+        $controller = new BazarrController(
+            $client,
+            $this->createMock(ConfigService::class),
+            new NullLogger(),
+            $this->createMock(BazarrSubtitleIndex::class),
+            $this->createMock(ServiceInstanceProvider::class),
+            $this->createMock(BazarrPosterResolver::class),
+        );
+        $controller->setContainer(new Container());
+        $data = json_decode((string) $controller->apiJobs($cache)->getContent(), true);
+
+        self::assertFalse($data['supported']);
     }
 
     public function testABazarrWithoutTheQueueIsUnsupported(): void
