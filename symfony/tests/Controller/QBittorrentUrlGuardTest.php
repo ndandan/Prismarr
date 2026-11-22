@@ -58,6 +58,11 @@ class QBittorrentUrlGuardTest extends TestCase
         yield 'trailing dot'       => ['http://169.254.169.254./', 'qbittorrent.upload.forbidden_host'];
         yield 'dns name to it'     => ['http://169.254.169.254.nip.io/', 'qbittorrent.upload.forbidden_host'];
         yield 'second line caught' => ["https://tracker.example/a.torrent\nhttp://2852039166/", 'qbittorrent.upload.forbidden_host'];
+        // L9 (review 2026-11-21): qBittorrent splits on newlines only, so a `|` is part of the URL.
+        yield 'pipe inside a url'  => ['https://tracker.example/dl.php?id=1|2', null];
+        yield 'crlf separated'     => ["https://tracker.example/a.torrent\r\nhttp://2852039166/", 'qbittorrent.upload.forbidden_host'];
+        // L8: an http(s) URL without a host is refused with a translated message.
+        yield 'no host'            => ['http:/a.torrent', 'qbittorrent.upload.invalid_url'];
     }
 
     #[DataProvider('cases')]

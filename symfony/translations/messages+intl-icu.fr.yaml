@@ -4057,6 +4057,7 @@ qbittorrent:
     uptime_minutes_tpl: '__M__ min'
     uptime_seconds_tpl: '__S__s'
   upload:
+    missing_url: 'Saisissez une URL ou un lien magnet'
     invalid_url: 'Seuls les liens http(s) et magnet: sont acceptés'
     forbidden_host: 'Cette URL pointe vers un hôte interdit (métadonnées cloud)'
     no_file: 'Aucun fichier reçu'

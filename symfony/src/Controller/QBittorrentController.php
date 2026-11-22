@@ -448,12 +448,13 @@ class QBittorrentController extends AbstractController
     public function addTorrent(Request $request): JsonResponse
     {
         $data = $request->toArray();
-        $urls     = $data['urls'] ?? '';
-        $category = $data['category'] ?? null;
-        $savepath = $data['savepath'] ?? null;
+        // Non-string fields count as absent (a JSON array was a TypeError → 500).
+        $urls     = is_string($data['urls'] ?? null) ? trim($data['urls']) : '';
+        $category = is_string($data['category'] ?? null) ? $data['category'] : null;
+        $savepath = is_string($data['savepath'] ?? null) ? $data['savepath'] : null;
         $paused   = (bool)($data['paused'] ?? false);
 
-        if (!$urls) return $this->json(['ok' => false, 'error' => 'URL/magnet manquant'], 400);
+        if ($urls === '') return $this->json(['ok' => false, 'error' => $this->translator->trans('qbittorrent.upload.missing_url')], 400);
 
         $error = $this->validateTorrentUrls($urls);
         if ($error !== null) {
@@ -488,7 +489,8 @@ class QBittorrentController extends AbstractController
             'metadata.azure.net',
         ];
 
-        foreach ((preg_split('/[\r\n|]+/', trim($raw)) ?: []) as $url) {
+        // qBittorrent splits `urls` on newlines only: a `|` belongs to the URL.
+        foreach ((preg_split('/[\r\n]+/', trim($raw)) ?: []) as $url) {
             $url = trim($url);
             if ($url === '') continue;
 
@@ -504,7 +506,7 @@ class QBittorrentController extends AbstractController
 
             $host = strtolower($parts['host'] ?? '');
             if ($host === '') {
-                return 'URL invalide';
+                return $this->translator->trans('qbittorrent.upload.invalid_url');
             }
             // parse_url keeps IPv6 brackets — strip them for blocklist comparison.
             $host = trim($host, '[]');

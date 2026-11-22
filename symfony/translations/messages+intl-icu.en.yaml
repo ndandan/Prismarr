@@ -4063,6 +4063,7 @@ qbittorrent:
     uptime_minutes_tpl: '__M__ min'
     uptime_seconds_tpl: '__S__s'
   upload:
+    missing_url: 'Enter a URL or a magnet link'
     invalid_url: 'Only http(s) and magnet: links are accepted'
     forbidden_host: 'This URL points to a forbidden host (cloud metadata)'
     no_file: 'No file received'
