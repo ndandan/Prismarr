@@ -32,6 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Usenet "Add file" accepts only NZB uploads.** Any file type was passed to the downloader, and a file over the 20 MB upload limit made the request fail with a server error; both now get a clear message.
 
 ### Fixed
+- **Wokeometer sync no longer gets stuck on an oversized page.** Wokeometer now caps a response at 512 KB and refuses a bigger page with an error that a retry cannot fix. Prismarr treated it as an outage, so the sync stopped on that page and kept retrying it every hour without getting further. It now asks for the same page with fewer titles and carries on. The refusals are not billed.
 - **A long Bazarr Sync or Translate no longer knocks out the rest of Bazarr.** Bazarr 1.5 finishes the job before it answers, and Prismarr gave up after 8 seconds and marked Bazarr as down, so badges and the Bazarr pages went blank for a while. It now waits 45 seconds, never marks Bazarr down for a slow job, and if the job is still going says "Still running in Bazarr" and keeps the button off instead of reporting a failure. EN + FR.
 - **UniFi page: one failed call no longer hides reservations and access-point names for 5 minutes**, and the live panels refresh on every 10-second poll again instead of every other one.
 - **Seerr blocklist: an error is shown as an error.** When Seerr could not return the blocklist the page said "Nothing is blocklisted"; it now shows the service banner. Removing the last entry on a page takes you to the previous page instead of an empty one.

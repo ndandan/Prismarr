@@ -111,6 +111,12 @@ audience scores and rating counts, and collection ids.
   the run stops and resumes an hour later. A temporary server or network
   failure is retried after 30 seconds, up to 3 failures in a row, then the run
   stops and resumes an hour later. Neither is billed.
+- **Oversized pages.** Wokeometer caps a response at 512 KB and answers a
+  bigger page with a 503 `response_too_large`, which no retry can fix. The
+  sync asks for the same page again with fewer titles (50, then 25, 10, 5, 1)
+  and goes back to 50 for the next page. These refusals are not billed. The
+  smaller request gets its own idempotency key, derived from the saved one,
+  so a container restart in the middle still replays it for free.
 - **Idempotency keys.** Each page request carries an `Idempotency-Key` that is
   saved before the request is sent and reused if the request has to be
   retried or the container restarts mid-page. A retried page is **replayed
@@ -151,6 +157,7 @@ audience scores and rating counts, and collection ids.
 | Key still being processed (409) | `error` | 1 hour | yes (same key) | resumes after the pause |
 | Switched off or key removed mid-run | `error` ("disabled mid-run") | 1 hour after the stop; the run resumes at the first hourly tick after BOTH re-enabling and that 1 hour backoff | yes (same key) | resumes once re-enabled and the backoff has passed |
 | Internal error in Prismarr | `error` | 6 hours | yes (same key) | resumes after the pause |
+| A single title is still too large for Wokeometer's 512 KB response cap | `invalid` | never automatically — retrying cannot help | yes (same key) | **paused until Sync now** |
 | Unreadable response (404, unusable body, …) | `invalid` | never automatically — an unusable 2xx is billed, so retrying it on a timer would re-bill it forever | yes (same key) | **paused until Sync now** |
 | HTTP 400 on a page requested with a cursor | `invalid` | never automatically | that phase restarts at its first page (the cursor is the likely culprit) | **paused until Sync now** |
 | Paging cursor did not move forward (results are sorted by id, so each cursor must sort after the last) / unreadable run state | `halted` | never automatically | **no** — the next run starts fresh | **paused until Sync now** |

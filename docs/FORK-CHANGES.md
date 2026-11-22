@@ -1287,6 +1287,33 @@ deferred batch. Each has a regression test that failed first.
   empty list) now shows the service banner via `clientFailed()`, and a page
   past the end redirects to the last page, as the issues page does.
 
+### Wokeometer: oversized pages (2026-11-21)
+
+Wokeometer's developer docs now cap responses at 512 KB: a larger page is a
+503 with code `response_too_large`, and an identical retry never succeeds. The
+client classified every 503 as `transient`, so the sync retried the page with
+the same key 3 times, stopped with `error`, and resumed into the same page
+every hour: unbilled, but a run hitting it could never finish.
+
+- `WokeometerClient` returns a new `too_large` outcome for that 503 and takes
+  an optional `$limit` (1-50).
+- `WokeometerSyncService` asks for the same page with fewer rows
+  (`PAGE_LIMIT_STEPS` 50 → 25 → 10 → 5 → 1) on the next page slot, back to 50
+  after the page commits. It is not counted as a transient failure, and a page
+  still too large at 1 row stops as `invalid` (resumable, automatic sync
+  paused). Five tries fit in one 8-page chunk.
+- A smaller page is a different query, and reusing an Idempotency-Key for a
+  different query is a 409. `pageKey()` derives a UUID-shaped key from the
+  persisted key and the limit, so no schema change is needed and a resumed run
+  re-asks for the smaller page under the same key: a page billed just before a
+  crash replays for free.
+- Two FF-4 / FF-5 regression tests from the 2026-11-06 review sat inside the
+  `TestableWokeometerSyncService` helper class, so PHPUnit never ran them. They
+  are moved into the test class; the FF-5 one now sets up a completed first
+  full sync and uses the real `schedule` trigger (a scheduled start before the
+  first full sync is refused by design). Each was checked to fail with its fix
+  reverted.
+
 ## 4. Fork-only — declined upstream
 
 ### Unraid server widget (v1 2026-07-01, v2 2026-07-02)

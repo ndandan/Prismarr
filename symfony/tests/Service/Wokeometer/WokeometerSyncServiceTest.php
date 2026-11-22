@@ -491,6 +491,78 @@ class WokeometerSyncServiceTest extends KernelTestCase
     }
 
     /** A first full sync completed 40 days ago: without a pause, a scheduled sync would be due. */
+    // ── oversized pages (503 response_too_large) ────────────────────────
+
+    private function tooLarge(): WokeometerPageResult
+    {
+        return new WokeometerPageResult('too_large', 503, message: 'Use a smaller limit.');
+    }
+
+    public function testATooLargePageIsRetriedWithFewerRowsUnderADerivedKey(): void
+    {
+        $this->client->script = [
+            $this->page(['m1'], 'c1'),
+            $this->tooLarge(),
+            $this->page(['m2'], null),
+            $this->page([], null, 'tv'),
+        ];
+
+        $r = $this->sync->runChunk($this->startRun());
+
+        $this->assertSame(WokeometerChunkResult::DONE, $r->status);
+        $this->assertSame([50, 50, 25, 50], array_column($this->client->calls, 'limit'), 'fewer rows for that page only');
+        $this->assertSame(['c1', 'c1'], [$this->client->calls[1]['after'], $this->client->calls[2]['after']], 'the same page is asked for again');
+        $base    = $this->client->calls[1]['key'];
+        $derived = $this->client->calls[2]['key'];
+        $this->assertNotSame($base, $derived, 'a different query needs a different idempotency key (else 409)');
+        $this->assertMatchesRegularExpression('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $derived);
+        $this->assertSame($base, $this->client->calls[2]['persistedKey'], 'the persisted key stays the base key the derived one comes from');
+
+        $s = $this->st();
+        $this->assertSame('ok', $s['last_status']);
+        $this->assertSame(3, $s['last_run_requests'], 'the 503 is not billed');
+        $this->assertSame(3, $s['total_requests']);
+        $this->assertSame(2, $this->mediaCount());
+        $this->assertSame(0, $s['run_transient_failures'], 'not counted as an outage');
+    }
+
+    public function testATooLargePageStepsDownToOneRowThenStopsAsInvalid(): void
+    {
+        $this->client->script = array_fill(0, 5, $this->tooLarge());
+
+        $r = $this->sync->runChunk($this->startRun());
+
+        $this->assertSame(WokeometerChunkResult::STOPPED, $r->status);
+        $this->assertSame('invalid', $r->reason);
+        $this->assertSame([50, 25, 10, 5, 1], array_column($this->client->calls, 'limit'));
+        $s = $this->st();
+        $this->assertSame('invalid', $s['last_status'], 'retrying cannot help: pause until Sync now');
+        $this->assertSame(503, $s['last_error_code']);
+        $this->assertSame('movie', $s['run_phase'], 'resumable');
+        $this->assertSame($this->client->calls[0]['key'], $s['run_idempotency_key']);
+        $this->assertSame(0, $s['run_requests'], 'nothing billed');
+        $this->assertFalse($this->sync->isDue(self::T0 + WokeometerSyncService::INVALID_BACKOFF_SECONDS));
+    }
+
+    public function testTheDerivedKeyIsStableAcrossAResumeSoABilledRetryReplaysFree(): void
+    {
+        // Crash right after the smaller page was (possibly) billed.
+        $this->client->script = [$this->tooLarge(), new \RuntimeException('worker died')];
+        $this->sync->runChunk($this->startRun());
+        $firstKey = $this->client->calls[1]['key'];
+        $this->assertSame(25, $this->client->calls[1]['limit']);
+
+        // Resume: the page is too large again at 50 rows; the 25-row retry
+        // must carry the SAME key so Wokeometer replays it without a charge.
+        $this->sync->clock = self::T0 + WokeometerSyncService::INTERNAL_ERROR_BACKOFF_SECONDS;
+        $this->client->calls = [];
+        $this->client->script = [$this->tooLarge(), $this->page(['m1'], null), $this->page([], null, 'tv')];
+        $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun())->status);
+
+        $this->assertSame([50, 25, 50], array_column($this->client->calls, 'limit'));
+        $this->assertSame($firstKey, $this->client->calls[1]['key']);
+    }
+
     private function overdueAfterAFullSync(): void
     {
         $done = self::T0 - 40 * 86_400;
@@ -1312,6 +1384,50 @@ class WokeometerSyncServiceTest extends KernelTestCase
         $this->assertSame(WokeometerChunkResult::DONE, $this->sync->runChunk($this->startRun())->status);
         $this->assertSame(5, $this->mediaCount());
     }
+
+    // ── FF-4 / FF-5 (review 2026-11-06) ────────────────────────────────────
+
+    public function testAFullRunThatReturnedNoRowsDoesNotCountAsCompleted(): void
+    {
+        // A provider glitch answering empty pages must not flip the install
+        // to incremental-only mode (full_sync_completed_at / watermark set).
+        $this->client->script = [
+            $this->page([], null),
+            $this->page([], null, 'tv'),
+        ];
+        $runId = $this->startRun();
+
+        $r = $this->sync->runChunk($runId);
+
+        $this->assertSame(WokeometerChunkResult::DONE, $r->status);
+        $s = $this->st();
+        $this->assertSame('ok', $s['last_status']);
+        $this->assertNull($s['full_sync_completed_at'], 'zero rows is not a completed full sync');
+        $this->assertNull($s['watermark']);
+    }
+
+    public function testAScheduledRunStopsWhenAutomaticSyncIsSwitchedOffMidRun(): void
+    {
+        $autoSync = true;
+        $settings = $this->createStub(WokeometerSettings::class);
+        $settings->method('isEnabled')->willReturn(true);
+        $settings->method('isAutoSyncEnabled')->willReturnCallback(function () use (&$autoSync): bool { return $autoSync; });
+        $settings->method('apiKey')->willReturn('wok_test');
+        $this->sync = $this->service($settings);
+        $this->overdueAfterAFullSync(); // a scheduled start needs a completed first full sync
+        $this->scriptFullCatalog();
+        $runId = $this->startRun('schedule'); // the trigger WokeometerSyncTickHandler sends
+
+        $autoSync = false; // the admin unticked "Automatic sync" while the run was in progress
+
+        $r = $this->sync->runChunk($runId);
+
+        $this->assertNotSame(WokeometerChunkResult::CONTINUE, $r->status, 'docs promise mid-run settings apply');
+        $s = $this->st();
+        $this->assertSame('error', $s['last_status']);
+        $this->assertStringContainsString('auto', (string) $s['last_error_message']);
+        $this->assertCount(0, $this->client->calls, 'no page was fetched after the switch');
+    }
 }
 
 /**
@@ -1323,7 +1439,7 @@ final class ScriptedWokeometerClient extends WokeometerClient
     /** @var list<WokeometerPageResult|\Throwable> */
     public array $script = [];
 
-    /** @var list<array{type: string, after: ?string, updatedSince: ?int, key: string, keyPersisted: bool}> */
+    /** @var list<array{type: string, after: ?string, updatedSince: ?int, key: string, keyPersisted: bool, persistedKey: mixed, limit: int}> */
     public array $calls = [];
 
     /** Runs after each call (e.g. a settings change saved while the page is in flight). */
@@ -1334,14 +1450,17 @@ final class ScriptedWokeometerClient extends WokeometerClient
         parent::__construct($settings, $logger);
     }
 
-    public function listMedia(string $type, ?string $after, ?int $updatedSinceEpoch, string $idempotencyKey): WokeometerPageResult
+    public function listMedia(string $type, ?string $after, ?int $updatedSinceEpoch, string $idempotencyKey, int $limit = self::PAGE_LIMIT): WokeometerPageResult
     {
+        $persisted = $this->state->get()['run_idempotency_key'];
         $this->calls[] = [
             'type'         => $type,
             'after'        => $after,
             'updatedSince' => $updatedSinceEpoch,
             'key'          => $idempotencyKey,
-            'keyPersisted' => $this->state->get()['run_idempotency_key'] === $idempotencyKey,
+            'keyPersisted' => $persisted === $idempotencyKey,
+            'persistedKey' => $persisted,
+            'limit'        => $limit,
         ];
         $next = array_shift($this->script);
         if ($this->afterCall !== null) {
@@ -1373,48 +1492,5 @@ final class TestableWokeometerSyncService extends WokeometerSyncService
     {
         $this->pauses++;
         $this->pausedMicros[] = $micros;
-    }
-
-    // ── FF-4 / FF-5 (review 2026-11-06) ────────────────────────────────────
-
-    public function testAFullRunThatReturnedNoRowsDoesNotCountAsCompleted(): void
-    {
-        // A provider glitch answering empty pages must not flip the install
-        // to incremental-only mode (full_sync_completed_at / watermark set).
-        $this->client->script = [
-            $this->page([], null),
-            $this->page([], null, 'tv'),
-        ];
-        $runId = $this->startRun();
-
-        $r = $this->sync->runChunk($runId);
-
-        $this->assertSame(WokeometerChunkResult::DONE, $r->status);
-        $s = $this->st();
-        $this->assertSame('ok', $s['last_status']);
-        $this->assertNull($s['full_sync_completed_at'], 'zero rows is not a completed full sync');
-        $this->assertNull($s['watermark']);
-    }
-
-    public function testAScheduledRunStopsWhenAutomaticSyncIsSwitchedOffMidRun(): void
-    {
-        $autoSync = true;
-        $settings = $this->createStub(WokeometerSettings::class);
-        $settings->method('isEnabled')->willReturn(true);
-        $settings->method('isAutoSyncEnabled')->willReturnCallback(function () use (&$autoSync): bool { return $autoSync; });
-        $settings->method('apiKey')->willReturn('wok_test');
-        $this->sync = $this->service($settings);
-        $this->scriptFullCatalog();
-        $runId = $this->startRun('scheduled');
-
-        $autoSync = false; // the admin unticked "Automatic sync" while the run was in progress
-
-        $r = $this->sync->runChunk($runId);
-
-        $this->assertNotSame(WokeometerChunkResult::CONTINUE, $r->status, 'docs promise mid-run settings apply');
-        $s = $this->st();
-        $this->assertSame('error', $s['last_status']);
-        $this->assertStringContainsString('auto', (string) $s['last_error_message']);
-        $this->assertCount(0, $this->client->calls, 'no page was fetched after the switch');
     }
 }

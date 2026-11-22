@@ -113,8 +113,9 @@ class WokeometerClient implements ResetInterface
      * @param string|null $after             Previous page's `next_cursor`
      * @param int|null    $updatedSinceEpoch Inclusive lower bound on `last_updated`
      * @param string      $idempotencyKey    Persisted by the caller BEFORE the call; reused on retry
+     * @param int         $limit             Rows per page, 1..PAGE_LIMIT (fewer after a `too_large`)
      */
-    public function listMedia(string $type, ?string $after, ?int $updatedSinceEpoch, string $idempotencyKey): WokeometerPageResult
+    public function listMedia(string $type, ?string $after, ?int $updatedSinceEpoch, string $idempotencyKey, int $limit = self::PAGE_LIMIT): WokeometerPageResult
     {
         if (!$this->ready()) {
             return $this->fail(WokeometerPageResult::UNCONFIGURED, 0, $type, 'not configured');
@@ -125,8 +126,11 @@ class WokeometerClient implements ResetInterface
         if (preg_match(self::IDEMPOTENCY_KEY, $idempotencyKey) !== 1) {
             return $this->fail(WokeometerPageResult::INVALID, 0, $type, 'invalid idempotency key');
         }
+        if ($limit < 1 || $limit > self::PAGE_LIMIT) {
+            return $this->fail(WokeometerPageResult::INVALID, 0, $type, 'page limit out of range');
+        }
 
-        $query = ['type' => $type, 'limit' => self::PAGE_LIMIT];
+        $query = ['type' => $type, 'limit' => $limit];
         if ($after !== null) {
             $query['after'] = $after;
         }
@@ -214,6 +218,8 @@ class WokeometerClient implements ResetInterface
         }
 
         $outcome = match (true) {
+            // The 512 KB response cap: an identical retry can never succeed.
+            $code === 503 && self::errorCode($json) === 'response_too_large' => WokeometerPageResult::TOO_LARGE,
             $code === 401 => WokeometerPageResult::AUTH,
             $code === 402 => WokeometerPageResult::OUT_OF_CREDITS,
             $code === 403 => WokeometerPageResult::FORBIDDEN,
@@ -386,6 +392,19 @@ class WokeometerClient implements ResetInterface
         $error = (string) $error;
 
         return trim($error) !== '' ? $error : null;
+    }
+
+    /**
+     * The application error `code` (`{"error":{"code":…}}`), or null.
+     *
+     * @param array<mixed>|null $json
+     */
+    private static function errorCode(?array $json): ?string
+    {
+        $error = $json['error'] ?? null;
+        $code  = is_array($error) ? ($error['code'] ?? null) : null;
+
+        return is_string($code) ? $code : null;
     }
 
     /**

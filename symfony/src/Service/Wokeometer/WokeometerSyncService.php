@@ -45,6 +45,10 @@ use Symfony\Contracts\Service\ResetInterface;
  * failure below MAX_TRANSIENT_FAILURES — the chunk returns `continue` with a
  * delay (Retry-After ≤ 15 min / 30 s) and the SAME Idempotency-Key; the lock
  * stays held. Both count in `run_transient_failures`; any OK page resets it.
+ * Nor is a 503 `response_too_large` (the provider's 512 KB response cap): the
+ * same page is asked for again with fewer rows (PAGE_LIMIT_STEPS), under a
+ * key derived from the persisted one (pageKey()), so a crash after a billed
+ * smaller page still replays it for free; the next page is back at 50 rows.
  *
  * Stop policy. 4xx/5xx/transport responses are UNBILLED, while restarting a
  * run re-bills every page up to its cursor — so almost every stop is
@@ -64,6 +68,7 @@ use Symfony\Contracts\Service\ResetInterface;
  * | client reports unconfigured               | `error`           | 1 h     | yes (same key)                   | resumes after backoff   |
  * | any Throwable after start()               | `error`           | 6 h     | yes (same key)                   | resumes after backoff   |
  * | invalid (404/…, unreadable 2xx)           | `invalid`         | 7 days  | yes (same key)                   | PAUSED until Sync now   |
+ * | response_too_large even at 1 row          | `invalid`         | 7 days  | yes (same key)                   | PAUSED until Sync now   |
  * | 400 on a page requested WITH a cursor     | `invalid`         | 7 days  | yes — phase restarts at its first page (cursor + key cleared) | PAUSED until Sync now |
  * | cursor did not advance (loop guard; a UUID cursor must sort AFTER the previous one) | `halted` | 24 h | NO — next run is fresh | PAUSED until Sync now |
  * | (internal) unknown `run_phase` in row     | `halted`          | 24 h    | NO — next run is fresh           | PAUSED until Sync now   |
@@ -122,6 +127,13 @@ class WokeometerSyncService implements ResetInterface
     public const MAX_RATE_LIMIT_WAIT_SECONDS = 900;
     /** Consecutive 429s (counted in `run_transient_failures`) before a resumable `error` stop. */
     public const MAX_RATE_LIMIT_RETRIES = 10;
+
+    /**
+     * Rows per page after each consecutive 503 `response_too_large` on the
+     * same page; the first is WokeometerClient::PAGE_LIMIT. Unbilled, and
+     * at most 5 tries, so every chunk (8 page slots) can reach the floor.
+     */
+    public const PAGE_LIMIT_STEPS = [50, 25, 10, 5, 1];
 
     public const STATUS_RUNNING        = 'running';
     public const STATUS_OK             = 'ok';
@@ -444,6 +456,32 @@ class WokeometerSyncService implements ResetInterface
         return self::uuid4();
     }
 
+    /**
+     * The Idempotency-Key for one request. A full page uses the persisted
+     * key itself. A smaller page is a different query, and reusing a key
+     * for a different query is a 409, so it gets a key DERIVED from the
+     * persisted one and the row count: deterministic, so a resumed run asks
+     * for the same smaller page under the same key and a page billed before
+     * a crash replays for free. UUID-shaped (version 5 bits), as the API wants.
+     */
+    public static function pageKey(string $baseKey, int $limit): string
+    {
+        if ($limit === self::PAGE_LIMIT_STEPS[0]) {
+            return $baseKey;
+        }
+        $hash = sha1($baseKey . '|limit=' . $limit);
+
+        return sprintf(
+            '%s-%s-5%s-%x%s-%s',
+            substr($hash, 0, 8),
+            substr($hash, 8, 4),
+            substr($hash, 13, 3),
+            (intval($hash[16], 16) & 0x3) | 0x8,
+            substr($hash, 17, 3),
+            substr($hash, 20, 12),
+        );
+    }
+
     private function processChunk(string $runId): WokeometerChunkResult
     {
         if ($this->state->get()['lock_run_id'] !== $runId) {
@@ -451,6 +489,7 @@ class WokeometerSyncService implements ResetInterface
         }
 
         $dropped = 0;
+        $limit   = self::PAGE_LIMIT_STEPS[0];
         try {
             for ($page = 0; $page < self::MAX_PAGES_PER_CHUNK; $page++) {
                 if ($page > 0) {
@@ -503,7 +542,7 @@ class WokeometerSyncService implements ResetInterface
                     ? max(0, $watermark - self::OVERLAP_SECONDS)
                     : null;
 
-                $result = $this->client->listMedia($phase, $cursor, $updatedSince, $key);
+                $result = $this->client->listMedia($phase, $cursor, $updatedSince, self::pageKey($key, $limit), $limit);
 
                 $now = $this->now();
                 if (!$this->state->heartbeat($runId, $now)) {
@@ -535,6 +574,7 @@ class WokeometerSyncService implements ResetInterface
 
                 switch ($result->outcome) {
                     case WokeometerPageResult::OK:
+                        $limit    = self::PAGE_LIMIT_STEPS[0]; // a smaller page only for the page that needed it
                         $dropped += $result->droppedRows;
                         $startedAt = self::intOrNull($s['run_started_at']) ?? $now;
                         $upserted  = $this->titles->upsertRows($result->rows, $startedAt, $now);
@@ -593,6 +633,16 @@ class WokeometerSyncService implements ResetInterface
                             return self::notOwner();
                         }
                         return new WokeometerChunkResult(WokeometerChunkResult::CONTINUE, self::TRANSIENT_RETRY_SECONDS);
+
+                    case WokeometerPageResult::TOO_LARGE:
+                        // Unbilled, and repeating it never helps: ask for the
+                        // same page with fewer rows on the next page slot.
+                        $step = array_search($limit, self::PAGE_LIMIT_STEPS, true);
+                        if ($step === false || !isset(self::PAGE_LIMIT_STEPS[$step + 1])) {
+                            return $this->stop($runId, self::STATUS_INVALID, $result->httpCode, $result->message ?? 'response too large', self::INVALID_BACKOFF_SECONDS, true, $fields);
+                        }
+                        $limit = self::PAGE_LIMIT_STEPS[$step + 1];
+                        break;
 
                     case WokeometerPageResult::AUTH:
                         return $this->stop($runId, self::STATUS_AUTH, $result->httpCode, $result->message, self::AUTH_BACKOFF_SECONDS, true, $fields);

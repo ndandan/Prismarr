@@ -640,6 +640,45 @@ class WokeometerClientTest extends TestCase
         $this->assertSame('Use an API key in Authorization: Bearer or x-api-key.', $result->message);
     }
 
+    /**
+     * Responses are capped at 512 KB: an oversized page is a 503 with code
+     * `response_too_large`, and repeating it can never succeed — the sync
+     * must ask for fewer rows instead of retrying it as an outage.
+     */
+    public function testResponseTooLargeIsNotATransientFailure(): void
+    {
+        $body = self::json(['error' => ['code' => 'response_too_large', 'message' => 'Use a smaller limit.']]);
+        $result = $this->client([self::response(503, $body)])->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame('too_large', $result->outcome);
+        $this->assertSame(503, $result->httpCode);
+        $this->assertSame('Use a smaller limit.', $result->message);
+    }
+
+    public function testAPageLimitBelowFiftyIsSent(): void
+    {
+        $client = $this->client([self::response(200, self::json(['data' => [], 'next_cursor' => null]))]);
+        $client->listMedia('movie', null, null, self::IDEM, 25);
+
+        parse_str((string) parse_url($this->urls[0], PHP_URL_QUERY), $query);
+        $this->assertSame(['type' => 'movie', 'limit' => '25'], $query);
+    }
+
+    /** @return array<string, array{int}> */
+    public static function outOfRangeLimits(): array
+    {
+        return ['zero' => [0], 'negative' => [-5], 'above the API maximum' => [51]];
+    }
+
+    #[DataProvider('outOfRangeLimits')]
+    public function testAnOutOfRangePageLimitIsInvalidWithoutRequest(int $limit): void
+    {
+        $result = $this->client()->listMedia('movie', null, null, self::IDEM, $limit);
+
+        $this->assertSame(WokeometerPageResult::INVALID, $result->outcome);
+        $this->assertSame(0, $this->calls);
+    }
+
     public function testErrorWithoutParseableBodyStillHasAMessage(): void
     {
         $result = $this->client([self::response(503, '<html>Service Unavailable</html>')])

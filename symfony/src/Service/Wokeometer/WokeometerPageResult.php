@@ -17,6 +17,8 @@ namespace App\Service\Wokeometer;
  *  - `rate_limited`   429 — `retryAfter` is always set
  *  - `conflict`       409 (Idempotency-Key reused for another request / still processing)
  *  - `transient`      5xx — retry with the SAME Idempotency-Key
+ *  - `too_large`      503 `response_too_large` (the 512 KB response cap) —
+ *                     repeating it never helps; ask for fewer rows instead
  *  - `invalid`        400 / 404 / other 4xx / unexpected status / malformed 2xx body
  *  - `transport`      curl error or HTTP code 0 — retry with the SAME Idempotency-Key
  *
@@ -53,6 +55,7 @@ final readonly class WokeometerPageResult
     public const RATE_LIMITED   = 'rate_limited';
     public const CONFLICT       = 'conflict';
     public const TRANSIENT      = 'transient';
+    public const TOO_LARGE      = 'too_large';
     public const INVALID        = 'invalid';
     public const TRANSPORT      = 'transport';
 
