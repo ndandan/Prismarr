@@ -46,6 +46,9 @@ class WokeometerClient implements ResetInterface
     /** Printable ASCII, no spaces — anything else could split the header. */
     private const HEADER_TOKEN = '/^[\x21-\x7E]+$/D';
 
+    /** X-Request-ID values we keep (log + stored error): short, no spaces or markup. */
+    private const REQUEST_ID = '/^[A-Za-z0-9._:-]{1,64}$/D';
+
     /** Idempotency keys are UUIDs; keep them to a header-safe alphabet. */
     private const IDEMPOTENCY_KEY = '/^[A-Za-z0-9-]{1,64}$/D';
 
@@ -174,10 +177,11 @@ class WokeometerClient implements ResetInterface
         $creditsRemaining = self::nonNegativeIntOrNull($headers['x-api-credits-remaining'] ?? null);
         $creditsCharged   = self::nonNegativeIntOrNull($headers['x-api-credits-charged'] ?? null);
         $replayed         = strtolower(trim($headers['idempotency-replayed'] ?? '')) === 'true';
+        $requestId        = preg_match(self::REQUEST_ID, $headers['x-request-id'] ?? '') === 1 ? $headers['x-request-id'] : null;
 
         if ($code >= 200 && $code < 300) {
             if ($json === null || array_is_list($json) || !isset($json['data']) || !is_array($json['data']) || !array_is_list($json['data'])) {
-                return $this->fail(WokeometerPageResult::INVALID, $code, $type, self::errorMessage($json) ?? 'invalid JSON response', $creditsRemaining, $creditsCharged, $replayed);
+                return $this->fail(WokeometerPageResult::INVALID, $code, $type, self::errorMessage($json) ?? 'invalid JSON response', $creditsRemaining, $creditsCharged, $replayed, requestId: $requestId);
             }
 
             $rows    = [];
@@ -195,14 +199,14 @@ class WokeometerClient implements ResetInterface
             // stops the sync so the cursor never advances past a page we
             // could not store.
             if ($rows === [] && $dropped > 0) {
-                return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'no usable rows in page', $creditsRemaining, $creditsCharged, $replayed);
+                return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'no usable rows in page', $creditsRemaining, $creditsCharged, $replayed, requestId: $requestId);
             }
             $cursor = $json['next_cursor'] ?? null;
             if ($cursor !== null && !is_string($cursor)) {
                 // FF-2 (review 2026-11-06): a non-string cursor is schema drift,
                 // not "end of phase" — ending the phase here would let a FULL
                 // run sweep the mirror of everything after this page.
-                return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'next_cursor is not a string', $creditsRemaining, $creditsCharged, $replayed);
+                return $this->fail(WokeometerPageResult::INVALID, $code, $type, 'next_cursor is not a string', $creditsRemaining, $creditsCharged, $replayed, requestId: $requestId);
             }
 
             return new WokeometerPageResult(
@@ -214,6 +218,7 @@ class WokeometerClient implements ResetInterface
                 creditsCharged: $creditsCharged,
                 replayed: $replayed,
                 droppedRows: $dropped,
+                requestId: $requestId,
             );
         }
 
@@ -250,6 +255,7 @@ class WokeometerClient implements ResetInterface
             $creditsCharged,
             $replayed,
             $retryAfter,
+            $requestId,
         );
     }
 
@@ -304,6 +310,7 @@ class WokeometerClient implements ResetInterface
         ?int $creditsCharged = null,
         bool $replayed = false,
         ?int $retryAfter = null,
+        ?string $requestId = null,
     ): WokeometerPageResult {
         $secrets = $this->secrets();
         $message = self::sanitize($message, $secrets);
@@ -314,6 +321,7 @@ class WokeometerClient implements ResetInterface
             'code'    => $code,
             'outcome' => $outcome,
             'message' => $message,
+            'request_id' => $requestId,
         ]);
 
         return new WokeometerPageResult(
@@ -324,6 +332,7 @@ class WokeometerClient implements ResetInterface
             replayed: $replayed,
             retryAfter: $retryAfter,
             message: $message,
+            requestId: $requestId,
         );
     }
 

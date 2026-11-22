@@ -39,7 +39,7 @@ final class AdminSettingsWokeometerRenderTest extends AbstractWebTestCase
         $this->assertSelectorExists('button[type="button"][data-wokeometer-sync-full]');
 
         foreach (['last_sync', 'last_status', 'last_run_requests', 'last_run_records', 'total_requests',
-            'credits_remaining', 'cached_records', 'records_with_tmdb', 'matched_titles', 'next_due'] as $stat) {
+            'credits_remaining', 'cached_records', 'records_with_tmdb', 'matched_titles', 'next_due', 'last_full_sync'] as $stat) {
             $this->assertSelectorExists('[data-wokeometer-stat="' . $stat . '"]', $stat);
         }
 
@@ -210,6 +210,26 @@ final class AdminSettingsWokeometerRenderTest extends AbstractWebTestCase
         $db->executeStatement('UPDATE wokeometer_sync_state SET full_sync_completed_at = 1700000000, last_success_at = 1700000000');
         $crawler = $this->client->request('GET', '/admin/settings');
         $this->assertStringContainsString('d-none', (string) $crawler->filter('[data-wokeometer-initial-hint]')->attr('class'));
+    }
+
+    public function testReconcileHintShowsNinetyDaysAfterTheLastFullSync(): void
+    {
+        $this->seedKey();
+        $db = $this->em()->getConnection();
+        $db->executeStatement('INSERT OR IGNORE INTO wokeometer_sync_state (id) VALUES (1)');
+        $recent = time() - 10 * 86_400;
+        $db->executeStatement('UPDATE wokeometer_sync_state SET full_sync_completed_at = ?, last_success_at = ?', [$recent, $recent]);
+
+        $crawler = $this->client->request('GET', '/admin/settings');
+        $this->assertNotSame('—', trim($crawler->filter('[data-wokeometer-stat="last_full_sync"]')->text()));
+        $hint = $crawler->filter('[data-wokeometer-reconcile-hint]');
+        $this->assertStringContainsString('d-none', (string) $hint->attr('class'));
+        $this->assertStringContainsString('more than 90 days', $hint->text());
+
+        $old = time() - 120 * 86_400;
+        $db->executeStatement('UPDATE wokeometer_sync_state SET full_sync_completed_at = ?', [$old]);
+        $crawler = $this->client->request('GET', '/admin/settings');
+        $this->assertStringNotContainsString('d-none', (string) $crawler->filter('[data-wokeometer-reconcile-hint]')->attr('class'));
     }
 
     public function testCostNoteSaysTheInitialSyncIsManualAndAutomaticSyncIsIncremental(): void

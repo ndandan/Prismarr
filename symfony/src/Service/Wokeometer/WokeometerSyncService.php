@@ -135,6 +135,13 @@ class WokeometerSyncService implements ResetInterface
      */
     public const PAGE_LIMIT_STEPS = [50, 25, 10, 5, 1];
 
+    /**
+     * Days after the last completed full sync from which the card suggests a
+     * Full resync: Wokeometer's `updated_since` misses some metadata edits
+     * and every deletion, and its docs say to reconcile now and then.
+     */
+    public const RECONCILE_SUGGEST_DAYS = 90;
+
     public const STATUS_RUNNING        = 'running';
     public const STATUS_OK             = 'ok';
     public const STATUS_ERROR          = 'error';
@@ -368,7 +375,7 @@ class WokeometerSyncService implements ResetInterface
      *     lastRunStartedAt: ?int, lastRunFinishedAt: ?int, lastRunRequests: ?int,
      *     lastRunRecords: ?int, totalRequests: int, creditsRemaining: ?int,
      *     creditsRemainingAt: ?int, nextAttemptAfter: ?int, fullSyncCompletedAt: ?int,
-     *     watermark: ?int, nextDueAt: ?int,
+     *     watermark: ?int, nextDueAt: ?int, reconcileSuggested: bool,
      *     cached: array{total: int, movies: int, series: int, seasons: int, withTmdb: int},
      *     matchedTitles: ?int
      * }
@@ -380,6 +387,7 @@ class WokeometerSyncService implements ResetInterface
 
         $heartbeat   = self::intOrNull($s['lock_heartbeat_at']);
         $lastSuccess = self::intOrNull($s['last_success_at']);
+        $fullDone    = self::intOrNull($s['full_sync_completed_at']);
 
         $matched = null;
         if ($matchedTitles !== null) {
@@ -411,9 +419,10 @@ class WokeometerSyncService implements ResetInterface
             'creditsRemaining'    => self::intOrNull($s['credits_remaining']),
             'creditsRemainingAt'  => self::intOrNull($s['credits_remaining_at']),
             'nextAttemptAfter'    => self::intOrNull($s['next_attempt_after']),
-            'fullSyncCompletedAt' => self::intOrNull($s['full_sync_completed_at']),
+            'fullSyncCompletedAt' => $fullDone,
             'watermark'           => self::intOrNull($s['watermark']),
             'nextDueAt'           => $lastSuccess !== null && !self::isPaused($s) ? $lastSuccess + WokeometerSettings::SYNC_INTERVAL_DAYS * 86_400 : null,
+            'reconcileSuggested'  => $fullDone !== null && $fullDone + self::RECONCILE_SUGGEST_DAYS * 86_400 <= $now,
             'cached'              => $this->titles->counts(),
             'matchedTitles'       => $matched,
         ];
@@ -449,6 +458,23 @@ class WokeometerSyncService implements ResetInterface
     protected function newRunId(): string
     {
         return self::uuid4();
+    }
+
+    /**
+     * A stop's error text with Wokeometer's request id appended, so the
+     * admin can quote it to their support: "message (ID abc)". Unchanged
+     * when the response carried none.
+     */
+    private static function withRequestId(?string $message, WokeometerPageResult $result): ?string
+    {
+        if ($result->requestId === null) {
+            return $message;
+        }
+
+        // Trim the message, never the id: stop() caps the text at MESSAGE_MAX.
+        $suffix = ' (ID ' . $result->requestId . ')';
+
+        return mb_substr(trim($message ?? $result->outcome), 0, self::MESSAGE_MAX - mb_strlen($suffix)) . $suffix;
     }
 
     protected function newIdempotencyKey(): string
@@ -610,7 +636,7 @@ class WokeometerSyncService implements ResetInterface
                         // Unbilled, but a 429 storm must not keep the run alive forever.
                         $failures = (self::intOrNull($s['run_transient_failures']) ?? 0) + 1;
                         if ($failures >= self::MAX_RATE_LIMIT_RETRIES) {
-                            return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, 'rate limited too many times in a row', self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
+                            return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, self::withRequestId('rate limited too many times in a row', $result), self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
                         }
                         $fields['run_transient_failures'] = $failures; // key kept → free replay
                         if (!$this->write($runId, $fields)) {
@@ -626,7 +652,7 @@ class WokeometerSyncService implements ResetInterface
                     case WokeometerPageResult::TRANSPORT:
                         $failures = (self::intOrNull($s['run_transient_failures']) ?? 0) + 1;
                         if ($failures >= self::MAX_TRANSIENT_FAILURES) {
-                            return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, $result->message, self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
+                            return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, self::withRequestId($result->message, $result), self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
                         }
                         $fields['run_transient_failures'] = $failures; // key kept → free replay
                         if (!$this->write($runId, $fields)) {
@@ -639,23 +665,23 @@ class WokeometerSyncService implements ResetInterface
                         // same page with fewer rows on the next page slot.
                         $step = array_search($limit, self::PAGE_LIMIT_STEPS, true);
                         if ($step === false || !isset(self::PAGE_LIMIT_STEPS[$step + 1])) {
-                            return $this->stop($runId, self::STATUS_INVALID, $result->httpCode, $result->message ?? 'response too large', self::INVALID_BACKOFF_SECONDS, true, $fields);
+                            return $this->stop($runId, self::STATUS_INVALID, $result->httpCode, self::withRequestId($result->message ?? 'response too large', $result), self::INVALID_BACKOFF_SECONDS, true, $fields);
                         }
                         $limit = self::PAGE_LIMIT_STEPS[$step + 1];
                         break;
 
                     case WokeometerPageResult::AUTH:
-                        return $this->stop($runId, self::STATUS_AUTH, $result->httpCode, $result->message, self::AUTH_BACKOFF_SECONDS, true, $fields);
+                        return $this->stop($runId, self::STATUS_AUTH, $result->httpCode, self::withRequestId($result->message, $result), self::AUTH_BACKOFF_SECONDS, true, $fields);
 
                     case WokeometerPageResult::FORBIDDEN:
-                        return $this->stop($runId, self::STATUS_FORBIDDEN, $result->httpCode, $result->message, self::AUTH_BACKOFF_SECONDS, true, $fields);
+                        return $this->stop($runId, self::STATUS_FORBIDDEN, $result->httpCode, self::withRequestId($result->message, $result), self::AUTH_BACKOFF_SECONDS, true, $fields);
 
                     case WokeometerPageResult::OUT_OF_CREDITS:
                         // Resumable: phase + cursor kept. The key is rotated —
                         // a 402 was never executed, so a new key on resume
                         // cannot double-bill, and it cannot hit a replayed 402.
                         $fields['run_idempotency_key'] = null;
-                        return $this->stop($runId, self::STATUS_OUT_OF_CREDITS, $result->httpCode, $result->message, self::CREDITS_BACKOFF_SECONDS, true, $fields);
+                        return $this->stop($runId, self::STATUS_OUT_OF_CREDITS, $result->httpCode, self::withRequestId($result->message, $result), self::CREDITS_BACKOFF_SECONDS, true, $fields);
 
                     case WokeometerPageResult::INVALID:
                         if ($cursor !== null && $result->httpCode === 400) {
@@ -665,10 +691,10 @@ class WokeometerSyncService implements ResetInterface
                             $fields['run_cursor']          = null;
                             $fields['run_idempotency_key'] = null;
                         }
-                        return $this->stop($runId, self::STATUS_INVALID, $result->httpCode, $result->message, self::INVALID_BACKOFF_SECONDS, true, $fields);
+                        return $this->stop($runId, self::STATUS_INVALID, $result->httpCode, self::withRequestId($result->message, $result), self::INVALID_BACKOFF_SECONDS, true, $fields);
 
                     default: // conflict (key still processing → same key), unconfigured, anything unknown
-                        return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, $result->message ?? $result->outcome, self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
+                        return $this->stop($runId, self::STATUS_ERROR, $result->httpCode, self::withRequestId($result->message ?? $result->outcome, $result), self::TRANSIENT_BACKOFF_SECONDS, true, $fields);
                 }
             }
 

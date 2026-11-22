@@ -926,6 +926,8 @@ admin:
     records_with_tmdb: Records with a TMDb id
     matched_titles: Matched library titles
     next_due: Next scheduled sync
+    last_full_sync: Last full sync
+    reconcile_hint: "It has been more than 90 days since the last full sync. Monthly updates miss some of Wokeometer's edits and every title it removes; a Full resync (about 280 billed requests) brings the local copy back in line."
     sync_now: Sync now
     full_resync: Full resync
     confirm_full: 'A full resync re-downloads the whole catalog (roughly 280 billed requests, ≈ $14). Continue?'

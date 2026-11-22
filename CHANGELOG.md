@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Wokeometer card: last full sync and a resync reminder.** The Settings card shows when the last full catalog sync finished, and after 90 days suggests a Full resync, since Wokeometer's monthly updates miss some edits and every removed title. It never starts one by itself. A run that stops on an error now shows Wokeometer's request ID with the message, for their support. EN + FR.
 - **Bazarr subtitle tools in the subtitle modal.** A "Current subtitles" section lists the movie's or episode's subtitle files and embedded tracks, each with what Bazarr can do to it: **Sync** a file to the audio, **Translate** it into one of the item's other missing languages, or **Extract** an embedded track to a file (Bazarr 1.6+). Each runs as a Bazarr job; if Bazarr refuses (image-based track, unreadable file, path mapping, failed translation) you get a specific message. EN + FR.
 - **Bazarr jobs and health in the Bazarr menu.** A chip shows Bazarr 1.6's running and queued jobs ("1 running · 2 queued · 40%", the job in its tooltip), hidden when idle. A "⚠ N issues" badge lists Bazarr's own health problems (a library folder it can't reach, a broken or missing language profile), hidden when Bazarr is healthy. EN + FR.
 - **Seerr blocklist page.** `/jellyseerr/blocklist`, linked from the Seerr menu: everything blocklisted in Seerr with who blocked it and when, title search, All / Manual / From-tags filters, paging and a confirmed Remove. EN + FR.

@@ -920,6 +920,8 @@ admin:
     records_with_tmdb: Enregistrements avec un identifiant TMDb
     matched_titles: Titres de la bibliothèque associés
     next_due: Prochaine synchronisation planifiée
+    last_full_sync: Dernière synchronisation complète
+    reconcile_hint: "La dernière synchronisation complète date de plus de 90 jours. Les mises à jour mensuelles ne voient pas certaines modifications de Wokeometer ni les titres qu'il retire ; une « Resynchronisation complète » (environ 280 requêtes facturées) remet la copie locale à niveau."
     sync_now: Synchroniser maintenant
     full_resync: Resynchronisation complète
     confirm_full: 'Une resynchronisation complète retélécharge tout le catalogue (environ 280 requêtes facturées, soit ≈ 14 $). Continuer ?'

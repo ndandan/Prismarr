@@ -242,7 +242,7 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $expected = ['enabled', 'configured', 'autoSync', 'running', 'runMode', 'runPhase', 'runRequests', 'runRecords',
             'lastStatus', 'lastErrorMessage', 'lastSuccessAt', 'lastRunStartedAt', 'lastRunFinishedAt', 'lastRunRequests',
             'lastRunRecords', 'totalRequests', 'creditsRemaining', 'creditsRemainingAt', 'nextAttemptAfter',
-            'fullSyncCompletedAt', 'watermark', 'nextDueAt', 'cached', 'matchedTitles'];
+            'fullSyncCompletedAt', 'watermark', 'nextDueAt', 'reconcileSuggested', 'cached', 'matchedTitles'];
         foreach ($expected as $key) {
             $this->assertArrayHasKey($key, $data['state'], $key);
         }
@@ -253,7 +253,7 @@ final class AdminSettingsWokeometerSyncTest extends AbstractWebTestCase
         $this->assertNull($data['state']['matchedTitles'], 'cold library cache => unknown, never a fetch');
         $this->assertStringNotContainsString('wok_', (string) $response->getContent());
         $this->assertSame(
-            ['lastSuccessAt' => '—', 'nextDueAt' => '—', 'lastRunFinishedAt' => '—', 'lastRunStartedAt' => '—'],
+            ['lastSuccessAt' => '—', 'nextDueAt' => '—', 'lastRunFinishedAt' => '—', 'lastRunStartedAt' => '—', 'fullSyncCompletedAt' => '—'],
             $data['state']['labels'],
             'never synced: every label is the dash',
         );

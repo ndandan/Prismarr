@@ -1313,6 +1313,13 @@ every hour: unbilled, but a run hitting it could never finish.
   full sync and uses the real `schedule` trigger (a scheduled start before the
   first full sync is refused by design). Each was checked to fail with its fix
   reverted.
+- `X-Request-ID` (new in Wokeometer's docs) is kept on `WokeometerPageResult`
+  when it is a short header-safe token, logged as `request_id` on failures,
+  and appended to a stop's `last_error_message` as `(ID …)` (the message is
+  trimmed, never the id, to fit the 255-char cap). No schema change.
+- `statusSummary()` adds `reconcileSuggested` (a completed full sync at least
+  `RECONCILE_SUGGEST_DAYS` = 90 days old); the card shows a "Last full sync"
+  row and a warning hint when it is true. Display only: nothing is billed.
 
 ## 4. Fork-only — declined upstream
 

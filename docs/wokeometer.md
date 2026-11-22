@@ -74,6 +74,16 @@ billed requests and the credits remaining as last reported by Wokeometer, so
 you can watch the spend. Prismarr never estimates dollars itself; use the
 $0.05 figure above.
 
+It also shows when the last **full** sync finished. Wokeometer's own docs say
+the "updated since" filter behind the monthly sync misses some metadata edits
+and never reports removed titles, and recommend reconciling a local copy now
+and then. More than 90 days after the last full sync, the card suggests a
+**Full resync**. It never runs one by itself.
+
+When a run stops on an error, the message on the card ends with Wokeometer's
+request ID, for example `(ID req_7f3a…)`. Quote it if you contact Wokeometer
+support. The same ID is in the container log.
+
 ## What is stored, and what is not
 
 Stored, per title, in the local `wokeometer_media` table: Wokeometer id, media

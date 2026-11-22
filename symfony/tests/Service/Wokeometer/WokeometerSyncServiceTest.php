@@ -1269,7 +1269,7 @@ class WokeometerSyncServiceTest extends KernelTestCase
             'enabled', 'configured', 'autoSync', 'running', 'runMode', 'runPhase', 'runRequests', 'runRecords',
             'lastStatus', 'lastErrorMessage', 'lastSuccessAt', 'lastRunStartedAt', 'lastRunFinishedAt',
             'lastRunRequests', 'lastRunRecords', 'totalRequests', 'creditsRemaining', 'creditsRemainingAt',
-            'nextAttemptAfter', 'fullSyncCompletedAt', 'watermark', 'nextDueAt', 'cached', 'matchedTitles',
+            'nextAttemptAfter', 'fullSyncCompletedAt', 'watermark', 'nextDueAt', 'reconcileSuggested', 'cached', 'matchedTitles',
         ], array_keys($sum));
         $this->assertTrue($sum['enabled']);
         $this->assertTrue($sum['configured']);
@@ -1282,6 +1282,31 @@ class WokeometerSyncServiceTest extends KernelTestCase
 
         $this->assertNull($this->sync->statusSummary()['matchedTitles']);
         $this->assertNull($this->sync->statusSummary(fn() => throw new \RuntimeException('cold'))['matchedTitles']);
+    }
+
+    /** Wokeometer's docs: updated_since misses some edits and every deletion, so reconcile now and then. */
+    public function testAFullResyncIsSuggestedNinetyDaysAfterTheLastFullSync(): void
+    {
+        $this->assertFalse($this->sync->statusSummary()['reconcileSuggested'], 'never synced: the initial-sync hint covers it');
+
+        $this->state->update(['full_sync_completed_at' => self::T0 - 89 * 86_400]);
+        $this->assertFalse($this->sync->statusSummary()['reconcileSuggested']);
+
+        $this->state->update(['full_sync_completed_at' => self::T0 - WokeometerSyncService::RECONCILE_SUGGEST_DAYS * 86_400]);
+        $this->assertTrue($this->sync->statusSummary()['reconcileSuggested']);
+        $this->assertSame(90, WokeometerSyncService::RECONCILE_SUGGEST_DAYS);
+    }
+
+    public function testAStopKeepsTheProviderRequestIdWithTheError(): void
+    {
+        [$s] = $this->stopOnSecondPage(new WokeometerPageResult(WokeometerPageResult::AUTH, 401, message: 'revoked', requestId: 'req_7f3a-01'));
+        $this->assertSame('revoked (ID req_7f3a-01)', $s['last_error_message']);
+    }
+
+    public function testAStopWithoutAProviderMessageStillKeepsTheRequestId(): void
+    {
+        [$s] = $this->stopOnSecondPage(new WokeometerPageResult(WokeometerPageResult::CONFLICT, 409, requestId: 'r9'));
+        $this->assertSame('conflict (ID r9)', $s['last_error_message'], 'no provider message: the outcome, still with the ID');
     }
 
     public function testStatusSummaryRunningAndNeverSynced(): void

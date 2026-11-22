@@ -1381,7 +1381,7 @@ class AdminSettingsController extends AbstractController
         }
 
         $view['state'] = $state;
-        foreach (['lastSuccessAt', 'nextDueAt'] as $field) {
+        foreach (['lastSuccessAt', 'nextDueAt', 'fullSyncCompletedAt'] as $field) {
             $epoch = $state[$field] ?? null;
             $view['times'][$field] = is_int($epoch) ? new \DateTimeImmutable('@' . $epoch) : null;
         }
@@ -1457,7 +1457,7 @@ class AdminSettingsController extends AbstractController
         }
 
         $labels = [];
-        foreach (['lastSuccessAt', 'nextDueAt', 'lastRunFinishedAt', 'lastRunStartedAt'] as $field) {
+        foreach (['lastSuccessAt', 'nextDueAt', 'lastRunFinishedAt', 'lastRunStartedAt', 'fullSyncCompletedAt'] as $field) {
             $epoch = $state[$field] ?? null;
             $label = null;
             if (is_int($epoch) && $prefs !== null) {

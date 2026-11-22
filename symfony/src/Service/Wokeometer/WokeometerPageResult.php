@@ -27,6 +27,8 @@ namespace App\Service\Wokeometer;
  * ≤ 255 chars) — never the raw body. `droppedRows` counts `data` entries
  * that failed normalization (no usable id, or a `media_type` outside
  * movie|tv); a non-empty page where EVERY entry was dropped is `invalid`.
+ * `requestId` is Wokeometer's `X-Request-ID` (the attempt's support id),
+ * null when absent or not a short header-safe token.
  *
  * @phpstan-type WokeometerRow array{
  *     wokeometerId: string,
@@ -73,6 +75,7 @@ final readonly class WokeometerPageResult
         public ?int $retryAfter = null,
         public ?string $message = null,
         public int $droppedRows = 0,
+        public ?string $requestId = null,
     ) {}
 
     public function isOk(): bool

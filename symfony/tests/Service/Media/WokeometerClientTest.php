@@ -679,6 +679,39 @@ class WokeometerClientTest extends TestCase
         $this->assertSame(0, $this->calls);
     }
 
+    /** Wokeometer's X-Request-ID identifies the attempt for support; kept on every result. */
+    public function testTheRequestIdHeaderIsKeptOnFailuresAndLogged(): void
+    {
+        $body = self::json(['error' => ['code' => 'invalid_api_key', 'message' => 'revoked']]);
+        $result = $this->client([self::response(401, $body, ['X-Request-ID' => 'req_7f3a-01'])])
+            ->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame('req_7f3a-01', $result->requestId);
+        $this->assertSame('req_7f3a-01', $this->logs[0]['context']['request_id']);
+    }
+
+    public function testTheRequestIdIsKeptOnAnOkPage(): void
+    {
+        $result = $this->client([self::response(200, self::json(['data' => [], 'next_cursor' => null]), ['X-Request-ID' => 'abc123'])])
+            ->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertSame('abc123', $result->requestId);
+    }
+
+    /** @return array<string, array{string}> */
+    public static function unsafeRequestIds(): array
+    {
+        return ['space' => ['a b'], 'markup' => ['<script>'], 'too long' => [str_repeat('a', 65)]];
+    }
+
+    #[DataProvider('unsafeRequestIds')]
+    public function testAnUnsafeRequestIdIsDropped(string $id): void
+    {
+        $result = $this->client([self::response(503, '{}', ['X-Request-ID' => $id])])->listMedia('movie', null, null, self::IDEM);
+
+        $this->assertNull($result->requestId);
+    }
+
     public function testErrorWithoutParseableBodyStillHasAMessage(): void
     {
         $result = $this->client([self::response(503, '<html>Service Unavailable</html>')])
@@ -857,7 +890,7 @@ class WokeometerClientTest extends TestCase
         $record = $this->logs[0];
         $this->assertSame('warning', $record['level']);
         $this->assertSame('Wokeometer request failed', $record['message']);
-        $this->assertSame(['path', 'type', 'code', 'outcome', 'message'], array_keys($record['context']));
+        $this->assertSame(['path', 'type', 'code', 'outcome', 'message', 'request_id'], array_keys($record['context']));
         $this->assertSame('/media', $record['context']['path']);
         $this->assertSame('movie', $record['context']['type']);
         $this->assertSame(401, $record['context']['code']);
