@@ -125,7 +125,7 @@ class JellyseerrBlocklistRenderTest extends WebTestCase
         $this->assertStringContainsString('Game of Thrones', $html);
         $this->assertStringContainsString('bob', $html);
         $this->assertSelectorExists('[data-blocklist-remove="603"][data-media-type="movie"]');
-        $this->assertSelectorExists('[data-blocklist-remove="1399"][data-media-type="tv"]');
+        $this->assertSelectorNotExists('[data-blocklist-remove="1399"]', 'a tag-rule entry has no Remove (L15)');
         $this->assertSelectorExists('a.btn[href="/jellyseerr/blocklist"]', 'the Seerr nav links the page');
     }
 
@@ -189,6 +189,73 @@ class JellyseerrBlocklistRenderTest extends WebTestCase
 
         $this->assertResponseIsSuccessful();
         $this->assertSame(['ok' => true], json_decode((string) $this->client->getResponse()->getContent(), true));
+    }
+
+    /**
+     * Review 2026-11-21 L15: Seerr's tag job deletes and re-creates every
+     * tag-sourced entry on each run, so removing one never sticks, and the
+     * remove also drops Seerr's media record. Say so instead of offering it.
+     */
+    public function testATagRuleEntryExplainsItCannotBeRemovedHere(): void
+    {
+        $this->boot($this->seerrWith([self::entry(1399, ['mediaType' => 'tv', 'title' => 'Game of Thrones', 'blocklistedTags' => '12,48'])]));
+
+        $crawler = $this->client->request('GET', '/jellyseerr/blocklist');
+
+        $this->assertSelectorNotExists('[data-blocklist-remove]');
+        $note = $crawler->filter('[data-blocklist-tag-note]');
+        $this->assertCount(1, $note);
+        $this->assertStringContainsString('tag rule', $note->text());
+        $this->assertStringContainsString('TMDb keywords 12, 48', $crawler->filter('td')->first()->text());
+    }
+
+    /**
+     * Review 2026-11-21 L19: Seerr removes the blocklist row first, then
+     * answers 404 when the title has no media record. The entry is gone, so
+     * that is a success, not an error toast over a row that no longer exists.
+     */
+    public function testRemoveTreatsSeerrs404AfterTheDeleteAsSuccess(): void
+    {
+        $this->boot(function (JellyseerrClient&MockObject $seerr): void {
+            $seerr->method('removeFromBlocklist')->willReturn(false);
+            $seerr->method('getLastError')->willReturn(['code' => 404, 'method' => 'DELETE', 'path' => '/api/v1/blocklist/5', 'message' => 'Not Found']);
+        });
+
+        $this->client->request('POST', '/jellyseerr/blocklist/5/remove', server: self::ajax(), content: (string) json_encode(['mediaType' => 'movie']));
+
+        $this->assertResponseIsSuccessful();
+        $this->assertSame(['ok' => true], json_decode((string) $this->client->getResponse()->getContent(), true));
+    }
+
+    public function testAFailedRemoveIsReportedAsAnError(): void
+    {
+        $this->boot(function (JellyseerrClient&MockObject $seerr): void {
+            $seerr->method('removeFromBlocklist')->willReturn(false);
+            $seerr->method('getLastError')->willReturn(['code' => 500, 'method' => 'DELETE', 'path' => '/api/v1/blocklist/5', 'message' => 'boom']);
+        });
+
+        $this->client->request('POST', '/jellyseerr/blocklist/5/remove', server: self::ajax(), content: (string) json_encode(['mediaType' => 'movie']));
+
+        $this->assertGreaterThanOrEqual(400, $this->client->getResponse()->getStatusCode());
+        $this->assertFalse(json_decode((string) $this->client->getResponse()->getContent(), true)['ok']);
+    }
+
+    public function testPagerLinksKeepTheSearchAndFilter(): void
+    {
+        $this->boot(function (JellyseerrClient&MockObject $seerr): void {
+            $seerr->method('getAbout')->willReturn(['version' => '3.5.2']);
+            $seerr->method('getBlocklist')->willReturn(['pageInfo' => ['pages' => 3], 'results' => [self::entry(1)]]);
+        });
+
+        $crawler = $this->client->request('GET', '/jellyseerr/blocklist?q=alien&filter=manual&page=2');
+
+        $links = $crawler->filter('.js-pagination a');
+        $this->assertGreaterThan(0, $links->count());
+        foreach ($links as $a) {
+            $href = (string) $a->getAttribute('href');
+            $this->assertStringContainsString('q=alien', $href);
+            $this->assertStringContainsString('filter=manual', $href);
+        }
     }
 
     public function testRemoveRejectsAnUnknownMediaTypeWithoutCallingSeerr(): void

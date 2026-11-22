@@ -311,7 +311,11 @@ class JellyseerrController extends AbstractController
         if ($mediaType !== 'movie' && $mediaType !== 'tv') {
             return $this->json(['ok' => false, 'error' => $this->translator->trans('jellyseerr.blocklist.invalid_type')], 400);
         }
-        if (!$this->jellyseerr->removeFromBlocklist($tmdbId, $mediaType)) {
+        if (!$this->jellyseerr->removeFromBlocklist($tmdbId, $mediaType)
+            // Review 2026-11-21 L19: Seerr deletes the blocklist row first and
+            // only then answers 404 when the title has no media record (or the
+            // row was already gone). Either way the entry is no longer there.
+            && (int) ($this->jellyseerr->getLastError()['code'] ?? 0) !== 404) {
             return $this->jsonClientError('Jellyseerr', $this->jellyseerr, $this->translator->trans('jellyseerr.blocklist.remove_error'));
         }
         return $this->json(['ok' => true]);

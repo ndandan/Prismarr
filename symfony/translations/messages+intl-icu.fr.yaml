@@ -5273,7 +5273,9 @@ jellyseerr:
     col_tags: Tags
     type_movie: Film
     type_tv: Série
-    tags_rule: 'Règle de tags : {tags}'
+    tags_rule: 'Règle de tags (mots-clés TMDb {tags})'
+    tag_note: Ajouté par une règle de tags
+    tag_note_title: "Seerr rajoute les entrées issues d'une règle de tags à chaque exécution de sa tâche. Modifiez la règle de tags dans les paramètres de Seerr pour débloquer ce titre."
     unknown_title: 'TMDb n° {id}'
     unknown_user: Inconnu
     remove: Retirer

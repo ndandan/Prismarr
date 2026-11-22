@@ -77,17 +77,24 @@
                             <a href="{{ path('tmdb_index') }}?detail={{ e.type }}/{{ e.tmdbId }}" class="js-bl-title"
                                data-ql-trigger data-ql-source="tmdb" data-ql-type="{{ e.type }}" data-ql-id="{{ e.tmdbId }}">{{ title }}</a>
                             {% if e.tags %}
-                                <div class="text-secondary small">{{ 'jellyseerr.blocklist.tags_rule'|trans({tags: e.tags}) }}</div>
+                                <div class="text-secondary small">{{ 'jellyseerr.blocklist.tags_rule'|trans({tags: e.tags|split(',')|map(t => t|trim)|join(', ')}) }}</div>
                             {% endif %}
                         </td>
                         <td><span class="js-type-badge js-type-{{ e.type }}">{{ ('jellyseerr.blocklist.type_' ~ e.type)|trans }}</span></td>
                         <td class="text-secondary">{{ e.user ?? 'jellyseerr.blocklist.unknown_user'|trans }}</td>
                         <td class="text-secondary">{{ e.createdAt ? e.createdAt|prismarr_date : '—' }}</td>
                         <td>
+                            {% if e.tags %}
+                                {# Review 2026-11-21 L15: Seerr's tag job re-creates every tag-sourced
+                                   entry on each run, so a remove here never sticks (and would drop
+                                   Seerr's media record for nothing). #}
+                                <span class="text-secondary small text-nowrap" data-blocklist-tag-note title="{{ 'jellyseerr.blocklist.tag_note_title'|trans }}">{{ 'jellyseerr.blocklist.tag_note'|trans }}</span>
+                            {% else %}
                             <button type="button" class="btn btn-sm btn-outline-danger"
                                     data-blocklist-remove="{{ e.tmdbId }}" data-media-type="{{ e.type }}"
                                     data-remove-url="{{ path('jellyseerr_blocklist_remove', {tmdbId: e.tmdbId}) }}"
                                     data-confirm="{{ 'jellyseerr.blocklist.remove_confirm'|trans|replace({'__TITLE__': title}) }}">{{ 'jellyseerr.blocklist.remove'|trans }}</button>
+                            {% endif %}
                         </td>
                     </tr>
                 {% endfor %}

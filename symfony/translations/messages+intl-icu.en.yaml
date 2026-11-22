@@ -5280,7 +5280,9 @@ jellyseerr:
     col_tags: Tags
     type_movie: Movie
     type_tv: TV
-    tags_rule: 'Tag rule: {tags}'
+    tags_rule: 'Tag rule (TMDb keywords {tags})'
+    tag_note: Set by a tag rule
+    tag_note_title: "Seerr re-adds tag-rule entries every time its tag job runs. Change the tag rule in Seerr's settings to unblock this title."
     unknown_title: 'TMDb #{id}'
     unknown_user: Unknown
     remove: Remove
