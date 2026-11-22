@@ -211,10 +211,10 @@
         if (d && d.ok === true) {
           btn.innerHTML = '&#10003; ' + window.escHtml(I18N[action]);
           if (window._prismarrToast) window._prismarrToast(I18N.queued, 'success');
-          // A translation or extraction adds a file (and fills a missing
-          // language): reload the list so it shows. A sync changes nothing
-          // listed, so its tick stays.
-          if (action !== 'sync') loadCurrentSubs(kind, itemId, seriesId, searchToken);
+          // No list reload here: Bazarr 1.6 queues the job and answers at once,
+          // so a reload would show the old list and turn this button back on
+          // before the file exists (a second click queues the same work). The
+          // button stays off with its tick; the server refreshes the item.
           return;
         }
         if (d && d.reason === 'still_running') {

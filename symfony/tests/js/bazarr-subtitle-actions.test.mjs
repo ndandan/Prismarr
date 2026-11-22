@@ -142,3 +142,13 @@ describe('bzSubActionToast', () => {
     assert.equal(loadAction().bzSubActionToast(null, i18n), 'Erreur');
   });
 });
+
+describe('doSubAction', () => {
+  it('keeps the button off after a success instead of reloading the list', async () => {
+    // Bazarr 1.6 queues the job and answers at once: an immediate reload
+    // shows the old list and re-enables Translate before the file exists.
+    const { sliceTemplate } = await import('./support/template-script.mjs');
+    const code = sliceTemplate('bazarr/_search_modal.html.twig', 'function doSubAction(', 'doSubAction');
+    assert.doesNotMatch(code, /loadCurrentSubs\(/);
+  });
+});
