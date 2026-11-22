@@ -703,6 +703,7 @@ class DashboardController extends AbstractController implements ResetInterface
     {
         set_time_limit(60);
         $recommendations = $this->health->isConfigured('tmdb') ? $this->recommendations() : [];
+        $this->upcomingUnreachable = false;
         $upcoming = ($this->health->isConfigured('radarr') || $this->health->isConfigured('sonarr'))
             ? $this->upcomingReleases() : [];
 
@@ -710,6 +711,8 @@ class DashboardController extends AbstractController implements ResetInterface
             'hero_spotlight' => $this->pickHeroSpotlight($recommendations),
             'stats'          => $this->stats(),
             'upcoming'       => $upcoming,
+            // Same verdict as the calendar card's 502 (review 2026-11-21 L6).
+            'upcoming_unreachable' => $upcoming === [] && $this->isUpcomingUnreachable(),
         ]);
     }
 

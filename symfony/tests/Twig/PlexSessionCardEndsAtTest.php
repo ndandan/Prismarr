@@ -49,6 +49,31 @@ class PlexSessionCardEndsAtTest extends AbstractWebTestCase
         );
     }
 
+    /**
+     * Review 2026-11-21 test gap: with the defaults (UTC-ish zone, 24 h) a
+     * revert to a raw `|date('H:i')` passed. A +5:45 zone and a 12 h clock
+     * cannot be produced by accident.
+     */
+    public function testEndsAtUsesTheDisplayZoneAndTwelveHourClock(): void
+    {
+        $em = $this->em();
+        $em->persist(new \App\Entity\Setting('display_timezone', 'Asia/Kathmandu'));
+        $em->persist(new \App\Entity\Setting('display_time_format', '12h'));
+        $em->flush();
+        static::getContainer()->get(DisplayPreferencesService::class)->reset();
+
+        $expect = static fn(): string => (new \DateTimeImmutable('+3600 seconds'))
+            ->setTimezone(new \DateTimeZone('Asia/Kathmandu'))->format('g:i A');
+        $before = $expect();
+        $html = $this->render($this->session(['stream_duration' => '5400000', 'view_offset' => '1800000']));
+        $after = $expect();
+
+        self::assertTrue(
+            str_contains($html, 'Ends at ' . $before) || str_contains($html, 'Ends at ' . $after),
+            'expected "Ends at ' . $before . '" (Kathmandu, 12 h) in: ' . $html,
+        );
+    }
+
     public function testNoEndsAtWhenPositionUnknown(): void
     {
         $html = $this->render($this->session([]));

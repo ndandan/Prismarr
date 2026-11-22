@@ -67,7 +67,8 @@
       </svg>
     </div>
     <div>
-      <div class="hero-stat-value">{{ upcoming|length }}</div>
+      {# Every Radarr/Sonarr down = unknown, not an empty week (review 2026-11-21 L6). #}
+      <div class="hero-stat-value">{{ (upcoming_unreachable ?? false) ? '—' : upcoming|length }}</div>
       <div class="hero-stat-label">{{ 'dashboard.hero.stats.upcoming_7d'|trans }}</div>
     </div>
   </div>

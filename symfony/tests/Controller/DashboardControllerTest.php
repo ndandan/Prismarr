@@ -1056,6 +1056,29 @@ class DashboardControllerTest extends TestCase
         self::assertSame(502, $controller->widgetUpcoming()->getStatusCode(), 'the dashboard shows "failed to load" + Retry, not "Nothing this week"');
     }
 
+    /** Review 2026-11-21 L6: the hero gets the same outage verdict as the calendar card. */
+    public function testHeroIsToldWhenEveryLibraryFailed(): void
+    {
+        $health = $this->createMock(HealthService::class);
+        $health->method('isConfigured')->willReturnCallback(fn(string $s): bool => $s === 'radarr');
+        $controller = $this->makeController(
+            health: $health,
+            radarr: $this->calendarClient(RadarrClient::class, self::TIMED_OUT),
+            cache: new \Symfony\Component\Cache\Adapter\ArrayAdapter(),
+        );
+        $params = [];
+        $twig = $this->createMock(\Twig\Environment::class);
+        $twig->method('render')->willReturnCallback(function (string $view, array $p) use (&$params): string { $params = $p; return ''; });
+        $container = $this->createMock(\Psr\Container\ContainerInterface::class);
+        $container->method('has')->willReturn(true);
+        $container->method('get')->willReturnCallback(fn(string $id) => $id === 'twig' ? $twig : null);
+        $controller->setContainer($container);
+
+        $controller->widgetHero();
+
+        self::assertTrue($params['upcoming_unreachable'] ?? null);
+    }
+
     public function testOneLibraryAnsweringIsNotAnOutage(): void
     {
         $radarrInst = $this->instance('radarr-1', 'Radarr');

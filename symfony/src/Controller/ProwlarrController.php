@@ -20,6 +20,9 @@ class ProwlarrController extends AbstractController
 {
     use ApiClientErrorTrait;
 
+    /** Most category ids one search forwards; Prowlarr's own pickers never need more (review 2026-11-21 L17). */
+    public const MAX_SEARCH_CATEGORIES = 50;
+
     public function __construct(
         private readonly ProwlarrClient $prowlarr,
         private readonly ConfigService $config,
@@ -157,6 +160,9 @@ class ProwlarrController extends AbstractController
             $c = trim($c);
             if (ctype_digit($c) && (int) $c > 0) {
                 $categories[] = (int) $c;
+                if (count($categories) >= self::MAX_SEARCH_CATEGORIES) {
+                    break;
+                }
             }
         }
         $results = $this->prowlarr->search($query, $indexerId, 'search', 100, $categories);

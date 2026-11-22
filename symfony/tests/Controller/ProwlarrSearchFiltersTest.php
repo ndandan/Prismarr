@@ -41,6 +41,20 @@ class ProwlarrSearchFiltersTest extends TestCase
         ]));
     }
 
+    /** Review 2026-11-21 L17: the category list is capped, so one request cannot carry thousands of ids. */
+    public function testTheCategoryListIsCapped(): void
+    {
+        $prowlarr = $this->createMock(ProwlarrClient::class);
+        $prowlarr->expects($this->once())->method('search')
+            ->with('dune', null, 'search', 100, range(1, ProwlarrController::MAX_SEARCH_CATEGORIES))
+            ->willReturn([]);
+
+        $this->controller($prowlarr)->search(Request::create('/prowlarr/search', 'GET', [
+            'q' => 'dune', 'categories' => implode(',', range(1, 500)),
+        ]));
+        self::assertSame(50, ProwlarrController::MAX_SEARCH_CATEGORIES);
+    }
+
     public function testNoPickersMeansAllIndexersAndCategories(): void
     {
         $prowlarr = $this->createMock(ProwlarrClient::class);
