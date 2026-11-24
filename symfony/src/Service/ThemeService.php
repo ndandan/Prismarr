@@ -89,19 +89,23 @@ final class ThemeService implements ResetInterface
     }
 
     /**
-     * @param array{light:bool,bg:array{0:int,1:float,2:float},primary:array{0:int,1:float,2:float},positive:array{0:int,1:float,2:float},negative:array{0:int,1:float,2:float},contrast:float,textSaturation:float} $p
+     * @param array{light:bool,flat?:bool,bg:array{0:int,1:float,2:float},primary:array{0:int,1:float,2:float},positive:array{0:int,1:float,2:float},negative:array{0:int,1:float,2:float},contrast:float,textSaturation:float} $p
      * @return array{light:bool,primary_hex:string,primary_rgb:string,css:array<string,string>}
      */
     private function resolvePreset(array $p): array
     {
         $light = $p['light'];
+        $flat = (bool) ($p['flat'] ?? false);
 
         [$bh, $bs, $bl] = $p['bg'];
         // Surface tiers. Dark themes: cards/footer lift ABOVE the background
         // while the sidebar sits BELOW it — reproduces the hand-tuned
         // #1c1c1c / #161616 / #0d0d0d palette for `midnight`. Light themes:
-        // everything trends toward white.
-        if ($light) {
+        // everything trends toward white. Flat presets (OLED Black) keep every
+        // surface on the background colour; the border does the separating.
+        if ($flat) {
+            $surface = $surface2 = $sidebar = $this->hsl($bh, $bs, $bl);
+        } elseif ($light) {
             $surface  = $this->hsl($bh, $bs, ColorMath::clamp($bl + 3));
             $surface2 = $this->hsl($bh, $bs, ColorMath::clamp($bl + 1.5));
             $sidebar  = $this->hsl($bh, $bs, ColorMath::clamp($bl + 3));
@@ -114,7 +118,7 @@ final class ThemeService implements ResetInterface
         // Border + text are alpha overlays whose strength scales with the
         // contrast multiplier (glance's `contrast-multiplier`).
         $contrast = (float) $p['contrast'];
-        $borderAlpha = round(($light ? 0.10 : 0.08) * $contrast, 3);
+        $borderAlpha = round(($light ? 0.10 : ($flat ? 0.12 : 0.08)) * $contrast, 3);
         $border = $light
             ? "rgba(0, 0, 0, $borderAlpha)"
             : "rgba(255, 255, 255, $borderAlpha)";

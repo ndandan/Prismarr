@@ -21,6 +21,19 @@ final class ThemePresetsTest extends TestCase
         self::assertFalse(ThemePresets::PRESETS['midnight']['light']);
     }
 
+    public function testOledPresetsAreBlackAndOnlyBlackIsFlat(): void
+    {
+        foreach (['oled_black', 'oled_soft'] as $key) {
+            self::assertArrayHasKey($key, ThemePresets::PRESETS);
+            $bg = ThemePresets::PRESETS[$key]['bg'];
+            self::assertSame('#000000', ColorMath::hslToHex($bg[0], $bg[1], $bg[2]), $key);
+            self::assertFalse(ThemePresets::PRESETS[$key]['light'], $key);
+        }
+        self::assertTrue(ThemePresets::PRESETS['oled_black']['flat'] ?? false);
+        self::assertFalse(ThemePresets::PRESETS['oled_soft']['flat'] ?? false);
+        self::assertFalse(ThemePresets::PRESETS['midnight']['flat'] ?? false);
+    }
+
     public function testEveryPresetHasCompleteShape(): void
     {
         foreach (ThemePresets::PRESETS as $key => $p) {

@@ -62,6 +62,31 @@ final class ThemeServiceTest extends TestCase
         self::assertSame('hsla(0, 0%, 6.5%, 0.95)', $r['css']['--prismarr-topbar-bg']);
     }
 
+    public function testOledBlackIsTrueBlackWithStrongerBorder(): void
+    {
+        $r = $this->serviceFor('oled_black')->resolve();
+        self::assertTrue($r['active']);
+        self::assertFalse($r['light']);
+        self::assertSame('#6366f1', $r['primary_hex']);
+        foreach (['--tblr-body-bg', '--prismarr-surface', '--prismarr-surface-2', '--prismarr-sidebar'] as $var) {
+            self::assertSame('hsl(0, 0%, 0%)', $r['css'][$var], $var);
+        }
+        self::assertSame('rgba(255, 255, 255, 0.12)', $r['css']['--prismarr-border']);
+        self::assertSame('rgba(255, 255, 255, 0.12)', $r['css']['--tblr-border-color']);
+        self::assertSame('hsla(0, 0%, 0%, 0.95)', $r['css']['--prismarr-topbar-bg']);
+    }
+
+    public function testOledSoftLiftsCardsOffBlack(): void
+    {
+        $r = $this->serviceFor('oled_soft')->resolve();
+        self::assertTrue($r['active']);
+        self::assertSame('hsl(0, 0%, 0%)',   $r['css']['--tblr-body-bg']);
+        self::assertSame('hsl(0, 0%, 4.5%)', $r['css']['--prismarr-surface']);
+        self::assertSame('hsl(0, 0%, 2%)',   $r['css']['--prismarr-surface-2']);
+        self::assertSame('hsl(0, 0%, 0%)',   $r['css']['--prismarr-sidebar']);
+        self::assertSame('rgba(255, 255, 255, 0.08)', $r['css']['--prismarr-border']);
+    }
+
     public function testLightPresetSetsLightFlag(): void
     {
         $r = $this->serviceFor('catppuccin_latte')->resolve();

@@ -26,6 +26,8 @@ final class ThemePresets
 
     // glance HSL values are "H S L"; we store [H, S, L]. Where glance omits
     // positive/negative we fill a sensible green/red; omitted multipliers → 1.0.
+    // Optional `flat` (default false, not a glance field): surfaces stay on the
+    // background colour instead of lifting off it — see ThemeService.
     // Authored from https://github.com/glanceapp/glance/blob/main/docs/themes.md
     public const PRESETS = [
         'midnight' => [
@@ -35,6 +37,30 @@ final class ThemePresets
             'primary'        => [239, 84, 66.8],   // #6366f1 indigo
             'positive'       => [142, 71, 45],     // green
             'negative'       => [0, 84, 60],       // red
+            'contrast'       => 1.0,
+            'textSaturation' => 1.0,
+        ],
+        // OLED presets: pure #000 background so the panel's pixels switch off.
+        // `flat` makes ThemeService keep cards / footers / sidebar on that same
+        // black and lean on a stronger border instead of a lifted surface.
+        'oled_black' => [
+            'label_key'      => 'admin.display.theme.preset.oled_black',
+            'light'          => false,
+            'flat'           => true,
+            'bg'             => [0, 0, 0],         // #000000
+            'primary'        => [239, 84, 66.8],   // #6366f1 indigo
+            'positive'       => [142, 71, 45],
+            'negative'       => [0, 84, 60],
+            'contrast'       => 1.0,
+            'textSaturation' => 1.0,
+        ],
+        'oled_soft' => [
+            'label_key'      => 'admin.display.theme.preset.oled_soft',
+            'light'          => false,
+            'bg'             => [0, 0, 0],         // #000000, cards lift to #0b0b0b
+            'primary'        => [239, 84, 66.8],
+            'positive'       => [142, 71, 45],
+            'negative'       => [0, 84, 60],
             'contrast'       => 1.0,
             'textSaturation' => 1.0,
         ],
