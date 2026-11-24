@@ -85,6 +85,13 @@ near-black.
 `ThemeService::resolve()`, `ThemeExtension`, a `display_theme` setting kept in
 sync with the preset table by a test.
 
+**OLED presets (2026-11-23, fork-only so far):** `oled_black` and `oled_soft`,
+both on a `#000` background. OLED Soft lifts cards to `#0b0b0b` through the
+normal surface math; OLED Black sets a new optional preset flag, `flat`, that
+keeps cards, card footers and the sidebar on the background colour and raises
+the dark border alpha from 0.08 to 0.12 so cards still read. Presets without
+the flag resolve unchanged.
+
 ### Dashboard layout customization — [#68](https://github.com/Shoshuo/Prismarr/pull/68)
 
 Reorder + hide/show every dashboard section (shipped 2026-06-26). Global,

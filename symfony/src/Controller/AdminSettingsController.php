@@ -289,6 +289,8 @@ class AdminSettingsController extends AbstractController
             'options' => [
                 'classic'              => 'admin.display.theme.preset.classic',
                 'midnight'             => 'admin.display.theme.preset.midnight',
+                'oled_black'           => 'admin.display.theme.preset.oled_black',
+                'oled_soft'            => 'admin.display.theme.preset.oled_soft',
                 'nord'                 => 'admin.display.theme.preset.nord',
                 'catppuccin_latte'     => 'admin.display.theme.preset.catppuccin_latte',
                 'catppuccin_frappe'    => 'admin.display.theme.preset.catppuccin_frappe',

@@ -1060,6 +1060,8 @@ admin:
       preset:
         classic: Classique (bascule clair/sombre manuelle)
         midnight: Minuit
+        oled_black: OLED noir
+        oled_soft: OLED doux
         nord: Nord
         catppuccin_latte: Catppuccin Latte
         catppuccin_frappe: Catppuccin Frappé

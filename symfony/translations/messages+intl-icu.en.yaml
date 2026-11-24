@@ -1066,6 +1066,8 @@ admin:
       preset:
         classic: Classic (manual light/dark toggle)
         midnight: Midnight
+        oled_black: OLED Black
+        oled_soft: OLED Soft
         nord: Nord
         catppuccin_latte: Catppuccin Latte
         catppuccin_frappe: Catppuccin Frappé
