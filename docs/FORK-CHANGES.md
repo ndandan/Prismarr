@@ -88,9 +88,12 @@ sync with the preset table by a test.
 **OLED presets (2026-11-23, fork-only so far):** `oled_black` and `oled_soft`,
 both on a `#000` background. OLED Soft lifts cards to `#0b0b0b` through the
 normal surface math; OLED Black sets a new optional preset flag, `flat`, that
-keeps cards, card footers and the sidebar on the background colour and raises
-the dark border alpha from 0.08 to 0.12 so cards still read. Presets without
-the flag resolve unchanged.
+keeps cards, card footers and the sidebar on the background colour, also
+emits Tabler's own panel tokens (`--tblr-bg-surface`, `-secondary`,
+`-tertiary`, `--tblr-bg-forms`: modals, dropdowns, quick-look, calendar cells,
+dashboard tiles, form fields) as that colour, and raises the dark border alpha
+from 0.08 to 0.12 so panels still read. Presets without the flag resolve
+unchanged.
 
 ### Dashboard layout customization — [#68](https://github.com/Shoshuo/Prismarr/pull/68)
 

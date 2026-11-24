@@ -135,27 +135,39 @@ final class ThemeService implements ResetInterface
         [$poh, $pos, $pol] = $p['positive'];
         [$neh, $nes, $nel] = $p['negative'];
 
+        $css = [
+            '--tblr-body-bg'        => $this->hsl($bh, $bs, $bl),
+            '--prismarr-surface'    => $surface,
+            '--prismarr-surface-2'  => $surface2,
+            '--prismarr-sidebar'    => $sidebar,
+            // Sticky topbar: the background tint with slight translucency so
+            // the blur(12px) backdrop still shows content scrolling beneath.
+            // Tracks the theme bg, so it no longer stays stuck near-black on
+            // non-midnight themes.
+            '--prismarr-topbar-bg'  => sprintf('hsla(%d, %s%%, %s%%, 0.95)', $bh, $this->num($bs), $this->num($bl)),
+            '--tblr-border-color'   => $border,
+            '--prismarr-border'     => $border,
+            '--tblr-body-color'     => $bodyColor,
+            '--tblr-secondary-color'=> $secondaryColor,
+            '--tblr-success'        => $this->hsl($poh, $pos, $pol),
+            '--tblr-danger'         => $this->hsl($neh, $nes, $nel),
+        ];
+
+        // Flat presets also black out Tabler's own panel tokens (modals,
+        // dropdowns, quick-look, calendar cells, dashboard tiles, form fields),
+        // which otherwise stay #1f2937 / #111827 in dark mode. Other presets
+        // keep Tabler's defaults, as before.
+        if ($flat) {
+            foreach (['--tblr-bg-surface', '--tblr-bg-surface-secondary', '--tblr-bg-surface-tertiary', '--tblr-bg-forms'] as $var) {
+                $css[$var] = $surface;
+            }
+        }
+
         return [
             'light'       => $light,
             'primary_hex' => ColorMath::hslToHex($ph, $ps, $pl),
             'primary_rgb' => ColorMath::hslToRgbTuple($ph, $ps, $pl),
-            'css'         => [
-                '--tblr-body-bg'        => $this->hsl($bh, $bs, $bl),
-                '--prismarr-surface'    => $surface,
-                '--prismarr-surface-2'  => $surface2,
-                '--prismarr-sidebar'    => $sidebar,
-                // Sticky topbar: the background tint with slight translucency so
-                // the blur(12px) backdrop still shows content scrolling beneath.
-                // Tracks the theme bg, so it no longer stays stuck near-black on
-                // non-midnight themes.
-                '--prismarr-topbar-bg'  => sprintf('hsla(%d, %s%%, %s%%, 0.95)', $bh, $this->num($bs), $this->num($bl)),
-                '--tblr-border-color'   => $border,
-                '--prismarr-border'     => $border,
-                '--tblr-body-color'     => $bodyColor,
-                '--tblr-secondary-color'=> $secondaryColor,
-                '--tblr-success'        => $this->hsl($poh, $pos, $pol),
-                '--tblr-danger'         => $this->hsl($neh, $nes, $nel),
-            ],
+            'css'         => $css,
         ];
     }
 

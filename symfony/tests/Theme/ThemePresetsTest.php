@@ -41,6 +41,9 @@ final class ThemePresetsTest extends TestCase
                 self::assertArrayHasKey($field, $p, "preset $key missing $field");
             }
             self::assertIsBool($p['light']);
+            if (array_key_exists('flat', $p)) {
+                self::assertIsBool($p['flat'], "preset $key.flat must be bool");
+            }
             foreach (['bg', 'primary', 'positive', 'negative'] as $c) {
                 self::assertCount(3, $p[$c], "preset $key.$c must be [H,S,L]");
             }

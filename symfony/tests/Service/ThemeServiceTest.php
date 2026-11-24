@@ -76,6 +76,25 @@ final class ThemeServiceTest extends TestCase
         self::assertSame('hsla(0, 0%, 0%, 0.95)', $r['css']['--prismarr-topbar-bg']);
     }
 
+    public function testOledBlackAlsoBlacksOutTablerPanels(): void
+    {
+        // Modals, dropdowns, quick-look, calendar cells and dashboard tiles use
+        // Tabler's own surface tokens (#1f2937 / #111827 in dark mode).
+        $r = $this->serviceFor('oled_black')->resolve();
+        foreach (['--tblr-bg-surface', '--tblr-bg-surface-secondary', '--tblr-bg-surface-tertiary', '--tblr-bg-forms'] as $var) {
+            self::assertSame('hsl(0, 0%, 0%)', $r['css'][$var] ?? null, $var);
+        }
+    }
+
+    public function testNonFlatPresetsLeaveTablerPanelsAlone(): void
+    {
+        foreach (['midnight', 'oled_soft'] as $key) {
+            $r = $this->serviceFor($key)->resolve();
+            self::assertArrayNotHasKey('--tblr-bg-surface', $r['css'], $key);
+            self::assertArrayNotHasKey('--tblr-bg-forms', $r['css'], $key);
+        }
+    }
+
     public function testOledSoftLiftsCardsOffBlack(): void
     {
         $r = $this->serviceFor('oled_soft')->resolve();
